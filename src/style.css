@@ -24,10 +24,27 @@ dt { color: #c5b8ee; } dd { margin: 0; color: #b6b0c5; }
 .panel { width: max-content; min-width: 300px; max-width: 640px; background: rgb(13 12 18 / var(--panel-opacity)); border: 1px solid rgb(239 235 255 / .05); border-radius: 16px; overflow: hidden; font-size: 16px; line-height: 1.5; text-shadow: 0 1px 3px #000, 0 1px 8px #0009; }
 .panel header { display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 20px; border-bottom: 1px solid rgb(239 235 255 / .05); font-weight: 500; }
 body[data-interactive="true"] .panel header { cursor: move; }
+.zone { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-actions { display: flex; gap: 2px; flex-shrink: 0; }
+button.icon { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; background: transparent; border: 0; border-radius: 8px; color: #d8d2e6; opacity: .4; cursor: pointer; }
+button.icon svg { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 2px #000); }
+body[data-interactive="true"] button.icon { opacity: 1; }
+body[data-interactive="true"] button.icon:hover { background: rgb(239 235 255 / .12); filter: none; }
+body[data-interactive="true"] #exit:hover { background: rgb(214 92 80 / .55); color: #fff; }
+#settings-toggle[aria-expanded="true"] { background: rgb(190 176 227 / .22); }
+.settings-actions { display: flex; gap: 8px; margin: 10px 0 8px; }
+.settings-actions button { flex: 1; padding: 6px 8px; font-size: 11px; border-radius: 8px; color: #e6e1f1; background: rgb(239 235 255 / .08); border-color: rgb(239 235 255 / .14); text-shadow: none; }
+.keys { gap: 4px 12px; font-size: 10px; margin: 0; }
 .route { padding: 12px 20px; }
 .route > div + div { margin-top: 4px; }
 .direction { color: #8edce8; font-style: italic; }
 .boss { color: #ce7832; }
+/* Finished steps stay in place, struck out and greyed, so the route keeps its shape. */
+.step { transition: color .3s, opacity .3s; }
+.step.done { color: #8d8899; opacity: .55; text-decoration: line-through; text-decoration-thickness: 1px; }
+.step.done .boss { color: inherit; }
+body[data-interactive="true"] .step.objective { cursor: pointer; border-radius: 6px; margin-inline: -6px; padding-inline: 6px; }
+body[data-interactive="true"] .step.objective:hover { background: rgb(239 235 255 / .08); }
 /* Width 0 + min-width 100%: the tools fill the panel but never widen it. */
 .edit-tools { display: none; width: 0; min-width: 100%; border-top: 1px solid rgb(239 235 255 / .07); background: rgb(39 35 51 / .3); padding: 12px 20px 10px; }
 body[data-interactive="true"] .edit-tools { display: block; }
@@ -37,6 +54,6 @@ body[data-interactive="true"] .edit-tools { display: block; }
 .opacity-control output { width: 28px; text-align: right; font-variant-numeric: tabular-nums; }
 .sample { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 5px; }
 input { accent-color: #beb0e3; }
-.edit-tools .hint { display: block; font-size: 10px; }
+.edit-tools .hint { display: block; font-size: 10px; overflow-wrap: anywhere; }
 .edit-tools footer { display: flex; justify-content: space-between; gap: 12px; color: #b4a9c6; font-size: 9px; letter-spacing: .04em; }
 kbd { font-family: inherit; }

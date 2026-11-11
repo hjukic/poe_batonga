@@ -1,0 +1,37 @@
+{
+  "formatVersion": 1,
+  "zone": { "id": "G1_1", "name": "The Riverbank", "level": 1 },
+  "steps": [
+    {
+      "id": "talk-wounded-man",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to the Wounded Man" }],
+      "trigger": {
+        "type": "npcLine",
+        "area": "G1_1",
+        "speaker": "Wounded Man",
+        "text": "Reach... Clearfell... Find the Miller..."
+      },
+      "evidence": "Last line of his dialogue; seen in a live log on 2026-11-11."
+    },
+    {
+      "id": "directions-river",
+      "kind": "note",
+      "parts": [{ "text": "Directions: Follow the river upstream", "style": "direction" }]
+    },
+    {
+      "id": "kill-bloated-miller",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "The Bloated Miller", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No verified log line yet; stays unknown until one is captured. Can be ticked by hand."
+    },
+    {
+      "id": "enter-clearfell-encampment",
+      "kind": "objective",
+      "parts": [{ "text": "Enter Clearfell Encampment" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_town" },
+      "evidence": "Zone-generation line for G1_town (data/observations/campaign-zones.json)."
+    }
+  ]
+}

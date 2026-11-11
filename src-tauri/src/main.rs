@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod tracker;
+
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
@@ -112,8 +114,86 @@ fn reset_overlay(app: AppHandle) -> Result<Status, String> {
 }
 
 #[tauri::command]
+fn open_controls(app: AppHandle) -> Result<(), String> {
+    let controls = app
+        .get_webview_window("controls")
+        .ok_or("Controls window missing")?;
+    let result = (|| {
+        controls.unminimize()?;
+        controls.show()?;
+        controls.set_focus()
+    })();
+    result.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn tracker_state(tracker: State<'_, tracker::Tracker>) -> Result<tracker::TrackerView, String> {
+    tracker.0.lock().map(|inner| inner.view()).map_err(|e| e.to_string())
+}
+
+/// Ticks or unticks a step by hand (recovery when the log misses or misreads one).
+#[tauri::command]
+fn toggle_step(app: AppHandle, id: String) -> Result<tracker::TrackerView, String> {
+    let tracker = app.state::<tracker::Tracker>();
+    let mut inner = tracker.0.lock().map_err(|e| e.to_string())?;
+    let tracker::Inner { route, progress, .. } = &mut *inner;
+    tracker::toggle(route, progress, &id)?;
+    inner.save();
+    let view = inner.view();
+    let _ = app.emit("tracker-state", view.clone());
+    Ok(view)
+}
+
+/// Clears all ticks. Log reading continues from where it is; past lines are not replayed.
+#[tauri::command]
+fn reset_progress(app: AppHandle) -> Result<tracker::TrackerView, String> {
+    let tracker = app.state::<tracker::Tracker>();
+    let mut inner = tracker.0.lock().map_err(|e| e.to_string())?;
+    inner.progress.completed.clear();
+    inner.progress.dismissed.clear();
+    inner.save();
+    let view = inner.view();
+    let _ = app.emit("tracker-state", view.clone());
+    Ok(view)
+}
+
+#[tauri::command]
 fn quit(app: AppHandle) {
     app.exit(0);
+}
+
+fn toggle_visibility(app: &AppHandle) {
+    if let Ok(status) = snapshot(app) {
+        let _ = report(app, apply_visibility(app, !status.visible));
+    }
+}
+
+fn toggle_interaction(app: &AppHandle) {
+    if let Ok(status) = snapshot(app) {
+        let _ = report(app, apply_interaction(app, !status.interactive));
+    }
+}
+
+// On Wayland, X11 global shortcuts only fire while an XWayland window has focus, so the
+// compositor binds the keys instead and signals us: `pkill -USR1 -x poe-batonga` toggles
+// visibility, `pkill -USR2 -x poe-batonga` toggles interaction.
+#[cfg(unix)]
+fn listen_for_signals(app: AppHandle) {
+    use signal_hook::consts::{SIGUSR1, SIGUSR2};
+    match signal_hook::iterator::Signals::new([SIGUSR1, SIGUSR2]) {
+        Ok(mut signals) => {
+            std::thread::spawn(move || {
+                for signal in signals.forever() {
+                    match signal {
+                        SIGUSR1 => toggle_visibility(&app),
+                        SIGUSR2 => toggle_interaction(&app),
+                        _ => {}
+                    }
+                }
+            });
+        }
+        Err(error) => eprintln!("Overlay: signal toggles unavailable: {error}"),
+    }
 }
 
 fn main() {
@@ -122,6 +202,10 @@ fn main() {
     let visibility = Shortcut::new(modifiers, Code::KeyO);
 
     tauri::Builder::default()
+        // Only one copy runs: a second launch shows the existing overlay and exits.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            let _ = report(app, apply_visibility(app, true));
+        }))
         .manage(OverlayState(Mutex::new(Status {
             visible: false,
             interactive: false,
@@ -133,21 +217,27 @@ fn main() {
             set_interaction,
             set_visibility,
             reset_overlay,
+            open_controls,
+            tracker_state,
+            toggle_step,
+            reset_progress,
             quit
         ])
         .setup(move |app| {
+            app.manage(tracker::init(app.handle()));
+            tracker::spawn(app.handle().clone());
+            #[cfg(unix)]
+            listen_for_signals(app.handle().clone());
             // Shortcut failure is recoverable through the regular controls window.
             let plugin = tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, shortcut, event| {
                     if event.state() != ShortcutState::Pressed {
                         return;
                     }
-                    if let Ok(status) = snapshot(app) {
-                        if shortcut == &interaction {
-                            let _ = report(app, apply_interaction(app, !status.interactive));
-                        } else if shortcut == &visibility {
-                            let _ = report(app, apply_visibility(app, !status.visible));
-                        }
+                    if shortcut == &interaction {
+                        toggle_interaction(app);
+                    } else if shortcut == &visibility {
+                        toggle_visibility(app);
                     }
                 })
                 .build();

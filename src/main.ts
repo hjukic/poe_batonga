@@ -10,6 +10,15 @@ interface Status {
   lastError: string | null;
 }
 
+interface StepPart { text: string; style?: string }
+interface StepView { id: string; kind: string; parts: StepPart[]; state: 'done' | 'open' | 'manual' | 'note'; source: string | null }
+interface TrackerView {
+  zone: { id: string; name: string; level: number };
+  currentArea: string | null;
+  steps: StepView[];
+  log: { connected: boolean; path: string | null; message: string };
+}
+
 const overlay = new URLSearchParams(location.search).get('view') === 'overlay';
 document.body.className = overlay ? 'overlay' : 'controls';
 const root = document.querySelector<HTMLElement>('#app')!;
@@ -26,17 +35,12 @@ root.innerHTML = overlay ? `
         </button>
       </div>
     </header>
-    <div class="route">
-      <div>Talk to the Wounded Man</div>
-      <div class="direction">Directions: Follow the river upstream</div>
-      <div>Kill <span class="boss">The Bloated Miller</span></div>
-      <div>Enter Clearfell Encampment</div>
-    </div>
+    <div class="route" id="route"></div>
     <div class="edit-tools">
       <div id="settings" hidden>
         <div class="opacity-control"><label for="opacity">Opacity</label><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></div>
-        <label class="sample"><input type="checkbox" id="sample" disabled /> Test overlay input</label>
-        <span id="sample-result" class="hint">Preview content · game tracking is not connected.</span>
+        <span class="hint">Click a step to tick or untick it by hand.</span>
+        <span id="log-status" class="hint">Connecting to the game log…</span>
         <div class="settings-actions"><button id="hide" type="button">Hide overlay</button><button id="open-controls" type="button">Controls window</button></div>
         <dl class="keys"><dt>Ctrl + Alt + O</dt><dd>Show / hide</dd><dt>Ctrl + Alt + I</dt><dd>Lock / unlock</dd></dl>
       </div>
@@ -47,12 +51,13 @@ root.innerHTML = overlay ? `
     <h1>Batonga overlay</h1>
     <p>A minimal campaign panel, inspired by Qutm. Preview content is shown until game tracking is connected.</p>
     <div class="status-card"><strong id="mode">Connecting…</strong><p id="visibility"></p></div>
-    <div class="buttons"><button id="interaction">Enable interaction</button><button id="visibility-toggle">Hide overlay</button><button id="reset">Recenter & lock</button><button id="quit" class="secondary">Quit</button></div>
+    <div class="buttons"><button id="interaction">Enable interaction</button><button id="visibility-toggle">Hide overlay</button><button id="reset">Recenter & lock</button><button id="quit" class="secondary">Quit</button><button id="reset-progress" class="secondary">Reset Riverbank progress</button></div>
     <dl><dt>Ctrl + Alt + I</dt><dd>Toggle interaction</dd><dt>Ctrl + Alt + O</dt><dd>Show / hide (returns to click-through)</dd></dl>
     <p class="hint">In interaction mode, drag the panel header. In click-through mode, mouse input reaches the window underneath. Close this controls window to quit both windows.</p>
     <div id="error" role="alert" hidden></div>
     <div id="shortcuts" role="status"></div>
-    <p class="hint">No logs, inventory scan or screen capture are connected in this experiment.</p>
+    <p class="hint">Progress comes from Path of Exile 2's Client.txt, read locally and never changed or uploaded. No inventory scan, screen capture or game input.</p>
+    <p id="log-status" class="hint"></p>
   </div>`;
 
 let status: Status | undefined;
@@ -62,8 +67,6 @@ function render(next: Status) {
   document.body.dataset.interactive = String(next.interactive);
   document.querySelector('#mode')!.textContent = next.interactive ? 'INTERACTION ON' : 'CLICK-THROUGH';
   if (overlay) {
-    const checkbox = document.querySelector<HTMLInputElement>('#sample')!;
-    checkbox.disabled = !next.interactive;
     // Returning to click-through closes settings so the play view stays minimal.
     if (!next.interactive) setSettingsOpen(false);
   } else {
@@ -74,6 +77,30 @@ function render(next: Status) {
       ? `Global shortcuts unavailable: ${next.shortcutErrors.join('; ')}. Use these buttons instead.` : 'Global shortcuts registered. Verify they work while the game is focused.';
     showError(next.lastError);
   }
+}
+function renderTracker(view: TrackerView) {
+  const logStatus = document.querySelector('#log-status');
+  if (logStatus) logStatus.textContent = view.log.connected ? `${view.log.message}: ${view.log.path}` : view.log.message;
+  if (!overlay) return;
+  document.querySelector('.zone')!.textContent = `${view.zone.name} - Zone Level: ${view.zone.level}`;
+  const route = document.querySelector<HTMLElement>('#route')!;
+  route.replaceChildren(...view.steps.map((step) => {
+    const row = document.createElement('div');
+    row.className = `step ${step.kind} ${step.state}`;
+    row.dataset.id = step.id;
+    for (const part of step.parts) {
+      const span = document.createElement('span');
+      span.textContent = part.text;
+      if (part.style) span.className = part.style;
+      row.append(span);
+    }
+    if (step.kind === 'objective') {
+      row.title = step.state === 'done'
+        ? `Done (${step.source === 'manual' ? 'ticked by hand' : 'from game log'})`
+        : step.state === 'manual' ? 'Not tracked from the log yet; tick by hand' : 'Ticks automatically from the game log';
+    }
+    return row;
+  }));
 }
 function setSettingsOpen(open: boolean) {
   const settings = document.querySelector<HTMLElement>('#settings');
@@ -124,8 +151,10 @@ if (overlay) {
       void getCurrentWindow().startDragging().catch(console.error);
     }
   });
-  document.querySelector('#sample')!.addEventListener('change', () => {
-    document.querySelector('#sample-result')!.textContent = 'Click received by the overlay. Toggle interaction off to test passing clicks through.';
+  document.querySelector('#route')!.addEventListener('click', (event) => {
+    const row = (event.target as Element).closest<HTMLElement>('.step.objective');
+    if (!row || !status?.interactive || !isTauri()) return;
+    void invoke<TrackerView>('toggle_step', { id: row.dataset.id }).then(renderTracker).catch(console.error);
   });
   document.querySelector('#settings-toggle')!.addEventListener('click', () => {
     setSettingsOpen(document.querySelector<HTMLElement>('#settings')!.hidden);
@@ -138,15 +167,34 @@ if (overlay) {
   document.querySelector('#visibility-toggle')!.addEventListener('click', () => void action('set_visibility', { visible: !status?.visible }));
   document.querySelector('#reset')!.addEventListener('click', () => void action('reset_overlay'));
   document.querySelector('#quit')!.addEventListener('click', () => void invoke('quit').catch((error) => showError(String(error))));
+  document.querySelector('#reset-progress')!.addEventListener('click', () => {
+    void invoke<TrackerView>('reset_progress').then(renderTracker).catch((error) => showError(String(error)));
+  });
 }
+
+// Shown only in a plain browser (npm run dev without Tauri), where no log can be read.
+const browserPreview: TrackerView = {
+  zone: { id: 'G1_1', name: 'The Riverbank', level: 1 },
+  currentArea: null,
+  log: { connected: false, path: null, message: 'Browser preview: no game log.' },
+  steps: [
+    { id: 'talk-wounded-man', kind: 'objective', parts: [{ text: 'Talk to the Wounded Man' }], state: 'done', source: 'log' },
+    { id: 'directions-river', kind: 'note', parts: [{ text: 'Directions: Follow the river upstream', style: 'direction' }], state: 'note', source: null },
+    { id: 'kill-bloated-miller', kind: 'objective', parts: [{ text: 'Kill ' }, { text: 'The Bloated Miller', style: 'boss' }], state: 'manual', source: null },
+    { id: 'enter-clearfell-encampment', kind: 'objective', parts: [{ text: 'Enter Clearfell Encampment' }], state: 'open', source: null },
+  ],
+};
 
 async function start() {
   if (!isTauri()) {
     render({ visible: true, interactive: true, shortcutErrors: ['Browser preview only; native window behavior is unavailable.'], lastError: null });
+    renderTracker(browserPreview);
     document.querySelectorAll<HTMLButtonElement>('button').forEach((button) => button.disabled = true);
     return;
   }
   await listen<Status>('overlay-status', (event) => render(event.payload));
+  await listen<TrackerView>('tracker-state', (event) => renderTracker(event.payload));
   render(await invoke<Status>('overlay_status'));
+  renderTracker(await invoke<TrackerView>('tracker_state'));
 }
 void start().catch((error) => showError(String(error)));
