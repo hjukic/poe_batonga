@@ -429,7 +429,8 @@ fn set_toggle_shortcut(app: AppHandle, accelerator: String) -> Result<Status, St
     snapshot(&app)
 }
 
-#[tauri::command]
+// Off the UI thread: it waits on a lock the background readers may hold for a while.
+#[tauri::command(async)]
 fn tracker_state(tracker: State<'_, tracker::Tracker>) -> Result<tracker::TrackerView, String> {
     tracker.0.lock().map(|inner| inner.view()).map_err(|e| e.to_string())
 }
@@ -462,12 +463,14 @@ fn reset_progress(app: AppHandle) -> Result<tracker::TrackerView, String> {
     Ok(view)
 }
 
-#[tauri::command]
+// Off the UI thread: it waits on a lock the background readers may hold for a while.
+#[tauri::command(async)]
 fn minimap_state(minimap: State<'_, minimap::Minimap>) -> Result<minimap::MinimapView, String> {
     minimap.last.lock().map(|view| view.clone()).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+// Off the UI thread: it waits on a lock the background readers may hold for a while.
+#[tauri::command(async)]
 fn layout_state(recorder: State<'_, layout::Recorder>) -> Option<layout::LayoutView> {
     recorder.view()
 }
