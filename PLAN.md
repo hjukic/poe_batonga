@@ -3,6 +3,12 @@
 What has to be made, in order. Tick a step when its "Done when" holds.
 The design lives in `docs/architecture.md`, the decisions and their reasons in `docs/decisions.md`.
 
+Release target (owner clarification, 2026-11-12): **PoE 2 1.0, Acts 1–6**.
+Do not implement Interlude content. Act 1 remains the first validation milestone;
+then extend the checklist, rule catalog and tested navigation through Act 6.
+Revalidate existing Act 1–4 rules for 1.0. Act 5–6 objectives and layout rules
+remain pending verified 1.0 sources/gameplay, not inferred from Interlude data.
+
 ## Phase 1: Set up
 
 - [x] **1. Create the repository**
@@ -69,6 +75,9 @@ The design lives in `docs/architecture.md`, the decisions and their reasons in `
   collected terrain (walkable outlines and points of interest for 51 Act 1-3
   areas). 97 historical campaign zone IDs are collected. Route adaptation, current-patch
   validation and actual layout assets remain later work.
+  Source audits: `docs/layout-shape-research.md` and
+  `docs/navigation-rule-research.md`. Earlier Interlude research is historical
+  and does not count toward the six-act 1.0 release.
 
 - [ ] **7. Test map reading**
   Establish a permitted basis for automatic local screen analysis, layout-based

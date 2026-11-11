@@ -15,6 +15,9 @@ Current document:
 - [Data sources](data-sources.md): selected route/zone/layout sources and their terms.
 - [Map-reading experiment](map-reading.md): offline baseline, negative real-image findings and next checks.
 - [Windows minimap](windows-minimap.md): automatic capture adapter and test coverage.
+- [Layout shapes](layout-shape-research.md): reviewed map-outline sources and limits.
+- [Navigation rules](navigation-rule-research.md): source audit and candidates for
+  the six-act PoE 2 1.0 target; earlier Interlude findings are historical only.
 
 ## Repository setup status
 

@@ -13,6 +13,14 @@ Inventory scanning, inventory scan recording/replay and price checking are also
 explicitly excluded. Quest-item progress remains in scope through validated
 log/quest evidence; it does not require an inventory scanner.
 
+Owner clarification, 2026-11-12: target **Path of Exile 2 version 1.0 and its
+six-act campaign (Acts 1–6)**. Interlude routes, objectives and navigation rules
+are excluded from product work. Existing Early Access observations may remain
+as historical research, but Interlude zones must not be relabelled as Act 5/6.
+Validate Act 1–4 assumptions against 1.0 and collect Act 5–6 rules from published
+1.0 sources and observed gameplay when available. Their rules are currently
+unverified; full six-act support is a release goal, not an implemented capability.
+
 ## Desired experience
 
 - Show a checklist of mandatory quest items, quest objectives and progression

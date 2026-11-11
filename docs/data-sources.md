@@ -4,6 +4,12 @@ This is a private project for two players; licences are not a selection
 criterion (owner, 2026-11-12). The machine-readable catalog is
 [`data/sources.json`](../data/sources.json).
 
+Release target amended by the owner on 2026-11-12: **PoE 2 1.0, Acts 1–6**,
+excluding Interludes. Selected Early Access sources are references pending 1.0
+validation. Their Interlude coverage does not establish Act 5 or Act 6 coverage.
+See the [navigation-rule audit](navigation-rule-research.md) for source dates,
+candidate rules and the remaining 1.0 validation work.
+
 | Data | Source | In the repo |
 | --- | --- | --- |
 | Campaign route | [domistae/poe2-leveling](https://github.com/domistae/poe2-leveling/tree/f682e2b99c4a5a4f31882f3674bba4dcefc6ab46), starting with `poe2_act1_guide.html` | Not yet; our own Riverbank route is in `data/routes/` |

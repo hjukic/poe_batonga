@@ -1,6 +1,9 @@
 # poe_batonga
 
 A planned Path of Exile 2 campaign leveling overlay for Windows and Linux.
+The release target is **PoE 2 version 1.0, Acts 1–6**. Interludes are outside the
+product scope. Existing Early Access guides are research references; rules and
+objectives must be validated for 1.0, including new Act 5 and Act 6 coverage.
 The target experience includes automatic progress tracking and layout-based
 navigation, conditional on GGG compliance and technical feasibility.
 An initial Tauri overlay is available. For The Riverbank it ticks objectives

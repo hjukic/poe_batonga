@@ -26,6 +26,7 @@ measured results or completion of Phase 2.
 | D18 | Windows implementation | Add a foreground-only visible-desktop GDI minimap adapter for windowed/borderless play. Verify client bounds/DPI and pause on focus loss or occlusion. No live game capture is performed by the development checks. OS capture support is separate from GGG permission and navigation accuracy. See [Windows minimap](windows-minimap.md). |
 | D19 | Owner requirement | Map reading is core behavior and starts automatically on both platforms, without an on/off setting. Ignore legacy disabled/opt-in keys while preserving other preferences. Keep Windows focus/occlusion checks and suppress stale guidance while paused. |
 | D20 | Navigation correction | Use minimap screen axes for bearings, equal orientation priors and continuous landmark alignment. Suppress ambiguous directions. Boss dialogue locates the player's encounter area and does not complete a kill objective; explicit checklist completion drives the next target. See [arrow correction](map-reading.md#live-arrow-correction-2026-11-12). |
+| D21 | Owner requirement (2026-11-12) | Target PoE 2 version 1.0, Acts 1–6. Exclude Interludes from implementation. Revalidate existing Act 1–4 rules against 1.0 and establish Act 5–6 coverage from verified sources/gameplay when available; historical Interlude data is not Act 5/6 support. |
 
 See [architecture](architecture.md) for data flow, experiment exit conditions and
 official research references. If automation cannot meet compliance or feasibility
