@@ -26,6 +26,20 @@ pub fn init(window: &gtk::ApplicationWindow, left: i32, top: i32) {
     // 0: keep clear of the top bar's reserved space instead of drawing under it.
     window.set_exclusive_zone(0);
     window.set_keyboard_mode(KeyboardMode::None);
+    // Not on a monitor yet: keep the saved position within the smallest monitor, since
+    // the compositor may place the overlay on any of them.
+    use gtk::prelude::{GtkWindowExt, MonitorExt};
+    let (width, height) = window.size();
+    let display = gtk::gdk::Display::default();
+    let smallest = display
+        .iter()
+        .flat_map(|d| (0..d.n_monitors()).filter_map(move |i| d.monitor(i)))
+        .map(|m| m.geometry())
+        .min_by_key(|area| area.width() * area.height());
+    let (left, top) = match smallest {
+        Some(area) => (left.clamp(0, (area.width() - width).max(0)), top.clamp(0, (area.height() - height).max(0))),
+        None => (left, top),
+    };
     move_to(window, left, top);
 }
 
@@ -35,9 +49,24 @@ pub fn set_interactive(window: &gtk::ApplicationWindow, interactive: bool) {
     window.set_keyboard_mode(if interactive { KeyboardMode::OnDemand } else { KeyboardMode::None });
 }
 
+/// Places the overlay, kept fully on its monitor (a layer surface is clipped to its
+/// output, so a saved position from a wider setup could hide it).
 pub fn move_to(window: &gtk::ApplicationWindow, left: i32, top: i32) {
-    window.set_layer_shell_margin(Edge::Left, left.max(0));
-    window.set_layer_shell_margin(Edge::Top, top.max(0));
+    use gtk::prelude::{GtkWindowExt, MonitorExt, WidgetExt};
+    let (width, height) = window.size();
+    let monitor = window
+        .window()
+        .and_then(|gdk_window| window.display().monitor_at_window(&gdk_window))
+        .or_else(|| window.display().primary_monitor());
+    let (max_left, max_top) = match monitor {
+        Some(monitor) => {
+            let area = monitor.geometry();
+            ((area.width() - width).max(0), (area.height() - height).max(0))
+        }
+        None => (i32::MAX, i32::MAX),
+    };
+    window.set_layer_shell_margin(Edge::Left, left.clamp(0, max_left));
+    window.set_layer_shell_margin(Edge::Top, top.clamp(0, max_top));
 }
 
 /// The current offset from the output's top-left corner.

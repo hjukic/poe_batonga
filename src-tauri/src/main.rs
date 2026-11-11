@@ -208,6 +208,17 @@ fn apply_visibility(app: &AppHandle, visible: bool) -> Result<Status, String> {
     let window = overlay(app)?;
     if visible {
         window.show().map_err(|e| e.to_string())?;
+        // Now that the layer surface is on a monitor, keep it within that monitor.
+        #[cfg(target_os = "linux")]
+        if snapshot(app)?.layer_shell {
+            let shown = window.clone();
+            let _ = app.run_on_main_thread(move || {
+                if let Ok(gtk_window) = shown.gtk_window() {
+                    let (x, y) = layer_shell::position(&gtk_window);
+                    layer_shell::move_to(&gtk_window, x, y);
+                }
+            });
+        }
         apply_interaction(app, false)?;
     } else {
         apply_interaction(app, false)?;
