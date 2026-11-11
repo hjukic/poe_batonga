@@ -69,6 +69,43 @@ pub fn move_to(window: &gtk::ApplicationWindow, left: i32, top: i32) {
     window.set_layer_shell_margin(Edge::Top, top.clamp(0, max_top));
 }
 
+/// Sends one request to Hyprland's IPC socket and returns the reply (None elsewhere).
+pub fn hyprland_request(request: &str) -> Option<String> {
+    use std::io::{Read, Write};
+    let runtime = std::env::var("XDG_RUNTIME_DIR").ok()?;
+    let instance = std::env::var("HYPRLAND_INSTANCE_SIGNATURE").ok()?;
+    let mut socket =
+        std::os::unix::net::UnixStream::connect(format!("{runtime}/hypr/{instance}/.socket.sock")).ok()?;
+    socket.write_all(request.as_bytes()).ok()?;
+    let mut reply = String::new();
+    socket.read_to_string(&mut reply).ok()?;
+    Some(reply)
+}
+
+/// Hyprland: the centre of the Path of Exile 2 window, in global logical pixels.
+pub fn game_center() -> Option<(i32, i32)> {
+    let clients: serde_json::Value = serde_json::from_str(&hyprland_request("j/clients")?).ok()?;
+    let game = clients.as_array()?.iter().find(|client| {
+        client["class"].as_str().is_some_and(|class| class == "steam_app_2694490")
+            || client["title"].as_str() == Some("Path of Exile 2")
+    })?;
+    let coord = |key: &str, i: usize| game[key][i].as_i64().map(|v| v as i32);
+    Some((coord("at", 0)? + coord("size", 0)? / 2, coord("at", 1)? + coord("size", 1)? / 2))
+}
+
+/// Puts the overlay on the monitor that contains the point (global logical pixels).
+pub fn set_monitor_at(window: &gtk::ApplicationWindow, x: i32, y: i32) {
+    use gtk::prelude::{MonitorExt, WidgetExt};
+    let display = window.display();
+    let monitor = (0..display.n_monitors()).filter_map(|i| display.monitor(i)).find(|monitor| {
+        let area = monitor.geometry();
+        x >= area.x() && x < area.x() + area.width() && y >= area.y() && y < area.y() + area.height()
+    });
+    if let Some(monitor) = monitor {
+        window.set_monitor(&monitor);
+    }
+}
+
 /// The current offset from the output's top-left corner.
 pub fn position(window: &gtk::ApplicationWindow) -> (i32, i32) {
     (window.layer_shell_margin(Edge::Left), window.layer_shell_margin(Edge::Top))

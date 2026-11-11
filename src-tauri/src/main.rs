@@ -175,14 +175,7 @@ fn watch_input_hover(app: AppHandle) {
 /// Hyprland's global cursor position, in the same logical pixels as layer margins.
 #[cfg(target_os = "linux")]
 fn hyprland_cursor() -> Option<(f64, f64)> {
-    use std::io::{Read, Write};
-    let runtime = std::env::var("XDG_RUNTIME_DIR").ok()?;
-    let instance = std::env::var("HYPRLAND_INSTANCE_SIGNATURE").ok()?;
-    let mut socket =
-        std::os::unix::net::UnixStream::connect(format!("{runtime}/hypr/{instance}/.socket.sock")).ok()?;
-    socket.write_all(b"cursorpos").ok()?;
-    let mut reply = String::new();
-    socket.read_to_string(&mut reply).ok()?;
+    let reply = layer_shell::hyprland_request("cursorpos")?;
     let (x, y) = reply.trim().split_once(',')?;
     Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
 }
@@ -204,6 +197,16 @@ fn apply_visibility(app: &AppHandle, visible: bool) -> Result<Status, String> {
     // On Linux a window that was never shown has no native GdkWindow yet, so show first.
     let window = overlay(app)?;
     if visible {
+        // Hyprland: open on the game's monitor rather than whichever one has focus.
+        #[cfg(target_os = "linux")]
+        if snapshot(app)?.layer_shell {
+            let target = window.clone();
+            let _ = app.run_on_main_thread(move || {
+                if let (Ok(gtk_window), Some((x, y))) = (target.gtk_window(), layer_shell::game_center()) {
+                    layer_shell::set_monitor_at(&gtk_window, x, y);
+                }
+            });
+        }
         window.show().map_err(|e| e.to_string())?;
         // Now that the layer surface is on a monitor, keep it within that monitor.
         #[cfg(target_os = "linux")]
