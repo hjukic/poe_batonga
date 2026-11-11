@@ -2,21 +2,19 @@
 // Fetch poe2way's collected zone terrain (walkable-area outline + points of
 // interest) for campaign areas and store it compactly under data/layouts/poe2way.
 //
-//   node scripts/fetch-poe2way-terrain.mjs [areaPrefix ...]   (default: G1_ G2_ G3_)
+//   node scripts/fetch-poe2way-terrain.mjs [areaId ...]
 //
-// Area IDs come from data/observations/campaign-zones.json.
+// Default: the first three campaign zones (The Riverbank, Clearfell Encampment,
+// Clearfell). poe2way has no terrain for The Riverbank (G1_1).
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = join(root, "data/layouts/poe2way");
 const api = "https://www.poe2way.com/api/map-layouts/";
-const prefixes = process.argv.slice(2).length ? process.argv.slice(2) : ["G1_", "G2_", "G3_"];
-
-const zones = JSON.parse(await readFile(join(root, "data/observations/campaign-zones.json"), "utf8"));
-const ids = zones.areas.map((a) => a.id).filter((id) => prefixes.some((p) => id.startsWith(p)));
+const ids = process.argv.slice(2).length ? process.argv.slice(2) : ["G1_1", "G1_town", "G1_2"];
 
 const en = (names) => (names && typeof names === "object" ? names.en ?? null : null);
 

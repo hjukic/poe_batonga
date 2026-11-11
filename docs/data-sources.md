@@ -8,7 +8,7 @@ criterion (owner, 2026-11-12). The machine-readable catalog is
 | --- | --- | --- |
 | Campaign route | [domistae/poe2-leveling](https://github.com/domistae/poe2-leveling/tree/f682e2b99c4a5a4f31882f3674bba4dcefc6ab46), starting with `poe2_act1_guide.html` | Not yet; our own Riverbank route is in `data/routes/` |
 | Zone IDs/names | Our own observations from the owner's local PoE 2 log | `data/observations/campaign-zones.json` |
-| Zone terrain (walls, POIs) | [poe2way](https://www.poe2way.com/atlas) collected terrain, Acts 1-3 | `data/layouts/poe2way/` |
+| Zone terrain (walls, POIs) | [poe2way](https://www.poe2way.com/atlas) collected terrain, first three zones | `data/layouts/poe2way/` |
 | Layout diagrams | [Vyary/qutm](https://github.com/Vyary/qutm) `layouts.json` | `data/layouts/qutm/` |
 
 ## Route reference
@@ -44,8 +44,16 @@ it compactly in `data/layouts/poe2way/` (fetched 2026-11-12, game release IDs in
 each file):
 
 ```sh
-node scripts/fetch-poe2way-terrain.mjs            # G1_ G2_ G3_ by default
+node scripts/fetch-poe2way-terrain.mjs            # G1_1 G1_town G1_2 by default
+node scripts/render-terrain.mjs                   # pictures in experiments/layouts/output
 ```
+
+We start with the first three zones (The Riverbank, Clearfell Encampment,
+Clearfell) and add more once navigation works there; other area IDs can be
+passed to the script. `render-terrain.mjs` draws each zone north-up and turned
+45° (`.game.svg`) to the in-game map orientation. The turn is checked against
+Qutm's Clearfell diagram (encampment exit at the bottom, waypoint and Mud Burrow
+top-left, The Grelwood right), not yet against live gameplay.
 
 Per area there is `<areaId>.json` and `<areaId>.svg` (extra variants as
 `<areaId>.v1.*`), plus `index.json`:
@@ -58,11 +66,13 @@ Per area there is `<areaId>.json` and `<areaId>.svg` (extra variants as
   `checkpoint`, `transition` (zone exit; `destination.areaId` when known),
   `waypoint`, `boss`, `npc`, `object`, `portal`, `stash`.
 
-Coverage: 51 of the 56 Act 1-3 area IDs we have observed. Missing: `G1_1` (The
-Riverbank), `G2_12_1`, `G2_12_2`, `G2_3a`, `G3_10`. Many exits have no destination.
+Coverage: Clearfell Encampment and Clearfell. poe2way has no terrain for The
+Riverbank (`G1_1`); for it we have only our own recordings. Exits without a known
+destination are labelled `exit` (the encampment's bottom exit leads to The
+Riverbank). NPCs appear several times where they stand at different quest stages.
 
 **Limits.** Each area is one *collected instance* ("collected terrain example");
-only Keth has a second variant. Campaign zones are generated per instance, so the
+Campaign zones are generated per instance, so the
 walls are an example, not the instance being played. The overall shape and the
 order of exits/POIs are likely to be similar, but the exact walls are not; live
 pathing needs the player's explored minimap or our recordings to confirm which

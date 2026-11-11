@@ -70,9 +70,9 @@
       "contentImported": true,
       "importedOn": "2026-11-12",
       "constraints": [
-        "One collected instance per area (Keth has two); campaign zones are generated per instance, so walls are an example, not the played instance",
-        "Outline and objects share game-space coordinates",
-        "Missing: G1_1, G2_12_1, G2_12_2, G2_3a, G3_10"
+        "Only the first three zones for now: G1_1 (no terrain on poe2way), G1_town, G1_2",
+        "One collected instance per area; campaign zones are generated per instance, so walls are an example, not the played instance",
+        "Outline and objects share game-space coordinates; the in-game map shows them turned 45 degrees"
       ]
     }
   ]
