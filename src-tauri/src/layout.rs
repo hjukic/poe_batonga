@@ -7,6 +7,8 @@
 //! A visit that cannot be related to earlier parts of the same instance (another
 //! entry, a teleport, tracking lost) starts a new part with its own coordinates.
 
+pub mod guide;
+
 use crate::minimap::MinimapView;
 use crate::tracker::LogEvent;
 use serde::{Deserialize, Serialize};
@@ -26,6 +28,11 @@ const WIDE: i32 = 32;
 /// Consecutive unmatched frames before a new part is started.
 const LOST_LIMIT: u32 = 9;
 const SAVE_EVERY: Duration = Duration::from_secs(15);
+/// Zones the arrow is enabled for while it is being tuned.
+const GUIDED: [&str; 3] = ["G1_1", "G1_town", "G1_2"];
+const SCALES_FILE: &str = "scales.json";
+/// At most this many wall cells are used to score the arrow's hypotheses.
+const GUIDE_WALLS: usize = 3000;
 /// Size of the overview grid sent to the overlay.
 pub const VIEW_COLS: usize = 300;
 pub const VIEW_ROWS: usize = 260;
@@ -107,14 +114,17 @@ struct Session {
     recording: Recording,
     /// Parts already finished in this instance (kept in `recording.parts`); `live` is extra.
     live: Live,
-    /// The arrival POI waits for the first placed frame.
+    /// The arrival POI waits for the first placed frame. Some("") is a live arrival
+    /// from an unknown zone (e.g. after logging in); None means the app started mid-zone.
     arrived_from: Option<String>,
     started: bool,
     file: Option<PathBuf>,
 }
 
-#[derive(Default)]
 struct State {
+    catalog: guide::Catalog,
+    /// Measured minimap cells per diagram width, per area.
+    scales: HashMap<String, Vec<f64>>,
     dir: Option<PathBuf>,
     session: Option<Session>,
     /// Area left most recently, for the next zone's "arrived" point.
@@ -149,6 +159,7 @@ pub struct LayoutView {
     trail: Vec<[f32; 2]>,
     player: [f32; 2],
     pois: Vec<ViewPoi>,
+    guide: Option<guide::GuideView>,
 }
 
 fn now() -> u64 {
@@ -213,7 +224,20 @@ fn register(
 
 impl Recorder {
     pub fn new(dir: Option<PathBuf>) -> Self {
-        Recorder(Mutex::new(State { dir, ..State::default() }))
+        let scales = dir
+            .as_ref()
+            .and_then(|d| std::fs::read(d.join(SCALES_FILE)).ok())
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default();
+        Recorder(Mutex::new(State {
+            catalog: guide::Catalog::load(),
+            scales,
+            dir,
+            session: None,
+            previous_area: None,
+            last_save: None,
+            last_view: None,
+        }))
     }
 
     /// Log events: zone changes start a new recording, live ones also leave POIs.
@@ -228,7 +252,8 @@ impl Recorder {
                     }
                 }
                 state.finish();
-                state.previous_area = if live { left } else { None };
+                // A live arrival with no zone before it (e.g. a new character) still starts at the arrival point.
+                state.previous_area = if live { Some(left.unwrap_or_default()) } else { None };
                 let recording = state
                     .load(area, *seed)
                     .unwrap_or(Recording {
@@ -391,10 +416,53 @@ impl State {
         }
     }
 
-    /// Saves and closes the current recording.
+    /// Saves and closes the current recording, and learns the zone's scale from it.
     fn finish(&mut self) {
         self.save();
-        self.session = None;
+        let Some(session) = self.session.take() else { return };
+        let pois = &session.live.part.pois;
+        let Some(arrival) = pois.iter().find(|p| p.kind == "arrived") else { return };
+        let area = &session.recording.area;
+        if let Some(scale) = guide::measure_scale(&self.catalog, area, &arrival.label, pois) {
+            self.scales.entry(area.clone()).or_default().push(scale);
+            if let Some(dir) = &self.dir {
+                let _ = std::fs::create_dir_all(dir);
+                if let Ok(json) = serde_json::to_vec_pretty(&self.scales) {
+                    let _ = std::fs::write(dir.join(SCALES_FILE), json);
+                }
+            }
+        }
+    }
+
+    fn guide(&self, session: &Session) -> Option<guide::GuideView> {
+        let area = session.recording.area.as_str();
+        if !GUIDED.contains(&area) {
+            return None;
+        }
+        let live = &session.live;
+        let arrival = live.part.pois.iter().find(|p| p.kind == "arrived")?;
+        let mut walls: Vec<(i32, i32)> = live.walls.iter().filter(|(_, &n)| n >= 2).map(|(&k, _)| k).collect();
+        if walls.len() > GUIDE_WALLS {
+            let step = walls.len().div_ceil(GUIDE_WALLS);
+            walls = walls.into_iter().step_by(step).collect();
+        }
+        let scale = self.scales.get(area).and_then(|all| {
+            let mut all = all.clone();
+            all.sort_by(f64::total_cmp);
+            all.get(all.len() / 2).copied()
+        });
+        guide::guide(
+            &self.catalog,
+            &guide::Evidence {
+                area,
+                arrived_from: &arrival.label,
+                walls: &walls,
+                trail: &live.part.trail,
+                player: live.pos,
+                pois: &live.part.pois,
+                scale,
+            },
+        )
     }
 
     fn view(&self) -> Option<LayoutView> {
@@ -442,6 +510,7 @@ impl State {
                     ViewPoi { kind: p.kind.clone(), label: p.label.clone(), x, y }
                 })
                 .collect(),
+            guide: self.guide(session),
         })
     }
 }

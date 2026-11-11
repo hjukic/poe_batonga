@@ -38,6 +38,12 @@ button.icon:hover { background: rgb(239 235 255 / .12); }
 .step.done { color: #8d8899; opacity: .55; text-decoration: line-through; text-decoration-thickness: 1px; }
 .step.done .boss { color: inherit; }
 
+/* ---- Arrow to the next objective ---- */
+.guide { display: flex; align-items: center; gap: 10px; padding: 0 20px 10px; font-size: 15px; transition: opacity .3s; }
+.guide[hidden] { display: none; }
+.guide .arrow { width: 34px; height: 34px; flex-shrink: 0; fill: #ffd27a; filter: drop-shadow(0 1px 3px #000); transition: transform .4s ease; }
+.guide.unsure { opacity: .45; }
+
 /* ---- Live minimap preview ---- */
 .minimap { padding: 0 20px 12px; }
 .minimap[hidden] { display: none; }

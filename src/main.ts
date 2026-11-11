@@ -43,6 +43,22 @@ interface LayoutView {
   trail: [number, number][];
   player: [number, number];
   pois: { kind: string; label: string; x: number; y: number }[];
+  guide: GuideView | null;
+}
+
+/** The arrow: estimated direction to the next objective, from the layout diagrams. */
+interface GuideView {
+  variant: string;
+  targetKind: string;
+  target: string;
+  /** Screen direction: 0 = right, 90 = down. */
+  degrees: number;
+  /** Minimap cells. */
+  distance: number;
+  /** 0-1, lead over the best hypothesis pointing elsewhere. */
+  confidence: number;
+  measured: boolean;
+  turned: boolean;
 }
 
 const icon = (paths: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
@@ -63,6 +79,10 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
       </div>
     </header>
     <div class="route" id="route"></div>
+    <div class="guide" id="guide" hidden>
+      <svg class="arrow" id="guide-arrow" viewBox="-12 -12 24 24" aria-hidden="true"><path d="M-8 -5 L8 0 L-8 5 L-4 0 Z"/></svg>
+      <span id="guide-text"></span>
+    </div>
     <div class="minimap" id="minimap" hidden>
       <canvas id="minimap-canvas" width="300" height="260"></canvas>
       <p id="minimap-message"></p>
@@ -139,6 +159,21 @@ function renderMinimap(view: MinimapView) {
   minimapBox.hidden = !view.enabled;
   $('#minimap-message').textContent = view.message;
 }
+/** Below this the arrow is shown faded: another direction is nearly as likely. */
+const SURE = 0.3;
+function renderGuide(guide: GuideView | null) {
+  const box = $('#guide');
+  box.hidden = !guide;
+  if (!guide) return;
+  const name = guide.target || (guide.targetKind === 'entrance' ? 'Exit' : guide.targetKind);
+  const sure = guide.confidence >= SURE;
+  box.classList.toggle('unsure', !sure);
+  $('#guide-arrow').style.transform = `rotate(${guide.degrees}deg)`;
+  const how = sure ? `${Math.round(guide.confidence * 100)}%` : 'unsure';
+  $('#guide-text').textContent = `${name} · ${how}${guide.measured ? '' : ' · rough distance'}`;
+  box.title = `Layout variant ${guide.variant}${guide.turned ? ' (rotated/mirrored)' : ''}, about ${Math.round(guide.distance)} minimap cells away`;
+}
+
 const POI_COLORS: Record<string, string> = { arrived: '#7fd18b', start: '#7fd18b', left: '#8edce8', npc: '#f2d36b' };
 function renderLayout(view: LayoutView | null) {
   const context = minimapCanvas.getContext('2d');
@@ -147,6 +182,7 @@ function renderLayout(view: LayoutView | null) {
   $('#layout-message').textContent = view
     ? `Recording ${view.area}${view.part > 1 ? ` (part ${view.part})` : ''}: ${view.matched}/${view.frames} frames placed`
     : '';
+  renderGuide(view?.guide ?? null);
   if (!view) return;
   const scale = Math.min(minimapCanvas.width / view.cols, minimapCanvas.height / view.rows);
   context.fillStyle = '#b9b4e6';
@@ -163,6 +199,16 @@ function renderLayout(view: LayoutView | null) {
     context.fillRect(poi.x * scale - 3, poi.y * scale - 3, 6, 6);
   }
   const [x, y] = view.player;
+  if (view.guide) {
+    // The arrow's direction from the player, on the map.
+    const r = (view.guide.degrees * Math.PI) / 180;
+    context.strokeStyle = view.guide.confidence >= SURE ? '#ffd27a' : 'rgb(255 210 122 / .4)';
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(x * scale, y * scale);
+    context.lineTo(x * scale + Math.cos(r) * 40, y * scale + Math.sin(r) * 40);
+    context.stroke();
+  }
   context.fillStyle = '#ff8a2a';
   context.beginPath();
   context.arc(x * scale, y * scale, 4, 0, Math.PI * 2);
