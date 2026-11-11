@@ -54,16 +54,18 @@ fn apply_interaction(app: &AppHandle, interactive: bool) -> Result<Status, Strin
 
 fn apply_visibility(app: &AppHandle, visible: bool) -> Result<Status, String> {
     // Showing always returns to click-through; a hidden window cannot leave an input trap.
-    apply_interaction(app, false)?;
+    // On Linux a window that was never shown has no native GdkWindow yet, and tao panics
+    // when click-through is set on it, so show first and switch to click-through after.
     let window = app
         .get_webview_window("overlay")
         .ok_or("Overlay window missing")?;
     if visible {
-        window.show()
+        window.show().map_err(|e| e.to_string())?;
+        apply_interaction(app, false)?;
     } else {
-        window.hide()
+        apply_interaction(app, false)?;
+        window.hide().map_err(|e| e.to_string())?;
     }
-    .map_err(|e| e.to_string())?;
     let state = app.state::<OverlayState>();
     let mut status = state.0.lock().map_err(|e| e.to_string())?;
     status.visible = visible;
