@@ -3,9 +3,12 @@
 This folder will hold the project scope, architecture and decision records as
 the corresponding steps in [the plan](../PLAN.md) are completed.
 
+Current document:
+
+- [Scope](scope.md): owner requirements recorded; second-contributor agreement pending.
+
 Planned documents (not written yet):
 
-- Scope agreement: Phase 1, step 2.
 - `architecture.md`: Phase 1, step 3.
 - `decisions.md`: Phase 1, step 3, starting with the scope decisions.
 
