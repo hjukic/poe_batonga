@@ -305,6 +305,23 @@ fn move_overlay_by(app: AppHandle, dx: i32, dy: i32) -> Result<(), String> {
     Ok(())
 }
 
+/// Fits the overlay to its panel (and open menu). Sync commands run on the main thread,
+/// so GTK can be used directly.
+#[tauri::command]
+fn resize_overlay(app: AppHandle, width: f64, height: f64) -> Result<(), String> {
+    let window = overlay(&app)?;
+    #[cfg(target_os = "linux")]
+    if snapshot(&app)?.layer_shell {
+        // The layer surface keeps its fixed size; record the panel's and keep it on-screen.
+        layer_shell::set_content_size(width.ceil() as i32, height.ceil() as i32);
+        let gtk_window = window.gtk_window().map_err(|e| e.to_string())?;
+        let (x, y) = layer_shell::position(&gtk_window);
+        layer_shell::move_to(&gtk_window, x, y);
+        return Ok(());
+    }
+    window.set_size(tauri::LogicalSize::new(width, height)).map_err(|e| e.to_string())
+}
+
 /// Layer-shell only: keeps the current position for the next start.
 #[tauri::command]
 fn save_overlay_position(app: AppHandle) -> Result<(), String> {
@@ -492,6 +509,7 @@ fn main() {
             set_visibility,
             move_overlay_by,
             save_overlay_position,
+            resize_overlay,
             set_input_rects,
             start_overlay_drag,
             end_overlay_drag,

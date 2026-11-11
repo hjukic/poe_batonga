@@ -28,8 +28,10 @@ pub fn init(window: &gtk::ApplicationWindow, left: i32, top: i32) {
     window.set_keyboard_mode(KeyboardMode::None);
     // Not on a monitor yet: keep the saved position within the smallest monitor, since
     // the compositor may place the overlay on any of them.
-    use gtk::prelude::{GtkWindowExt, MonitorExt};
-    let (width, height) = window.size();
+    use gtk::prelude::MonitorExt;
+    // The panel's size isn't known yet; assume a typical one.
+    let (width, height) = (360, 420);
+    let _ = window;
     let display = gtk::gdk::Display::default();
     let smallest = display
         .iter()
@@ -52,8 +54,8 @@ pub fn set_interactive(window: &gtk::ApplicationWindow, interactive: bool) {
 /// Places the overlay, kept fully on its monitor (a layer surface is clipped to its
 /// output, so a saved position from a wider setup could hide it).
 pub fn move_to(window: &gtk::ApplicationWindow, left: i32, top: i32) {
-    use gtk::prelude::{GtkWindowExt, MonitorExt, WidgetExt};
-    let (width, height) = window.size();
+    use gtk::prelude::{MonitorExt, WidgetExt};
+    let (width, height) = content_size(window);
     let monitor = window
         .window()
         .and_then(|gdk_window| window.display().monitor_at_window(&gdk_window))
@@ -113,6 +115,23 @@ pub fn set_monitor_at(window: &gtk::ApplicationWindow, x: i32, y: i32) {
     if let Some(monitor) = monitor {
         window.set_monitor(&monitor);
     }
+}
+
+/// The panel's real size (it is smaller than the layer surface). GTK doesn't pass a
+/// resize of a mapped layer window on to the compositor, so the surface keeps its fixed,
+/// generous size from tauri.conf.json; the area around the panel is transparent and
+/// click-through. This size keeps the panel itself on its monitor.
+static CONTENT_SIZE: std::sync::Mutex<Option<(i32, i32)>> = std::sync::Mutex::new(None);
+
+pub fn set_content_size(width: i32, height: i32) {
+    if let Ok(mut size) = CONTENT_SIZE.lock() {
+        *size = Some((width, height));
+    }
+}
+
+fn content_size(window: &gtk::ApplicationWindow) -> (i32, i32) {
+    use gtk::prelude::GtkWindowExt;
+    CONTENT_SIZE.lock().ok().and_then(|size| *size).unwrap_or_else(|| window.size())
 }
 
 /// The current offset from the output's top-left corner.

@@ -1,6 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import './style.css';
 
 interface Status {
@@ -89,11 +89,10 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
       <p id="minimap-message"></p>
       <p id="layout-message"></p>
     </div>
-    <div class="version" title="App version: goes up with every update">v${__APP_VERSION__.split('.').slice(0, 2).join('.')}</div>
+    <div class="version" title="App version: goes up with every update">v${__APP_VERSION__}</div>
   </section>
   <div id="settings" class="dropdown" aria-label="Settings" hidden>
     <label class="row"><span>Opacity</span><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></label>
-    <p class="hint">Reads visible map pixels locally. Raw frames stay in memory; explored layouts are saved locally. GGG permission for live navigation remains unconfirmed.</p>
     <div class="row"><span>Show / hide</span><button id="shortcut" class="keycap" type="button" title="Click, then press a new shortcut"></button></div>
     <p id="shortcut-error" class="warning" hidden></p>
     <hr />
@@ -346,7 +345,8 @@ function fitWindow() {
   const height = Math.ceil(Math.max(...boxes.map((box) => box.bottom))) + 1; // body padding
   if (`${width}x${height}` !== lastSize) {
     lastSize = `${width}x${height}`;
-    void getCurrentWindow().setSize(new LogicalSize(width, height)).catch(console.error);
+    // Rust picks the right way: GTK sizing for a layer surface, a window resize elsewhere.
+    void invoke('resize_overlay', { width, height }).catch(console.error);
   }
   syncInput();
 }
