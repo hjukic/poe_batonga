@@ -54,9 +54,14 @@ explicit. See [log findings](log-findings.md) for what the file actually supplie
   warns of outdated PoE 2 Act-Decoder layouts. Its game screenshots also require
   separate provenance consideration. Do not import that image collection as our
   initial dataset.
-- [Qutm](https://github.com/Vyary/qutm) is Apache-2.0 and useful as a reference;
-  we have not selected its route/diagram assets for import. Diagram coordinates
-  are authored positions, not live player coordinates.
+- [Qutm](https://github.com/Vyary/qutm) is Apache-2.0. **Its layout diagrams are
+  imported** (owner request, 2026-11-11) as `data/layouts/qutm/layouts.json`. They
+  cover 94 zones with 106 variants and give positions for the start, exits,
+  waypoints, checkpoints and bosses; see the [README](../data/layouts/qutm/README.md).
+  Diagram coordinates are authored 0-1 positions, not live player coordinates. Our
+  own recordings supply each zone's scale and which variant is being played.
+- Mobalytics campaign-layout guides (Act 1-3) and the PoE 2 wiki have layout
+  pictures, but they carry no reuse licence. They are not imported.
 - The exact Exile Leveling fork in the original plan was not identified and its
   PoE 2 applicability/licence was not established. It is not selected.
 - PoE 2 wiki copyright pages could not be verified in this review. Do not assume

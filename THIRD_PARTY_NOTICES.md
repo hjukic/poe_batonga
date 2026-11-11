@@ -24,6 +24,12 @@ Qutm was inspected as a reference for the overlay's presentation and log parsing
 Its application code and game-image assets are not bundled here. See
 [the review](docs/qutm-review.md) and [overlay experiment](docs/overlay-test.md).
 
+Its layout diagrams are bundled unmodified as
+[data/layouts/qutm/layouts.json](data/layouts/qutm/layouts.json), from revision
+`d18b4e6abee3f87c90342222918c6b08422967c5`, under the Apache License 2.0:
+[licenses/qutm-Apache-2.0.txt](licenses/qutm-Apache-2.0.txt). Upstream has no
+NOTICE file. The author does not endorse this project.
+
 ## Game content
 
 Path of Exile 2, game assets, names and trademarks belong to their respective

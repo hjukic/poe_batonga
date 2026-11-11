@@ -14,7 +14,11 @@
       "licenseFile": "licenses/domistae-MIT.txt",
       "upstreamTargetPatch": "0.5.5",
       "contentImported": false,
-      "constraints": ["Original authored text only; no images or third-party extracts", "Preserve copyright, license and source attribution", "Validate objectives against target patch before shipping"]
+      "constraints": [
+        "Original authored text only; no images or third-party extracts",
+        "Preserve copyright, license and source attribution",
+        "Validate objectives against target patch before shipping"
+      ]
     },
     {
       "id": "local-client-log",
@@ -23,7 +27,12 @@
       "artifact": "data/observations/campaign-zones.json",
       "method": "Offline collection of internal area IDs, scene names and observed levels from the owner's Client.txt",
       "contentImported": true,
-      "constraints": ["Factual observations only; original logs remain local", "No character names, chat, server details or quest dialogue exported", "Historical observations are not a current-patch authoritative zone table", "No licence to game assets or full logs is asserted"]
+      "constraints": [
+        "Factual observations only; original logs remain local",
+        "No character names, chat, server details or quest dialogue exported",
+        "Historical observations are not a current-patch authoritative zone table",
+        "No licence to game assets or full logs is asserted"
+      ]
     },
     {
       "id": "project-layout-schematics",
@@ -32,7 +41,32 @@
       "method": "Contributor-authored abstract schematics from labelled observations of explored maps",
       "license": "MIT for original project artwork",
       "contentImported": false,
-      "constraints": ["No tracing or importing third-party images", "Record author, patch, zone, observation and confidence for each diagram", "Unknown variants remain unsupported", "No exact-instance or hidden-map claims", "Live automated capture remains subject to step 7"]
+      "constraints": [
+        "No tracing or importing third-party images",
+        "Record author, patch, zone, observation and confidence for each diagram",
+        "Unknown variants remain unsupported",
+        "No exact-instance or hidden-map claims",
+        "Live automated capture remains subject to step 7"
+      ]
+    },
+    {
+      "id": "qutm-layouts",
+      "kind": "layout-diagrams",
+      "selection": "selected",
+      "repository": "https://github.com/Vyary/qutm",
+      "revision": "d18b4e6abee3f87c90342222918c6b08422967c5",
+      "sourceFile": "src/assets/layouts.json",
+      "license": "Apache-2.0",
+      "licenseFile": "licenses/qutm-Apache-2.0.txt",
+      "artifact": "data/layouts/qutm/layouts.json",
+      "contentImported": true,
+      "importedOn": "2026-11-11",
+      "constraints": [
+        "Unmodified copy; keep licence and attribution in THIRD_PARTY_NOTICES.md",
+        "Authored diagrams with approximate 0-1 positions, not to scale and not exact instances",
+        "No Qutm icon images imported",
+        "Variant and scale must be established from our own recordings before guiding"
+      ]
     }
   ]
 }
