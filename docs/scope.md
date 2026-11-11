@@ -1,7 +1,7 @@
 # Scope: Path of Exile 2 leveling companion
 
-Phase 1, step 2. Requirements recorded on 2026-11-11 from the project owner;
-agreement by the second contributor is still pending.
+Phase 1, step 2. Requirements recorded on 2026-11-11 from the project owner
+and agreed by both contributors the same day.
 
 ## Product and platforms
 
@@ -63,8 +63,8 @@ replace the requested automatic experience with manual operation.
 ## Completion and reference
 
 Step 2 is complete when both contributors agree to this page, including its
-conditional features. Owner requirements recorded; second-contributor agreement
-pending. Implementation and GGG clarification have not been completed.
+conditional features. Both contributors agreed on 2026-11-11; step 2 is complete.
+Implementation and GGG clarification have not been completed.
 
 Reference checked 2026-11-11: [GGG Terms of Use for Path of Exile and Path of
 Exile 2](https://www.pathofexile.com/legal/terms-of-use-and-privacy-policy),

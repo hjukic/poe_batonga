@@ -1,7 +1,7 @@
 # Decisions and proposals
 
-Recorded 2026-11-11. Scope requirements come from the project owner; the second
-contributor's scope agreement is pending. Technical proposals below are not
+Recorded 2026-11-11. Scope requirements come from the project owner and were
+agreed by both contributors on 2026-11-11. Technical proposals below are not
 measured results or completion of Phase 2.
 
 | ID | Status | Decision and reason |

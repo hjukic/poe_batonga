@@ -5,7 +5,7 @@ the corresponding steps in [the plan](../PLAN.md) are completed.
 
 Current document:
 
-- [Scope](scope.md): owner requirements recorded; second-contributor agreement pending.
+- [Scope](scope.md): agreed by both contributors.
 
 - [Architecture](architecture.md): Phase 1.3 proposal and Phase 2 research questions.
 - [Decisions](decisions.md): scope requirements, proposals and deferred choices.
@@ -17,14 +17,6 @@ Current document:
 
 ## Repository setup status
 
-The GitHub repository, README, license and documentation folder are present.
-Step 1 remains open until collaborator access is confirmed:
-
-1. The owner invites the collaborator through GitHub Settings > Collaborators
-   and grants write access; the collaborator accepts the invitation.
-2. Each contributor pushes a branch and opens a pull request into `main`.
-3. Record the two pull request links here, then tick step 1 in the plan.
-
-Owner verification PR: pending.
-
-Collaborator verification PR: pending.
+The GitHub repository, README, license and documentation folder are present,
+and the second contributor has collaborator access. Step 1 is complete
+(confirmed by the owner 2026-11-11).

@@ -5,23 +5,22 @@ The design lives in `docs/architecture.md`, the decisions and their reasons in `
 
 ## Phase 1: Set up
 
-- [ ] **1. Create the repository**
+- [x] **1. Create the repository**
   Create the GitHub repo, add your friend as collaborator, and add a README, a licence and the `docs/` folder.
   Done when: both of you can push a branch and open a pull request.
 
-  Status: repository, README, MIT license and `docs/` are present. Collaborator
-  invitation and both contributors' branch/PR checks are still pending; see
-  `docs/README.md`.
+  Status: repository, README, MIT license and `docs/` are present; the second
+  contributor has collaborator access (confirmed by the owner 2026-11-11).
 
-- [ ] **2. Agree the scope**
+- [x] **2. Agree the scope**
   Write down the PoE 2 campaign overlay scope: Windows and Linux, automatic
   objective tracking, mandatory and selected optional quest items, a map panel
   and automatic layout-based directional guidance. GGG compliance is mandatory;
   automatic recognition and the arrow depend on compliance and feasibility.
   Done when: you both agree on one page of text.
 
-  Status: owner requirements recorded in `docs/scope.md`; agreement by the
-  second contributor is pending. No automatic recognition feature is approved yet.
+  Status: `docs/scope.md` agreed by both contributors (2026-11-11). Automatic
+  recognition and the arrow remain conditional on step 7.
 
 - [x] **3. Draft the architecture**
   Write `docs/architecture.md` with the parts of the app, how data flows between them, and the open questions. Start `docs/decisions.md` with the decisions from step 2.
