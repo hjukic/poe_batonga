@@ -89,6 +89,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
       <p id="minimap-message"></p>
       <p id="layout-message"></p>
     </div>
+    <div class="version" title="App version: goes up with every update">v${__APP_VERSION__.split('.').slice(0, 2).join('.')}</div>
   </section>
   <div id="settings" class="dropdown" aria-label="Settings" hidden>
     <label class="row"><span>Opacity</span><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></label>

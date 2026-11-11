@@ -69,3 +69,10 @@ git push -u origin your-change
 
 Open a pull request into `main` on GitHub. Collaborators need write access before
 they can push branches to this repository.
+
+### Version number
+
+The overlay shows the app version bottom right (`v0.1`). It comes from `version` in
+`package.json` (Tauri reads the same field). Raise the minor version
+(`0.1.0` → `0.2.0` → …) with every update you push, so a running app shows whether
+it has the latest change.
