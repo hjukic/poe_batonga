@@ -16,6 +16,23 @@ input to the game and produces no arrow yet. Best results with the game's map
 landscape transparency turned off. The policy notes below still describe the
 unresolved question with GGG.
 
+**Layout recorder (2026-11-11).** `src-tauri/src/layout.rs` builds our own layout
+data while the owner plays. This follows the data-sources rule: project-original
+data from our own explored-map observations, with no third-party images and no
+game files. The minimap is centred on the player, so each frame's walls are
+matched against the map built so far (an exact overlap scores above a one-cell
+near miss) to find how far the player moved. The frames are stitched into a
+map of the zone visit. Points of interest come from the live log: `arrived` (from
+the previous zone), `left` (towards the next zone, which may also be a waypoint or
+portal) and `npc` (where a named speaker, NPC or boss first spoke). Recordings
+are saved per instance at `<app data>/layouts/<area>/<seed>.json`. A
+re-entry, a teleport or lost tracking starts a new part with its own coordinates.
+`node scripts/render-layouts.mjs` draws them as SVG. In a 60-second live test,
+all 182 frames were placed with none lost, and the walls lined up cleanly.
+Open questions for the arrow: whether instances of a zone share a layout family
+(compare several Riverbank seeds), detecting minimap icons (waypoints,
+checkpoints, transitions), and a fixed minimap zoom.
+
 ## Policy findings
 
 GGG's [official developer policy](https://www.pathofexile.com/developer/docs/index#policy)

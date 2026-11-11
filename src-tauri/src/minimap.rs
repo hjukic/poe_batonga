@@ -8,7 +8,7 @@ use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 /// About three frames a second.
 const FRAME_INTERVAL: Duration = Duration::from_millis(330);
@@ -21,8 +21,8 @@ const REGION_X: f64 = 0.84375;
 const REGION_W: f64 = 0.15625;
 const REGION_H: f64 = 0.24;
 
-/// Native pixels per cell of the wall grid sent to the UI.
-const CELL: usize = 4;
+/// Native minimap pixels per cell of the wall grid.
+pub const CELL: usize = 2;
 /// Wall pixels a cell needs, so single stray pixels are ignored.
 const CELL_MIN: u32 = 2;
 const MARKER_MIN: u32 = 4;
@@ -38,6 +38,8 @@ pub struct MinimapView {
     /// Grid size in cells; `walls` lists occupied cells as [column, row].
     pub cols: usize,
     pub rows: usize,
+    /// Used by the layout recorder; the overlay draws the stitched layout instead.
+    #[serde(skip)]
     pub walls: Vec<[u16; 2]>,
     /// Player marker centre in grid cells.
     pub player: Option<[f32; 2]>,
@@ -238,7 +240,14 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
                     None => MinimapView::status(true, "Starting"),
                     Some((Err(error), _)) => MinimapView::status(true, error),
                     Some((Ok(area), _)) => match capture(area) {
-                        Ok(image) => analyse(&image, true),
+                        Ok(image) => {
+                            let view = analyse(&image, true);
+                            let recorder = app.state::<crate::layout::Recorder>();
+                            if let Some(layout) = recorder.on_frame(&view, [image.width, image.height]) {
+                                let _ = app.emit("layout-state", layout);
+                            }
+                            view
+                        }
                         Err(error) => {
                             region = None;
                             MinimapView::status(true, &error)
@@ -284,11 +293,11 @@ mod tests {
         });
         let view = analyse(&frame, true);
         assert!(view.visible);
-        assert_eq!((view.cols, view.rows), (16, 16));
-        assert_eq!(view.walls.len(), 16);
-        assert!(view.walls.iter().all(|[_, row]| *row == 5));
+        assert_eq!((view.cols, view.rows), (32, 32));
+        assert_eq!(view.walls.len(), 32);
+        assert!(view.walls.iter().all(|[_, row]| *row == 10));
         let [px, py] = view.player.unwrap();
-        assert!((px - 7.875).abs() < 0.01 && (py - 10.375).abs() < 0.01, "{px},{py}");
+        assert!((px - 15.75).abs() < 0.01 && (py - 20.75).abs() < 0.01, "{px},{py}");
     }
 
     #[test]
@@ -325,9 +334,39 @@ mod tests {
         if let Some([x, y]) = view.player {
             art[y as usize][x as usize] = '@';
         }
-        for row in art.iter().step_by(2) {
-            println!("{}", row.iter().step_by(1).collect::<String>().trim_end());
+        for row in art.iter().step_by(4) {
+            println!("{}", row.iter().step_by(2).collect::<String>().trim_end());
         }
+    }
+
+    /// Records the live game for LIVE_SECONDS (default 45) into LIVE_OUT (a layouts folder):
+    /// `LIVE_OUT=/tmp/x cargo test --release live_record -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    #[cfg(target_os = "linux")]
+    fn live_record() {
+        use crate::layout::Recorder;
+        use crate::tracker::LogEvent;
+        let out = std::env::var("LIVE_OUT").expect("set LIVE_OUT");
+        let seconds: u64 = std::env::var("LIVE_SECONDS").ok().and_then(|s| s.parse().ok()).unwrap_or(45);
+        let area = std::env::var("LIVE_AREA").unwrap_or_else(|_| "live-test".into());
+        let recorder = Recorder::new(Some(out.into()));
+        recorder.on_log(&LogEvent::ZoneEntered { area, level: 0, seed: Some(seconds) }, false);
+        let started = Instant::now();
+        let (mut frames, mut slowest) = (0, Duration::ZERO);
+        while started.elapsed() < Duration::from_secs(seconds) {
+            let t = Instant::now();
+            let Ok(region) = locate_minimap() else { continue };
+            let Ok(image) = capture(&region) else { continue };
+            let view = analyse(&image, true);
+            recorder.on_frame(&view, [image.width, image.height]);
+            frames += 1;
+            slowest = slowest.max(t.elapsed());
+            std::thread::sleep(FRAME_INTERVAL.saturating_sub(t.elapsed()));
+        }
+        // A zone change saves and closes the recording.
+        recorder.on_log(&LogEvent::ZoneEntered { area: "end".into(), level: 0, seed: None }, false);
+        println!("{frames} frames, slowest {slowest:?}");
     }
 
     #[test]

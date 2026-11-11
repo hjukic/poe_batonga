@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod layout;
 mod minimap;
 mod tracker;
 
@@ -299,6 +300,11 @@ fn set_minimap_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn layout_state(recorder: State<'_, layout::Recorder>) -> Option<layout::LayoutView> {
+    recorder.view()
+}
+
+#[tauri::command]
 fn quit(app: AppHandle) {
     app.exit(0);
 }
@@ -322,6 +328,7 @@ fn main() {
             reset_progress,
             minimap_state,
             set_minimap_enabled,
+            layout_state,
             quit
         ])
         .setup(|app| {
@@ -333,6 +340,9 @@ fn main() {
                 shortcut_error: None,
                 last_error: None,
             })));
+            // Before the tracker and minimap threads, which both feed it.
+            let layouts = app.path().app_data_dir().ok().map(|dir| dir.join("layouts"));
+            app.manage(layout::Recorder::new(layouts));
             app.manage(tracker::init(app.handle()));
             tracker::spawn(app.handle().clone());
             let reader = minimap::init(settings.read_minimap);

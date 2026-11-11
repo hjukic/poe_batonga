@@ -68,7 +68,7 @@ pub fn load_route() -> Route {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LogEvent {
-    ZoneEntered { area: String, level: u32 },
+    ZoneEntered { area: String, level: u32, seed: Option<u64> },
     Dialogue { speaker: String, text: String },
 }
 
@@ -84,9 +84,10 @@ pub fn parse_line(line: &str) -> Option<(String, LogEvent)> {
 
     if let Some(rest) = message.strip_prefix("Generating level ") {
         let (level, rest) = rest.split_once(" area \"")?;
-        let (area, _) = rest.split_once('"')?;
+        let (area, rest) = rest.split_once('"')?;
         let level = level.trim().parse().ok()?;
-        return Some((timestamp, LogEvent::ZoneEntered { area: area.to_string(), level }));
+        let seed = rest.trim().strip_prefix("with seed ").and_then(|s| s.trim().parse().ok());
+        return Some((timestamp, LogEvent::ZoneEntered { area: area.to_string(), level, seed }));
     }
 
     // Dialogue is logged like chat, but without a channel prefix. Player chat
@@ -150,7 +151,7 @@ pub fn apply(route: &Route, progress: &mut Progress, timestamp: &str, event: &Lo
             continue;
         }
         let evidence = match (trigger, event) {
-            (Trigger::ZoneEntered { area }, LogEvent::ZoneEntered { area: got, level }) if area == got => {
+            (Trigger::ZoneEntered { area }, LogEvent::ZoneEntered { area: got, level, .. }) if area == got => {
                 format!("Entered {got} (level {level})")
             }
             (Trigger::NpcLine { area, speaker, text }, LogEvent::Dialogue { speaker: who, text: said })
@@ -345,6 +346,20 @@ fn first_run_offset(file: &mut File, len: u64) -> std::io::Result<u64> {
     Ok(start + offset as u64)
 }
 
+/// The zone the player is in now: the last zone generation in the last few MB.
+fn current_zone(file: &mut File, len: u64) -> std::io::Result<Option<LogEvent>> {
+    let start = len.saturating_sub(FIRST_RUN_LOOKBACK);
+    file.seek(SeekFrom::Start(start))?;
+    let mut buf = Vec::new();
+    file.take(len - start).read_to_end(&mut buf)?;
+    let text = String::from_utf8_lossy(&buf);
+    Ok(text
+        .lines()
+        .rev()
+        .filter(|line| line.contains("Generating level "))
+        .find_map(|line| parse_line(line).map(|(_, event)| event)))
+}
+
 fn set_log_status(app: &AppHandle, connected: bool, path: Option<&Path>, message: &str) {
     let tracker = app.state::<Tracker>();
     let Ok(mut inner) = tracker.0.lock() else { return };
@@ -387,9 +402,15 @@ fn follow(app: &AppHandle, path: &Path) -> std::io::Result<()> {
             _ => first_run_offset(&mut file, len)?,
         }
     };
+    // The layout recorder needs the current zone even when no new zone is entered.
+    if let Some(zone) = current_zone(&mut file, pos)? {
+        app.state::<crate::layout::Recorder>().on_log(&zone, false);
+    }
     set_log_status(app, true, Some(path), "Reading game log (read-only)");
 
     let mut pending: Vec<u8> = Vec::new();
+    // Lines read before first reaching the end of the file are history, not live play.
+    let mut live = false;
     loop {
         let len = std::fs::metadata(path)?.len();
         if len < pos {
@@ -409,14 +430,16 @@ fn follow(app: &AppHandle, path: &Path) -> std::io::Result<()> {
             };
             let complete: Vec<u8> = pending.drain(..=last_newline).collect();
             let read_through = pos - pending.len() as u64;
-            process(app, &path_text, &complete, read_through);
+            process(app, &path_text, &complete, read_through, live);
             continue; // more may be waiting beyond MAX_READ
         }
+        live = true;
         std::thread::sleep(POLL);
     }
 }
 
-fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64) {
+fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: bool) {
+    let recorder = app.state::<crate::layout::Recorder>();
     let tracker = app.state::<Tracker>();
     let Ok(mut inner) = tracker.0.lock() else { return };
     let Inner { route, progress, .. } = &mut *inner;
@@ -425,6 +448,7 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64) {
     for line in String::from_utf8_lossy(bytes).lines() {
         if let Some((timestamp, event)) = parse_line(line) {
             changed |= apply(route, progress, &timestamp, &event);
+            recorder.on_log(&event, live);
         }
     }
     progress.log_path = Some(path.to_string());
@@ -448,7 +472,7 @@ mod tests {
         let (ts, event) =
             parse_line(&line("DEBUG", r#"Generating level 1 area "G1_1" with seed 1256743153"#)).unwrap();
         assert_eq!(ts, "2026/11/11 22:41:55");
-        assert_eq!(event, LogEvent::ZoneEntered { area: "G1_1".into(), level: 1 });
+        assert_eq!(event, LogEvent::ZoneEntered { area: "G1_1".into(), level: 1, seed: Some(1256743153) });
     }
 
     #[test]

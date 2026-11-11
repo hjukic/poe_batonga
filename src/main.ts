@@ -25,11 +25,22 @@ interface MinimapView {
   enabled: boolean;
   visible: boolean;
   message: string;
+  player: [number, number] | null;
+}
+
+/** The stitched map of the current zone visit, scaled to a cols x rows grid. */
+interface LayoutView {
+  area: string;
+  seed: number | null;
+  part: number;
+  frames: number;
+  matched: number;
   cols: number;
   rows: number;
-  /** Occupied wall cells as [column, row]. */
   walls: [number, number][];
-  player: [number, number] | null;
+  trail: [number, number][];
+  player: [number, number];
+  pois: { kind: string; label: string; x: number; y: number }[];
 }
 
 const icon = (paths: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
@@ -53,6 +64,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <div class="minimap" id="minimap" hidden>
       <canvas id="minimap-canvas" width="300" height="260"></canvas>
       <p id="minimap-message"></p>
+      <p id="layout-message"></p>
     </div>
   </section>
   <div id="settings" class="dropdown" aria-label="Settings" hidden>
@@ -123,21 +135,35 @@ function renderMinimap(view: MinimapView) {
   readMinimap.checked = view.enabled;
   minimapBox.hidden = !view.enabled;
   $('#minimap-message').textContent = view.message;
+}
+const POI_COLORS: Record<string, string> = { arrived: '#7fd18b', start: '#7fd18b', left: '#8edce8', npc: '#f2d36b' };
+function renderLayout(view: LayoutView | null) {
   const context = minimapCanvas.getContext('2d');
   if (!context) return;
-  const { width, height } = minimapCanvas;
-  context.clearRect(0, 0, width, height);
-  if (!view.cols || !view.rows) return;
-  const cell = Math.min(width / view.cols, height / view.rows);
+  context.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+  $('#layout-message').textContent = view
+    ? `Recording ${view.area}${view.part > 1 ? ` (part ${view.part})` : ''}: ${view.matched}/${view.frames} frames placed`
+    : '';
+  if (!view) return;
+  const scale = Math.min(minimapCanvas.width / view.cols, minimapCanvas.height / view.rows);
   context.fillStyle = '#b9b4e6';
-  for (const [column, row] of view.walls) context.fillRect(column * cell, row * cell, Math.max(cell, 1.5), Math.max(cell, 1.5));
-  if (view.player) {
-    const [x, y] = view.player;
-    context.fillStyle = '#ff8a2a';
+  for (const [x, y] of view.walls) context.fillRect(x * scale, y * scale, Math.max(scale, 1.5), Math.max(scale, 1.5));
+  if (view.trail.length > 1) {
+    context.strokeStyle = 'rgb(255 138 42 / .45)';
+    context.lineWidth = 1.5;
     context.beginPath();
-    context.arc(x * cell, y * cell, 4, 0, Math.PI * 2);
-    context.fill();
+    view.trail.forEach(([x, y], i) => (i ? context.lineTo(x * scale, y * scale) : context.moveTo(x * scale, y * scale)));
+    context.stroke();
   }
+  for (const poi of view.pois) {
+    context.fillStyle = POI_COLORS[poi.kind] ?? '#fff';
+    context.fillRect(poi.x * scale - 3, poi.y * scale - 3, 6, 6);
+  }
+  const [x, y] = view.player;
+  context.fillStyle = '#ff8a2a';
+  context.beginPath();
+  context.arc(x * scale, y * scale, 4, 0, Math.PI * 2);
+  context.fill();
 }
 readMinimap.addEventListener('change', () => {
   void invoke('set_minimap_enabled', { enabled: readMinimap.checked }).catch((error) => showMessage('#error', String(error)));
@@ -295,6 +321,8 @@ async function start() {
   await listen<TrackerView>('tracker-state', (event) => renderTracker(event.payload));
   await listen<MinimapView>('minimap-state', (event) => renderMinimap(event.payload));
   renderMinimap(await invoke<MinimapView>('minimap_state'));
+  await listen<LayoutView>('layout-state', (event) => renderLayout(event.payload));
+  renderLayout(await invoke<LayoutView | null>('layout_state'));
   render(await invoke<Status>('overlay_status'));
   renderTracker(await invoke<TrackerView>('tracker_state'));
   fitWindow();
