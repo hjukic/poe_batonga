@@ -14,6 +14,7 @@ Current document:
 - [Overlay experiment](overlay-test.md): run instructions, controls and platform test results.
 - [Data sources](data-sources.md): selected route/zone/layout sources and their terms.
 - [Map-reading experiment](map-reading.md): offline baseline, negative real-image findings and next checks.
+- [Windows minimap](windows-minimap.md): automatic capture adapter and test coverage.
 
 ## Repository setup status
 

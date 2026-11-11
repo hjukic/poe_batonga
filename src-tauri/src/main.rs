@@ -57,8 +57,6 @@ struct Dragging(std::sync::Arc<std::sync::atomic::AtomicBool>);
 #[serde(default)]
 struct Settings {
     toggle_shortcut: String,
-    /// Live minimap reading (screenshots of the minimap corner only).
-    read_minimap: bool,
     /// Overlay offset from the screen's top-left corner (layer-shell only).
     overlay_x: i32,
     overlay_y: i32,
@@ -68,7 +66,6 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             toggle_shortcut: DEFAULT_TOGGLE_SHORTCUT.into(),
-            read_minimap: true,
             overlay_x: 20,
             overlay_y: 170,
         }
@@ -400,6 +397,7 @@ fn toggle_step(app: AppHandle, id: String) -> Result<tracker::TrackerView, Strin
     let mut inner = tracker.0.lock().map_err(|e| e.to_string())?;
     let tracker::Inner { route, progress, .. } = &mut *inner;
     tracker::toggle(route, progress, &id)?;
+    inner.sync_navigation(&app);
     inner.save();
     let view = inner.view();
     let _ = app.emit("tracker-state", view.clone());
@@ -413,6 +411,7 @@ fn reset_progress(app: AppHandle) -> Result<tracker::TrackerView, String> {
     let mut inner = tracker.0.lock().map_err(|e| e.to_string())?;
     inner.progress.completed.clear();
     inner.progress.dismissed.clear();
+    inner.sync_navigation(&app);
     inner.save();
     let view = inner.view();
     let _ = app.emit("tracker-state", view.clone());
@@ -422,14 +421,6 @@ fn reset_progress(app: AppHandle) -> Result<tracker::TrackerView, String> {
 #[tauri::command]
 fn minimap_state(minimap: State<'_, minimap::Minimap>) -> Result<minimap::MinimapView, String> {
     minimap.last.lock().map(|view| view.clone()).map_err(|e| e.to_string())
-}
-
-/// Turns live minimap reading on or off; the choice is kept across restarts.
-#[tauri::command]
-fn set_minimap_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
-    save_settings(&app, &Settings { read_minimap: enabled, ..load_settings(&app) })?;
-    app.state::<minimap::Minimap>().enabled.store(enabled, std::sync::atomic::Ordering::Relaxed);
-    Ok(())
 }
 
 #[tauri::command]
@@ -464,7 +455,6 @@ fn main() {
             toggle_step,
             reset_progress,
             minimap_state,
-            set_minimap_enabled,
             layout_state,
             quit
         ])
@@ -491,8 +481,11 @@ fn main() {
             let layouts = app.path().app_data_dir().ok().map(|dir| dir.join("layouts"));
             app.manage(layout::Recorder::new(layouts));
             app.manage(tracker::init(app.handle()));
+            if let Ok(inner) = app.state::<tracker::Tracker>().0.lock() {
+                inner.sync_navigation(app.handle());
+            }
             tracker::spawn(app.handle().clone());
-            let reader = minimap::init(settings.read_minimap);
+            let reader = minimap::init();
             minimap::spawn(app.handle().clone(), &reader);
             app.manage(reader);
             #[cfg(not(target_os = "linux"))]
@@ -525,6 +518,17 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_capture_settings_do_not_disable_reading_or_change_other_preferences() {
+        let old: Settings = serde_json::from_str(r#"{"readMinimap":false,"windowsCaptureOptIn":false,"toggleShortcut":"F9","overlayX":80}"#).unwrap();
+        assert_eq!(old.toggle_shortcut, "F9");
+        assert_eq!(old.overlay_x, 80);
+        let saved = serde_json::to_value(old).unwrap();
+        assert!(saved.get("readMinimap").is_none());
+        assert!(saved.get("windowsCaptureOptIn").is_none());
+        assert!(minimap::init().last.lock().unwrap().enabled);
+    }
 
     #[test]
     fn accepts_the_accelerators_the_settings_menu_records() {

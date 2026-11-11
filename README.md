@@ -25,6 +25,12 @@ this needs the `gtk-layer-shell` system library (Arch: `pacman -S gtk-layer-shel
 On Hyprland the global shortcut fires while the game (an XWayland window) has focus. See the
 [test procedure and results](docs/overlay-test.md) for Windows and Linux checks.
 
+Windows minimap capture is available for windowed/borderless PoE 2 and starts
+automatically with the application. It pauses when the game loses focus or the
+minimap is covered, then resumes when conditions allow. There is no read-map
+toggle. See [Windows minimap support](docs/windows-minimap.md) for limits
+and outstanding gameplay verification.
+
 `npm run build` validates the frontend; `npm run desktop:build` builds the native
 executable. Native/game behavior requires the manual checks above.
 

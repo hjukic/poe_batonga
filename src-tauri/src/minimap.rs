@@ -5,14 +5,20 @@
 //! game files or memory, and never sends input to the game.
 
 use serde::Serialize;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
+#[cfg(target_os = "windows")]
+#[path = "minimap_windows.rs"]
+mod windows_capture;
+#[cfg(target_os = "windows")]
+use windows_capture::{capture, locate_minimap, Region as CaptureRegion};
+#[cfg(not(target_os = "windows"))]
+type CaptureRegion = String;
+
 /// About three frames a second.
 const FRAME_INTERVAL: Duration = Duration::from_millis(330);
-const IDLE_INTERVAL: Duration = Duration::from_secs(2);
 /// Where the game is checked again (window moved, workspace switched).
 const LOCATE_INTERVAL: Duration = Duration::from_secs(2);
 
@@ -109,6 +115,7 @@ pub fn analyse(image: &Image, enabled: bool) -> MinimapView {
 }
 
 /// Parses binary PPM (P6, 8-bit), which is what `grim -t ppm` writes.
+#[cfg(any(target_os = "linux", test))]
 pub fn parse_ppm(bytes: &[u8]) -> Result<Image, String> {
     let mut fields = Vec::with_capacity(4);
     let mut pos = 0;
@@ -198,41 +205,33 @@ fn capture(region: &str) -> Result<Image, String> {
     parse_ppm(&output.stdout)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 fn locate_minimap() -> Result<String, String> {
-    Err("Live minimap reading is only implemented for Linux (Hyprland) so far".into())
+    Err("Minimap reading supports Windows and Linux/Hyprland".into())
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 fn capture(_region: &str) -> Result<Image, String> {
-    Err("Live minimap reading is only implemented for Linux (Hyprland) so far".into())
+    Err("Minimap reading supports Windows and Linux/Hyprland".into())
 }
 
 pub struct Minimap {
-    pub enabled: Arc<AtomicBool>,
     pub last: Arc<std::sync::Mutex<MinimapView>>,
 }
 
-pub fn init(enabled: bool) -> Minimap {
-    let message = if enabled { "Starting" } else { "Off" };
+pub fn init() -> Minimap {
     Minimap {
-        enabled: Arc::new(AtomicBool::new(enabled)),
-        last: Arc::new(std::sync::Mutex::new(MinimapView::status(enabled, message))),
+        last: Arc::new(std::sync::Mutex::new(MinimapView::status(true, "Starting"))),
     }
 }
 
 pub fn spawn(app: AppHandle, minimap: &Minimap) {
-    let enabled = minimap.enabled.clone();
     let last = minimap.last.clone();
     std::thread::spawn(move || {
-        let mut region: Option<(Result<String, String>, Instant)> = None;
+        let mut region: Option<(Result<CaptureRegion, String>, Instant)> = None;
         loop {
-            let on = enabled.load(Ordering::Relaxed);
             let started = Instant::now();
-            let view = if !on {
-                region = None;
-                MinimapView::status(false, "Off")
-            } else {
+            let view = {
                 if region.as_ref().is_none_or(|(_, at)| at.elapsed() > LOCATE_INTERVAL) {
                     region = Some((locate_minimap(), Instant::now()));
                 }
@@ -263,7 +262,7 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
             if changed.unwrap_or(true) {
                 let _ = app.emit("minimap-state", view.clone());
             }
-            let wait = if on && view.visible { FRAME_INTERVAL } else if on { FRAME_INTERVAL * 2 } else { IDLE_INTERVAL };
+            let wait = if view.visible { FRAME_INTERVAL } else { FRAME_INTERVAL * 2 };
             std::thread::sleep(wait.saturating_sub(started.elapsed()));
         }
     });

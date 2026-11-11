@@ -7,12 +7,16 @@ ready for real-game navigation. Step 7 remains open.
 continuous live reading of the minimap without waiting for GGG's answer, on the
 condition that no game files or memory are accessed. `src-tauri/src/minimap.rs`
 takes a screenshot of only the top-right minimap corner of the game's monitor about three
-times a second (Linux/Hyprland via `hyprctl` and `grim`; other platforms not yet),
-only while the game is the visible workspace. It finds explored walls by their
+times a second (Linux/Hyprland via `hyprctl` and `grim`; Windows via the visible
+client-area GDI adapter described in [Windows support](windows-minimap.md)). On
+Windows it pauses when the game is not foreground or the minimap is covered.
+On Hyprland the game must be on the visible workspace. It finds explored walls by their
 lavender line colour (about RGB 91,91,121) and the player by the orange cross,
-and shows a live preview in the overlay. It can be switched off in settings ("Read
-minimap"). Frames stay in memory; nothing is saved or uploaded. It sends no
-input to the game and produces no arrow yet. Best results with the game's map
+and shows a live preview in the overlay. Reading starts automatically with the
+application; the owner explicitly removed the on/off setting. Raw frames stay
+in memory; explored geometry can be saved by the layout recorder below. Nothing
+is uploaded. It sends no input to the game. The layout matcher may display an
+estimated arrow, whose gameplay accuracy on Windows remains unverified. Best results with the game's map
 landscape transparency turned off. The policy notes below still describe the
 unresolved question with GGG.
 
@@ -41,8 +45,8 @@ establishes a basis for the project's informed, read-only local log workflow.
 The same policy distinguishes independent tools from prohibited game interaction
 and constrains input macros. Our scope sends no game inputs. These provisions do
 not specifically establish permission for continuous visual layout inference or
-navigation. Keep those live features gated pending clarification of the exact
-behavior under the [Terms of Use](https://www.pathofexile.com/legal/terms-of-use-and-privacy-policy).
+navigation. The owner chose live reading despite this unresolved question; that
+choice is not GGG approval under the [Terms of Use](https://www.pathofexile.com/legal/terms-of-use-and-privacy-policy).
 
 [A clarification draft](ggg-clarification-draft.md) is prepared but has not been sent.
 This review does not claim GGG has approved the app.
@@ -55,7 +59,7 @@ The staff reply declines tool-specific assurances and advises against tools
 providing an in-game advantage, interacting with game files or automating play.
 It does not resolve permission for our planned navigation feature.
 
-Source inspection of the current native app finds separate desktop windows and
+At the earlier pre-game review, before log/capture integration, source inspection found separate desktop windows and
 shortcuts controlling those windows, with no game-memory access, injection,
 game-input automation, log reader or capture implementation. The Node experiment
 only analyzes existing local image files and is not launched by the native app.
@@ -161,3 +165,40 @@ Decision: retain the arrow as an unresolved conditional feature. The evidence
 rejects this simple extraction baseline for gameplay; it does not prove all local
 computer-vision approaches are infeasible. Do not advance step 7 to complete or
 claim Linux capture support based on these results.
+
+## Live arrow correction (2026-11-12)
+
+The live Qutm guide previously favoured the diagram's original orientation over
+rotations/mirrors by a fixed prior. With no observation it could report a 65%
+lead as if it were useful confidence. It also treated a boss speaking, or walking
+near a guessed icon, as completion; this sent the player toward Clearfell while
+Miller's fight was starting. The screenshot supplied during testing demonstrates
+the premature target change, not a measured angular error.
+
+Bearings now use `atan2(target.y - player.y, target.x - player.x)` in the same
+screen axes as the minimap: right 0°, down 90°, left 180°, up -90°. No character
+facing or extra isometric rotation is applied. Both the SVG and the map ray use
+that bearing. Rotation animation is removed so crossing ±180° cannot spin the
+arrow the long way around.
+
+All diagram orientations start with equal weight. Observed encounter landmarks
+calibrate continuous rotation and scale, retaining both possible handednesses.
+Competing directions suppress the arrow and show “Direction not confirmed”;
+the score lead is no longer displayed as a probability. Wall-box fitting is still
+only a schematic heuristic, not a validated match to real map geometry.
+
+Boss dialogue pins the **player's location at that moment**, not the boss. It
+keeps the boss objective active. Within 32 minimap cells of that encounter point,
+the UI shows “Encounter area · defeat boss” with no invented enemy bearing. Farther
+away it can point back to the recorded encounter area in screen coordinates.
+Neither dialogue nor proximity completes an objective. The existing manual
+completion/untick/reset controls now also update navigation through an explicit
+route `navigationTarget` mapping. Unlock the overlay to click an objective;
+locked mode retains click-through behavior. A verified kill event/visual boss detector is
+not implemented; until then Miller cannot automatically switch to the exit just
+because combat started. Leaving the zone changes the recording normally.
+
+Regression checks cover the supplied fight-start scenario, cardinal/diagonal
+bearings, walking past an encounter, arbitrary rotations, unresolved mirrors,
+completion/untick/reset snapshots and suppression during tracking loss. A live
+gameplay run remains necessary to measure tracking and navigation accuracy.

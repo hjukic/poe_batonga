@@ -21,6 +21,7 @@
     },
     {
       "id": "kill-bloated-miller",
+      "navigationTarget": { "area": "G1_1", "label": "The Bloated Miller" },
       "kind": "objective",
       "parts": [{ "text": "Kill " }, { "text": "The Bloated Miller", "style": "boss" }],
       "trigger": null,

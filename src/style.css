@@ -32,19 +32,23 @@ button.icon:hover { background: rgb(239 235 255 / .12); }
 #exit:hover { background: rgb(214 92 80 / .6); color: #fff; }
 #settings-toggle[aria-expanded="true"] { background: rgb(190 176 227 / .22); opacity: 1; }
 .route { padding: 12px 20px; }
-.route > div + div { margin-top: 4px; }
+.route > .step + .step { margin-top: 4px; }
 .direction { color: #8edce8; font-style: italic; }
 .boss { color: #ce7832; }
 /* Finished steps stay in place, struck out and greyed, so the route keeps its shape. */
 .step { transition: color .3s, opacity .3s; }
+button.step { display: block; width: 100%; padding: 0; border: 0; background: transparent; text-align: left; font: inherit; color: inherit; line-height: inherit; text-shadow: inherit; }
+button.step:disabled { cursor: default; }
+button.step:enabled:hover { background: rgb(239 235 255 / .06); }
 .step.done { color: #8d8899; opacity: .55; text-decoration: line-through; text-decoration-thickness: 1px; }
 .step.done .boss { color: inherit; }
 
 /* ---- Arrow to the next objective ---- */
 .guide { display: flex; align-items: center; gap: 10px; padding: 0 20px 10px; font-size: 15px; transition: opacity .3s; }
 .guide[hidden] { display: none; }
-.guide .arrow { width: 34px; height: 34px; flex-shrink: 0; fill: #ffd27a; filter: drop-shadow(0 1px 3px #000); transition: transform .4s ease; }
-.guide.unsure { opacity: .45; }
+.guide .arrow { width: 34px; height: 34px; flex-shrink: 0; fill: #ffd27a; filter: drop-shadow(0 1px 3px #000); }
+.guide .arrow[hidden] { display: none; }
+.guide.unsure { color: var(--muted); }
 
 /* ---- Live minimap preview ---- */
 .minimap { padding: 0 20px 12px; }

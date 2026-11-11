@@ -131,6 +131,7 @@ struct Session {
 
 struct State {
     catalog: guide::Catalog,
+    completed: HashMap<String, Vec<String>>,
     /// Measured minimap cells per diagram width, per area.
     scales: HashMap<String, Vec<f64>>,
     dir: Option<PathBuf>,
@@ -335,6 +336,7 @@ impl Recorder {
             .unwrap_or_default();
         Recorder(Mutex::new(State {
             catalog: guide::Catalog::load(),
+            completed: HashMap::new(),
             scales,
             dir,
             session: None,
@@ -479,6 +481,16 @@ impl Recorder {
     pub fn view(&self) -> Option<LayoutView> {
         self.0.lock().ok()?.view()
     }
+
+    /// Replacing the snapshot also handles unticking/resetting a checklist.
+    pub fn set_completed(&self, objectives: Vec<(String, String)>) -> Option<LayoutView> {
+        let mut state = self.0.lock().ok()?;
+        state.completed.clear();
+        for (area, label) in objectives {
+            state.completed.entry(area).or_default().push(label);
+        }
+        state.view()
+    }
 }
 
 impl State {
@@ -553,12 +565,16 @@ impl State {
             return None;
         }
         let live = &session.live;
+        if live.lost_streak > 0 {
+            return None;
+        }
         // Everything relative to the (first) arrival point, which the diagrams start from.
         let arrival = live.part.pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at)?;
         let (ax, ay) = (arrival.x, arrival.y);
         let mut walls: Vec<(i32, i32)> =
             live.walls.iter().filter(|(_, &n)| n >= 2).map(|(&(x, y), _)| (x - ax, y - ay)).collect();
         if walls.len() > GUIDE_WALLS {
+            walls.sort_unstable();
             let step = walls.len().div_ceil(GUIDE_WALLS);
             walls = walls.into_iter().step_by(step).collect();
         }
@@ -573,9 +589,9 @@ impl State {
                 area,
                 arrived_from: &arrival.label,
                 walls: &walls,
-                trail: &live.part.trail.iter().map(|&[x, y]| [x - ax, y - ay]).collect::<Vec<_>>(),
                 player: (live.pos.0 - ax, live.pos.1 - ay),
                 pois: &live.part.pois.iter().map(|p| Poi { x: p.x - ax, y: p.y - ay, ..p.clone() }).collect::<Vec<_>>(),
+                completed: self.completed.get(area).map(Vec::as_slice).unwrap_or_default(),
                 scale,
             },
         )
@@ -713,6 +729,31 @@ mod tests {
         let pois = &state.session.as_ref().unwrap().live.part.pois;
         assert_eq!(pois.len(), 1);
         assert_eq!(pois[0].kind, "start");
+    }
+
+    #[test]
+    fn fight_start_completion_untick_and_tracking_loss_update_guidance() {
+        let recorder = Recorder::new(None);
+        enter(&recorder, "G1_1");
+        for x in [0, 4, 8] {
+            recorder.on_frame(&frame((x, 0)), [300, 260]);
+        }
+        recorder.on_log(&LogEvent::Dialogue {
+            speaker: "The Bloated Miller".into(), text: "Fight starts".into(),
+        }, true);
+        let guide = recorder.view().unwrap().guide.unwrap();
+        assert_eq!(guide.target, "Miller");
+        assert_eq!(guide.source, "encounter");
+        assert_eq!(guide.degrees, None);
+
+        let guide = recorder.set_completed(vec![("G1_1".into(), "The Bloated Miller".into())])
+            .unwrap().guide.unwrap();
+        assert_eq!(guide.target, "Clearfell Encampent");
+        let guide = recorder.set_completed(vec![]).unwrap().guide.unwrap();
+        assert_eq!(guide.target, "Miller");
+
+        recorder.0.lock().unwrap().session.as_mut().unwrap().live.lost_streak = 1;
+        assert!(recorder.view().unwrap().guide.is_none());
     }
 }
 

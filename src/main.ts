@@ -52,7 +52,8 @@ interface GuideView {
   targetKind: string;
   target: string;
   /** Screen direction: 0 = right, 90 = down. */
-  degrees: number;
+  degrees: number | null;
+  source: 'estimated' | 'unconfirmed' | 'encounter';
   /** Minimap cells. */
   distance: number;
   /** 0-1, lead over the best hypothesis pointing elsewhere. */
@@ -91,7 +92,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
   </section>
   <div id="settings" class="dropdown" aria-label="Settings" hidden>
     <label class="row"><span>Opacity</span><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></label>
-    <label class="row"><span>Read minimap</span><input id="read-minimap" type="checkbox" checked /></label>
+    <p class="hint">Reads visible map pixels locally. Raw frames stay in memory; explored layouts are saved locally. GGG permission for live navigation remains unconfirmed.</p>
     <div class="row"><span>Show / hide</span><button id="shortcut" class="keycap" type="button" title="Click, then press a new shortcut"></button></div>
     <p id="shortcut-error" class="warning" hidden></p>
     <hr />
@@ -126,6 +127,7 @@ function render(next: Status) {
   lockButton.title = next.interactive ? 'Lock' : 'Unlock';
   lockButton.setAttribute('aria-label', lockButton.title);
   lockButton.setAttribute('aria-pressed', String(!next.interactive));
+  syncStepControls();
   if (!next.interactive) setSettingsOpen(false);
   if (!recording) shortcutButton.textContent = shortcutLabel(next.toggleShortcut);
   showMessage('#shortcut-error', next.shortcutError);
@@ -137,9 +139,20 @@ function renderTracker(view: TrackerView) {
   showMessage('#log-warning', view.log.connected ? null : view.log.message);
   $('.zone').textContent = `${view.zone.name} - Zone Level: ${view.zone.level}`;
   $('#route').replaceChildren(...view.steps.map((step) => {
-    const row = document.createElement('div');
+    const row = document.createElement(step.kind === 'objective' ? 'button' : 'div');
     row.className = `step ${step.kind} ${step.state}`;
     row.dataset.id = step.id;
+    if (row instanceof HTMLButtonElement) {
+      row.type = 'button';
+      row.setAttribute('aria-pressed', String(step.state === 'done'));
+      row.addEventListener('click', () => {
+        row.disabled = true;
+        void invoke<TrackerView>('toggle_step', { id: step.id }).then(renderTracker).catch((error) => {
+          showMessage('#error', String(error));
+          syncStepControls();
+        });
+      });
+    }
     for (const part of step.parts) {
       const span = document.createElement('span');
       span.textContent = part.text;
@@ -148,30 +161,51 @@ function renderTracker(view: TrackerView) {
     }
     return row;
   }));
+  syncStepControls();
+}
+
+function syncStepControls() {
+  document.querySelectorAll<HTMLButtonElement>('#route button.step').forEach((row) => {
+    row.disabled = !status?.interactive;
+    row.title = status?.interactive ? 'Mark complete / incomplete' : 'Unlock the overlay to correct progress';
+  });
 }
 
 // ---- Live minimap ----
 const minimapBox = $('#minimap');
 const minimapCanvas = $<HTMLCanvasElement>('#minimap-canvas');
-const readMinimap = $<HTMLInputElement>('#read-minimap');
+let minimapTracking = false;
 function renderMinimap(view: MinimapView) {
-  readMinimap.checked = view.enabled;
+  minimapTracking = view.enabled && view.visible && view.player !== null;
   minimapBox.hidden = !view.enabled;
   $('#minimap-message').textContent = view.message;
+  if (!minimapTracking) {
+    renderGuide(null);
+    minimapCanvas.getContext('2d')?.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+  }
 }
-/** Below this the arrow is shown faded: another direction is nearly as likely. */
-const SURE = 0.3;
+const screenDirection = (degrees: number) =>
+  ['right', 'down-right', 'down', 'down-left', 'left', 'up-left', 'up', 'up-right'][
+    Math.round(((degrees % 360) + 360) / 45) % 8
+  ];
 function renderGuide(guide: GuideView | null) {
+  if (!minimapTracking) guide = null;
   const box = $('#guide');
   box.hidden = !guide;
   if (!guide) return;
   const name = guide.target || (guide.targetKind === 'entrance' ? 'Exit' : guide.targetKind);
-  const sure = guide.confidence >= SURE;
-  box.classList.toggle('unsure', !sure);
-  $('#guide-arrow').style.transform = `rotate(${guide.degrees}deg)`;
-  const how = sure ? `${Math.round(guide.confidence * 100)}%` : 'unsure';
-  $('#guide-text').textContent = `${name} · ${how}${guide.measured ? '' : ' · rough distance'}`;
-  box.title = `Layout variant ${guide.variant}${guide.turned ? ' (rotated/mirrored)' : ''}, about ${Math.round(guide.distance)} minimap cells away`;
+  const bearing = guide.degrees !== null && Number.isFinite(guide.degrees);
+  const arrow = $('#guide-arrow');
+  arrow.hidden = !bearing;
+  box.classList.toggle('unsure', guide.source === 'unconfirmed');
+  if (bearing) arrow.style.transform = `rotate(${guide.degrees}deg)`;
+  const how = guide.source === 'encounter'
+    ? (bearing ? 'Back to encounter area' : 'Encounter area · defeat boss')
+    : guide.source === 'unconfirmed' ? 'Direction not confirmed' : 'Estimated';
+  $('#guide-text').textContent = `${name} · ${how}${bearing ? ` · ${screenDirection(guide.degrees!)}` : ''}`;
+  box.title = guide.source === 'encounter'
+    ? 'The player location when the boss spoke, not the moving boss position. Dialogue does not confirm a kill.'
+    : `Screen/minimap direction, independent of character facing. Layout variant ${guide.variant}${guide.turned ? ' (rotated/mirrored)' : ''}; schematic distance is approximate.`;
 }
 
 const POI_COLORS: Record<string, string> = { arrived: '#7fd18b', start: '#7fd18b', left: '#8edce8', npc: '#f2d36b' };
@@ -199,10 +233,10 @@ function renderLayout(view: LayoutView | null) {
     context.fillRect(poi.x * scale - 3, poi.y * scale - 3, 6, 6);
   }
   const [x, y] = view.player;
-  if (view.guide) {
+  if (view.guide && minimapTracking && view.guide.degrees !== null) {
     // The arrow's direction from the player, on the map.
     const r = (view.guide.degrees * Math.PI) / 180;
-    context.strokeStyle = view.guide.confidence >= SURE ? '#ffd27a' : 'rgb(255 210 122 / .4)';
+    context.strokeStyle = '#ffd27a';
     context.lineWidth = 2;
     context.beginPath();
     context.moveTo(x * scale, y * scale);
@@ -214,10 +248,6 @@ function renderLayout(view: LayoutView | null) {
   context.arc(x * scale, y * scale, 4, 0, Math.PI * 2);
   context.fill();
 }
-readMinimap.addEventListener('change', () => {
-  void invoke('set_minimap_enabled', { enabled: readMinimap.checked }).catch((error) => showMessage('#error', String(error)));
-});
-
 function setSettingsOpen(open: boolean) {
   const wasOpen = !settings.hidden;
   settings.hidden = !open;

@@ -52,6 +52,14 @@ pub struct Step {
     pub parts: Vec<Part>,
     #[serde(default)]
     pub trigger: Option<Trigger>,
+    #[serde(default, rename = "navigationTarget")]
+    pub navigation_target: Option<NavigationTarget>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NavigationTarget {
+    pub area: String,
+    pub label: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -233,6 +241,15 @@ pub struct Inner {
 }
 
 impl Inner {
+    pub fn sync_navigation(&self, app: &AppHandle) {
+        let completed = self.route.steps.iter().filter(|s| self.progress.completed.contains_key(&s.id))
+            .filter_map(|s| s.navigation_target.as_ref())
+            .map(|t| (t.area.clone(), t.label.clone())).collect();
+        if let Some(view) = app.state::<crate::layout::Recorder>().set_completed(completed) {
+            let _ = app.emit("layout-state", view);
+        }
+    }
+
     pub fn view(&self) -> TrackerView {
         let steps = self
             .route
@@ -455,6 +472,7 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
     progress.log_offset = Some(read_through);
     inner.save();
     if changed {
+        inner.sync_navigation(app);
         let _ = app.emit("tracker-state", inner.view());
     }
 }
@@ -473,6 +491,25 @@ mod tests {
             parse_line(&line("DEBUG", r#"Generating level 1 area "G1_1" with seed 1256743153"#)).unwrap();
         assert_eq!(ts, "2026/11/11 22:41:55");
         assert_eq!(event, LogEvent::ZoneEntered { area: "G1_1".into(), level: 1, seed: Some(1256743153) });
+    }
+
+    #[test]
+    fn miller_dialogue_is_not_completion_and_manual_completion_has_a_navigation_target() {
+        let route = load_route();
+        let mut progress = Progress::default();
+        apply(&route, &mut progress, "now", &LogEvent::ZoneEntered {
+            area: "G1_1".into(), level: 1, seed: Some(7),
+        });
+        apply(&route, &mut progress, "now", &LogEvent::Dialogue {
+            speaker: "The Bloated Miller".into(), text: "Fight starts".into(),
+        });
+        assert!(!progress.completed.contains_key("kill-bloated-miller"));
+        toggle(&route, &mut progress, "kill-bloated-miller").unwrap();
+        let step = route.steps.iter().find(|s| s.id == "kill-bloated-miller").unwrap();
+        let target = step.navigation_target.as_ref().unwrap();
+        assert_eq!(target.area, "G1_1");
+        assert_eq!(target.label, "The Bloated Miller");
+        assert!(progress.completed.contains_key(&step.id));
     }
 
     #[test]

@@ -1,11 +1,10 @@
 //! The arrow: where the next objective probably is, from Qutm's layout diagrams
 //! (`data/layouts/qutm/layouts.json`) fitted to what we have recorded of this visit.
 //!
-//! Each diagram variant, in each of the 8 rotations/mirrors, is anchored at the
-//! player's arrival point. A hypothesis is scored by how well the explored walls fit
-//! inside the zone the diagram describes and, once a boss has spoken, by whether the
-//! boss is where the diagram says. The scale (minimap cells per diagram width) comes
-//! from that boss, from earlier visits, or from a default.
+//! Coordinates keep the minimap's screen axes: x right, y down. Schematics are
+//! hypotheses, not measured maps. Competing bearings suppress the arrow. Dialogue
+//! records the PLAYER's encounter location, never the moving boss's coordinates,
+//! and never proves a kill or completion.
 
 use super::Poi;
 use serde::{Deserialize, Serialize};
@@ -19,14 +18,13 @@ const ZONES: &str = include_str!("../../../data/observations/campaign-zones.json
 pub const DEFAULT_SCALE: f64 = 1200.0;
 /// How far outside the diagram's box walls may lie (the diagrams are approximate).
 const MARGIN: f64 = 0.12;
-/// Rotated or mirrored versions of a variant are less likely than the drawn one.
-const TURNED_PRIOR: f64 = 0.35;
-/// A boss seen this far (in degrees) from where the diagram puts it rules a hypothesis out.
-const BOSS_ANGLE: f64 = 40.0;
 /// Two directions closer than this count as agreeing.
 const SAME_WAY: f64 = 45.0;
-/// Within this share of the diagram width an objective counts as reached.
-const REACH: f64 = 0.06;
+/// Minimum lead supported by evidence, not by a preferred diagram orientation.
+const MIN_CONFIDENCE: f32 = 0.3;
+/// Dialogue does not locate a boss precisely. Inside the encounter area there is
+/// no defensible bearing to a moving enemy; show the objective without an arrow.
+const ENCOUNTER_RADIUS: f64 = 32.0;
 
 #[derive(Deserialize, Debug, Clone)]
 struct Icon {
@@ -131,15 +129,31 @@ fn angle_between(a: (f64, f64), b: (f64, f64)) -> f64 {
     d.min(360.0 - d)
 }
 
+/// CSS/SVG and the minimap share these axes; no camera/isometric correction is
+/// appropriate. A coincident target has no direction (atan2(0, 0) is misleading).
+fn screen_bearing(dx: f64, dy: f64) -> Option<f32> {
+    (dx.hypot(dy) > 1e-6).then(|| dy.atan2(dx).to_degrees() as f32)
+}
+
+/// Fit a continuous rotation, keeping both handedness hypotheses. Snapping to
+/// quarter turns left up to 40 degrees of error even after observing a landmark.
+fn align(drawn: (f64, f64), seen: (f64, f64), mirror: bool) -> ([f64; 4], f64) {
+    let sign = if mirror { -1.0 } else { 1.0 };
+    let angle = seen.1.atan2(seen.0) - drawn.1.atan2(sign * drawn.0);
+    let (s, c) = angle.sin_cos();
+    ([c * sign, -s, s * sign, c], seen.0.hypot(seen.1) / drawn.0.hypot(drawn.1))
+}
+
 /// What we know about the current visit, in minimap cells relative to the arrival point.
 pub struct Evidence<'a> {
     pub area: &'a str,
     /// Area id the player came from; the arrival point is that zone's entrance.
     pub arrived_from: &'a str,
     pub walls: &'a [(i32, i32)],
-    pub trail: &'a [[i32; 2]],
     pub player: (i32, i32),
     pub pois: &'a [Poi],
+    /// Explicit objective completion from the checklist, never proximity/dialogue.
+    pub completed: &'a [String],
     /// Measured on earlier visits, if any.
     pub scale: Option<f64>,
 }
@@ -152,7 +166,9 @@ pub struct GuideView {
     pub target_kind: String,
     pub target: String,
     /// Screen direction in degrees: 0 = right, 90 = down.
-    pub degrees: f32,
+    pub degrees: Option<f32>,
+    /// "estimated", "unconfirmed", or "encounter" (player location at dialogue).
+    pub source: String,
     /// Estimated distance in minimap cells.
     pub distance: f32,
     /// 0-1: how far ahead this hypothesis is of the best one pointing elsewhere.
@@ -212,41 +228,59 @@ pub fn guide(catalog: &Catalog, ev: &Evidence) -> Option<GuideView> {
 
     for variant in variants {
         let Some(start) = start_icon(variant, &from_names) else { continue };
-        let order = route(variant, start);
+        let order: Vec<usize> = route(variant, start).into_iter().filter(|&i| {
+            let label = variant.icons[i].label.as_deref().unwrap_or("");
+            !ev.completed.iter().any(|done| same_name(label, done))
+        }).collect();
         if order.is_empty() {
             continue;
         }
         let origin = (variant.icons[start].x, variant.icons[start].y);
         let rel = |i: usize| (variant.icons[i].x - origin.0, variant.icons[i].y - origin.1);
-        // A boss that has spoken pins one point of the diagram.
-        let spoken = order.iter().find_map(|&i| {
-            let icon = &variant.icons[i];
+        let target = order[0];
+        let target_icon = &variant.icons[target];
+        // The observed encounter area takes precedence over any diagram guess.
+        // Remain on this boss until completion is explicitly confirmed.
+        if let Some(poi) = ev.pois.iter().find(|p| p.kind == "npc" && target_icon.id == "boss"
+            && same_name(&p.label, target_icon.label.as_deref().unwrap_or(""))) {
+            let (dx, dy) = (poi.x as f64 - player.0, poi.y as f64 - player.1);
+            let distance = dx.hypot(dy);
+            hypotheses.push(Hypothesis {
+                score: 1.0,
+                view: GuideView {
+                    variant: variant.name.clone(), target_kind: target_icon.id.clone(),
+                    target: target_icon.label.clone().unwrap_or_default(),
+                    degrees: if distance > ENCOUNTER_RADIUS { screen_bearing(dx, dy) } else { None },
+                    source: "encounter".into(), distance: distance as f32,
+                    confidence: 0.0, measured: true, turned: false,
+                },
+            });
+            continue;
+        }
+        // An encountered boss can calibrate a later objective, but its dialogue
+        // is an approximate landmark, not evidence that the objective is done.
+        let spoken = variant.icons.iter().enumerate().find_map(|(i, icon)| {
             let label = icon.label.as_deref().filter(|_| icon.id == "boss")?;
             let poi = ev.pois.iter().find(|p| p.kind == "npc" && same_name(&p.label, label))?;
-            Some((i, (poi.x as f64, poi.y as f64)))
+            let seen = (poi.x as f64, poi.y as f64);
+            (rel(i).0.hypot(rel(i).1) > 0.1 && seen.0.hypot(seen.1) > ENCOUNTER_RADIUS)
+                .then_some((i, seen))
         });
 
-        for (n, t) in TURNS.iter().enumerate() {
-            let mut score = if n == 0 { 1.0 } else { TURNED_PRIOR };
-            let mut scale = base_scale;
-            let mut measured = ev.scale.is_some();
-            if let Some((i, seen)) = spoken {
-                let drawn = turn(t, rel(i));
-                if angle_between(drawn, seen) > BOSS_ANGLE {
-                    continue;
-                }
-                let length = drawn.0.hypot(drawn.1);
-                if length > 1e-6 {
-                    scale = seen.0.hypot(seen.1) / length;
-                    measured = true;
-                }
-            }
+        let transforms: Vec<([f64; 4], f64)> = if let Some((i, seen)) = spoken {
+            [false, true].into_iter().map(|mirror| align(rel(i), seen, mirror)).collect()
+        } else {
+            TURNS.iter().map(|&t| (t, base_scale)).collect()
+        };
+        for (t, mut scale) in transforms {
+            let mut score = 1.0;
+            let measured = spoken.is_some() || ev.scale.is_some();
             // Smallest scale at which the walls fit the diagram's box (95th percentile).
             let mut needed: Vec<f64> = ev
                 .walls
                 .iter()
                 .map(|&(x, y)| {
-                    let (u, v) = unturn(t, (x as f64, y as f64));
+                    let (u, v) = unturn(&t, (x as f64, y as f64));
                     let room = |d: f64, at: f64| if d > 0.0 { d / (1.0 + MARGIN - at) } else { -d / (at + MARGIN) };
                     room(u, origin.0).max(room(v, origin.1))
                 })
@@ -260,16 +294,9 @@ pub fn guide(catalog: &Catalog, ev: &Evidence) -> Option<GuideView> {
                 }
             }
             let at = |i: usize| {
-                let (x, y) = turn(t, rel(i));
+                let (x, y) = turn(&t, rel(i));
                 (x * scale, y * scale)
             };
-            let reached = |i: usize| {
-                let spot = at(i);
-                let near = REACH * scale;
-                ev.trail.iter().any(|&[x, y]| (x as f64 - spot.0).hypot(y as f64 - spot.1) < near)
-                    || spoken.is_some_and(|(s, _)| s == i)
-            };
-            let Some(&target) = order.iter().find(|&&i| !reached(i)).or(order.last()) else { continue };
             let spot = at(target);
             let (dx, dy) = (spot.0 - player.0, spot.1 - player.1);
             let icon = &variant.icons[target];
@@ -279,11 +306,12 @@ pub fn guide(catalog: &Catalog, ev: &Evidence) -> Option<GuideView> {
                     variant: variant.name.clone(),
                     target_kind: icon.id.clone(),
                     target: icon.label.clone().unwrap_or_default(),
-                    degrees: dy.atan2(dx).to_degrees() as f32,
+                    degrees: screen_bearing(dx, dy),
+                    source: "estimated".into(),
                     distance: dx.hypot(dy) as f32,
                     confidence: 0.0,
                     measured,
-                    turned: n != 0,
+                    turned: t != TURNS[0],
                 },
             });
         }
@@ -292,16 +320,22 @@ pub fn guide(catalog: &Catalog, ev: &Evidence) -> Option<GuideView> {
     hypotheses.sort_by(|a, b| b.score.total_cmp(&a.score));
     let best = hypotheses.first()?;
     let direction = |v: &GuideView| {
-        let r = (v.degrees as f64).to_radians();
+        let r = (v.degrees.unwrap_or(0.0) as f64).to_radians();
         (r.cos(), r.sin())
     };
     let rival = hypotheses
         .iter()
         .skip(1)
-        .find(|h| angle_between(direction(&h.view), direction(&best.view)) > SAME_WAY)
+        .find(|h| h.view.target_kind != best.view.target_kind
+            || !same_name(&h.view.target, &best.view.target)
+            || angle_between(direction(&h.view), direction(&best.view)) > SAME_WAY)
         .map_or(0.0, |h| h.score);
     let mut view = best.view.clone();
     view.confidence = (1.0 - rival / best.score.max(1e-9)) as f32;
+    if view.confidence < MIN_CONFIDENCE || (view.source == "estimated" && view.degrees.is_none()) {
+        view.degrees = None;
+        view.source = "unconfirmed".into();
+    }
     Some(view)
 }
 
@@ -324,7 +358,9 @@ pub fn measure_scale(catalog: &Catalog, area: &str, arrived_from: &str, pois: &[
                 }
                 let drawn = (icon.x - origin.0, icon.y - origin.1);
                 let seen = (poi.x as f64, poi.y as f64);
-                if angle_between(drawn, seen) <= BOSS_ANGLE && drawn.0.hypot(drawn.1) > 0.1 {
+                // Length is invariant under rotation/reflection. Do not reject a
+                // real observation because the schematic points another way.
+                if seen.0.hypot(seen.1) > ENCOUNTER_RADIUS && drawn.0.hypot(drawn.1) > 0.1 {
                     found.push(seen.0.hypot(seen.1) / drawn.0.hypot(drawn.1));
                 }
             }
@@ -357,57 +393,123 @@ mod tests {
         assert_eq!(catalog.names.get("G1_1").unwrap()[0], "The Riverbank");
     }
 
-    /// Riverbank v1 runs from bottom-left to the top-right; v2 mirrors it. Walls
-    /// explored far to the right of the start only fit v1.
-    #[test]
-    fn explored_walls_pick_the_variant() {
-        let catalog = Catalog::load();
-        let walls: Vec<(i32, i32)> = (0..600).map(|x| (x, -x / 3)).collect();
-        let ev = Evidence {
-            area: "G1_1",
-            arrived_from: "",
-            walls: &walls,
-            trail: &[[0, 0]],
-            player: (0, 0),
-            pois: &[],
-            scale: None,
-        };
-        let view = guide(&catalog, &ev).unwrap();
-        assert_eq!(view.variant, "1");
-        assert!(!view.turned);
-        assert_eq!(view.target, "Miller");
-        // Miller is up and to the right: between 0 and -90 degrees on screen.
-        assert!(view.degrees < 0.0 && view.degrees > -90.0, "{}", view.degrees);
-        assert!(view.confidence > 0.5, "{}", view.confidence);
+    fn evidence() -> Evidence<'static> {
+        Evidence { area: "G1_1", arrived_from: "", walls: &[], player: (0, 0), pois: &[], completed: &[], scale: None }
     }
 
     #[test]
-    fn a_boss_that_spoke_sets_the_scale_and_the_next_target() {
+    fn no_evidence_does_not_invent_a_confident_orientation() {
+        let view = guide(&Catalog::load(), &evidence()).unwrap();
+        assert_eq!(view.target, "Miller");
+        assert_eq!(view.degrees, None);
+        assert_eq!(view.source, "unconfirmed");
+        assert_eq!(view.confidence, 0.0);
+    }
+
+    #[test]
+    fn miller_dialogue_at_fight_start_does_not_skip_to_town() {
+        let pois = [poi("npc", "The Bloated Miller", 1200, -780)];
+        let ev = Evidence { player: (1200, -780), pois: &pois, ..evidence() };
+        let view = guide(&Catalog::load(), &ev).unwrap();
+        assert_eq!(view.target, "Miller");
+        assert_eq!(view.source, "encounter");
+        assert_eq!(view.degrees, None); // No known coordinates of the moving boss.
+    }
+
+    #[test]
+    fn standing_on_a_guessed_boss_location_does_not_complete_it() {
+        let ev = Evidence { player: (715, -470), scale: Some(1200.0), ..evidence() };
+        assert_eq!(guide(&Catalog::load(), &ev).unwrap().target, "Miller");
+    }
+
+    #[test]
+    fn encounter_bearing_uses_live_screen_axes_not_the_schematic() {
+        let pois = [poi("npc", "The Bloated Miller", 100, -60)];
+        let ev = Evidence { player: (60, -10), pois: &pois, ..evidence() };
+        let view = guide(&Catalog::load(), &ev).unwrap();
+        assert_eq!(view.target, "Miller");
+        assert_eq!(view.source, "encounter");
+        assert!((view.degrees.unwrap() - (-51.34019)).abs() < 0.001);
+        // Passing the recorded encounter reverses the bearing.
+        let ev = Evidence { player: (140, -110), ..ev };
+        let view = guide(&Catalog::load(), &ev).unwrap();
+        assert!((view.degrees.unwrap() - 128.65981).abs() < 0.001);
+    }
+
+    #[test]
+    fn only_confirmed_completion_advances_to_the_exit() {
         let catalog = Catalog::load();
-        // v1: start (0.06, 0.76), Miller (0.66, 0.37): 0.60 right, 0.39 up.
-        let miller = poi("npc", "The Bloated Miller", 1200, -780);
-        let ev = Evidence {
-            area: "G1_1",
-            arrived_from: "",
-            walls: &[],
-            trail: &[[0, 0], [1200, -780]],
-            player: (1200, -780),
-            pois: std::slice::from_ref(&miller),
-            scale: None,
-        };
+        let pois = [poi("npc", "The Bloated Miller", 1200, -780)];
+        let completed = ["The Bloated Miller".into()];
+        let ev = Evidence { player: (1200, -780), pois: &pois, completed: &completed, ..evidence() };
         let view = guide(&catalog, &ev).unwrap();
-        assert_eq!((view.variant.as_str(), view.target.as_str()), ("1", "Clearfell Encampent"));
+        assert_eq!(view.target, "Clearfell Encampent");
         assert!(view.measured);
-        assert!(view.distance > 200.0 && view.distance < 500.0, "{}", view.distance);
-        let scale = measure_scale(&catalog, "G1_1", "", &[miller]).unwrap();
-        assert!((scale - 2000.0).abs() < 100.0, "{scale}");
+        let completed = ["Miller".into(), "Clearfell Encampment".into()];
+        assert!(guide(&catalog, &Evidence { completed: &completed, ..ev }).is_none());
+    }
+
+    #[test]
+    fn screen_bearings_match_human_directions() {
+        for (x, y, degrees) in [(10., 0., 0.), (10., 10., 45.), (0., 10., 90.),
+            (-10., 10., 135.), (-10., 0., 180.), (-10., -10., -135.),
+            (0., -10., -90.), (10., -10., -45.)] {
+            assert_eq!(screen_bearing(x, y), Some(degrees));
+        }
+        assert_eq!(screen_bearing(0., 0.), None);
+    }
+
+    #[test]
+    fn landmark_alignment_is_continuous_in_all_quadrants_and_mirrors() {
+        for degrees in [-170.0_f64, -113., -37., 22., 68., 149.] {
+            let seen = (degrees.to_radians().cos() * 600., degrees.to_radians().sin() * 600.);
+            for mirror in [false, true] {
+                let (t, scale) = align((0.6, -0.4), seen, mirror);
+                let (x, y) = turn(&t, (0.6, -0.4));
+                assert!((x * scale - seen.0).abs() < 1e-6);
+                assert!((y * scale - seen.1).abs() < 1e-6);
+            }
+        }
+    }
+
+    fn schematic(exit: (f64, f64)) -> Catalog {
+        Catalog {
+            layouts: HashMap::from([("G1_1".into(), vec![Variant {
+                name: "test".into(), icons: vec![
+                    Icon { id: "myplayer".into(), label: None, x: 0.2, y: 0.5 },
+                    Icon { id: "boss".into(), label: Some("Miller".into()), x: 0.5, y: 0.5 },
+                    Icon { id: "entrance".into(), label: Some("Town".into()), x: exit.0, y: exit.1 },
+                ], lines: vec![Line { from: 0, to: 1 }, Line { from: 1, to: 2 }],
+            }])]), names: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn a_landmark_does_not_resolve_mirrored_exit_bearings() {
+        let pois = [poi("npc", "Miller", 600, 0)];
+        let completed = ["Miller".into()];
+        let ev = Evidence { player: (600, 0), pois: &pois, completed: &completed, ..evidence() };
+        let view = guide(&schematic((0.5, 0.8)), &ev).unwrap();
+        assert_eq!(view.target, "Town");
+        assert_eq!(view.source, "unconfirmed");
+        assert_eq!(view.degrees, None);
+    }
+
+    #[test]
+    fn an_aligned_exit_uses_the_observed_non_quarter_turn() {
+        let pois = [poi("npc", "Miller", 600, -300)];
+        let completed = ["Miller".into()];
+        let ev = Evidence { player: (600, -300), pois: &pois, completed: &completed, ..evidence() };
+        let view = guide(&schematic((0.8, 0.5)), &ev).unwrap();
+        assert_eq!(view.source, "estimated");
+        assert!((view.degrees.unwrap() + 26.56505).abs() < 0.001);
     }
 
     #[test]
     fn needs_a_known_arrival_point() {
         let catalog = Catalog::load();
         // Clearfell's diagrams start at an entrance; coming from an unknown zone there is no anchor.
-        let ev = Evidence { area: "G1_2", arrived_from: "", walls: &[], trail: &[], player: (0, 0), pois: &[], scale: None };
+        let ev = Evidence { area: "G1_2", ..evidence() };
         assert!(guide(&catalog, &ev).is_none());
         let ev = Evidence { arrived_from: "G1_town", ..ev };
         assert!(guide(&catalog, &ev).is_some());
@@ -416,9 +518,17 @@ mod tests {
     #[test]
     fn back_from_town_starts_at_the_town_entrance() {
         let catalog = Catalog::load();
-        let ev = Evidence { area: "G1_1", arrived_from: "G1_town", walls: &[], trail: &[], player: (0, 0), pois: &[], scale: None };
+        let ev = Evidence { arrived_from: "G1_town", ..evidence() };
         // No drawn route leads away from the encampment entrance, so the boss is next.
         let view = guide(&catalog, &ev).unwrap();
         assert_eq!(view.target, "Miller");
+    }
+
+    #[test]
+    fn scale_measurement_does_not_assume_screen_orientation() {
+        let catalog = schematic((0.8, 0.5));
+        for (x, y) in [(600, 0), (0, -600), (-600, 0), (0, 600)] {
+            assert_eq!(measure_scale(&catalog, "G1_1", "", &[poi("npc", "Miller", x, y)]), Some(2000.0));
+        }
     }
 }

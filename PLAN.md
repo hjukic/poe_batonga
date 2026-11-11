@@ -83,8 +83,10 @@ The design lives in `docs/architecture.md`, the decisions and their reasons in `
 
   Status: `docs/map-reading.md` records an offline PNG baseline, 15 passing
   checks and diagnostics on two existing local screenshots. Synthetic cases work;
-  real minimap extraction/player detection do not yet meet requirements. No live
-  capture or arrow is enabled. Policy permits informed log reading; visual
+  real minimap extraction/player detection do not yet meet requirements. A Windows
+  windowed/borderless GDI capture adapter is implemented alongside Hyprland capture;
+  Map reading starts automatically as requested by the owner; Windows gameplay
+  verification is still pending. Policy permits informed log reading; visual
   analysis/navigation clarification and Windows/Linux capture tests remain open.
 
 - [ ] **8. Choose the language**
