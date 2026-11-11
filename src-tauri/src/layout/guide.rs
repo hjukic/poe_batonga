@@ -169,11 +169,13 @@ struct Hypothesis {
 
 fn start_icon(variant: &Variant, from_names: &[String]) -> Option<usize> {
     let icons = &variant.icons;
-    icons.iter().position(|i| i.id == "myplayer").or_else(|| {
-        icons.iter().position(|i| {
+    // Coming through an entrance starts there; otherwise at the drawn start (a new character).
+    icons
+        .iter()
+        .position(|i| {
             i.id == "entrance" && i.label.as_deref().is_some_and(|l| from_names.iter().any(|n| same_name(l, n)))
         })
-    })
+        .or_else(|| icons.iter().position(|i| i.id == "myplayer"))
 }
 
 /// Objectives in order: the drawn route from the start, else bosses/rewards, then exits.
@@ -409,5 +411,14 @@ mod tests {
         assert!(guide(&catalog, &ev).is_none());
         let ev = Evidence { arrived_from: "G1_town", ..ev };
         assert!(guide(&catalog, &ev).is_some());
+    }
+
+    #[test]
+    fn back_from_town_starts_at_the_town_entrance() {
+        let catalog = Catalog::load();
+        let ev = Evidence { area: "G1_1", arrived_from: "G1_town", walls: &[], trail: &[], player: (0, 0), pois: &[], scale: None };
+        // No drawn route leads away from the encampment entrance, so the boss is next.
+        let view = guide(&catalog, &ev).unwrap();
+        assert_eq!(view.target, "Miller");
     }
 }
