@@ -14,5 +14,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-single-instance = "2"
 
-[target."cfg(unix)".dependencies]
-signal-hook = "0.3"
+# GTK input shape: while locked, only the header buttons take mouse input.
+# Same major version as the gtk crate Tauri itself uses.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"

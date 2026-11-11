@@ -12,11 +12,6 @@
   "app": {
     "windows": [
       {
-        "label": "controls", "title": "Batonga · Overlay controls",
-        "width": 580, "height": 620, "minWidth": 480, "minHeight": 540,
-        "center": true, "focus": false
-      },
-      {
         "label": "overlay", "title": "Batonga · Overlay",
         "url": "index.html?view=overlay",
         "width": 550, "height": 360, "x": 20, "y": 170,

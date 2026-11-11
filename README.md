@@ -17,8 +17,10 @@ npm ci
 npm run desktop
 ```
 
-Use **Ctrl+Alt+I** for interaction and **Ctrl+Alt+O** to show/hide. The regular
-controls window also provides recovery and quit buttons. See the
+**Ctrl+Space** shows and hides the overlay; change it under the settings (gear)
+button. The lock button unlocks the panel to move it, open settings or tick a step
+by hand; while locked, only the header buttons take clicks. On Hyprland the global
+shortcut fires while the game (an XWayland window) has focus. See the
 [test procedure and results](docs/overlay-test.md) for Windows and Linux checks.
 
 `npm run build` validates the frontend; `npm run desktop:build` builds the native
