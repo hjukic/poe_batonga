@@ -1,0 +1,1031 @@
+{
+  "formatVersion": 1,
+  "kind": "historical-campaign-zone-observations",
+  "sourceId": "local-client-log",
+  "reviewStatus": "not-validated-for-current-patch",
+  "observedFrom": "2025-09-09",
+  "observedThrough": "2026-09-10",
+  "linesScanned": 3072602,
+  "areas": [
+    {
+      "id": "G1_1",
+      "names": [
+        "The Riverbank"
+      ],
+      "observedLevels": [
+        1
+      ],
+      "generationRecords": 77
+    },
+    {
+      "id": "G1_11",
+      "names": [
+        "Hunting Grounds"
+      ],
+      "observedLevels": [
+        10
+      ],
+      "generationRecords": 56
+    },
+    {
+      "id": "G1_12",
+      "names": [
+        "Freythorn"
+      ],
+      "observedLevels": [
+        11
+      ],
+      "generationRecords": 35
+    },
+    {
+      "id": "G1_13_1",
+      "names": [
+        "Ogham Farmlands"
+      ],
+      "observedLevels": [
+        12
+      ],
+      "generationRecords": 42
+    },
+    {
+      "id": "G1_13_2",
+      "names": [
+        "Ogham Village"
+      ],
+      "observedLevels": [
+        13
+      ],
+      "generationRecords": 24
+    },
+    {
+      "id": "G1_14",
+      "names": [
+        "The Manor Ramparts"
+      ],
+      "observedLevels": [
+        14
+      ],
+      "generationRecords": 27
+    },
+    {
+      "id": "G1_15",
+      "names": [
+        "Ogham Manor"
+      ],
+      "observedLevels": [
+        15
+      ],
+      "generationRecords": 45
+    },
+    {
+      "id": "G1_2",
+      "names": [
+        "Clearfell"
+      ],
+      "observedLevels": [
+        2
+      ],
+      "generationRecords": 42
+    },
+    {
+      "id": "G1_3",
+      "names": [
+        "Mud Burrow"
+      ],
+      "observedLevels": [
+        3
+      ],
+      "generationRecords": 17
+    },
+    {
+      "id": "G1_4",
+      "names": [
+        "The Grelwood"
+      ],
+      "observedLevels": [
+        4
+      ],
+      "generationRecords": 64
+    },
+    {
+      "id": "G1_5",
+      "names": [
+        "The Red Vale"
+      ],
+      "observedLevels": [
+        5
+      ],
+      "generationRecords": 40
+    },
+    {
+      "id": "G1_6",
+      "names": [
+        "The Grim Tangle"
+      ],
+      "observedLevels": [
+        6
+      ],
+      "generationRecords": 38
+    },
+    {
+      "id": "G1_7",
+      "names": [
+        "Cemetery of the Eternals"
+      ],
+      "observedLevels": [
+        7
+      ],
+      "generationRecords": 60
+    },
+    {
+      "id": "G1_8",
+      "names": [
+        "Mausoleum of the Praetor"
+      ],
+      "observedLevels": [
+        8,
+        9
+      ],
+      "generationRecords": 18
+    },
+    {
+      "id": "G1_9",
+      "names": [
+        "Tomb of the Consort"
+      ],
+      "observedLevels": [
+        8,
+        9
+      ],
+      "generationRecords": 26
+    },
+    {
+      "id": "G1_town",
+      "names": [
+        "Clearfell Encampment"
+      ],
+      "observedLevels": [
+        15
+      ],
+      "generationRecords": 207
+    },
+    {
+      "id": "G2_1",
+      "names": [
+        "Vastiri Outskirts"
+      ],
+      "observedLevels": [
+        16
+      ],
+      "generationRecords": 20
+    },
+    {
+      "id": "G2_10_1",
+      "names": [
+        "Mawdun Quarry"
+      ],
+      "observedLevels": [
+        17
+      ],
+      "generationRecords": 16
+    },
+    {
+      "id": "G2_10_2",
+      "names": [
+        "Mawdun Mine"
+      ],
+      "observedLevels": [
+        18
+      ],
+      "generationRecords": 21
+    },
+    {
+      "id": "G2_12",
+      "names": [
+        "Dreadnought"
+      ],
+      "observedLevels": [
+        31
+      ],
+      "generationRecords": 4
+    },
+    {
+      "id": "G2_12_1",
+      "names": [
+        "The Dreadnought"
+      ],
+      "observedLevels": [
+        31
+      ],
+      "generationRecords": 11
+    },
+    {
+      "id": "G2_12_2",
+      "names": [
+        "Dreadnought Vanguard"
+      ],
+      "observedLevels": [
+        32
+      ],
+      "generationRecords": 16
+    },
+    {
+      "id": "G2_13",
+      "names": [
+        "Trial of the Sekhemas"
+      ],
+      "observedLevels": [
+        22
+      ],
+      "generationRecords": 131
+    },
+    {
+      "id": "G2_2",
+      "names": [
+        "Traitor's Passage"
+      ],
+      "observedLevels": [
+        19
+      ],
+      "generationRecords": 25
+    },
+    {
+      "id": "G2_3",
+      "names": [
+        "The Halani Gates"
+      ],
+      "observedLevels": [
+        20
+      ],
+      "generationRecords": 24
+    },
+    {
+      "id": "G2_3a",
+      "names": [
+        "The Halani Gates"
+      ],
+      "observedLevels": [
+        20
+      ],
+      "generationRecords": 13
+    },
+    {
+      "id": "G2_4_1",
+      "names": [
+        "Keth"
+      ],
+      "observedLevels": [
+        23,
+        25
+      ],
+      "generationRecords": 18
+    },
+    {
+      "id": "G2_4_2",
+      "names": [
+        "The Lost City"
+      ],
+      "observedLevels": [
+        24
+      ],
+      "generationRecords": 23
+    },
+    {
+      "id": "G2_4_3",
+      "names": [
+        "Buried Shrines"
+      ],
+      "observedLevels": [
+        25
+      ],
+      "generationRecords": 19
+    },
+    {
+      "id": "G2_5_1",
+      "names": [
+        "Mastodon Badlands"
+      ],
+      "observedLevels": [
+        21,
+        26
+      ],
+      "generationRecords": 23
+    },
+    {
+      "id": "G2_5_2",
+      "names": [
+        "The Bone Pits"
+      ],
+      "observedLevels": [
+        22,
+        27
+      ],
+      "generationRecords": 22
+    },
+    {
+      "id": "G2_6",
+      "names": [
+        "Valley of the Titans"
+      ],
+      "observedLevels": [
+        26
+      ],
+      "generationRecords": 13
+    },
+    {
+      "id": "G2_7",
+      "names": [
+        "The Titan Grotto"
+      ],
+      "observedLevels": [
+        27
+      ],
+      "generationRecords": 16
+    },
+    {
+      "id": "G2_8",
+      "names": [
+        "Deshar"
+      ],
+      "observedLevels": [
+        28
+      ],
+      "generationRecords": 18
+    },
+    {
+      "id": "G2_9_1",
+      "names": [
+        "Path of Mourning"
+      ],
+      "observedLevels": [
+        29
+      ],
+      "generationRecords": 15
+    },
+    {
+      "id": "G2_9_2",
+      "names": [
+        "The Spires of Deshar"
+      ],
+      "observedLevels": [
+        30
+      ],
+      "generationRecords": 15
+    },
+    {
+      "id": "G2_town",
+      "names": [
+        "The Ardura Caravan"
+      ],
+      "observedLevels": [
+        32
+      ],
+      "generationRecords": 212
+    },
+    {
+      "id": "G3_1",
+      "names": [
+        "Sandswept Marsh"
+      ],
+      "observedLevels": [
+        33
+      ],
+      "generationRecords": 21
+    },
+    {
+      "id": "G3_10",
+      "names": [
+        "The Trial of Chaos"
+      ],
+      "observedLevels": [
+        38,
+        43,
+        75
+      ],
+      "generationRecords": 22
+    },
+    {
+      "id": "G3_10_Airlock",
+      "names": [
+        "The Temple of Chaos"
+      ],
+      "observedLevels": [
+        38
+      ],
+      "generationRecords": 52
+    },
+    {
+      "id": "G3_11",
+      "names": [
+        "Apex of Filth"
+      ],
+      "observedLevels": [
+        41
+      ],
+      "generationRecords": 12
+    },
+    {
+      "id": "G3_12",
+      "names": [
+        "Temple of Kopec"
+      ],
+      "observedLevels": [
+        42
+      ],
+      "generationRecords": 13
+    },
+    {
+      "id": "G3_14",
+      "names": [
+        "Utzaal"
+      ],
+      "observedLevels": [
+        43
+      ],
+      "generationRecords": 29
+    },
+    {
+      "id": "G3_16",
+      "names": [
+        "Aggorat"
+      ],
+      "observedLevels": [
+        44
+      ],
+      "generationRecords": 23
+    },
+    {
+      "id": "G3_17",
+      "names": [
+        "The Black Chambers"
+      ],
+      "observedLevels": [
+        45
+      ],
+      "generationRecords": 24
+    },
+    {
+      "id": "G3_2_1",
+      "names": [
+        "Infested Barrens"
+      ],
+      "observedLevels": [
+        35
+      ],
+      "generationRecords": 34
+    },
+    {
+      "id": "G3_2_2",
+      "names": [
+        "The Matlan Waterways"
+      ],
+      "observedLevels": [
+        39
+      ],
+      "generationRecords": 18
+    },
+    {
+      "id": "G3_3",
+      "names": [
+        "Jungle Ruins"
+      ],
+      "observedLevels": [
+        34
+      ],
+      "generationRecords": 34
+    },
+    {
+      "id": "G3_4",
+      "names": [
+        "The Venom Crypts"
+      ],
+      "observedLevels": [
+        35
+      ],
+      "generationRecords": 13
+    },
+    {
+      "id": "G3_5",
+      "names": [
+        "Chimeral Wetlands"
+      ],
+      "observedLevels": [
+        36
+      ],
+      "generationRecords": 31
+    },
+    {
+      "id": "G3_6_1",
+      "names": [
+        "Jiquani's Machinarium"
+      ],
+      "observedLevels": [
+        37
+      ],
+      "generationRecords": 23
+    },
+    {
+      "id": "G3_6_2",
+      "names": [
+        "Jiquani's Sanctum"
+      ],
+      "observedLevels": [
+        38
+      ],
+      "generationRecords": 17
+    },
+    {
+      "id": "G3_7",
+      "names": [
+        "The Azak Bog"
+      ],
+      "observedLevels": [
+        36,
+        40
+      ],
+      "generationRecords": 25
+    },
+    {
+      "id": "G3_8",
+      "names": [
+        "The Drowned City"
+      ],
+      "observedLevels": [
+        40
+      ],
+      "generationRecords": 16
+    },
+    {
+      "id": "G3_9",
+      "names": [
+        "The Molten Vault"
+      ],
+      "observedLevels": [
+        41
+      ],
+      "generationRecords": 7
+    },
+    {
+      "id": "G3_town",
+      "names": [
+        "Ziggurat Encampment"
+      ],
+      "observedLevels": [
+        44
+      ],
+      "generationRecords": 171
+    },
+    {
+      "id": "G4_1_1",
+      "names": [
+        "Isle of Kin"
+      ],
+      "observedLevels": [
+        46,
+        47,
+        49,
+        51
+      ],
+      "generationRecords": 20
+    },
+    {
+      "id": "G4_1_2",
+      "names": [
+        "Volcanic Warrens"
+      ],
+      "observedLevels": [
+        47,
+        48,
+        50,
+        51,
+        52
+      ],
+      "generationRecords": 16
+    },
+    {
+      "id": "G4_10",
+      "names": [
+        "The Excavation"
+      ],
+      "observedLevels": [
+        52
+      ],
+      "generationRecords": 10
+    },
+    {
+      "id": "G4_11_1b",
+      "names": [
+        "Ngakanu"
+      ],
+      "observedLevels": [
+        53
+      ],
+      "generationRecords": 13
+    },
+    {
+      "id": "G4_11_2",
+      "names": [
+        "Heart of the Tribe"
+      ],
+      "observedLevels": [
+        53
+      ],
+      "generationRecords": 12
+    },
+    {
+      "id": "G4_13",
+      "names": [
+        "Plunder's Point"
+      ],
+      "observedLevels": [
+        53
+      ],
+      "generationRecords": 1
+    },
+    {
+      "id": "G4_2_1",
+      "names": [
+        "Kedge Bay"
+      ],
+      "observedLevels": [
+        46,
+        47,
+        48
+      ],
+      "generationRecords": 15
+    },
+    {
+      "id": "G4_2_2",
+      "names": [
+        "Journey's End"
+      ],
+      "observedLevels": [
+        47,
+        48
+      ],
+      "generationRecords": 27
+    },
+    {
+      "id": "G4_3_1",
+      "names": [
+        "Whakapanu Island"
+      ],
+      "observedLevels": [
+        48,
+        49,
+        50
+      ],
+      "generationRecords": 15
+    },
+    {
+      "id": "G4_3_2",
+      "names": [
+        "Singing Caverns"
+      ],
+      "observedLevels": [
+        49,
+        50,
+        51
+      ],
+      "generationRecords": 12
+    },
+    {
+      "id": "G4_4_1",
+      "names": [
+        "Eye of Hinekora"
+      ],
+      "observedLevels": [
+        50,
+        51
+      ],
+      "generationRecords": 14
+    },
+    {
+      "id": "G4_4_2",
+      "names": [
+        "Halls of the Dead"
+      ],
+      "observedLevels": [
+        51,
+        52
+      ],
+      "generationRecords": 18
+    },
+    {
+      "id": "G4_4_3",
+      "names": [
+        "Trial of the Ancestors"
+      ],
+      "observedLevels": [
+        51
+      ],
+      "generationRecords": 10
+    },
+    {
+      "id": "G4_5_1",
+      "names": [
+        "Abandoned Prison"
+      ],
+      "observedLevels": [
+        47,
+        48,
+        49,
+        50
+      ],
+      "generationRecords": 15
+    },
+    {
+      "id": "G4_5_2",
+      "names": [
+        "Solitary Confinement"
+      ],
+      "observedLevels": [
+        48,
+        49,
+        50,
+        51
+      ],
+      "generationRecords": 15
+    },
+    {
+      "id": "G4_7",
+      "names": [
+        "Shrike Island"
+      ],
+      "observedLevels": [
+        46,
+        47,
+        48,
+        50,
+        51
+      ],
+      "generationRecords": 10
+    },
+    {
+      "id": "G4_8a",
+      "names": [
+        "Arastas"
+      ],
+      "observedLevels": [
+        52
+      ],
+      "generationRecords": 1
+    },
+    {
+      "id": "G4_8b",
+      "names": [
+        "Arastas"
+      ],
+      "observedLevels": [
+        52
+      ],
+      "generationRecords": 10
+    },
+    {
+      "id": "G4_town",
+      "names": [
+        "Kingsmarch"
+      ],
+      "observedLevels": [
+        53
+      ],
+      "generationRecords": 155
+    },
+    {
+      "id": "P1_1",
+      "names": [
+        "Scorched Farmlands"
+      ],
+      "observedLevels": [
+        54
+      ],
+      "generationRecords": 24
+    },
+    {
+      "id": "P1_2",
+      "names": [
+        "Stones of Serle"
+      ],
+      "observedLevels": [
+        54
+      ],
+      "generationRecords": 15
+    },
+    {
+      "id": "P1_3",
+      "names": [
+        "The Blackwood"
+      ],
+      "observedLevels": [
+        55
+      ],
+      "generationRecords": 15
+    },
+    {
+      "id": "P1_4",
+      "names": [
+        "Holten"
+      ],
+      "observedLevels": [
+        55,
+        61,
+        62,
+        63
+      ],
+      "generationRecords": 382
+    },
+    {
+      "id": "P1_5",
+      "names": [
+        "Wolvenhold"
+      ],
+      "observedLevels": [
+        56
+      ],
+      "generationRecords": 9
+    },
+    {
+      "id": "P1_6",
+      "names": [
+        "Holten Estate"
+      ],
+      "observedLevels": [
+        56
+      ],
+      "generationRecords": 17
+    },
+    {
+      "id": "P1_Town",
+      "names": [
+        "The Refuge"
+      ],
+      "observedLevels": [
+        64
+      ],
+      "generationRecords": 33
+    },
+    {
+      "id": "P2_1",
+      "names": [
+        "The Khari Crossing"
+      ],
+      "observedLevels": [
+        58,
+        62
+      ],
+      "generationRecords": 29
+    },
+    {
+      "id": "P2_2",
+      "names": [
+        "Pools of Khatal"
+      ],
+      "observedLevels": [
+        59,
+        63
+      ],
+      "generationRecords": 17
+    },
+    {
+      "id": "P2_3",
+      "names": [
+        "Sel Khari Sanctuary "
+      ],
+      "observedLevels": [
+        59,
+        63
+      ],
+      "generationRecords": 11
+    },
+    {
+      "id": "P2_5",
+      "names": [
+        "The Galai Gates"
+      ],
+      "observedLevels": [
+        60,
+        64
+      ],
+      "generationRecords": 25
+    },
+    {
+      "id": "P2_6",
+      "names": [
+        "Qimah"
+      ],
+      "observedLevels": [
+        60,
+        64
+      ],
+      "generationRecords": 59
+    },
+    {
+      "id": "P2_7",
+      "names": [
+        "Qimah Reservoir"
+      ],
+      "observedLevels": [
+        60,
+        64
+      ],
+      "generationRecords": 18
+    },
+    {
+      "id": "P2_Town",
+      "names": [
+        "The Khari Bazaar"
+      ],
+      "observedLevels": [
+        64
+      ],
+      "generationRecords": 70
+    },
+    {
+      "id": "P3_1",
+      "names": [
+        "Ashen Forest"
+      ],
+      "observedLevels": [
+        58,
+        62
+      ],
+      "generationRecords": 12
+    },
+    {
+      "id": "P3_2",
+      "names": [
+        "Kriar Village"
+      ],
+      "observedLevels": [
+        58,
+        62
+      ],
+      "generationRecords": 13
+    },
+    {
+      "id": "P3_3",
+      "names": [
+        "Glacial Tarn"
+      ],
+      "observedLevels": [
+        59,
+        63
+      ],
+      "generationRecords": 23
+    },
+    {
+      "id": "P3_4",
+      "names": [
+        "Howling Caves"
+      ],
+      "observedLevels": [
+        59,
+        63
+      ],
+      "generationRecords": 12
+    },
+    {
+      "id": "P3_5",
+      "names": [
+        "Kriar Peaks"
+      ],
+      "observedLevels": [
+        60,
+        64
+      ],
+      "generationRecords": 13
+    },
+    {
+      "id": "P3_6",
+      "names": [
+        "Etched Ravine"
+      ],
+      "observedLevels": [
+        60,
+        64
+      ],
+      "generationRecords": 12
+    },
+    {
+      "id": "P3_7",
+      "names": [
+        "The Cuachic Vault"
+      ],
+      "observedLevels": [
+        60,
+        64
+      ],
+      "generationRecords": 13
+    },
+    {
+      "id": "P3_Town",
+      "names": [
+        "The Glade"
+      ],
+      "observedLevels": [
+        64
+      ],
+      "generationRecords": 38
+    }
+  ]
+}

@@ -7,10 +7,13 @@ Current document:
 
 - [Scope](scope.md): owner requirements recorded; second-contributor agreement pending.
 
-Planned documents (not written yet):
-
-- `architecture.md`: Phase 1, step 3.
-- `decisions.md`: Phase 1, step 3, starting with the scope decisions.
+- [Architecture](architecture.md): Phase 1.3 proposal and Phase 2 research questions.
+- [Decisions](decisions.md): scope requirements, proposals and deferred choices.
+- [Qutm review](qutm-review.md): inspected log parser, guide/layout behavior and lessons.
+- [Local log findings](log-findings.md): observed fields and limits for quest items/navigation.
+- [Overlay experiment](overlay-test.md): run instructions, controls and platform test results.
+- [Data sources](data-sources.md): selected route/zone/layout sources and their terms.
+- [Map-reading experiment](map-reading.md): offline baseline, negative real-image findings and next checks.
 
 ## Repository setup status
 

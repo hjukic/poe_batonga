@@ -23,9 +23,13 @@ The design lives in `docs/architecture.md`, the decisions and their reasons in `
   Status: owner requirements recorded in `docs/scope.md`; agreement by the
   second contributor is pending. No automatic recognition feature is approved yet.
 
-- [ ] **3. Draft the architecture**
+- [x] **3. Draft the architecture**
   Write `docs/architecture.md` with the parts of the app, how data flows between them, and the open questions. Start `docs/decisions.md` with the decisions from step 2.
   Done when: the open questions in it match steps 4 to 7.
+
+  Status: `docs/architecture.md` describes the proposed components, evidence/data
+  flow and experiments mapped to steps 4-7. `docs/decisions.md` records scope
+  requirements and separates technical proposals from validated decisions.
 
 ## Phase 2: Find out
 
@@ -35,11 +39,24 @@ The design lives in `docs/architecture.md`, the decisions and their reasons in `
   assuming they exist; record whether character and quest/item evidence exists.
   Done when: the architecture file lists exactly what the log provides.
 
+  Research: `docs/qutm-review.md` identifies candidate zone, level-up and
+  dialogue/reward patterns from Qutm source. `docs/log-findings.md` records a
+  full-file search of local historical logs: zone/seed/hash and reward evidence
+  exists; generic quest-item pickup, player position and map geometry were not
+  established. Labelled gameplay checks and current-patch validation remain.
+
 - [ ] **5. Test the overlay window**
   Build a tiny window that stays on top of the game, once in Tauri and, if that fails, in Electron. Try it on Hyprland and on your friend's system.
   Done when: you know which toolkit shows a window over the game on both systems.
 
-- [ ] **6. Collect the data sources**
+  Status: initial Tauri prototype includes a transparent topmost overlay,
+  click-through/interaction toggling, global shortcuts and a recovery controls
+  window. See `docs/overlay-test.md` for setup, verification and outstanding
+  Windows/Hyprland game tests. Windows release build, startup and shortcut-state
+  checks pass; actual mouse routing and game stacking remain unverified.
+  This step is not yet complete.
+
+- [x] **6. Collect the data sources**
   List PoE 2-specific sources for each kind of data and their licences. The
   candidates below are unverified and must be checked for PoE 2 relevance:
   - route steps: Domistae's route, the wiki's act guides, the Exile Leveling fork
@@ -47,6 +64,12 @@ The design lives in `docs/architecture.md`, the decisions and their reasons in `
   - layout pictures: Exile-UI's images or your own screenshots
 
   Done when: each kind of data has a chosen source you are allowed to use.
+
+  Status: `docs/data-sources.md` and `data/sources.json` select Domistae's MIT
+  original route text, locally observed zone metadata and project-authored layout
+  schematics. The route revision, licence and attribution are recorded; 97
+  historical campaign zone IDs are collected. Route adaptation, current-patch
+  validation and actual layout assets remain later work.
 
 - [ ] **7. Test map reading**
   Establish a permitted basis for automatic local screen analysis, layout-based
@@ -58,6 +81,12 @@ The design lives in `docs/architecture.md`, the decisions and their reasons in `
   Done when: compliance evidence and technical results are documented, including
   unknown states and ambiguous matches. If automation or the arrow cannot meet
   these constraints, agree a reduced checklist/map-panel scope with both contributors.
+
+  Status: `docs/map-reading.md` records an offline PNG baseline, 15 passing
+  checks and diagnostics on two existing local screenshots. Synthetic cases work;
+  real minimap extraction/player detection do not yet meet requirements. No live
+  capture or arrow is enabled. Policy permits informed log reading; visual
+  analysis/navigation clarification and Windows/Linux capture tests remain open.
 
 - [ ] **8. Choose the language**
   Decide from the result of step 5. Recommendation: Tauri 2 (Rust core, web UI), with Electron as the fallback.

@@ -1,0 +1,12 @@
+{
+  "datasetKind": "unlabelled-local-samples",
+  "templates": [{ "id": "example-layout", "file": "layout-crop.png" }],
+  "frames": [{ "id": "example-frame", "file": "frame-crop.png" }],
+  "profile": {
+    "mapMin": 170,
+    "mapSpread": 35,
+    "playerMinGreen": 180,
+    "playerMaxRed": 120,
+    "playerMaxBlue": 140
+  }
+}

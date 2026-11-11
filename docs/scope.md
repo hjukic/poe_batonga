@@ -9,6 +9,9 @@ Build a desktop overlay for the Path of Exile 2 campaign, initially validated on
 Act 1, that helps the player level and follow campaign objectives. It must work
 on Windows and Linux, including the planned Hyprland test. Endgame, trading,
 build optimization, consoles and Path of Exile 1 are outside this scope.
+Inventory scanning, inventory scan recording/replay and price checking are also
+explicitly excluded. Quest-item progress remains in scope through validated
+log/quest evidence; it does not require an inventory scanner.
 
 ## Desired experience
 
@@ -37,7 +40,10 @@ injection, client/file modification, network interception, hidden map extraction
 or automated movement, combat, item pickup, quest interaction or game inputs.
 Automatic checklist updates change only this app's state.
 
-The public terms do not establish permission for our proposed continuous screen
+GGG's [developer policy](https://www.pathofexile.com/developer/docs/index#policy)
+permits log reading when the user knows how the data is used; this supplies the
+basis for our informed read-only log workflow. It does not establish permission
+for our proposed continuous screen
 analysis, layout inference or automatic progress detection. These are desired
 features, not approved capabilities. Before enabling them in live gameplay,
 document a permitted basis for the exact behavior, seeking written clarification
