@@ -12,18 +12,51 @@
   "app": {
     "windows": [
       {
-        "label": "overlay", "title": "Batonga · Overlay",
+        "label": "overlay",
+        "title": "Batonga · Overlay",
         "url": "index.html?view=overlay",
-        "width": 550, "height": 360, "x": 20, "y": 170,
-        "transparent": true, "backgroundColor": "#00000000",
-        "decorations": false, "shadow": false, "alwaysOnTop": true,
-        "skipTaskbar": true, "resizable": true,
-        "focus": false, "focusable": false, "visible": false
+        "width": 550,
+        "height": 360,
+        "x": 20,
+        "y": 170,
+        "transparent": true,
+        "backgroundColor": "#00000000",
+        "decorations": false,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": true,
+        "focus": false,
+        "focusable": false,
+        "visible": false
+      },
+      {
+        "label": "compass",
+        "title": "Batonga · Compass",
+        "url": "compass.html",
+        "width": 360,
+        "height": 360,
+        "transparent": true,
+        "backgroundColor": "#00000000",
+        "decorations": false,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "focus": false,
+        "focusable": false,
+        "visible": false
       }
     ],
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
     }
   },
-  "bundle": { "active": false, "icon": ["icons/icon.png", "icons/icon.ico"] }
+  "bundle": {
+    "active": false,
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico"
+    ]
+  }
 }

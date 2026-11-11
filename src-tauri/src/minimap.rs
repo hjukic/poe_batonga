@@ -153,11 +153,9 @@ pub fn parse_ppm(bytes: &[u8]) -> Result<Image, String> {
 fn locate_minimap() -> Result<String, String> {
     use serde_json::Value;
     let hyprctl = |what: &str| -> Result<Value, String> {
-        let output = std::process::Command::new("hyprctl")
-            .args([what, "-j"])
-            .output()
-            .map_err(|e| format!("hyprctl unavailable ({e}); only Hyprland is supported so far"))?;
-        serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())
+        let reply = crate::layer_shell::hyprland_request(&format!("j/{what}"))
+            .ok_or("Hyprland not reachable; only Hyprland is supported on Linux so far")?;
+        serde_json::from_str(&reply).map_err(|_| format!("Unexpected reply from Hyprland: {}", reply.trim()))
     };
     let clients = hyprctl("clients")?;
     let game = clients

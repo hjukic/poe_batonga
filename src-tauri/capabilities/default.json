@@ -1,7 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "desktop",
-  "description": "Overlay window: dragging, sizing to content and event synchronization",
-  "windows": ["overlay"],
-  "permissions": ["core:event:default", "core:window:allow-start-dragging", "core:window:allow-set-size"]
+  "description": "Overlay and compass windows: dragging, sizing to content and event synchronization",
+  "windows": [
+    "overlay",
+    "compass"
+  ],
+  "permissions": [
+    "core:event:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-size"
+  ]
 }

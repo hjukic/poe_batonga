@@ -73,7 +73,16 @@ pub fn move_to(window: &gtk::ApplicationWindow, left: i32, top: i32) {
 pub fn hyprland_request(request: &str) -> Option<String> {
     use std::io::{Read, Write};
     let runtime = std::env::var("XDG_RUNTIME_DIR").ok()?;
-    let instance = std::env::var("HYPRLAND_INSTANCE_SIGNATURE").ok()?;
+    // Started outside the desktop session (e.g. detached), the instance variable is
+    // missing: use the most recently started Hyprland instance instead.
+    let instance = std::env::var("HYPRLAND_INSTANCE_SIGNATURE").ok().or_else(|| {
+        std::fs::read_dir(format!("{runtime}/hypr"))
+            .ok()?
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().join(".socket.sock").exists())
+            .max_by_key(|entry| entry.metadata().and_then(|m| m.modified()).ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+    })?;
     let mut socket =
         std::os::unix::net::UnixStream::connect(format!("{runtime}/hypr/{instance}/.socket.sock")).ok()?;
     socket.write_all(request.as_bytes()).ok()?;
@@ -109,4 +118,42 @@ pub fn set_monitor_at(window: &gtk::ApplicationWindow, x: i32, y: i32) {
 /// The current offset from the output's top-left corner.
 pub fn position(window: &gtk::ApplicationWindow) -> (i32, i32) {
     (window.layer_shell_margin(Edge::Left), window.layer_shell_margin(Edge::Top))
+}
+
+/// Where the character stands on the game's screen, as a share of its height (the
+/// camera keeps the player horizontally centred, a little above the middle).
+pub const PLAYER_Y: f64 = 0.45;
+
+/// The compass: a layer surface that never takes input, centred on the player.
+/// Call before the window is first shown, like `init`.
+pub fn init_compass(window: &gtk::ApplicationWindow) {
+    window.init_layer_shell();
+    window.set_layer(Layer::Overlay);
+    window.set_namespace("poe-batonga-compass");
+    // Anchored to the top edge only: centred horizontally, placed down by its margin.
+    window.set_anchor(Edge::Top, true);
+    // -1: measure from the monitor's edge, ignoring the top bar's reserved space.
+    window.set_exclusive_zone(-1);
+    window.set_keyboard_mode(KeyboardMode::None);
+}
+
+/// Puts the compass on the game's monitor around the player, and makes it click-through.
+/// Call on the main thread after the window is shown.
+pub fn place_compass(window: &gtk::ApplicationWindow) {
+    use gtk::prelude::{GtkWindowExt, MonitorExt, WidgetExt};
+    let center = game_center();
+    if let Some((x, y)) = center {
+        set_monitor_at(window, x, y);
+    }
+    let display = window.display();
+    let monitor = center
+        .and_then(|(x, y)| display.monitor_at_point(x, y))
+        .or_else(|| window.window().and_then(|w| display.monitor_at_window(&w)));
+    if let Some(monitor) = monitor {
+        let (_, height) = window.size();
+        let area = monitor.geometry();
+        let top = (area.height() as f64 * PLAYER_Y) as i32 - height / 2;
+        window.set_layer_shell_margin(Edge::Top, top.max(0));
+    }
+    window.input_shape_combine_region(Some(&gtk::cairo::Region::create()));
 }

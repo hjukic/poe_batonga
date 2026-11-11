@@ -96,6 +96,28 @@ fn overlay(app: &AppHandle) -> Result<WebviewWindow, String> {
     app.get_webview_window("overlay").ok_or_else(|| "Overlay window missing".into())
 }
 
+/// The compass around the player: shown and hidden with the overlay, never takes input.
+fn show_compass(app: &AppHandle, visible: bool) {
+    let Some(window) = app.get_webview_window("compass") else { return };
+    if !visible {
+        let _ = window.hide();
+        return;
+    }
+    let _ = window.show();
+    #[cfg(target_os = "linux")]
+    if snapshot(app).is_ok_and(|s| s.layer_shell) {
+        let shown = window.clone();
+        let _ = app.run_on_main_thread(move || {
+            if let Ok(gtk_window) = shown.gtk_window() {
+                layer_shell::place_compass(&gtk_window);
+            }
+        });
+        return;
+    }
+    let _ = window.set_ignore_cursor_events(true);
+    let _ = window.center();
+}
+
 fn snapshot(app: &AppHandle) -> Result<Status, String> {
     app.state::<OverlayState>().0.lock().map(|s| s.clone()).map_err(|e| e.to_string())
 }
@@ -220,9 +242,11 @@ fn apply_visibility(app: &AppHandle, visible: bool) -> Result<Status, String> {
             });
         }
         apply_interaction(app, false)?;
+        show_compass(app, true);
     } else {
         apply_interaction(app, false)?;
         window.hide().map_err(|e| e.to_string())?;
+        show_compass(app, false);
     }
     let state = app.state::<OverlayState>();
     let mut status = state.0.lock().map_err(|e| e.to_string())?;
@@ -470,6 +494,12 @@ fn main() {
                     .and_then(|window| window.gtk_window().map_err(|e| e.to_string()))
                     .map(|gtk_window| layer_shell::init(&gtk_window, settings.overlay_x, settings.overlay_y))
                     .is_ok();
+            #[cfg(target_os = "linux")]
+            if layer_shell {
+                if let Some(Ok(gtk_window)) = app.get_webview_window("compass").map(|w| w.gtk_window()) {
+                    layer_shell::init_compass(&gtk_window);
+                }
+            }
             #[cfg(not(target_os = "linux"))]
             let layer_shell = false;
             app.manage(OverlayState(Mutex::new(Status {
