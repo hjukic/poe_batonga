@@ -13,11 +13,11 @@ interface GuideView {
 interface LayoutView { guide: GuideView | null }
 interface MinimapView { enabled: boolean; visible: boolean; player: [number, number] | null }
 
-/** Ring radius around the player, in CSS pixels (the window is 360 x 360). */
+/** Ring radius around the player, in CSS pixels (the window is 460 x 460, room for the label). */
 const RADIUS = 125;
 
 document.body.innerHTML = `
-  <svg id="compass" viewBox="-180 -180 360 360" aria-hidden="true">
+  <svg id="compass" viewBox="-230 -230 460 460" aria-hidden="true">
     <circle class="ring" r="${RADIUS}"/>
     <g id="needle">
       <path class="head" d="M${RADIUS + 22} 0 L${RADIUS - 6} -17 L${RADIUS + 2} 0 L${RADIUS - 6} 17 Z"/>
@@ -51,7 +51,7 @@ function frame() {
     needle.setAttribute('transform', `rotate(${shown})`);
     const r = (shown * Math.PI) / 180;
     // The label sits just outside the arrow head.
-    label.style.transform = `translate(${Math.cos(r) * (RADIUS + 48)}px, ${Math.sin(r) * (RADIUS + 48)}px) translate(-50%, -50%)`;
+    label.style.transform = `translate(${Math.cos(r) * (RADIUS + 44)}px, ${Math.sin(r) * (RADIUS + 44)}px) translate(-50%, -50%)`;
   }
   requestAnimationFrame(frame);
 }
