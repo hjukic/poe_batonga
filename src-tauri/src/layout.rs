@@ -31,6 +31,14 @@ const SAVE_EVERY: Duration = Duration::from_secs(15);
 /// Zones the arrow is enabled for while it is being tuned.
 const GUIDED: [&str; 3] = ["G1_1", "G1_town", "G1_2"];
 const SCALES_FILE: &str = "scales.json";
+/// Joining pieces of a visit: how often to try, the least shape to try with, the
+/// coarse grid for the first search and the share of walls that must line up.
+const MERGE_EVERY: Duration = Duration::from_secs(3);
+const MERGE_MIN_WALLS: usize = 400;
+/// A piece can be smaller: one minimap frame shows about 250-1000 wall cells.
+const MERGE_MIN_PIECE: usize = 200;
+const MERGE_COARSE: i32 = 6;
+const MERGE_MATCH: f64 = 0.6;
 /// At most this many wall cells are used to score the arrow's hypotheses.
 const GUIDE_WALLS: usize = 3000;
 /// Size of the overview grid sent to the overlay.
@@ -131,6 +139,7 @@ struct State {
     previous_area: Option<String>,
     last_save: Option<Instant>,
     last_view: Option<Instant>,
+    last_merge: Option<Instant>,
 }
 
 pub struct Recorder(Mutex<State>);
@@ -222,6 +231,101 @@ fn register(
     (best.0, best.3 as f64 / rel.len().max(1) as f64)
 }
 
+/// Finds where a separately recorded piece of the same visit lies on the current map:
+/// a coarse search over every overlap, then a fine one around the best few.
+/// `piece` walls are in the piece's own coordinates; returns the shift onto `walls`.
+fn locate_piece(walls: &HashMap<(i32, i32), u32>, piece: &[(i32, i32)]) -> Option<(i32, i32)> {
+    if walls.len() < MERGE_MIN_WALLS || piece.len() < MERGE_MIN_PIECE {
+        return None;
+    }
+    let c = MERGE_COARSE;
+    let coarse = |(x, y): (i32, i32)| (x.div_euclid(c), y.div_euclid(c));
+    let mut map: std::collections::HashSet<(i32, i32)> = std::collections::HashSet::new();
+    for &cell in walls.keys() {
+        map.insert(coarse(cell));
+    }
+    let mut cells: Vec<(i32, i32)> = piece.iter().map(|&cell| coarse(cell)).collect();
+    cells.sort_unstable();
+    cells.dedup();
+    let bounds = |it: &mut dyn Iterator<Item = (i32, i32)>| {
+        it.fold((i32::MAX, i32::MAX, i32::MIN, i32::MIN), |(a, b, cc, d), (x, y)| (a.min(x), b.min(y), cc.max(x), d.max(y)))
+    };
+    let (mx0, my0, mx1, my1) = bounds(&mut map.iter().copied());
+    let (px0, py0, px1, py1) = bounds(&mut cells.iter().copied());
+    // Dense copy of the coarse map for fast lookups.
+    let (w, h) = ((mx1 - mx0 + 1) as usize, (my1 - my0 + 1) as usize);
+    let mut grid = vec![false; w * h];
+    for &(x, y) in &map {
+        grid[(y - my0) as usize * w + (x - mx0) as usize] = true;
+    }
+    let mut scored = Vec::new();
+    for dy in (my0 - py1)..=(my1 - py0) {
+        for dx in (mx0 - px1)..=(mx1 - px0) {
+            let hits = cells
+                .iter()
+                .filter(|&&(x, y)| {
+                    let (gx, gy) = (x + dx - mx0, y + dy - my0);
+                    gx >= 0 && gy >= 0 && (gx as usize) < w && (gy as usize) < h && grid[gy as usize * w + gx as usize]
+                })
+                .count();
+            if hits * 4 >= cells.len() {
+                scored.push((hits, (dx, dy)));
+            }
+        }
+    }
+    scored.sort_unstable_by_key(|a| std::cmp::Reverse(a.0));
+    let best = scored.first()?;
+    // A different, nearly as good place means the piece is ambiguous (e.g. a straight corridor).
+    if scored.iter().any(|&(hits, (dx, dy))| {
+        ((dx - best.1 .0).abs() > 2 || (dy - best.1 .1).abs() > 2) && hits * 10 > best.0 * 9
+    }) {
+        return None;
+    }
+    let candidates: Vec<(i32, i32)> = scored.iter().take(3).map(|&(_, (dx, dy))| (dx * c, dy * c)).collect();
+    candidates
+        .into_iter()
+        .map(|shift| register(walls, piece, shift, c + 2))
+        .filter(|&(_, share)| share >= MERGE_MATCH)
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(shift, _)| shift)
+}
+
+/// Joins earlier pieces of this visit onto the live map once they can be placed on it,
+/// so arrival points and NPCs found before a restart or a lost track still count.
+fn merge_pieces(session: &mut Session) -> bool {
+    let live = &mut session.live;
+    for index in 0..session.recording.parts.len() {
+        let part = &session.recording.parts[index];
+        let piece: Vec<(i32, i32)> = part.walls.iter().map(|&[x, y, _]| (x, y)).collect();
+        let Some((dx, dy)) = locate_piece(&live.walls, &piece) else { continue };
+        let part = session.recording.parts.remove(index);
+        for [x, y, n] in part.walls {
+            *live.walls.entry((x + dx, y + dy)).or_insert(0) += n as u32;
+        }
+        let mut trail: Vec<[i32; 2]> = part.trail.iter().map(|&[x, y]| [x + dx, y + dy]).collect();
+        trail.append(&mut live.part.trail);
+        live.part.trail = trail;
+        let mut pois: Vec<Poi> = part
+            .pois
+            .into_iter()
+            .map(|p| Poi { x: p.x + dx, y: p.y + dy, ..p })
+            .chain(live.part.pois.drain(..))
+            .collect();
+        // Once a real arrival is known, "app started here" points mean nothing.
+        if pois.iter().any(|p| p.kind == "arrived") {
+            pois.retain(|p| p.kind != "start");
+        }
+        pois.sort_by_key(|p| p.at);
+        live.part.pois = pois;
+        live.part.frames += part.frames;
+        live.part.matched += part.matched;
+        live.part.lost += part.lost;
+        live.part.started_at = live.part.started_at.min(part.started_at);
+        return true;
+    }
+    false
+}
+
 impl Recorder {
     pub fn new(dir: Option<PathBuf>) -> Self {
         let scales = dir
@@ -237,6 +341,7 @@ impl Recorder {
             previous_area: None,
             last_save: None,
             last_view: None,
+            last_merge: None,
         }))
     }
 
@@ -351,6 +456,13 @@ impl Recorder {
                 }
             }
         }
+        let due_merge = state.last_merge.is_none_or(|t| t.elapsed() >= MERGE_EVERY);
+        if due_merge {
+            state.last_merge = Some(Instant::now());
+            if let Some(session) = state.session.as_mut().filter(|s| !s.recording.parts.is_empty()) {
+                merge_pieces(session);
+            }
+        }
         let due_save = state.last_save.is_none_or(|t| t.elapsed() >= SAVE_EVERY);
         if due_save {
             state.save();
@@ -421,9 +533,10 @@ impl State {
         self.save();
         let Some(session) = self.session.take() else { return };
         let pois = &session.live.part.pois;
-        let Some(arrival) = pois.iter().find(|p| p.kind == "arrived") else { return };
+        let Some(arrival) = pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at) else { return };
         let area = &session.recording.area;
-        if let Some(scale) = guide::measure_scale(&self.catalog, area, &arrival.label, pois) {
+        let relative: Vec<Poi> = pois.iter().map(|p| Poi { x: p.x - arrival.x, y: p.y - arrival.y, ..p.clone() }).collect();
+        if let Some(scale) = guide::measure_scale(&self.catalog, area, &arrival.label, &relative) {
             self.scales.entry(area.clone()).or_default().push(scale);
             if let Some(dir) = &self.dir {
                 let _ = std::fs::create_dir_all(dir);
@@ -440,8 +553,11 @@ impl State {
             return None;
         }
         let live = &session.live;
-        let arrival = live.part.pois.iter().find(|p| p.kind == "arrived")?;
-        let mut walls: Vec<(i32, i32)> = live.walls.iter().filter(|(_, &n)| n >= 2).map(|(&k, _)| k).collect();
+        // Everything relative to the (first) arrival point, which the diagrams start from.
+        let arrival = live.part.pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at)?;
+        let (ax, ay) = (arrival.x, arrival.y);
+        let mut walls: Vec<(i32, i32)> =
+            live.walls.iter().filter(|(_, &n)| n >= 2).map(|(&(x, y), _)| (x - ax, y - ay)).collect();
         if walls.len() > GUIDE_WALLS {
             let step = walls.len().div_ceil(GUIDE_WALLS);
             walls = walls.into_iter().step_by(step).collect();
@@ -457,9 +573,9 @@ impl State {
                 area,
                 arrived_from: &arrival.label,
                 walls: &walls,
-                trail: &live.part.trail,
-                player: live.pos,
-                pois: &live.part.pois,
+                trail: &live.part.trail.iter().map(|&[x, y]| [x - ax, y - ay]).collect::<Vec<_>>(),
+                player: (live.pos.0 - ax, live.pos.1 - ay),
+                pois: &live.part.pois.iter().map(|p| Poi { x: p.x - ax, y: p.y - ay, ..p.clone() }).collect::<Vec<_>>(),
                 scale,
             },
         )
@@ -598,4 +714,41 @@ mod tests {
         assert_eq!(pois.len(), 1);
         assert_eq!(pois[0].kind, "start");
     }
+}
+
+/// Joins the pieces of a real recording: `LAYOUT_FILE=<json> cargo test --release join_real -- --ignored --nocapture`.
+#[cfg(test)]
+#[test]
+#[ignore]
+fn join_real_recording() {
+    let path = std::env::var("LAYOUT_FILE").expect("set LAYOUT_FILE");
+    let mut recording: Recording = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    let biggest = (0..recording.parts.len()).max_by_key(|&i| recording.parts[i].walls.len()).unwrap();
+    let first = recording.parts.remove(biggest);
+    let mut live = Live::new();
+    live.walls = first.walls.iter().map(|&[x, y, n]| ((x, y), n as u32)).collect();
+    live.part = Part { walls: vec![], ..first };
+    let parts = recording.parts.len();
+    let mut session = Session { recording, live, arrived_from: None, started: true, file: None };
+    let started = Instant::now();
+    while merge_pieces(&mut session) {}
+    let recorder = Recorder::new(None);
+    let guide = {
+        let mut state = recorder.0.lock().unwrap();
+        state.session = Some(session);
+        let view = state.view().unwrap().guide;
+        session = state.session.take().unwrap();
+        view
+    };
+    println!("guide: {guide:?}");
+    if let Ok(out) = std::env::var("LAYOUT_OUT") {
+        session.recording.parts = vec![session.live.snapshot()];
+        std::fs::write(out, serde_json::to_vec(&session.recording).unwrap()).unwrap();
+    }
+    println!(
+        "joined {} of {parts} pieces in {:?}; pois {:?}",
+        parts - session.recording.parts.len(),
+        started.elapsed(),
+        session.live.part.pois.iter().map(|p| (&p.kind, &p.label, p.x, p.y)).collect::<Vec<_>>()
+    );
 }
