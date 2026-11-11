@@ -21,6 +21,17 @@ interface TrackerView {
   log: { connected: boolean; path: string | null; message: string };
 }
 
+interface MinimapView {
+  enabled: boolean;
+  visible: boolean;
+  message: string;
+  cols: number;
+  rows: number;
+  /** Occupied wall cells as [column, row]. */
+  walls: [number, number][];
+  player: [number, number] | null;
+}
+
 const icon = (paths: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;
 const LOCKED = icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>');
 const UNLOCKED = icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.75-1.4"/>');
@@ -39,13 +50,17 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
       </div>
     </header>
     <div class="route" id="route"></div>
+    <div class="minimap" id="minimap" hidden>
+      <canvas id="minimap-canvas" width="300" height="260"></canvas>
+      <p id="minimap-message"></p>
+    </div>
   </section>
   <div id="settings" class="dropdown" aria-label="Settings" hidden>
     <label class="row"><span>Opacity</span><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></label>
+    <label class="row"><span>Read minimap</span><input id="read-minimap" type="checkbox" checked /></label>
     <div class="row"><span>Show / hide</span><button id="shortcut" class="keycap" type="button" title="Click, then press a new shortcut"></button></div>
     <p id="shortcut-error" class="warning" hidden></p>
     <hr />
-    <button id="recenter" class="item" type="button">Recenter overlay</button>
     <button id="reset-progress" class="item" type="button">Reset progress</button>
     <p id="log-warning" class="warning" hidden></p>
     <p id="error" class="warning" role="alert" hidden></p>
@@ -58,6 +73,8 @@ const lockButton = $<HTMLButtonElement>('#lock');
 const shortcutButton = $<HTMLButtonElement>('#shortcut');
 let status: Status | undefined;
 let recording = false;
+/** The menu unlocked a locked overlay; closing the menu locks it again. */
+let relockOnClose = false;
 
 const shortcutLabel = (accelerator: string) =>
   accelerator.split('+').map((key) => key.replace(/^Key(?=.)/, '').replace(/^Digit(?=.)/, '')).join(' + ');
@@ -98,10 +115,44 @@ function renderTracker(view: TrackerView) {
   }));
 }
 
+// ---- Live minimap ----
+const minimapBox = $('#minimap');
+const minimapCanvas = $<HTMLCanvasElement>('#minimap-canvas');
+const readMinimap = $<HTMLInputElement>('#read-minimap');
+function renderMinimap(view: MinimapView) {
+  readMinimap.checked = view.enabled;
+  minimapBox.hidden = !view.enabled;
+  $('#minimap-message').textContent = view.message;
+  const context = minimapCanvas.getContext('2d');
+  if (!context) return;
+  const { width, height } = minimapCanvas;
+  context.clearRect(0, 0, width, height);
+  if (!view.cols || !view.rows) return;
+  const cell = Math.min(width / view.cols, height / view.rows);
+  context.fillStyle = '#b9b4e6';
+  for (const [column, row] of view.walls) context.fillRect(column * cell, row * cell, Math.max(cell, 1.5), Math.max(cell, 1.5));
+  if (view.player) {
+    const [x, y] = view.player;
+    context.fillStyle = '#ff8a2a';
+    context.beginPath();
+    context.arc(x * cell, y * cell, 4, 0, Math.PI * 2);
+    context.fill();
+  }
+}
+readMinimap.addEventListener('change', () => {
+  void invoke('set_minimap_enabled', { enabled: readMinimap.checked }).catch((error) => showMessage('#error', String(error)));
+});
+
 function setSettingsOpen(open: boolean) {
+  const wasOpen = !settings.hidden;
   settings.hidden = !open;
   settingsToggle.setAttribute('aria-expanded', String(open));
-  if (!open) stopRecording();
+  if (open || !wasOpen) return;
+  stopRecording();
+  if (relockOnClose) {
+    relockOnClose = false;
+    if (status?.interactive) void call('set_interaction', { interactive: false });
+  }
 }
 
 async function call(command: string, args?: Record<string, unknown>) {
@@ -199,11 +250,17 @@ $('#route').addEventListener('click', (event) => {
   if (!row || !status?.interactive || !isTauri()) return;
   void invoke<TrackerView>('toggle_step', { id: row.dataset.id }).then(renderTracker).catch((error) => showMessage('#error', String(error)));
 });
-lockButton.addEventListener('click', () => void call('set_interaction', { interactive: !status?.interactive }));
+lockButton.addEventListener('click', () => {
+  relockOnClose = false; // an explicit lock/unlock wins over the menu's temporary unlock
+  void call('set_interaction', { interactive: !status?.interactive });
+});
 settingsToggle.addEventListener('click', async () => {
   const open = settings.hidden;
-  // The menu needs mouse input, so opening it unlocks the overlay.
-  if (open && !status?.interactive) await call('set_interaction', { interactive: true });
+  // The menu needs mouse input, so opening it unlocks the overlay until it closes.
+  if (open && !status?.interactive) {
+    relockOnClose = true;
+    await call('set_interaction', { interactive: true });
+  }
   setSettingsOpen(open);
 });
 document.addEventListener('mousedown', (event) => {
@@ -211,7 +268,6 @@ document.addEventListener('mousedown', (event) => {
   if (!settings.hidden && !settings.contains(target) && !settingsToggle.contains(target)) setSettingsOpen(false);
 });
 $('#exit').addEventListener('click', () => void invoke('quit').catch(console.error));
-$('#recenter').addEventListener('click', () => void call('reset_overlay'));
 $('#reset-progress').addEventListener('click', () => {
   void invoke<TrackerView>('reset_progress').then(renderTracker).catch((error) => showMessage('#error', String(error)));
 });
@@ -237,6 +293,8 @@ async function start() {
   }
   await listen<Status>('overlay-status', (event) => render(event.payload));
   await listen<TrackerView>('tracker-state', (event) => renderTracker(event.payload));
+  await listen<MinimapView>('minimap-state', (event) => renderMinimap(event.payload));
+  renderMinimap(await invoke<MinimapView>('minimap_state'));
   render(await invoke<Status>('overlay_status'));
   renderTracker(await invoke<TrackerView>('tracker_state'));
   fitWindow();
