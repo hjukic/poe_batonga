@@ -37,8 +37,6 @@ button.icon:hover { background: rgb(239 235 255 / .12); }
 .step { transition: color .3s, opacity .3s; }
 .step.done { color: #8d8899; opacity: .55; text-decoration: line-through; text-decoration-thickness: 1px; }
 .step.done .boss { color: inherit; }
-body[data-interactive="true"] .step.objective { cursor: pointer; border-radius: 6px; margin-inline: -6px; padding-inline: 6px; }
-body[data-interactive="true"] .step.objective:hover { background: rgb(239 235 255 / .08); }
 
 /* ---- Live minimap preview ---- */
 .minimap { padding: 0 20px 12px; }

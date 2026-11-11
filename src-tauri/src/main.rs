@@ -29,8 +29,7 @@ struct Status {
 
 struct OverlayState(Mutex<Status>);
 
-/// Where the header buttons are, in the overlay's CSS pixels. While locked, only this
-/// area takes mouse input, so the lock button can always be clicked.
+/// An area of the overlay, in its CSS pixels.
 #[derive(Clone, Copy, Default, Debug, serde::Deserialize)]
 struct Rect {
     x: f64,
@@ -39,7 +38,19 @@ struct Rect {
     height: f64,
 }
 
-struct ControlsRect(Mutex<Rect>);
+impl Rect {
+    fn contains(&self, x: f64, y: f64) -> bool {
+        x >= self.x && x <= self.x + self.width && y >= self.y && y <= self.y + self.height
+    }
+}
+
+/// The only areas that take mouse input; everything else is click-through, locked or not.
+/// The page sends them: the header buttons when locked, the whole top bar when unlocked,
+/// plus the settings menu while it is open.
+struct InputRects(Mutex<Vec<Rect>>);
+
+/// Set while the top bar is being dragged on Hyprland (see `start_overlay_drag`).
+struct Dragging(std::sync::Arc<std::sync::atomic::AtomicBool>);
 
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -98,11 +109,11 @@ fn publish(app: &AppHandle) {
     }
 }
 
-/// Linux: GTK's input shape limits mouse input to the header buttons while locked
-/// (an empty region would make the lock button unreachable).
+/// Linux: GTK's input shape limits mouse input to the input rects. On a layer surface the
+/// keyboard is also only taken while unlocked (for recording a shortcut).
 #[cfg(target_os = "linux")]
-fn set_click_through(app: &AppHandle, window: &WebviewWindow, through: bool) -> Result<(), String> {
-    let rect = *app.state::<ControlsRect>().0.lock().map_err(|e| e.to_string())?;
+fn apply_input(app: &AppHandle, window: &WebviewWindow, interactive: bool) -> Result<(), String> {
+    let rects = app.state::<InputRects>().0.lock().map_err(|e| e.to_string())?.clone();
     let layer = snapshot(app)?.layer_shell;
     let window = window.clone();
     // GTK objects are not Send, so fetch and change the GTK window on the main thread.
@@ -110,45 +121,44 @@ fn set_click_through(app: &AppHandle, window: &WebviewWindow, through: bool) -> 
         use gtk::prelude::WidgetExt;
         let Ok(gtk_window) = window.gtk_window() else { return };
         if layer {
-            layer_shell::set_interactive(&gtk_window, !through);
+            layer_shell::set_interactive(&gtk_window, interactive);
         }
-        if through {
-            let area = gtk::cairo::RectangleInt::new(
+        let region = gtk::cairo::Region::create();
+        for rect in &rects {
+            let _ = region.union_rectangle(&gtk::cairo::RectangleInt::new(
                 rect.x.floor() as i32,
                 rect.y.floor() as i32,
                 rect.width.ceil() as i32,
                 rect.height.ceil() as i32,
-            );
-            gtk_window.input_shape_combine_region(Some(&gtk::cairo::Region::create_rectangle(&area)));
-        } else {
-            gtk_window.input_shape_combine_region(None);
+            ));
         }
+        gtk_window.input_shape_combine_region(Some(&region));
     })
     .map_err(|e| e.to_string())
 }
 
-/// Elsewhere the whole window is click-through while locked; `watch_controls_hover`
-/// lifts it while the cursor is over the header buttons.
+/// Elsewhere the whole window ignores the mouse; `watch_input_hover` lifts that while the
+/// cursor is over an input rect.
 #[cfg(not(target_os = "linux"))]
-fn set_click_through(_app: &AppHandle, window: &WebviewWindow, through: bool) -> Result<(), String> {
-    window.set_ignore_cursor_events(through).map_err(|e| e.to_string())
+fn apply_input(_app: &AppHandle, window: &WebviewWindow, _interactive: bool) -> Result<(), String> {
+    window.set_ignore_cursor_events(true).map_err(|e| e.to_string())
 }
 
-/// Not Linux: poll the cursor and make the window clickable only over the header buttons
-/// while locked. Untested on Windows so far.
+/// Not Linux: poll the cursor and make the window clickable only over the input rects.
+/// Untested on Windows so far.
 #[cfg_attr(target_os = "linux", allow(dead_code))]
-fn watch_controls_hover(app: AppHandle) {
+fn watch_input_hover(app: AppHandle) {
     std::thread::spawn(move || {
         let mut over = false;
         loop {
-            std::thread::sleep(std::time::Duration::from_millis(50));
+            std::thread::sleep(std::time::Duration::from_millis(30));
             let Ok(status) = snapshot(&app) else { continue };
             let Ok(window) = overlay(&app) else { continue };
-            if !status.visible || status.interactive {
+            if !status.visible {
                 over = false;
                 continue;
             }
-            let rect = app.state::<ControlsRect>().0.lock().map(|r| *r).unwrap_or_default();
+            let rects = app.state::<InputRects>().0.lock().map(|r| r.clone()).unwrap_or_default();
             let (Ok(cursor), Ok(origin), Ok(scale)) =
                 (app.cursor_position(), window.inner_position(), window.scale_factor())
             else {
@@ -156,7 +166,7 @@ fn watch_controls_hover(app: AppHandle) {
             };
             let x = (cursor.x - origin.x as f64) / scale;
             let y = (cursor.y - origin.y as f64) / scale;
-            let inside = x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+            let inside = rects.iter().any(|rect| rect.contains(x, y));
             if inside != over {
                 over = inside;
                 let _ = window.set_ignore_cursor_events(!inside);
@@ -165,10 +175,25 @@ fn watch_controls_hover(app: AppHandle) {
     });
 }
 
+/// Hyprland's global cursor position, in the same logical pixels as layer margins.
+#[cfg(target_os = "linux")]
+fn hyprland_cursor() -> Option<(f64, f64)> {
+    use std::io::{Read, Write};
+    let runtime = std::env::var("XDG_RUNTIME_DIR").ok()?;
+    let instance = std::env::var("HYPRLAND_INSTANCE_SIGNATURE").ok()?;
+    let mut socket =
+        std::os::unix::net::UnixStream::connect(format!("{runtime}/hypr/{instance}/.socket.sock")).ok()?;
+    socket.write_all(b"cursorpos").ok()?;
+    let mut reply = String::new();
+    socket.read_to_string(&mut reply).ok()?;
+    let (x, y) = reply.trim().split_once(',')?;
+    Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
+}
+
 // All input behavior belongs to our window; no keys or mouse actions are sent to the game.
 fn apply_interaction(app: &AppHandle, interactive: bool) -> Result<Status, String> {
     let window = overlay(app)?;
-    set_click_through(app, &window, !interactive)?;
+    apply_input(app, &window, interactive)?;
     let state = app.state::<OverlayState>();
     let mut status = state.0.lock().map_err(|e| e.to_string())?;
     window.set_focusable(interactive).map_err(|e| e.to_string())?;
@@ -260,13 +285,74 @@ fn save_overlay_position(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn set_controls_rect(app: AppHandle, rect: Rect) -> Result<(), String> {
-    *app.state::<ControlsRect>().0.lock().map_err(|e| e.to_string())? = rect;
+fn set_input_rects(app: AppHandle, rects: Vec<Rect>) -> Result<(), String> {
+    *app.state::<InputRects>().0.lock().map_err(|e| e.to_string())? = rects;
     let status = snapshot(&app)?;
-    if status.visible && !status.interactive {
-        set_click_through(&app, &overlay(&app)?, true)?;
+    if status.visible {
+        apply_input(&app, &overlay(&app)?, status.interactive)?;
     }
     Ok(())
+}
+
+/// Hyprland + layer-shell: the overlay follows the real cursor until `end_overlay_drag`,
+/// so dragging is as smooth as the cursor. Returns false when unavailable; the page then
+/// falls back to moving the overlay by pointer deltas.
+#[tauri::command]
+fn start_overlay_drag(app: AppHandle) -> Result<bool, String> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::sync::atomic::Ordering;
+        if !snapshot(&app)?.layer_shell {
+            return Ok(false);
+        }
+        let Some(start) = hyprland_cursor() else { return Ok(false) };
+        let gtk_window = overlay(&app)?.gtk_window().map_err(|e| e.to_string())?;
+        let origin = layer_shell::position(&gtk_window);
+        let dragging = app.state::<Dragging>().0.clone();
+        if dragging.swap(true, Ordering::SeqCst) {
+            return Ok(true); // already following the cursor
+        }
+        let handle = app.clone();
+        std::thread::spawn(move || {
+            let mut last = origin;
+            while dragging.load(Ordering::SeqCst) {
+                std::thread::sleep(std::time::Duration::from_millis(4));
+                let Some(cursor) = hyprland_cursor() else { continue };
+                let target = (
+                    origin.0 + (cursor.0 - start.0).round() as i32,
+                    origin.1 + (cursor.1 - start.1).round() as i32,
+                );
+                if target == last {
+                    continue;
+                }
+                last = target;
+                let window = handle.get_webview_window("overlay");
+                let _ = handle.run_on_main_thread(move || {
+                    if let Some(Ok(gtk_window)) = window.map(|w| w.gtk_window()) {
+                        layer_shell::move_to(&gtk_window, target.0, target.1);
+                    }
+                });
+            }
+        });
+        Ok(true)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = app;
+        Ok(false)
+    }
+}
+
+/// Stops following the cursor and keeps the position for the next start.
+#[tauri::command]
+fn end_overlay_drag(app: AppHandle) -> Result<(), String> {
+    app.state::<Dragging>().0.store(false, std::sync::atomic::Ordering::SeqCst);
+    // Queued after the drag thread's last move, so the saved position is the final one.
+    let handle = app.clone();
+    app.run_on_main_thread(move || {
+        let _ = save_overlay_position(handle);
+    })
+    .map_err(|e| e.to_string())
 }
 
 /// Changes the show/hide shortcut. On failure the previous one stays registered.
@@ -351,14 +437,17 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             let _ = report(app, apply_visibility(app, true));
         }))
-        .manage(ControlsRect(Mutex::new(Rect::default())))
+        .manage(InputRects(Mutex::new(Vec::new())))
+        .manage(Dragging(Default::default()))
         .invoke_handler(tauri::generate_handler![
             overlay_status,
             set_interaction,
             set_visibility,
             move_overlay_by,
             save_overlay_position,
-            set_controls_rect,
+            set_input_rects,
+            start_overlay_drag,
+            end_overlay_drag,
             set_toggle_shortcut,
             tracker_state,
             toggle_step,
@@ -396,7 +485,7 @@ fn main() {
             minimap::spawn(app.handle().clone(), &reader);
             app.manage(reader);
             #[cfg(not(target_os = "linux"))]
-            watch_controls_hover(app.handle().clone());
+            watch_input_hover(app.handle().clone());
 
             // Only the show/hide shortcut is global; a failure is shown in the settings menu.
             let plugin = tauri_plugin_global_shortcut::Builder::new()

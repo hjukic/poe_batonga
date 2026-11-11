@@ -110,6 +110,7 @@ function render(next: Status) {
   if (!recording) shortcutButton.textContent = shortcutLabel(next.toggleShortcut);
   showMessage('#shortcut-error', next.shortcutError);
   showMessage('#error', next.lastError);
+  syncInput();
 }
 
 function renderTracker(view: TrackerView) {
@@ -175,6 +176,7 @@ function setSettingsOpen(open: boolean) {
   const wasOpen = !settings.hidden;
   settings.hidden = !open;
   settingsToggle.setAttribute('aria-expanded', String(open));
+  syncInput();
   if (open || !wasOpen) return;
   stopRecording();
   if (relockOnClose) {
@@ -241,11 +243,25 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-// ---- Window size and the clickable area while locked ----
+// ---- Window size and the clickable areas ----
 const panel = $('.panel');
+const header = $('#drag');
 const actions = $('.header-actions');
 let lastSize = '';
-let lastRect = '';
+let lastRects = '';
+/** Only these areas take the mouse; the route is always click-through to the game. */
+function syncInput() {
+  if (!isTauri() || !status) return;
+  const areas = [status.interactive ? header : actions, ...(settings.hidden ? [] : [settings])];
+  const rects = areas.map((element) => {
+    const box = element.getBoundingClientRect();
+    return { x: box.left, y: box.top, width: box.width, height: box.height };
+  });
+  const json = JSON.stringify(rects);
+  if (json === lastRects) return;
+  lastRects = json;
+  void invoke('set_input_rects', { rects }).catch(console.error);
+}
 function fitWindow() {
   if (!isTauri()) return;
   const boxes = [panel, settings].filter((element) => !element.hidden).map((element) => element.getBoundingClientRect());
@@ -255,52 +271,51 @@ function fitWindow() {
     lastSize = `${width}x${height}`;
     void getCurrentWindow().setSize(new LogicalSize(width, height)).catch(console.error);
   }
-  const box = actions.getBoundingClientRect();
-  const rect = { x: box.left, y: box.top, width: box.width, height: box.height };
-  if (JSON.stringify(rect) !== lastRect) {
-    lastRect = JSON.stringify(rect);
-    void invoke('set_controls_rect', { rect }).catch(console.error);
-  }
+  syncInput();
 }
 const observer = new ResizeObserver(fitWindow);
 observer.observe(panel);
 observer.observe(settings);
 
-// ---- Pointer actions ----
-// A layer surface can't be dragged by the compositor, so the overlay moves itself: each
-// move shifts the window under the pointer by the same amount, so the pointer's offset
-// from where the drag started is always the distance still to go.
-let drag: { x: number; y: number; busy: boolean } | null = null;
-$('#drag').addEventListener('mousedown', (event) => {
+// ---- Dragging the top bar (unlocked) ----
+// A layer surface can't be dragged by the compositor. On Hyprland the app follows the
+// real cursor (smooth). Elsewhere the overlay moves itself by pointer deltas: each move
+// shifts the window under the pointer by the same amount, so the pointer's offset from
+// where the drag started is the distance still to go.
+let drag: { native: boolean; x: number; y: number; busy: boolean } | null = null;
+header.addEventListener('mousedown', (event) => {
   if ((event.target as Element).closest('button')) return;
   if (!status?.interactive || event.button !== 0 || !isTauri()) return;
   if (!status.layerShell) {
     void getCurrentWindow().startDragging().catch(console.error);
     return;
   }
-  drag = { x: event.clientX, y: event.clientY, busy: false };
+  const current = { native: false, x: event.clientX, y: event.clientY, busy: true };
+  drag = current;
+  void invoke<boolean>('start_overlay_drag')
+    .then((native) => { current.native = native; })
+    .catch(console.error)
+    .finally(() => { current.busy = false; });
 });
 document.addEventListener('mousemove', (event) => {
-  if (!drag || drag.busy) return;
+  if (!drag || drag.native || drag.busy) return;
   const dx = Math.round(event.clientX - drag.x), dy = Math.round(event.clientY - drag.y);
   if (!dx && !dy) return;
   const current = drag;
   current.busy = true;
   void invoke('move_overlay_by', { dx, dy })
     .catch(console.error)
-    // Wait for the compositor to apply the move before measuring again.
-    .finally(() => requestAnimationFrame(() => requestAnimationFrame(() => { current.busy = false; })));
+    // Let the compositor apply the move before measuring again.
+    .finally(() => requestAnimationFrame(() => { current.busy = false; }));
 });
-document.addEventListener('mouseup', () => {
+function endDrag() {
   if (!drag) return;
   drag = null;
-  void invoke('save_overlay_position').catch(console.error);
-});
-$('#route').addEventListener('click', (event) => {
-  const row = (event.target as Element).closest<HTMLElement>('.step.objective');
-  if (!row || !status?.interactive || !isTauri()) return;
-  void invoke<TrackerView>('toggle_step', { id: row.dataset.id }).then(renderTracker).catch((error) => showMessage('#error', String(error)));
-});
+  // end_overlay_drag also saves the position; harmless when the drag wasn't native.
+  void invoke('end_overlay_drag').catch(console.error);
+}
+document.addEventListener('mouseup', endDrag);
+window.addEventListener('blur', endDrag);
 lockButton.addEventListener('click', () => {
   relockOnClose = false; // an explicit lock/unlock wins over the menu's temporary unlock
   void call('set_interaction', { interactive: !status?.interactive });
