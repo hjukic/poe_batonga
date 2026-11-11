@@ -9,6 +9,10 @@ The design lives in `docs/architecture.md`, the decisions and their reasons in `
   Create the GitHub repo, add your friend as collaborator, and add a README, a licence and the `docs/` folder.
   Done when: both of you can push a branch and open a pull request.
 
+  Status: repository, README, MIT license and `docs/` are present. Collaborator
+  invitation and both contributors' branch/PR checks are still pending; see
+  `docs/README.md`.
+
 - [ ] **2. Agree the scope**
   Write down what the app does and doesn't do: campaign only, a checklist, a map panel, the arrow as a stretch goal, no memory reading, and which systems it must run on.
   Done when: you both agree on one page of text.
