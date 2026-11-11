@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod minimap;
 mod tracker;
 
 use std::str::FromStr;
@@ -37,13 +38,16 @@ struct ControlsRect(Mutex<Rect>);
 
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[serde(default)]
 struct Settings {
     toggle_shortcut: String,
+    /// Live minimap reading (screenshots of the minimap corner only).
+    read_minimap: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { toggle_shortcut: DEFAULT_TOGGLE_SHORTCUT.into() }
+        Settings { toggle_shortcut: DEFAULT_TOGGLE_SHORTCUT.into(), read_minimap: true }
     }
 }
 
@@ -239,7 +243,7 @@ fn set_toggle_shortcut(app: AppHandle, accelerator: String) -> Result<Status, St
         let _ = parse_shortcut(&old).map(|s| shortcuts.register(s));
         return Err(format!("{accelerator} can't be used: {error}"));
     }
-    save_settings(&app, &Settings { toggle_shortcut: accelerator.clone() })?;
+    save_settings(&app, &Settings { toggle_shortcut: accelerator.clone(), ..load_settings(&app) })?;
     {
         let state = app.state::<OverlayState>();
         let mut status = state.0.lock().map_err(|e| e.to_string())?;
@@ -282,6 +286,19 @@ fn reset_progress(app: AppHandle) -> Result<tracker::TrackerView, String> {
 }
 
 #[tauri::command]
+fn minimap_state(minimap: State<'_, minimap::Minimap>) -> Result<minimap::MinimapView, String> {
+    minimap.last.lock().map(|view| view.clone()).map_err(|e| e.to_string())
+}
+
+/// Turns live minimap reading on or off; the choice is kept across restarts.
+#[tauri::command]
+fn set_minimap_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
+    save_settings(&app, &Settings { read_minimap: enabled, ..load_settings(&app) })?;
+    app.state::<minimap::Minimap>().enabled.store(enabled, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
 fn quit(app: AppHandle) {
     app.exit(0);
 }
@@ -303,6 +320,8 @@ fn main() {
             tracker_state,
             toggle_step,
             reset_progress,
+            minimap_state,
+            set_minimap_enabled,
             quit
         ])
         .setup(|app| {
@@ -316,6 +335,9 @@ fn main() {
             })));
             app.manage(tracker::init(app.handle()));
             tracker::spawn(app.handle().clone());
+            let reader = minimap::init(settings.read_minimap);
+            minimap::spawn(app.handle().clone(), &reader);
+            app.manage(reader);
             #[cfg(not(target_os = "linux"))]
             watch_controls_hover(app.handle().clone());
 

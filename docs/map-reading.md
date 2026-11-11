@@ -1,8 +1,20 @@
 # Offline map-reading experiment (Phase 2, step 7)
 
 Status on 2026-11-11: an offline baseline is implemented and tested. It is not
-ready for real-game navigation. No automatic capture, game inputs or arrow were
-added to the application. Step 7 remains open.
+ready for real-game navigation. Step 7 remains open.
+
+**Live minimap reading (owner decision, 2026-11-11).** The owner chose to enable
+continuous live reading of the minimap without waiting for GGG's answer, on the
+condition that no game files or memory are accessed. `src-tauri/src/minimap.rs`
+takes a screenshot of only the top-right minimap corner of the game's monitor about three
+times a second (Linux/Hyprland via `hyprctl` and `grim`; other platforms not yet),
+only while the game is the visible workspace. It finds explored walls by their
+lavender line colour (about RGB 91,91,121) and the player by the orange cross,
+and shows a live preview in the overlay. It can be switched off in settings ("Read
+minimap"). Frames stay in memory; nothing is saved or uploaded. It sends no
+input to the game and produces no arrow yet. Best results with the game's map
+landscape transparency turned off. The policy notes below still describe the
+unresolved question with GGG.
 
 ## Policy findings
 

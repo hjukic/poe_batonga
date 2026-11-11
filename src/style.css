@@ -40,6 +40,13 @@ button.icon:hover { background: rgb(239 235 255 / .12); }
 body[data-interactive="true"] .step.objective { cursor: pointer; border-radius: 6px; margin-inline: -6px; padding-inline: 6px; }
 body[data-interactive="true"] .step.objective:hover { background: rgb(239 235 255 / .08); }
 
+/* ---- Live minimap preview ---- */
+.minimap { padding: 0 20px 12px; }
+.minimap[hidden] { display: none; }
+.minimap canvas { display: block; width: 150px; height: 130px; margin-left: auto; }
+.minimap p { margin: 2px 0 0; font-size: 11.5px; color: var(--muted); text-align: right; }
+.row input[type="checkbox"] { width: 16px; height: 16px; margin: 0; }
+
 /* ---- Settings menu ---- */
 .dropdown { position: absolute; top: 42px; right: 6px; z-index: 1; width: 240px; padding: 6px; background: var(--menu-bg); border: 1px solid var(--menu-line); border-radius: 12px; box-shadow: 0 12px 32px rgb(0 0 0 / .5); font-size: 13px; line-height: 1.3; color: #ebe7f3; }
 .dropdown[hidden] { display: none; }
