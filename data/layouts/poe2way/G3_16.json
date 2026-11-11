@@ -1,0 +1,113 @@
+{
+ "areaId": "G3_16",
+ "name": "Aggorat",
+ "releaseId": "332c90763db659c06c33a25251b457b312a1bc0fa913309de737bc61acb9a568",
+ "terrain": {
+  "bounds": [
+   1060.488,
+   496.488,
+   2503.512,
+   2917.512
+  ],
+  "cells": [
+   138,
+   174
+  ],
+  "textureSize": [
+   1058,
+   1334
+  ]
+ },
+ "image": {
+  "bounds": [
+   1050.803904,
+   486.803904,
+   2513.196096,
+   2927.196096
+  ],
+  "width": 1227,
+  "height": 2048
+ },
+ "objects": [
+  {
+   "id": "1",
+   "kind": "checkpoint",
+   "x": 1261,
+   "y": 714,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "transition",
+   "x": 1276,
+   "y": 517,
+   "label": null,
+   "destination": {
+    "areaId": "G3_14",
+    "name": "Utzaal",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "waypoint",
+   "x": 1276,
+   "y": 812,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 1368,
+   "y": 2104,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "checkpoint",
+   "x": 1897,
+   "y": 1690,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "checkpoint",
+   "x": 1897,
+   "y": 2564,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "transition",
+   "x": 1897,
+   "y": 2817,
+   "label": null,
+   "destination": {
+    "areaId": "G3_17",
+    "name": "The Black Chambers",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "checkpoint",
+   "x": 2399,
+   "y": 1276,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

@@ -1,0 +1,139 @@
+{
+ "areaId": "G1_7",
+ "name": "Cemetery of the Eternals",
+ "releaseId": "e52d27f1ee327490b3e7f9bf3e671b16b80a797594f8ad7f8e1ae745461eb1c5",
+ "terrain": {
+  "bounds": [
+   244.488,
+   364.488,
+   1480.512,
+   1711.512
+  ],
+  "cells": [
+   75,
+   93
+  ],
+  "textureSize": [
+   575,
+   713
+  ]
+ },
+ "image": {
+  "bounds": [
+   239.099904,
+   359.099904,
+   1485.9000959999998,
+   1716.9000959999998
+  ],
+  "width": 1880,
+  "height": 2048
+ },
+ "objects": [
+  {
+   "id": "1",
+   "kind": "transition",
+   "x": 1069,
+   "y": 741,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "transition",
+   "x": 1078,
+   "y": 378,
+   "label": null,
+   "destination": {
+    "areaId": "G1_11",
+    "name": "Hunting Grounds",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "waypoint",
+   "x": 1080,
+   "y": 940,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 1089,
+   "y": 901,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "transition",
+   "x": 1133,
+   "y": 933,
+   "label": null,
+   "destination": {
+    "areaId": "G1_6",
+    "name": "The Grim Tangle",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "checkpoint",
+   "x": 1240,
+   "y": 1656,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "transition",
+   "x": 1255,
+   "y": 1621,
+   "label": null,
+   "destination": {
+    "areaId": "G1_9",
+    "name": "Tomb of the Consort",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "transition",
+   "x": 714,
+   "y": 861,
+   "label": null,
+   "destination": {
+    "areaId": "G1_8",
+    "name": "Mausoleum of the Praetor",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "checkpoint",
+   "x": 780,
+   "y": 874,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "11",
+   "kind": "checkpoint",
+   "x": 793,
+   "y": 1540,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

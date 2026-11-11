@@ -1,0 +1,153 @@
+{
+ "areaId": "G1_2",
+ "name": "Clearfell",
+ "releaseId": "771caa3a22b9f5b4e4fc3f99d7a89d72fc15b4e89cb8478d5a3b370e80e8cd17",
+ "terrain": {
+  "bounds": [
+   532.488,
+   184.488,
+   1741.512,
+   1423.512
+  ],
+  "cells": [
+   84,
+   81
+  ],
+  "textureSize": [
+   644,
+   621
+  ]
+ },
+ "image": {
+  "bounds": [
+   527.531904,
+   179.531904,
+   1746.4680959999998,
+   1428.4680959999998
+  ],
+  "width": 1999,
+  "height": 2048
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1031,
+   "y": 1003,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "waypoint",
+   "x": 1277,
+   "y": 380,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "checkpoint",
+   "x": 1322,
+   "y": 335,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "transition",
+   "x": 1337,
+   "y": 318,
+   "label": null,
+   "destination": {
+    "areaId": "G1_3",
+    "name": "Mud Burrow",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 1538,
+   "y": 1189,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "transition",
+   "x": 1553,
+   "y": 1237,
+   "label": null,
+   "destination": {
+    "areaId": "G1_4",
+    "name": "The Grelwood",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "checkpoint",
+   "x": 1650,
+   "y": 705,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "transition",
+   "x": 528,
+   "y": 1184,
+   "label": null,
+   "destination": {
+    "areaId": "G1_town",
+    "name": "Clearfell Encampment",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "checkpoint",
+   "x": 558,
+   "y": 1206,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "checkpoint",
+   "x": 809,
+   "y": 416,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "11",
+   "kind": "checkpoint",
+   "x": 843,
+   "y": 981,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "13",
+   "kind": "boss",
+   "x": 895,
+   "y": 445,
+   "label": "Frostblood Ritual",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

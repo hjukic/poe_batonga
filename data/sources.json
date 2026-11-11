@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
-  "reviewedOn": "2026-11-11",
-  "purpose": "Source selection for Phase 2 step 6; not runtime route/layout schemas",
+  "reviewedOn": "2026-11-12",
+  "purpose": "Catalog of data sources; private project, licences are not tracked",
   "sources": [
     {
       "id": "domistae-route",
@@ -10,13 +10,10 @@
       "repository": "https://github.com/domistae/poe2-leveling",
       "revision": "f682e2b99c4a5a4f31882f3674bba4dcefc6ab46",
       "sourceFile": "poe2_act1_guide.html",
-      "license": "MIT",
-      "licenseFile": "licenses/domistae-MIT.txt",
       "upstreamTargetPatch": "0.5.5",
       "contentImported": false,
       "constraints": [
         "Original authored text only; no images or third-party extracts",
-        "Preserve copyright, license and source attribution",
         "Validate objectives against target patch before shipping"
       ]
     },
@@ -30,8 +27,7 @@
       "constraints": [
         "Factual observations only; original logs remain local",
         "No character names, chat, server details or quest dialogue exported",
-        "Historical observations are not a current-patch authoritative zone table",
-        "No licence to game assets or full logs is asserted"
+        "Historical observations are not a current-patch authoritative zone table"
       ]
     },
     {
@@ -39,10 +35,8 @@
       "kind": "layout-diagrams",
       "selection": "selected",
       "method": "Contributor-authored abstract schematics from labelled observations of explored maps",
-      "license": "MIT for original project artwork",
       "contentImported": false,
       "constraints": [
-        "No tracing or importing third-party images",
         "Record author, patch, zone, observation and confidence for each diagram",
         "Unknown variants remain unsupported",
         "No exact-instance or hidden-map claims",
@@ -56,16 +50,29 @@
       "repository": "https://github.com/Vyary/qutm",
       "revision": "d18b4e6abee3f87c90342222918c6b08422967c5",
       "sourceFile": "src/assets/layouts.json",
-      "license": "Apache-2.0",
-      "licenseFile": "licenses/qutm-Apache-2.0.txt",
       "artifact": "data/layouts/qutm/layouts.json",
       "contentImported": true,
       "importedOn": "2026-11-11",
       "constraints": [
-        "Unmodified copy; keep licence and attribution in THIRD_PARTY_NOTICES.md",
         "Authored diagrams with approximate 0-1 positions, not to scale and not exact instances",
         "No Qutm icon images imported",
         "Variant and scale must be established from our own recordings before guiding"
+      ]
+    },
+    {
+      "id": "poe2way-terrain",
+      "kind": "zone-terrain",
+      "selection": "selected",
+      "site": "https://www.poe2way.com/atlas",
+      "api": "https://www.poe2way.com/api/map-layouts/<areaId>",
+      "artifact": "data/layouts/poe2way/",
+      "script": "scripts/fetch-poe2way-terrain.mjs",
+      "contentImported": true,
+      "importedOn": "2026-11-12",
+      "constraints": [
+        "One collected instance per area (Keth has two); campaign zones are generated per instance, so walls are an example, not the played instance",
+        "Outline and objects share game-space coordinates",
+        "Missing: G1_1, G2_12_1, G2_12_2, G2_3a, G3_10"
       ]
     }
   ]

@@ -1,0 +1,118 @@
+{
+ "areaId": "G3_7",
+ "name": "The Azak Bog",
+ "releaseId": "f27a97aeb64c4017237d880d2ff242ba452426ebec10f20273b76e2183ba2a70",
+ "terrain": {
+  "bounds": [
+   319.488,
+   421.488,
+   1285.512,
+   2491.512
+  ],
+  "cells": [
+   75,
+   123
+  ],
+  "textureSize": [
+   575,
+   943
+  ]
+ },
+ "image": {
+  "bounds": [
+   311.207904,
+   413.207904,
+   1293.792096,
+   2499.792096
+  ],
+  "width": 964,
+  "height": 2048
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1172,
+   "y": 1861,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "boss",
+   "x": 649,
+   "y": 505,
+   "label": "Gor-gor Mog",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "transition",
+   "x": 724,
+   "y": 585,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "checkpoint",
+   "x": 743,
+   "y": 637,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 851,
+   "y": 1469,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "npc",
+   "x": 944,
+   "y": 2380,
+   "label": "Farrow",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "checkpoint",
+   "x": 949,
+   "y": 2409,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "waypoint",
+   "x": 965,
+   "y": 2346,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "transition",
+   "x": 966,
+   "y": 2487,
+   "label": null,
+   "destination": {
+    "areaId": "G3_2_2",
+    "name": "The Matlan Waterways",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  }
+ ]
+}

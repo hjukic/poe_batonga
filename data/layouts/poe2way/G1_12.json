@@ -1,0 +1,100 @@
+{
+ "areaId": "G1_12",
+ "name": "Freythorn",
+ "releaseId": "b35158f71c2809344b69e84609b785cd83028176c150fc6300f1099bfcc3a91a",
+ "terrain": {
+  "bounds": [
+   370.488,
+   412.488,
+   1546.512,
+   1552.512
+  ],
+  "cells": [
+   87,
+   174
+  ],
+  "textureSize": [
+   667,
+   1334
+  ]
+ },
+ "image": {
+  "bounds": [
+   365.783904,
+   407.783904,
+   1551.2160959999999,
+   1557.2160959999999
+  ],
+  "width": 2048,
+  "height": 1986
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1071,
+   "y": 585,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "checkpoint",
+   "x": 1255,
+   "y": 895,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 1312,
+   "y": 1440,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "transition",
+   "x": 376,
+   "y": 1009,
+   "label": null,
+   "destination": {
+    "areaId": "G1_11",
+    "name": "Hunting Grounds",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "checkpoint",
+   "x": 416,
+   "y": 1046,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "waypoint",
+   "x": 517,
+   "y": 931,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "checkpoint",
+   "x": 560,
+   "y": 825,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

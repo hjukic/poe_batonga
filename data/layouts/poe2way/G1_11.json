@@ -1,0 +1,189 @@
+{
+ "areaId": "G1_11",
+ "name": "Hunting Grounds",
+ "releaseId": "494de27b92a73a4e93f16baeaa3337d8e514ac03250b4bb2fb18d254f23ed871",
+ "terrain": {
+  "bounds": [
+   235.488,
+   265.488,
+   1627.512,
+   1699.512
+  ],
+  "cells": [
+   81,
+   87
+  ],
+  "textureSize": [
+   621,
+   667
+  ]
+ },
+ "image": {
+  "bounds": [
+   229.751904,
+   259.751904,
+   1633.248096,
+   1705.248096
+  ],
+  "width": 1988,
+  "height": 2048
+ },
+ "objects": [
+  {
+   "id": "1",
+   "kind": "checkpoint",
+   "x": 1040,
+   "y": 532,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "transition",
+   "x": 1084,
+   "y": 507,
+   "label": null,
+   "destination": {
+    "areaId": "G1_13_1",
+    "name": "Ogham Farmlands",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 266,
+   "y": 432,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "transition",
+   "x": 275,
+   "y": 828,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "transition",
+   "x": 275,
+   "y": 965,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "checkpoint",
+   "x": 298,
+   "y": 828,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "boss",
+   "x": 307,
+   "y": 1276,
+   "label": "The Hunt Stone",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "transition",
+   "x": 310,
+   "y": 266,
+   "label": null,
+   "destination": {
+    "areaId": "G1_12",
+    "name": "Freythorn",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "transition",
+   "x": 410,
+   "y": 673,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "11",
+   "kind": "checkpoint",
+   "x": 740,
+   "y": 803,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "12",
+   "kind": "transition",
+   "x": 830,
+   "y": 1688,
+   "label": null,
+   "destination": {
+    "areaId": "G1_7",
+    "name": "Cemetery of the Eternals",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "13",
+   "kind": "waypoint",
+   "x": 851,
+   "y": 1604,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "15",
+   "kind": "checkpoint",
+   "x": 885,
+   "y": 1117,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "16",
+   "kind": "checkpoint",
+   "x": 891,
+   "y": 1599,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "17",
+   "kind": "checkpoint",
+   "x": 927,
+   "y": 455,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "18",
+   "kind": "transition",
+   "x": 931,
+   "y": 377,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

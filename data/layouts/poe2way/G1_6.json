@@ -1,0 +1,131 @@
+{
+ "areaId": "G1_6",
+ "name": "The Grim Tangle",
+ "releaseId": "349d9e2cc5e9d94614230db380aa42ea458adb9b49e4bf368470eb457c976412",
+ "terrain": {
+  "bounds": [
+   172.488,
+   232.488,
+   1573.512,
+   1408.512
+  ],
+  "cells": [
+   75,
+   75
+  ],
+  "textureSize": [
+   575,
+   575
+  ]
+ },
+ "image": {
+  "bounds": [
+   166.883904,
+   226.883904,
+   1579.116096,
+   1414.116096
+  ],
+  "width": 2048,
+  "height": 1722
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1026,
+   "y": 1065,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "checkpoint",
+   "x": 1416,
+   "y": 1019,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "transition",
+   "x": 1437,
+   "y": 1033,
+   "label": null,
+   "destination": {
+    "areaId": "G1_7",
+    "name": "Cemetery of the Eternals",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "waypoint",
+   "x": 407,
+   "y": 287,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 479,
+   "y": 284,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "transition",
+   "x": 493,
+   "y": 237,
+   "label": null,
+   "destination": {
+    "areaId": "G1_4",
+    "name": "The Grelwood",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "transition",
+   "x": 755,
+   "y": 1308,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "boss",
+   "x": 898,
+   "y": 1309,
+   "label": "Den of the Druid",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "transition",
+   "x": 972,
+   "y": 1173,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "checkpoint",
+   "x": 986,
+   "y": 1173,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

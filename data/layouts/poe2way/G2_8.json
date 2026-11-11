@@ -1,0 +1,113 @@
+{
+ "areaId": "G2_8",
+ "name": "Deshar",
+ "releaseId": "b8b0b728c6c06b3211d2c17e9d17bafc958d26c390383847cc2100f1fc97e999",
+ "terrain": {
+  "bounds": [
+   511.488,
+   571.488,
+   1861.512,
+   3070.512
+  ],
+  "cells": [
+   111,
+   147
+  ],
+  "textureSize": [
+   851,
+   1127
+  ]
+ },
+ "image": {
+  "bounds": [
+   501.491904,
+   561.4919040000001,
+   1871.508096,
+   3080.508096
+  ],
+  "width": 1114,
+  "height": 2048
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "transition",
+   "x": 1005,
+   "y": 2913,
+   "label": null,
+   "destination": {
+    "areaId": "G2_town",
+    "name": "The Ardura Caravan",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "checkpoint",
+   "x": 1285,
+   "y": 2087,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "checkpoint",
+   "x": 1583,
+   "y": 1306,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 1739,
+   "y": 2158,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "transition",
+   "x": 523,
+   "y": 850,
+   "label": null,
+   "destination": {
+    "areaId": "G2_9_1",
+    "name": "Path of Mourning",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "checkpoint",
+   "x": 608,
+   "y": 861,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "checkpoint",
+   "x": 932,
+   "y": 2840,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "waypoint",
+   "x": 954,
+   "y": 2863,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

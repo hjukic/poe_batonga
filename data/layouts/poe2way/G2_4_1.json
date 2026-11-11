@@ -1,0 +1,180 @@
+{
+ "areaId": "G2_4_1",
+ "name": "Keth",
+ "releaseId": "374d5d58dfb4c9390e0166a3c2ea7c728f483bf5654700b09e7134d13712a9aa",
+ "terrain": {
+  "bounds": [
+   316.488,
+   319.488,
+   2341.512,
+   1546.512
+  ],
+  "cells": [
+   117,
+   81
+  ],
+  "textureSize": [
+   897,
+   621
+  ]
+ },
+ "image": {
+  "bounds": [
+   308.387904,
+   311.387904,
+   2349.6120960000003,
+   1554.6120959999998
+  ],
+  "width": 2048,
+  "height": 1247
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1060,
+   "y": 502,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "transition",
+   "x": 1079,
+   "y": 517,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "checkpoint",
+   "x": 1758,
+   "y": 702,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "waypoint",
+   "x": 1759,
+   "y": 1322,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "checkpoint",
+   "x": 1831,
+   "y": 1310,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "transition",
+   "x": 2074,
+   "y": 1288,
+   "label": null,
+   "destination": {
+    "areaId": "G2_town",
+    "name": "The Ardura Caravan",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "transition",
+   "x": 2150,
+   "y": 379,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "transition",
+   "x": 2192,
+   "y": 774,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "11",
+   "kind": "transition",
+   "x": 337,
+   "y": 448,
+   "label": null,
+   "destination": {
+    "areaId": "G2_4_2",
+    "name": "The Lost City",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "12",
+   "kind": "checkpoint",
+   "x": 427,
+   "y": 1025,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "13",
+   "kind": "checkpoint",
+   "x": 431,
+   "y": 448,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "14",
+   "kind": "transition",
+   "x": 437,
+   "y": 1000,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "15",
+   "kind": "transition",
+   "x": 534,
+   "y": 448,
+   "label": null,
+   "destination": {
+    "areaId": "G2_4_2",
+    "name": "The Lost City",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "16",
+   "kind": "checkpoint",
+   "x": 909,
+   "y": 1322,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "17",
+   "kind": "boss",
+   "x": 993,
+   "y": 1407,
+   "label": "The Venom Pit",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

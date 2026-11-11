@@ -1,0 +1,270 @@
+{
+ "areaId": "G1_town",
+ "name": "Clearfell Encampment",
+ "releaseId": "G1_town.20261019-r1",
+ "terrain": {
+  "bounds": [
+   136.488,
+   187.488,
+   457.512,
+   400.512
+  ],
+  "cells": [
+   33,
+   30
+  ],
+  "textureSize": [
+   253,
+   230
+  ]
+ },
+ "image": {
+  "bounds": [
+   133.488,
+   184.488,
+   460.512,
+   403.512
+  ],
+  "width": 2048,
+  "height": 1372
+ },
+ "objects": [
+  {
+   "id": "c22359bc0317b2b4",
+   "kind": "object",
+   "x": 354,
+   "y": 395,
+   "label": "Salvage Bench",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "ed9c65a800d8090d",
+   "kind": "transition",
+   "x": 115,
+   "y": 376,
+   "label": null,
+   "destination": null,
+   "evidence": "authored-position"
+  },
+  {
+   "id": "13300f6d20e8f563",
+   "kind": "transition",
+   "x": 324,
+   "y": 189,
+   "label": null,
+   "destination": {
+    "areaId": "G1_2",
+    "name": "Clearfell",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10ec56261c8e3b0d",
+   "kind": "transition",
+   "x": 383,
+   "y": 398,
+   "label": null,
+   "destination": {
+    "areaId": "G1_2",
+    "name": "Clearfell",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "f15f65219306cb53",
+   "kind": "transition",
+   "x": 453,
+   "y": 284,
+   "label": null,
+   "destination": {
+    "areaId": "G1_2",
+    "name": "Clearfell",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "75e0499f8abfaff9",
+   "kind": "object",
+   "x": 407,
+   "y": 339,
+   "label": "Verisium Anvil",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8d7f61120a043e90",
+   "kind": "object",
+   "x": 349,
+   "y": 237,
+   "label": "Well",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5db1313a53657827",
+   "kind": "npc",
+   "x": 374,
+   "y": 289,
+   "label": "Una",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7c24a6b1fee91d84",
+   "kind": "npc",
+   "x": 304,
+   "y": 307,
+   "label": "Una",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "b4efeeb449f57016",
+   "kind": "npc",
+   "x": 312,
+   "y": 341,
+   "label": "Finn",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "64c476e0c1955109",
+   "kind": "npc",
+   "x": 260,
+   "y": 303,
+   "label": "Renly",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "d53f33a294eaf860",
+   "kind": "npc",
+   "x": 375,
+   "y": 307,
+   "label": "Leitis",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "a88daf27dfa5fcbb",
+   "kind": "npc",
+   "x": 328,
+   "y": 346,
+   "label": "Una",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "f283c2d9c9ddd0b1",
+   "kind": "npc",
+   "x": 319,
+   "y": 345,
+   "label": "The Hooded One",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4031d9fc7fd0e52d",
+   "kind": "npc",
+   "x": 290,
+   "y": 303,
+   "label": "Finn",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "aabcc94562f8454b",
+   "kind": "npc",
+   "x": 321,
+   "y": 284,
+   "label": "Renly",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "007d20e7d5e42d14",
+   "kind": "npc",
+   "x": 401,
+   "y": 369,
+   "label": "Renly",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "d24c0fc2f0658d2a",
+   "kind": "npc",
+   "x": 288,
+   "y": 298,
+   "label": "The Hooded One",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "077322e188deda64",
+   "kind": "npc",
+   "x": 414,
+   "y": 317,
+   "label": "Farrow",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "cd6d20d5beff15fd",
+   "kind": "npc",
+   "x": 393,
+   "y": 273,
+   "label": "The Hooded One",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "0c75396eff7a62ec",
+   "kind": "portal",
+   "x": 306,
+   "y": 250,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "87bd8d72c8903579",
+   "kind": "stash",
+   "x": 349,
+   "y": 338,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1cf406238254772a",
+   "kind": "stash",
+   "x": 336,
+   "y": 335,
+   "label": "Stash",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4e0c6ffe037a77d4",
+   "kind": "object",
+   "x": 360,
+   "y": 365,
+   "label": "Reforging Bench",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "ffa38bde1472a832",
+   "kind": "waypoint",
+   "x": 282,
+   "y": 252,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

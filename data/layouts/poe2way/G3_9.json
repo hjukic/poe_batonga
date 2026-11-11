@@ -1,0 +1,109 @@
+{
+ "areaId": "G3_9",
+ "name": "The Molten Vault",
+ "releaseId": "a2de426d83afc354174944964fec42c81c4e043a039000c20dff52d805de1084",
+ "terrain": {
+  "bounds": [
+   544.488,
+   529.488,
+   2167.512,
+   2074.512
+  ],
+  "cells": [
+   109,
+   109
+  ],
+  "textureSize": [
+   835,
+   835
+  ]
+ },
+ "image": {
+  "bounds": [
+   537.9959040000001,
+   522.9959040000001,
+   2174.004096,
+   2081.004096
+  ],
+  "width": 2048,
+  "height": 1950
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1035,
+   "y": 1843,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "checkpoint",
+   "x": 1573,
+   "y": 1831,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "transition",
+   "x": 1686,
+   "y": 861,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "checkpoint",
+   "x": 1724,
+   "y": 883,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "boss",
+   "x": 1757,
+   "y": 975,
+   "label": "The Aureaduct",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "waypoint",
+   "x": 792,
+   "y": 632,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "transition",
+   "x": 793,
+   "y": 540,
+   "label": null,
+   "destination": {
+    "areaId": "G3_8",
+    "name": "The Drowned City",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "11",
+   "kind": "checkpoint",
+   "x": 799,
+   "y": 768,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

@@ -1,0 +1,118 @@
+{
+ "areaId": "G2_10_1",
+ "name": "Mawdun Quarry",
+ "releaseId": "9ad69237571d437d8dcbde8a21dbae933ea24402141c9e4cade492acf65d1d56",
+ "terrain": {
+  "bounds": [
+   364.488,
+   547.488,
+   2143.512,
+   2164.512
+  ],
+  "cells": [
+   103,
+   103
+  ],
+  "textureSize": [
+   789,
+   789
+  ]
+ },
+ "image": {
+  "bounds": [
+   357.371904,
+   540.3719040000001,
+   2150.6280960000004,
+   2171.6280960000004
+  ],
+  "width": 2048,
+  "height": 1863
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1152,
+   "y": 1471,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "checkpoint",
+   "x": 1356,
+   "y": 657,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "checkpoint",
+   "x": 1565,
+   "y": 1889,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "checkpoint",
+   "x": 2050,
+   "y": 1747,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "transition",
+   "x": 463,
+   "y": 562,
+   "label": null,
+   "destination": {
+    "areaId": "G2_town",
+    "name": "The Ardura Caravan",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "waypoint",
+   "x": 642,
+   "y": 808,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "checkpoint",
+   "x": 649,
+   "y": 867,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "transition",
+   "x": 936,
+   "y": 2035,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "checkpoint",
+   "x": 959,
+   "y": 2020,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

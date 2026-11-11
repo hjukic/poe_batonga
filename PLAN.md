@@ -6,10 +6,10 @@ The design lives in `docs/architecture.md`, the decisions and their reasons in `
 ## Phase 1: Set up
 
 - [x] **1. Create the repository**
-  Create the GitHub repo, add your friend as collaborator, and add a README, a licence and the `docs/` folder.
+  Create the GitHub repo, add your friend as collaborator, and add a README and the `docs/` folder.
   Done when: both of you can push a branch and open a pull request.
 
-  Status: repository, README, MIT license and `docs/` are present; the second
+  Status: repository, README and `docs/` are present; the second
   contributor has collaborator access (confirmed by the owner 2026-11-11).
 
 - [x] **2. Agree the scope**
@@ -56,18 +56,18 @@ The design lives in `docs/architecture.md`, the decisions and their reasons in `
   This step is not yet complete.
 
 - [x] **6. Collect the data sources**
-  List PoE 2-specific sources for each kind of data and their licences. The
+  List PoE 2-specific sources for each kind of data. The
   candidates below are unverified and must be checked for PoE 2 relevance:
   - route steps: Domistae's route, the wiki's act guides, the Exile Leveling fork
   - zone table: exports of the game's data
   - layout pictures: Exile-UI's images or your own screenshots
 
-  Done when: each kind of data has a chosen source you are allowed to use.
+  Done when: each kind of data has a chosen source.
 
-  Status: `docs/data-sources.md` and `data/sources.json` select Domistae's MIT
-  original route text, locally observed zone metadata and project-authored layout
-  schematics. The route revision, licence and attribution are recorded; 97
-  historical campaign zone IDs are collected. Route adaptation, current-patch
+  Status: `docs/data-sources.md` and `data/sources.json` select Domistae's route
+  text, locally observed zone metadata, Qutm's layout diagrams and poe2way's
+  collected terrain (walkable outlines and points of interest for 51 Act 1-3
+  areas). 97 historical campaign zone IDs are collected. Route adaptation, current-patch
   validation and actual layout assets remain later work.
 
 - [ ] **7. Test map reading**

@@ -1,0 +1,127 @@
+{
+ "areaId": "G2_5_2",
+ "name": "The Bone Pits",
+ "releaseId": "651059a20151e5039f42cc0f9c189859c456f5c1266d6a8282c1d0da074c5cb1",
+ "terrain": {
+  "bounds": [
+   325.488,
+   451.488,
+   2095.512,
+   2578.512
+  ],
+  "cells": [
+   111,
+   129
+  ],
+  "textureSize": [
+   851,
+   989
+  ]
+ },
+ "image": {
+  "bounds": [
+   316.979904,
+   442.979904,
+   2104.020096,
+   2587.020096
+  ],
+  "width": 1707,
+  "height": 2048
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1214,
+   "y": 1674,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "checkpoint",
+   "x": 1377,
+   "y": 555,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "transition",
+   "x": 1439,
+   "y": 516,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "boss",
+   "x": 1554,
+   "y": 517,
+   "label": "Blackrib Pit",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 1812,
+   "y": 1754,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "checkpoint",
+   "x": 1913,
+   "y": 2271,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "waypoint",
+   "x": 1977,
+   "y": 2442,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "transition",
+   "x": 2007,
+   "y": 2561,
+   "label": null,
+   "destination": {
+    "areaId": "G2_5_1",
+    "name": "Mastodon Badlands",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "checkpoint",
+   "x": 566,
+   "y": 1352,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "checkpoint",
+   "x": 970,
+   "y": 1173,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

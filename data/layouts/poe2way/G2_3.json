@@ -1,0 +1,145 @@
+{
+ "areaId": "G2_3",
+ "name": "The Halani Gates",
+ "releaseId": "c8bca5137abec2365a0f2d4468a6a62de7e52d6a894fb355827692b381d7c3a9",
+ "terrain": {
+  "bounds": [
+   601.488,
+   109.488,
+   4243.512,
+   1060.512
+  ],
+  "cells": [
+   213,
+   51
+  ],
+  "textureSize": [
+   1633,
+   391
+  ]
+ },
+ "image": {
+  "bounds": [
+   586.9199040000001,
+   94.919904,
+   4258.080096,
+   1075.080096
+  ],
+  "width": 2048,
+  "height": 547
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1583,
+   "y": 722,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "checkpoint",
+   "x": 1631,
+   "y": 266,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 2556,
+   "y": 428,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "transition",
+   "x": 2556,
+   "y": 449,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "boss",
+   "x": 2726,
+   "y": 448,
+   "label": "Infested Tower",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "transition",
+   "x": 2771,
+   "y": 495,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "transition",
+   "x": 3879,
+   "y": 381,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "checkpoint",
+   "x": 4189,
+   "y": 575,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "transition",
+   "x": 4201,
+   "y": 531,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "11",
+   "kind": "transition",
+   "x": 605,
+   "y": 863,
+   "label": null,
+   "destination": {
+    "areaId": "G2_2",
+    "name": "Traitor's Passage",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "12",
+   "kind": "waypoint",
+   "x": 724,
+   "y": 844,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "13",
+   "kind": "checkpoint",
+   "x": 740,
+   "y": 776,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

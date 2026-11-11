@@ -1,0 +1,198 @@
+{
+ "areaId": "G2_6",
+ "name": "Valley of the Titans",
+ "releaseId": "1bb3c8ae04ad452313537f05f862b73089be54475c6b7314b6cbb1d6a0673b23",
+ "terrain": {
+  "bounds": [
+   193.488,
+   193.488,
+   2068.512,
+   1531.512
+  ],
+  "cells": [
+   111,
+   87
+  ],
+  "textureSize": [
+   851,
+   667
+  ]
+ },
+ "image": {
+  "bounds": [
+   185.987904,
+   185.987904,
+   2076.0120960000004,
+   1539.012096
+  ],
+  "width": 2048,
+  "height": 1466
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "transition",
+   "x": 1357,
+   "y": 1415,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "checkpoint",
+   "x": 1387,
+   "y": 1436,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "checkpoint",
+   "x": 1706,
+   "y": 787,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "waypoint",
+   "x": 1758,
+   "y": 931,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "transition",
+   "x": 1980,
+   "y": 439,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "checkpoint",
+   "x": 2018,
+   "y": 454,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "checkpoint",
+   "x": 305,
+   "y": 672,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "checkpoint",
+   "x": 414,
+   "y": 1409,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "11",
+   "kind": "transition",
+   "x": 437,
+   "y": 1388,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "13",
+   "kind": "transition",
+   "x": 650,
+   "y": 775,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "14",
+   "kind": "transition",
+   "x": 666,
+   "y": 405,
+   "label": null,
+   "destination": {
+    "areaId": "G2_town",
+    "name": "The Ardura Caravan",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "15",
+   "kind": "transition",
+   "x": 667,
+   "y": 404,
+   "label": null,
+   "destination": {
+    "areaId": "G2_town",
+    "name": "The Ardura Caravan",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "16",
+   "kind": "checkpoint",
+   "x": 688,
+   "y": 479,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "17",
+   "kind": "checkpoint",
+   "x": 700,
+   "y": 1096,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "18",
+   "kind": "transition",
+   "x": 740,
+   "y": 680,
+   "label": null,
+   "destination": {
+    "areaId": "G2_7",
+    "name": "The Titan Grotto",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "20",
+   "kind": "transition",
+   "x": 815,
+   "y": 792,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "21",
+   "kind": "transition",
+   "x": 859,
+   "y": 660,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

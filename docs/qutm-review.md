@@ -68,9 +68,7 @@ invokes those commands during scan recording/replay. Those mechanisms conflict
 with our no-game-input scope and should not be adopted. A repository's compliance
 claim is not confirmation from GGG.
 
-The repository includes an Apache-2.0 LICENSE. No source or assets were copied
-into our project. Any future reuse needs attribution/licence review and separate
-provenance checks for game-derived images and text.
+Its layout diagrams were later imported as `data/layouts/qutm/layouts.json`.
 
 ## Recommendation and next evidence
 

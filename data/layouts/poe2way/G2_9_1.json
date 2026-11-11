@@ -1,0 +1,95 @@
+{
+ "areaId": "G2_9_1",
+ "name": "Path of Mourning",
+ "releaseId": "a7f14c9aeb10480ef0ca19fc3911af957c000d7f315e510445ee3e22fd04f3c7",
+ "terrain": {
+  "bounds": [
+   289.488,
+   289.488,
+   2038.512,
+   2029.512
+  ],
+  "cells": [
+   111,
+   111
+  ],
+  "textureSize": [
+   851,
+   851
+  ]
+ },
+ "image": {
+  "bounds": [
+   282.491904,
+   282.491904,
+   2045.508096,
+   2036.508096
+  ],
+  "width": 2048,
+  "height": 2038
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1986,
+   "y": 425,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "transition",
+   "x": 2037,
+   "y": 448,
+   "label": null,
+   "destination": {
+    "areaId": "G2_9_2",
+    "name": "The Spires of Deshar",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "waypoint",
+   "x": 399,
+   "y": 1966,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "checkpoint",
+   "x": 438,
+   "y": 1896,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "transition",
+   "x": 500,
+   "y": 1943,
+   "label": null,
+   "destination": {
+    "areaId": "G2_8",
+    "name": "Deshar",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "checkpoint",
+   "x": 798,
+   "y": 586,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

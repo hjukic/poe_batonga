@@ -1,0 +1,175 @@
+{
+ "areaId": "G3_12",
+ "name": "Temple of Kopec",
+ "releaseId": "0a8e2f954db88e77f1cadca2c5f4de6ea9056c14dca1624f351c60070300483f",
+ "terrain": {
+  "bounds": [
+   217.488,
+   181.488,
+   2818.512,
+   1327.512
+  ],
+  "cells": [
+   138,
+   66
+  ],
+  "textureSize": [
+   1058,
+   506
+  ]
+ },
+ "image": {
+  "bounds": [
+   207.083904,
+   171.083904,
+   2828.9160960000004,
+   1337.916096
+  ],
+  "width": 2048,
+  "height": 911
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "transition",
+   "x": 1543,
+   "y": 1191,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "transition",
+   "x": 1544,
+   "y": 326,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "checkpoint",
+   "x": 1568,
+   "y": 334,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "transition",
+   "x": 220,
+   "y": 758,
+   "label": null,
+   "destination": {
+    "areaId": "G3_town",
+    "name": "Ziggurat Encampment",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "transition",
+   "x": 2488,
+   "y": 948,
+   "label": null,
+   "destination": {
+    "areaId": "G3_town",
+    "name": "Ziggurat Encampment",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "checkpoint",
+   "x": 2512,
+   "y": 932,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "transition",
+   "x": 2539,
+   "y": 863,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "transition",
+   "x": 2540,
+   "y": 656,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "transition",
+   "x": 2575,
+   "y": 718,
+   "label": null,
+   "destination": {
+    "areaId": "G3_town",
+    "name": "Ziggurat Encampment",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "transition",
+   "x": 2598,
+   "y": 758,
+   "label": null,
+   "destination": {
+    "areaId": "G3_town",
+    "name": "Ziggurat Encampment",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "boss",
+   "x": 2598,
+   "y": 759,
+   "label": "Altar of the Sun",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "11",
+   "kind": "transition",
+   "x": 2718,
+   "y": 758,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "12",
+   "kind": "transition",
+   "x": 370,
+   "y": 184,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "13",
+   "kind": "checkpoint",
+   "x": 379,
+   "y": 783,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

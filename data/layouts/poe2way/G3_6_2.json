@@ -1,0 +1,148 @@
+{
+ "areaId": "G3_6_2",
+ "name": "Jiquani's Sanctum",
+ "releaseId": "c33f6848a0152276258a885aa5f3860f90d2120cdca5a2496f1852d67ecfa888",
+ "terrain": {
+  "bounds": [
+   178.488,
+   244.488,
+   1729.512,
+   1387.512
+  ],
+  "cells": [
+   83,
+   67
+  ],
+  "textureSize": [
+   636,
+   513
+  ]
+ },
+ "image": {
+  "bounds": [
+   172.283904,
+   238.283904,
+   1735.7160959999999,
+   1393.7160959999999
+  ],
+  "width": 2048,
+  "height": 1513
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "transition",
+   "x": 1076,
+   "y": 402,
+   "label": null,
+   "destination": {
+    "areaId": "G3_6_1",
+    "name": "Jiquani's Machinarium",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "transition",
+   "x": 1098,
+   "y": 264,
+   "label": null,
+   "destination": {
+    "areaId": "G3_6_1",
+    "name": "Jiquani's Machinarium",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "checkpoint",
+   "x": 1523,
+   "y": 1057,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "checkpoint",
+   "x": 419,
+   "y": 1057,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "transition",
+   "x": 833,
+   "y": 402,
+   "label": null,
+   "destination": {
+    "areaId": "G3_6_1",
+    "name": "Jiquani's Machinarium",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "waypoint",
+   "x": 908,
+   "y": 277,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "checkpoint",
+   "x": 932,
+   "y": 655,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "transition",
+   "x": 954,
+   "y": 312,
+   "label": null,
+   "destination": {
+    "areaId": "G3_6_1",
+    "name": "Jiquani's Machinarium",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "11",
+   "kind": "boss",
+   "x": 954,
+   "y": 402,
+   "label": "Grand Soul Core Nexus",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "14",
+   "kind": "checkpoint",
+   "x": 991,
+   "y": 295,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "15",
+   "kind": "checkpoint",
+   "x": 992,
+   "y": 1136,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

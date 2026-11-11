@@ -1,0 +1,105 @@
+{
+ "areaId": "G3_1",
+ "name": "Sandswept Marsh",
+ "releaseId": "6bab506cbe566fb8ea952a52046be478fca2a90b908a1d02f2f5a82ca1b5b7f1",
+ "terrain": {
+  "bounds": [
+   448.488,
+   322.488,
+   1483.512,
+   2428.512
+  ],
+  "cells": [
+   75,
+   120
+  ],
+  "textureSize": [
+   575,
+   920
+  ]
+ },
+ "image": {
+  "bounds": [
+   440.063904,
+   314.063904,
+   1491.936096,
+   2436.9360960000004
+  ],
+  "width": 1015,
+  "height": 2048
+ },
+ "objects": [
+  {
+   "id": "1",
+   "kind": "checkpoint",
+   "x": 1018,
+   "y": 2273,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "waypoint",
+   "x": 1126,
+   "y": 2377,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "transition",
+   "x": 1308,
+   "y": 337,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "checkpoint",
+   "x": 1375,
+   "y": 356,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "checkpoint",
+   "x": 1387,
+   "y": 1352,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "12",
+   "kind": "checkpoint",
+   "x": 643,
+   "y": 731,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "13",
+   "kind": "boss",
+   "x": 653,
+   "y": 1483,
+   "label": "Foul Ritual",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "14",
+   "kind": "checkpoint",
+   "x": 729,
+   "y": 1585,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

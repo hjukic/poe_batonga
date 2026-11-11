@@ -3,7 +3,6 @@
 `layouts.json` is an unmodified copy of
 [Vyary/qutm `src/assets/layouts.json`](https://github.com/Vyary/qutm/blob/d18b4e6abee3f87c90342222918c6b08422967c5/src/assets/layouts.json)
 at revision `d18b4e6abee3f87c90342222918c6b08422967c5`, imported 2026-11-11.
-Copyright 2026 Vyary, Apache-2.0: [licence](../../../licenses/qutm-Apache-2.0.txt).
 Upstream last changed this file on 2026-09-14 (Interlude layouts and the
 Forbidden Rites content update).
 

@@ -1,0 +1,95 @@
+{
+ "areaId": "G1_14",
+ "name": "The Manor Ramparts",
+ "releaseId": "02de2dde26ece8209bcd94d7dc77fd5fa5cdeb26306a6ec80a404e26f8343bbf",
+ "terrain": {
+  "bounds": [
+   259.488,
+   466.488,
+   1843.512,
+   1747.512
+  ],
+  "cells": [
+   93,
+   87
+  ],
+  "textureSize": [
+   713,
+   667
+  ]
+ },
+ "image": {
+  "bounds": [
+   253.151904,
+   460.151904,
+   1849.848096,
+   1753.848096
+  ],
+  "width": 2048,
+  "height": 1659
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1679,
+   "y": 1100,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "transition",
+   "x": 500,
+   "y": 1277,
+   "label": null,
+   "destination": {
+    "areaId": "G1_13_2",
+    "name": "Ogham Village",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "waypoint",
+   "x": 517,
+   "y": 1183,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 554,
+   "y": 1277,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "checkpoint",
+   "x": 847,
+   "y": 1671,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "transition",
+   "x": 862,
+   "y": 1751,
+   "label": null,
+   "destination": {
+    "areaId": "G1_15",
+    "name": "Ogham Manor",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  }
+ ]
+}

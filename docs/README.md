@@ -18,6 +18,6 @@ Current document:
 
 ## Repository setup status
 
-The GitHub repository, README, license and documentation folder are present,
+The GitHub repository, README and documentation folder are present,
 and the second contributor has collaborator access. Step 1 is complete
 (confirmed by the owner 2026-11-11).

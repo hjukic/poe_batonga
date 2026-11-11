@@ -1,0 +1,145 @@
+{
+ "areaId": "G2_4_3",
+ "name": "Buried Shrines",
+ "releaseId": "eeb7d1c596f04db6d119f83684dd11763821a3acb18f63b44c1218f8b956f180",
+ "terrain": {
+  "bounds": [
+   205.488,
+   217.488,
+   2809.512,
+   1225.512
+  ],
+  "cells": [
+   141,
+   61
+  ],
+  "textureSize": [
+   1081,
+   467
+  ]
+ },
+ "image": {
+  "bounds": [
+   195.071904,
+   207.071904,
+   2819.928096,
+   1235.9280959999999
+  ],
+  "width": 2048,
+  "height": 803
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1092,
+   "y": 408,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "checkpoint",
+   "x": 1092,
+   "y": 994,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "transition",
+   "x": 2150,
+   "y": 701,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "transition",
+   "x": 2314,
+   "y": 622,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 2357,
+   "y": 620,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "transition",
+   "x": 2638,
+   "y": 621,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "boss",
+   "x": 2737,
+   "y": 620,
+   "label": "The Vestibule",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "checkpoint",
+   "x": 417,
+   "y": 975,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "transition",
+   "x": 517,
+   "y": 232,
+   "label": null,
+   "destination": {
+    "areaId": "G2_4_2",
+    "name": "The Lost City",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "waypoint",
+   "x": 517,
+   "y": 356,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "11",
+   "kind": "checkpoint",
+   "x": 543,
+   "y": 474,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "13",
+   "kind": "checkpoint",
+   "x": 925,
+   "y": 373,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

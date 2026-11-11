@@ -1,0 +1,131 @@
+{
+ "areaId": "G3_2_1",
+ "name": "Infested Barrens",
+ "releaseId": "76db475907ad040ba868a3e3ffbdbc8b18406eccb4a819e85a23c36c5b5d5c4d",
+ "terrain": {
+  "bounds": [
+   244.488,
+   670.488,
+   1861.512,
+   1687.512
+  ],
+  "cells": [
+   96,
+   96
+  ],
+  "textureSize": [
+   736,
+   736
+  ]
+ },
+ "image": {
+  "bounds": [
+   238.019904,
+   664.0199040000001,
+   1867.980096,
+   1693.980096
+  ],
+  "width": 2048,
+  "height": 1294
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1222,
+   "y": 911,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "transition",
+   "x": 1308,
+   "y": 1571,
+   "label": null,
+   "destination": {
+    "areaId": "ExpeditionSubArea_Kalguur_Act3",
+    "name": "Mystic Refuge",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 1323,
+   "y": 1543,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "checkpoint",
+   "x": 1352,
+   "y": 1350,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "waypoint",
+   "x": 1726,
+   "y": 1240,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "checkpoint",
+   "x": 1785,
+   "y": 1150,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "transition",
+   "x": 1864,
+   "y": 1155,
+   "label": null,
+   "destination": {
+    "areaId": "G3_3",
+    "name": "Jungle Ruins",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "transition",
+   "x": 280,
+   "y": 1282,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "10",
+   "kind": "checkpoint",
+   "x": 319,
+   "y": 1262,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "11",
+   "kind": "checkpoint",
+   "x": 895,
+   "y": 1567,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

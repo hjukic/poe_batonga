@@ -1,0 +1,109 @@
+{
+ "areaId": "G3_17",
+ "name": "The Black Chambers",
+ "releaseId": "6097bf2455589f6114093568b3e5761a8731d02d82a946f841d33a917b18d650",
+ "terrain": {
+  "bounds": [
+   175.488,
+   154.488,
+   1411.512,
+   2251.512
+  ],
+  "cells": [
+   69,
+   105
+  ],
+  "textureSize": [
+   529,
+   805
+  ]
+ },
+ "image": {
+  "bounds": [
+   167.099904,
+   146.099904,
+   1419.9000959999998,
+   2259.9000960000003
+  ],
+  "width": 1214,
+  "height": 2048
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1118,
+   "y": 1391,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "checkpoint",
+   "x": 428,
+   "y": 1391,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "checkpoint",
+   "x": 781,
+   "y": 1984,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "transition",
+   "x": 793,
+   "y": 167,
+   "label": null,
+   "destination": {
+    "areaId": "G3_16",
+    "name": "Aggorat",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "boss",
+   "x": 793,
+   "y": 2173,
+   "label": "The Testing Pit",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "waypoint",
+   "x": 793,
+   "y": 402,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "transition",
+   "x": 794,
+   "y": 2034,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "checkpoint",
+   "x": 808,
+   "y": 356,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

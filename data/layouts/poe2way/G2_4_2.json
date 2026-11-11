@@ -1,0 +1,122 @@
+{
+ "areaId": "G2_4_2",
+ "name": "The Lost City",
+ "releaseId": "b94493c6a36bb92280213a03a59545573df9d9ab0015b01d700d777456c1e0bb",
+ "terrain": {
+  "bounds": [
+   181.488,
+   304.488,
+   1360.512,
+   2302.512
+  ],
+  "cells": [
+   67,
+   115
+  ],
+  "textureSize": [
+   513,
+   881
+  ]
+ },
+ "image": {
+  "bounds": [
+   173.495904,
+   296.495904,
+   1368.504096,
+   2310.504096
+  ],
+  "width": 1215,
+  "height": 2048
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1144,
+   "y": 1322,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "checkpoint",
+   "x": 320,
+   "y": 977,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "transition",
+   "x": 782,
+   "y": 2219,
+   "label": null,
+   "destination": {
+    "areaId": "G2_4_3",
+    "name": "Buried Shrines",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "checkpoint",
+   "x": 806,
+   "y": 2193,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "5",
+   "kind": "checkpoint",
+   "x": 861,
+   "y": 1580,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "checkpoint",
+   "x": 894,
+   "y": 608,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "transition",
+   "x": 908,
+   "y": 305,
+   "label": null,
+   "destination": {
+    "areaId": "G2_4_1",
+    "name": "Keth",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "waypoint",
+   "x": 908,
+   "y": 517,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "9",
+   "kind": "boss",
+   "x": 977,
+   "y": 1597,
+   "label": "The Galleria",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

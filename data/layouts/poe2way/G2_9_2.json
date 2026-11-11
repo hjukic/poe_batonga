@@ -1,0 +1,100 @@
+{
+ "areaId": "G2_9_2",
+ "name": "The Spires of Deshar",
+ "releaseId": "d6aebd99602e38cbe828f8699a1c31ce4a39b903fd838377d902f0b9ac149792",
+ "terrain": {
+  "bounds": [
+   391.488,
+   874.488,
+   2185.512,
+   2458.512
+  ],
+  "cells": [
+   135,
+   135
+  ],
+  "textureSize": [
+   1035,
+   1035
+  ]
+ },
+ "image": {
+  "bounds": [
+   384.311904,
+   867.311904,
+   2192.6880960000003,
+   2465.6880960000003
+  ],
+  "width": 2048,
+  "height": 1811
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1138,
+   "y": 1591,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "checkpoint",
+   "x": 1966,
+   "y": 1017,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "transition",
+   "x": 1994,
+   "y": 1003,
+   "label": null,
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "4",
+   "kind": "boss",
+   "x": 2105,
+   "y": 998,
+   "label": "The Defiled Spire",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "6",
+   "kind": "transition",
+   "x": 403,
+   "y": 2380,
+   "label": null,
+   "destination": {
+    "areaId": "G2_9_1",
+    "name": "Path of Mourning",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "7",
+   "kind": "waypoint",
+   "x": 448,
+   "y": 2380,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "checkpoint",
+   "x": 498,
+   "y": 2352,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

@@ -1,0 +1,113 @@
+{
+ "areaId": "G2_1",
+ "name": "Vastiri Outskirts",
+ "releaseId": "b9caa547c3284abe1eb71f91222cf70b88747a65a6d571344ac2364fb780c07f",
+ "terrain": {
+  "bounds": [
+   316.488,
+   331.488,
+   2098.512,
+   2029.512
+  ],
+  "cells": [
+   120,
+   105
+  ],
+  "textureSize": [
+   920,
+   805
+  ]
+ },
+ "image": {
+  "bounds": [
+   309.359904,
+   324.359904,
+   2105.640096,
+   2036.6400959999999
+  ],
+  "width": 2048,
+  "height": 1953
+ },
+ "objects": [
+  {
+   "id": "0",
+   "kind": "checkpoint",
+   "x": 1246,
+   "y": 529,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "1",
+   "kind": "checkpoint",
+   "x": 1636,
+   "y": 441,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "2",
+   "kind": "checkpoint",
+   "x": 1723,
+   "y": 1750,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "3",
+   "kind": "waypoint",
+   "x": 1821,
+   "y": 1653,
+   "label": "Waypoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "8",
+   "kind": "boss",
+   "x": 1929,
+   "y": 617,
+   "label": "Raider's Cliffs",
+   "destination": null,
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "11",
+   "kind": "transition",
+   "x": 2045,
+   "y": 1772,
+   "label": null,
+   "destination": {
+    "areaId": "G2_town",
+    "name": "The Ardura Caravan",
+    "evidence": "native-component"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "14",
+   "kind": "transition",
+   "x": 2128,
+   "y": 1382,
+   "label": null,
+   "destination": {
+    "areaId": "G1_town",
+    "name": "Clearfell Encampment",
+    "evidence": "game-data-rule"
+   },
+   "evidence": "observed-marker"
+  },
+  {
+   "id": "16",
+   "kind": "checkpoint",
+   "x": 448,
+   "y": 1345,
+   "label": "Checkpoint",
+   "destination": null,
+   "evidence": "observed-marker"
+  }
+ ]
+}

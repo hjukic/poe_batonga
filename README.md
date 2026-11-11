@@ -45,9 +45,8 @@ not sufficient for game navigation; it is not connected to the overlay.
 - [Architecture](docs/architecture.md) and [decisions](docs/decisions.md): proposed
   design and experiments needed before implementation.
 - [Documentation](docs/README.md): documentation status and repository setup checks.
-- [Data sources](docs/data-sources.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
-- [License](LICENSE): MIT license for this repository's original work. External
-  routes, game data and images need their own source and license review before use.
+- [Data sources](docs/data-sources.md): route, zone and layout data, including
+  poe2way's zone terrain (walls and points of interest) in `data/layouts/poe2way/`.
 
 ## Contributing
 

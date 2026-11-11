@@ -35,7 +35,7 @@ vision service is needed. Proposed source boundaries:
 | `core/navigation` | Choose next objective and produce expiring directional guidance |
 | `core/storage` | Local SQLite progress, evidence history and settings |
 | `ui` | Checklist, layout panel, arrow and separate interactive settings window |
-| `data` | Versioned route, zone and layout JSON plus licensed assets |
+| `data` | Versioned route, zone and layout JSON plus assets |
 | `fixtures` | Offline samples with provenance and expected observations |
 
 These are proposed boundaries, not files already created. Start with simple
@@ -90,7 +90,7 @@ match. Do not assume a seed or unique instance ID exists in the log.
    and map viewport. Handle minimap and expanded map separately.
 2. Normalize scale/UI placement and extract explored line geometry and landmarks.
    Start with conventional image processing; choose an OCR/model dependency only
-   if the offline experiment demonstrates a need and its licence is suitable.
+   if the offline experiment demonstrates a need.
 3. Compare against multiple zone-specific layout hypotheses, allowing translation,
    scale and only the rotations/reflections validated by data. Keep alternatives
    when a short explored corridor fits multiple layouts.
