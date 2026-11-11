@@ -108,8 +108,6 @@ const lockButton = $<HTMLButtonElement>('#lock');
 const shortcutButton = $<HTMLButtonElement>('#shortcut');
 let status: Status | undefined;
 let recording = false;
-/** The menu unlocked a locked overlay; closing the menu locks it again. */
-let relockOnClose = false;
 
 const shortcutLabel = (accelerator: string) =>
   accelerator.split('+').map((key) => key.replace(/^Key(?=.)/, '').replace(/^Digit(?=.)/, '')).join(' + ');
@@ -255,10 +253,6 @@ function setSettingsOpen(open: boolean) {
   syncInput();
   if (open || !wasOpen) return;
   stopRecording();
-  if (relockOnClose) {
-    relockOnClose = false;
-    if (status?.interactive) void call('set_interaction', { interactive: false });
-  }
 }
 
 async function call(command: string, args?: Record<string, unknown>) {
@@ -322,13 +316,15 @@ document.addEventListener('keydown', (event) => {
 // ---- Window size and the clickable areas ----
 const panel = $('.panel');
 const header = $('#drag');
-const actions = $('.header-actions');
 let lastSize = '';
 let lastRects = '';
-/** Only these areas take the mouse; the route is always click-through to the game. */
+/**
+ * Only these areas take the mouse; the route is always click-through to the game.
+ * Locked: just the lock button. Unlocked: the whole top bar, plus the open menu.
+ */
 function syncInput() {
   if (!isTauri() || !status) return;
-  const areas = [status.interactive ? header : actions, ...(settings.hidden ? [] : [settings])];
+  const areas = status.interactive ? [header, ...(settings.hidden ? [] : [settings])] : [lockButton];
   const rects = areas.map((element) => {
     const box = element.getBoundingClientRect();
     return { x: box.left, y: box.top, width: box.width, height: box.height };
@@ -393,24 +389,16 @@ function endDrag() {
 }
 document.addEventListener('mouseup', endDrag);
 window.addEventListener('blur', endDrag);
-lockButton.addEventListener('click', () => {
-  relockOnClose = false; // an explicit lock/unlock wins over the menu's temporary unlock
-  void call('set_interaction', { interactive: !status?.interactive });
-});
-settingsToggle.addEventListener('click', async () => {
-  const open = settings.hidden;
-  // The menu needs mouse input, so opening it unlocks the overlay until it closes.
-  if (open && !status?.interactive) {
-    relockOnClose = true;
-    await call('set_interaction', { interactive: true });
-  }
-  setSettingsOpen(open);
+lockButton.addEventListener('click', () => void call('set_interaction', { interactive: !status?.interactive }));
+// Settings and close only take clicks while unlocked (see syncInput).
+settingsToggle.addEventListener('click', () => {
+  if (status?.interactive) setSettingsOpen(settings.hidden);
 });
 document.addEventListener('mousedown', (event) => {
   const target = event.target as Element;
   if (!settings.hidden && !settings.contains(target) && !settingsToggle.contains(target)) setSettingsOpen(false);
 });
-$('#exit').addEventListener('click', () => void invoke('quit').catch(console.error));
+$('#exit').addEventListener('click', () => { if (status?.interactive) void invoke('quit').catch(console.error); });
 $('#reset-progress').addEventListener('click', () => {
   void invoke<TrackerView>('reset_progress').then(renderTracker).catch((error) => showMessage('#error', String(error)));
 });

@@ -30,6 +30,10 @@ button.icon svg { display: block; width: 16px; height: 16px; fill: none; stroke:
 button.icon:hover, body[data-interactive="true"] button.icon { opacity: 1; }
 button.icon:hover { background: rgb(239 235 255 / .12); }
 #exit:hover { background: rgb(214 92 80 / .6); color: #fff; }
+/* Locked: only the lock takes clicks; settings and close are click-through and look it. */
+body:not([data-interactive="true"]) #lock { opacity: .7; }
+body:not([data-interactive="true"]) #settings-toggle,
+body:not([data-interactive="true"]) #exit { opacity: .25; background: transparent; color: #e4dff0; }
 #settings-toggle[aria-expanded="true"] { background: rgb(190 176 227 / .22); opacity: 1; }
 .route { padding: 12px 20px; }
 .route > .step + .step { margin-top: 4px; }
