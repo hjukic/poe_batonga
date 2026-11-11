@@ -460,7 +460,25 @@ fn quit(app: AppHandle) {
     app.exit(0);
 }
 
+/// Linux: with nvidia-utils installed but no NVIDIA driver loaded (e.g. an AMD-only
+/// machine), glvnd tries NVIDIA's EGL first and WebKit's page process crashes inside
+/// libnvidia-gpucomp or draws nothing. Use Mesa then. Runs before any thread or GL use;
+/// an explicit __EGL_VENDOR_LIBRARY_FILENAMES from the user always wins.
+#[cfg(target_os = "linux")]
+fn prefer_mesa_egl() {
+    const MESA: &str = "/usr/share/glvnd/egl_vendor.d/50_mesa.json";
+    let nvidia_loaded = std::path::Path::new("/proc/driver/nvidia").exists();
+    if std::env::var_os("__EGL_VENDOR_LIBRARY_FILENAMES").is_none()
+        && !nvidia_loaded
+        && std::path::Path::new(MESA).exists()
+    {
+        std::env::set_var("__EGL_VENDOR_LIBRARY_FILENAMES", MESA);
+    }
+}
+
 fn main() {
+    #[cfg(target_os = "linux")]
+    prefer_mesa_egl();
     tauri::Builder::default()
         // Only one copy runs: a second launch shows the existing overlay and exits.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
