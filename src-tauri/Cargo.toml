@@ -18,3 +18,5 @@ tauri-plugin-single-instance = "2"
 # Same major version as the gtk crate Tauri itself uses.
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
+# v0_6: keyboard modes, margin getters, is_supported (needs system gtk-layer-shell >= 0.6).
+gtk-layer-shell = { version = "0.8", features = ["v0_6"] }

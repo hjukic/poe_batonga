@@ -10,6 +10,8 @@ interface Status {
   toggleShortcut: string;
   shortcutError: string | null;
   lastError: string | null;
+  /** Wayland layer surface: moved with move_overlay_by instead of window dragging. */
+  layerShell: boolean;
 }
 
 interface StepPart { text: string; style?: string }
@@ -265,11 +267,34 @@ observer.observe(panel);
 observer.observe(settings);
 
 // ---- Pointer actions ----
+// A layer surface can't be dragged by the compositor, so the overlay moves itself: each
+// move shifts the window under the pointer by the same amount, so the pointer's offset
+// from where the drag started is always the distance still to go.
+let drag: { x: number; y: number; busy: boolean } | null = null;
 $('#drag').addEventListener('mousedown', (event) => {
   if ((event.target as Element).closest('button')) return;
-  if (status?.interactive && event.button === 0 && isTauri()) {
+  if (!status?.interactive || event.button !== 0 || !isTauri()) return;
+  if (!status.layerShell) {
     void getCurrentWindow().startDragging().catch(console.error);
+    return;
   }
+  drag = { x: event.clientX, y: event.clientY, busy: false };
+});
+document.addEventListener('mousemove', (event) => {
+  if (!drag || drag.busy) return;
+  const dx = Math.round(event.clientX - drag.x), dy = Math.round(event.clientY - drag.y);
+  if (!dx && !dy) return;
+  const current = drag;
+  current.busy = true;
+  void invoke('move_overlay_by', { dx, dy })
+    .catch(console.error)
+    // Wait for the compositor to apply the move before measuring again.
+    .finally(() => requestAnimationFrame(() => requestAnimationFrame(() => { current.busy = false; })));
+});
+document.addEventListener('mouseup', () => {
+  if (!drag) return;
+  drag = null;
+  void invoke('save_overlay_position').catch(console.error);
 });
 $('#route').addEventListener('click', (event) => {
   const row = (event.target as Element).closest<HTMLElement>('.step.objective');
@@ -313,7 +338,7 @@ const browserPreview: TrackerView = {
 
 async function start() {
   if (!isTauri()) {
-    render({ visible: true, interactive: true, toggleShortcut: 'Ctrl+Space', shortcutError: null, lastError: null });
+    render({ visible: true, interactive: true, toggleShortcut: 'Ctrl+Space', shortcutError: null, lastError: null, layerShell: false });
     renderTracker(browserPreview);
     return;
   }

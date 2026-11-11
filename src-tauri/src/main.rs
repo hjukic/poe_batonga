@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(target_os = "linux")]
+mod layer_shell;
 mod layout;
 mod minimap;
 mod tracker;
@@ -21,6 +23,8 @@ struct Status {
     toggle_shortcut: String,
     shortcut_error: Option<String>,
     last_error: Option<String>,
+    /// Wayland layer-shell surface: moved by margins (move_overlay_by), not window dragging.
+    layer_shell: bool,
 }
 
 struct OverlayState(Mutex<Status>);
@@ -44,11 +48,19 @@ struct Settings {
     toggle_shortcut: String,
     /// Live minimap reading (screenshots of the minimap corner only).
     read_minimap: bool,
+    /// Overlay offset from the screen's top-left corner (layer-shell only).
+    overlay_x: i32,
+    overlay_y: i32,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { toggle_shortcut: DEFAULT_TOGGLE_SHORTCUT.into(), read_minimap: true }
+        Settings {
+            toggle_shortcut: DEFAULT_TOGGLE_SHORTCUT.into(),
+            read_minimap: true,
+            overlay_x: 20,
+            overlay_y: 170,
+        }
     }
 }
 
@@ -91,11 +103,15 @@ fn publish(app: &AppHandle) {
 #[cfg(target_os = "linux")]
 fn set_click_through(app: &AppHandle, window: &WebviewWindow, through: bool) -> Result<(), String> {
     let rect = *app.state::<ControlsRect>().0.lock().map_err(|e| e.to_string())?;
+    let layer = snapshot(app)?.layer_shell;
     let window = window.clone();
     // GTK objects are not Send, so fetch and change the GTK window on the main thread.
     app.run_on_main_thread(move || {
         use gtk::prelude::WidgetExt;
         let Ok(gtk_window) = window.gtk_window() else { return };
+        if layer {
+            layer_shell::set_interactive(&gtk_window, !through);
+        }
         if through {
             let area = gtk::cairo::RectangleInt::new(
                 rect.x.floor() as i32,
@@ -152,10 +168,10 @@ fn watch_controls_hover(app: AppHandle) {
 // All input behavior belongs to our window; no keys or mouse actions are sent to the game.
 fn apply_interaction(app: &AppHandle, interactive: bool) -> Result<Status, String> {
     let window = overlay(app)?;
+    set_click_through(app, &window, !interactive)?;
     let state = app.state::<OverlayState>();
     let mut status = state.0.lock().map_err(|e| e.to_string())?;
     window.set_focusable(interactive).map_err(|e| e.to_string())?;
-    set_click_through(app, &window, !interactive)?;
     status.interactive = interactive;
     status.last_error = None;
     Ok(status.clone())
@@ -214,13 +230,33 @@ fn set_visibility(app: AppHandle, visible: bool) -> Result<Status, String> {
     report(&app, apply_visibility(&app, visible))
 }
 
+/// Layer-shell only: moves the overlay by (dx, dy) pixels. Sync commands run on the main
+/// thread, so GTK can be used directly.
 #[tauri::command]
-fn reset_overlay(app: AppHandle) -> Result<Status, String> {
-    let result = (|| {
-        overlay(&app)?.center().map_err(|e| e.to_string())?;
-        apply_visibility(&app, true)
-    })();
-    report(&app, result)
+fn move_overlay_by(app: AppHandle, dx: i32, dy: i32) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        let gtk_window = overlay(&app)?.gtk_window().map_err(|e| e.to_string())?;
+        let (x, y) = layer_shell::position(&gtk_window);
+        layer_shell::move_to(&gtk_window, x + dx, y + dy);
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = (app, dx, dy);
+    Ok(())
+}
+
+/// Layer-shell only: keeps the current position for the next start.
+#[tauri::command]
+fn save_overlay_position(app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        let gtk_window = overlay(&app)?.gtk_window().map_err(|e| e.to_string())?;
+        let (overlay_x, overlay_y) = layer_shell::position(&gtk_window);
+        save_settings(&app, &Settings { overlay_x, overlay_y, ..load_settings(&app) })?;
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = app;
+    Ok(())
 }
 
 #[tauri::command]
@@ -320,7 +356,8 @@ fn main() {
             overlay_status,
             set_interaction,
             set_visibility,
-            reset_overlay,
+            move_overlay_by,
+            save_overlay_position,
             set_controls_rect,
             set_toggle_shortcut,
             tracker_state,
@@ -333,12 +370,22 @@ fn main() {
         ])
         .setup(|app| {
             let settings = load_settings(app.handle());
+            // Wayland: make the overlay a layer surface before it is first shown.
+            #[cfg(target_os = "linux")]
+            let layer_shell = layer_shell::supported()
+                && overlay(app.handle())
+                    .and_then(|window| window.gtk_window().map_err(|e| e.to_string()))
+                    .map(|gtk_window| layer_shell::init(&gtk_window, settings.overlay_x, settings.overlay_y))
+                    .is_ok();
+            #[cfg(not(target_os = "linux"))]
+            let layer_shell = false;
             app.manage(OverlayState(Mutex::new(Status {
                 visible: false,
                 interactive: false,
                 toggle_shortcut: settings.toggle_shortcut.clone(),
                 shortcut_error: None,
                 last_error: None,
+                layer_shell,
             })));
             // Before the tracker and minimap threads, which both feed it.
             let layouts = app.path().app_data_dir().ok().map(|dir| dir.join("layouts"));
