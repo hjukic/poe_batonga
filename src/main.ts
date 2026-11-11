@@ -1,6 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import './style.css';
 
 interface Status {
@@ -15,7 +15,17 @@ document.body.className = overlay ? 'overlay' : 'controls';
 const root = document.querySelector<HTMLElement>('#app')!;
 root.innerHTML = overlay ? `
   <section class="panel" aria-label="Campaign guide preview">
-    <header id="drag"><span>The Riverbank - Zone Level: 1</span><span class="preview-label">Preview</span></header>
+    <header id="drag">
+      <span class="zone">The Riverbank - Zone Level: 1</span>
+      <div class="header-actions">
+        <button id="settings-toggle" class="icon" type="button" title="Settings" aria-label="Settings" aria-expanded="false" aria-controls="settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <button id="exit" class="icon" type="button" title="Exit Batonga" aria-label="Exit Batonga">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </header>
     <div class="route">
       <div>Talk to the Wounded Man</div>
       <div class="direction">Directions: Follow the river upstream</div>
@@ -23,9 +33,13 @@ root.innerHTML = overlay ? `
       <div>Enter Clearfell Encampment</div>
     </div>
     <div class="edit-tools">
-      <div class="opacity-control"><label for="opacity">Opacity</label><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></div>
-      <label class="sample"><input type="checkbox" id="sample" disabled /> Test overlay input</label>
-      <span id="sample-result" class="hint">Preview content · game tracking is not connected.</span>
+      <div id="settings" hidden>
+        <div class="opacity-control"><label for="opacity">Opacity</label><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></div>
+        <label class="sample"><input type="checkbox" id="sample" disabled /> Test overlay input</label>
+        <span id="sample-result" class="hint">Preview content · game tracking is not connected.</span>
+        <div class="settings-actions"><button id="hide" type="button">Hide overlay</button><button id="open-controls" type="button">Controls window</button></div>
+        <dl class="keys"><dt>Ctrl + Alt + O</dt><dd>Show / hide</dd><dt>Ctrl + Alt + I</dt><dd>Lock / unlock</dd></dl>
+      </div>
       <footer><span id="mode">CONNECTING</span><kbd>Ctrl + Alt + I to lock</kbd></footer>
     </div>
   </section>` : `
@@ -50,6 +64,8 @@ function render(next: Status) {
   if (overlay) {
     const checkbox = document.querySelector<HTMLInputElement>('#sample')!;
     checkbox.disabled = !next.interactive;
+    // Returning to click-through closes settings so the play view stays minimal.
+    if (!next.interactive) setSettingsOpen(false);
   } else {
     document.querySelector('#visibility')!.textContent = next.visible ? 'Overlay visible' : 'Overlay hidden';
     document.querySelector('#interaction')!.textContent = next.interactive ? 'Lock to click-through' : 'Enable interaction';
@@ -58,6 +74,12 @@ function render(next: Status) {
       ? `Global shortcuts unavailable: ${next.shortcutErrors.join('; ')}. Use these buttons instead.` : 'Global shortcuts registered. Verify they work while the game is focused.';
     showError(next.lastError);
   }
+}
+function setSettingsOpen(open: boolean) {
+  const settings = document.querySelector<HTMLElement>('#settings');
+  if (!settings) return;
+  settings.hidden = !open;
+  document.querySelector('#settings-toggle')!.setAttribute('aria-expanded', String(open));
 }
 function showError(message: string | null) {
   const element = document.querySelector<HTMLElement>('#error');
@@ -85,7 +107,19 @@ if (overlay) {
     setOpacity(slider.valueAsNumber);
     try { localStorage.setItem('panel-opacity', slider.value); } catch { /* Optional preference. */ }
   });
+  // The window follows the panel, so it never leaves empty transparent space around the text.
+  const panel = document.querySelector<HTMLElement>('.panel')!;
+  let lastSize = '';
+  new ResizeObserver(() => {
+    if (!isTauri()) return;
+    const box = panel.getBoundingClientRect();
+    const width = Math.ceil(box.width) + 2, height = Math.ceil(box.height) + 2; // body padding
+    if (`${width}x${height}` === lastSize) return;
+    lastSize = `${width}x${height}`;
+    void getCurrentWindow().setSize(new LogicalSize(width, height)).catch(console.error);
+  }).observe(panel);
   document.querySelector('#drag')!.addEventListener('mousedown', (event) => {
+    if ((event.target as Element).closest('button')) return;
     if (status?.interactive && (event as MouseEvent).button === 0 && isTauri()) {
       void getCurrentWindow().startDragging().catch(console.error);
     }
@@ -93,6 +127,12 @@ if (overlay) {
   document.querySelector('#sample')!.addEventListener('change', () => {
     document.querySelector('#sample-result')!.textContent = 'Click received by the overlay. Toggle interaction off to test passing clicks through.';
   });
+  document.querySelector('#settings-toggle')!.addEventListener('click', () => {
+    setSettingsOpen(document.querySelector<HTMLElement>('#settings')!.hidden);
+  });
+  document.querySelector('#exit')!.addEventListener('click', () => void invoke('quit').catch(console.error));
+  document.querySelector('#hide')!.addEventListener('click', () => void action('set_visibility', { visible: false }));
+  document.querySelector('#open-controls')!.addEventListener('click', () => void invoke('open_controls').catch(console.error));
 } else {
   document.querySelector('#interaction')!.addEventListener('click', () => void action('set_interaction', { interactive: !status?.interactive }));
   document.querySelector('#visibility-toggle')!.addEventListener('click', () => void action('set_visibility', { visible: !status?.visible }));

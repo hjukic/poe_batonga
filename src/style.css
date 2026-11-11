@@ -21,21 +21,22 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: 12px; font-size: 12px;
 dt { color: #c5b8ee; } dd { margin: 0; color: #b6b0c5; }
 .hint, #shortcuts { color: #a49caf; font-size: 12px; line-height: 1.6; }
 #error { color: #ffd2bf; background: #412b25; border: 1px solid #9f6753; padding: 12px; margin: 12px 0; overflow-wrap: anywhere; }
-.panel { width: 100%; background: rgb(13 12 18 / var(--panel-opacity)); border: 1px solid rgb(239 235 255 / .05); border-radius: 16px; overflow: hidden; font-size: 16px; line-height: 1.5; text-shadow: 0 1px 3px #000, 0 1px 8px #0009; }
-.panel header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px 20px; border-bottom: 1px solid rgb(239 235 255 / .05); font-weight: 500; }
+.panel { width: max-content; min-width: 300px; max-width: 640px; background: rgb(13 12 18 / var(--panel-opacity)); border: 1px solid rgb(239 235 255 / .05); border-radius: 16px; overflow: hidden; font-size: 16px; line-height: 1.5; text-shadow: 0 1px 3px #000, 0 1px 8px #0009; }
+.panel header { display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 20px; border-bottom: 1px solid rgb(239 235 255 / .05); font-weight: 500; }
 body[data-interactive="true"] .panel header { cursor: move; }
-.preview-label { color: #b5adbf; font-size: 10px; letter-spacing: .02em; font-weight: 400; }
 .route { padding: 12px 20px; }
 .route > div + div { margin-top: 4px; }
 .direction { color: #8edce8; font-style: italic; }
 .boss { color: #ce7832; }
-.edit-tools { display: none; border-top: 1px solid rgb(239 235 255 / .07); background: rgb(39 35 51 / .3); padding: 12px 20px 10px; }
+/* Width 0 + min-width 100%: the tools fill the panel but never widen it. */
+.edit-tools { display: none; width: 0; min-width: 100%; border-top: 1px solid rgb(239 235 255 / .07); background: rgb(39 35 51 / .3); padding: 12px 20px 10px; }
 body[data-interactive="true"] .edit-tools { display: block; }
+#settings { margin-bottom: 12px; }
 .opacity-control { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 11px; color: #bcb4c9; }
 .opacity-control input { flex: 1; min-width: 0; height: 4px; cursor: pointer; }
 .opacity-control output { width: 28px; text-align: right; font-variant-numeric: tabular-nums; }
 .sample { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 5px; }
 input { accent-color: #beb0e3; }
 .edit-tools .hint { display: block; font-size: 10px; }
-.edit-tools footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; color: #b4a9c6; font-size: 9px; letter-spacing: .04em; }
+.edit-tools footer { display: flex; justify-content: space-between; gap: 12px; color: #b4a9c6; font-size: 9px; letter-spacing: .04em; }
 kbd { font-family: inherit; }

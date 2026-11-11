@@ -3,5 +3,5 @@
   "identifier": "desktop",
   "description": "Local overlay controls and event synchronization",
   "windows": ["controls", "overlay"],
-  "permissions": ["core:event:default", "core:window:allow-start-dragging"]
+  "permissions": ["core:event:default", "core:window:allow-start-dragging", "core:window:allow-set-size"]
 }

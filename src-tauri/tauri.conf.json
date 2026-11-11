@@ -22,7 +22,7 @@
         "width": 550, "height": 360, "x": 20, "y": 170,
         "transparent": true, "backgroundColor": "#00000000",
         "decorations": false, "shadow": false, "alwaysOnTop": true,
-        "skipTaskbar": true, "resizable": false,
+        "skipTaskbar": true, "resizable": true,
         "focus": false, "focusable": false, "visible": false
       }
     ],
