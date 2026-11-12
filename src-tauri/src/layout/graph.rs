@@ -442,20 +442,29 @@ impl Area {
     }
 }
 
-/// The bundled graphs, built on first use per area (distance fields take a moment).
+/// Areas whose graphs stay built (the current one and the last few).
+const KEEP_AREAS: usize = 3;
+
+/// The bundled graphs, built on first use per area (distance fields take a
+/// moment) and dropped again once `KEEP_AREAS` newer areas were used.
 #[derive(Default)]
-pub struct Graphs(Mutex<HashMap<String, Option<Area>>>);
+pub struct Graphs(Mutex<Vec<(String, Option<Area>)>>);
 
 impl Graphs {
     pub fn get(&self, id: &str) -> Option<Area> {
         let mut built = self.0.lock().ok()?;
-        built
-            .entry(id.to_string())
-            .or_insert_with(|| {
-                let (_, json) = crate::bundle::LAYOUTS.iter().find(|(stem, _)| *stem == id)?;
-                Area::parse(id, json)
-            })
-            .clone()
+        if let Some(i) = built.iter().position(|(a, _)| a == id) {
+            let entry = built.remove(i);
+            let area = entry.1.clone();
+            built.push(entry);
+            return area;
+        }
+        let area = crate::bundle::LAYOUTS.iter().find(|(stem, _)| *stem == id).and_then(|(_, json)| Area::parse(id, json));
+        built.push((id.to_string(), area.clone()));
+        if built.len() > KEEP_AREAS {
+            built.remove(0);
+        }
+        area
     }
 }
 

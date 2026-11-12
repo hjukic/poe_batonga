@@ -97,6 +97,12 @@ const GOLD_WALK: f64 = 100.0;
 /// truth: only there can it be gold. Elsewhere it is at most "rough", and in
 /// dungeons (room grids, scale not measured) "unconfirmed".
 const MEASURED: [&str; 2] = ["G1_1", "G1_2"];
+/// Frame-to-frame moves under this many minimap cells are registration jitter:
+/// they move the particles but do not count as walked.
+const JITTER: f64 = 2.0;
+/// A minimap scale (cells per world unit) outside this range is a bad
+/// measurement; the navigator then uses the default.
+const SCALE_RANGE: (f64, f64) = (0.4, 1.6);
 /// The top layout is named once it has at least this probability.
 const SURE: f64 = 0.5;
 /// Layouts below this probability are left out of the needle.
@@ -249,6 +255,7 @@ fn unix_now() -> u64 {
 impl Navigator {
     pub fn new(area: &Area, arrival: Arrival, memory: Option<&Memory>, scale: f64, seed: u64) -> Self {
         let mut rng = Rng(seed ^ 0x5EED_0F_BA70_4A);
+        let scale = if scale.is_finite() && (SCALE_RANGE.0..=SCALE_RANGE.1).contains(&scale) { scale } else { super::graph::SCALE };
         let n = area.layouts.len();
         // Evidence kept per kind carries on; an older memory has only the posterior.
         let evidence = memory.filter(|m| !m.path.is_empty() || !m.anchors.is_empty());
@@ -327,12 +334,14 @@ impl Navigator {
     pub fn moved(&mut self, dx: f64, dy: f64) {
         let (wx, wy) = super::guide::from_screen((dx / self.scale, dy / self.scale));
         let step = wx.hypot(wy);
+        // A cell of registration jitter is not walking.
+        let walking = dx.hypot(dy) >= JITTER;
         self.pending = (self.pending.0 + wx, self.pending.1 + wy);
         self.pending_sq += step * step;
         let keep = (-step / HEADING_LENGTH).exp();
         self.heading = (self.heading.0 * keep + wx, self.heading.1 * keep + wy);
-        self.walked += step;
-        if step > 0.0 {
+        if walking {
+            self.walked += step;
             self.touched();
         }
         self.since_weigh += step;
@@ -927,6 +936,49 @@ mod tests {
         assert_eq!(source("tgr", false), "rough", "an area without a replayed recording");
         assert_eq!(source("dgr", false), "unconfirmed", "a dungeon");
         assert_eq!(source("dgr", true), "unconfirmed", "a dungeon, until its scale is measured");
+    }
+
+    #[test]
+    fn every_bundled_area_takes_every_call() {
+        let graphs = graph::Graphs::default();
+        for (id, _) in crate::bundle::LAYOUTS {
+            let Some(area) = graphs.get(id) else { continue };
+            let exits: Vec<NavTarget> = area.names.keys().map(|e| exit(e, e)).collect();
+            for arrival in [Arrival::Unknown, Arrival::From(""), Arrival::From(exits.first().map_or("", |t| t.label.as_str()))] {
+                let mut nav = Navigator::new(&area, arrival, None, SCALE, 1);
+                for i in 0..40 {
+                    nav.moved((i % 7) as f64 - 2.0, 5.0);
+                }
+                nav.lost(3.0);
+                nav.lost(f64::INFINITY);
+                for t in &exits {
+                    nav.seen(Seen::Left(t.label.as_str()));
+                    nav.seen(Seen::Exit(t.label.as_str()));
+                }
+                nav.seen(Seen::Tag("boss"));
+                if let Some(view) = nav.guide(&exits) {
+                    assert!(view.degrees.is_none_or(f32::is_finite) && view.distance.is_finite(), "{id}: {view:?}");
+                }
+                let memory = nav.memory();
+                assert!(memory.layouts.values().all(|p| p.is_finite()), "{id}");
+                Navigator::new(&area, Arrival::Unknown, Some(&memory), SCALE, 2);
+            }
+        }
+    }
+
+    #[test]
+    fn a_bad_scale_falls_back_and_jitter_is_not_walking() {
+        let area = graph::load("G1_2");
+        for scale in [0.0, -1.0, f64::NAN, 40.0] {
+            let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, scale, 1);
+            nav.moved(10.0, 0.0);
+            assert!(nav.guide(&[exit("G1_3", "Mud Burrow")]).unwrap().degrees.is_some_and(f32::is_finite), "{scale}");
+        }
+        let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 1);
+        for i in 0..200 {
+            nav.moved(if i % 2 == 0 { 1.0 } else { -1.0 }, 0.0);
+        }
+        assert_eq!(nav.progress().0, 0.0);
     }
 
     #[test]
