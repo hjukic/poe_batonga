@@ -823,7 +823,10 @@ when (in this order):
    `an_arrival_is_the_exits_place_only_by_its_exit_and_soon_after_the_entry`;
 3. it was seen earlier in this part: a sighting's place on the dead-reckoned track is
    turned back into cells from the player (sightings end at every loss, and a new part
-   starts with one).
+   starts with one). Not after a placement jump (a frame placed more than 20 cells from
+   the last: a wide re-find, which may be a wrong match and would leave the sighting
+   off against the walls by as much; fix pass 1, review B-6). It still counts as
+   evidence (`a_placement_jump_ends_the_sighting_as_a_target_on_the_map`).
 
 Then the way there. If one is found and is at most 4 times the straight line (or 150
 cells more), the needle looks 40 cells along it and the distance shown is its length.

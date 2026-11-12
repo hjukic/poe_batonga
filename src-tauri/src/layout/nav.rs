@@ -214,7 +214,14 @@ struct Sighting {
     scans: u32,
     /// Its label was counted in an update.
     labelled: bool,
+    /// Placement jumps of the track before it was first seen (see `JUMPED`).
+    jumps: u32,
 }
+
+/// A frame placed this far (minimap cells) from the last is a jump: a wide re-find
+/// that may be a wrong match. A sighting from before one is no target on the map
+/// (its place against the walls may be off by the jump); it still counts as evidence.
+const JUMPED: f64 = 20.0;
 
 /// An exit icon of a map frame: its offset from the player in minimap cells
 /// (screen axes) and, when its label could be read, the area it leads to (an
@@ -378,6 +385,8 @@ pub struct Navigator {
     track: (f64, f64),
     /// Units walked at the last icon update.
     icon_walked: f64,
+    /// Placement jumps of the track so far.
+    jumps: u32,
     /// The needle points at the target's icon (else along the route from where
     /// the icon puts the player): switched with hysteresis.
     at_icon: Cell<bool>,
@@ -498,6 +507,7 @@ impl Navigator {
             sightings: Vec::new(),
             track: (0.0, 0.0),
             icon_walked: 0.0,
+            jumps: 0,
             at_icon: Cell::new(false),
             exits_seen: memory
                 .map(|m| {
@@ -552,7 +562,7 @@ impl Navigator {
                 Some(i) => i,
                 None => {
                     new = true;
-                    self.sightings.push(Sighting { at, name: None, scans: 0, labelled: icon.to.is_some() });
+                    self.sightings.push(Sighting { at, name: None, scans: 0, labelled: icon.to.is_some(), jumps: self.jumps });
                     self.sightings.len() - 1
                 }
             };
@@ -815,6 +825,9 @@ impl Navigator {
         let step = wx.hypot(wy);
         // A cell of registration jitter is not walking.
         let walking = dx.hypot(dy) >= JITTER;
+        if dx.hypot(dy) > JUMPED {
+            self.jumps += 1;
+        }
         self.pending = (self.pending.0 + wx, self.pending.1 + wy);
         self.pending_sq += step * step;
         self.track = (self.track.0 + wx, self.track.1 + wy);
@@ -1183,6 +1196,7 @@ impl Navigator {
             let list = self
                 .sightings
                 .iter()
+                .filter(|s| s.jumps == self.jumps)
                 .map(|s| {
                     // The inverse of how `icons` placed it on the track.
                     let (sx, sy) = to_screen((s.at.0 - self.track.0, s.at.1 - self.track.1));
@@ -2090,7 +2104,9 @@ mod tests {
         // The icon goes out of view and the player walks 30 cells right: the
         // sighting keeps its place, the way still goes through the doorway.
         nav.icons(&[]);
-        nav.moved(30.0, 0.0);
+        for _ in 0..3 {
+            nav.moved(10.0, 0.0);
+        }
         let later = nav.guide_on(&target, Some(&lent(&map, &[], (30, 0), None))).unwrap();
         assert!(angle_between(later.degrees.unwrap(), bearing(40.0, -40.0)) < 10.0, "{later:?}");
         assert!((125.0..150.0).contains(&later.distance), "{later:?}");
@@ -2284,5 +2300,24 @@ mod tests {
         assert_eq!(ask(CameIn { exits: &other, ..base }).unwrap().source, "rough");
         let named = [Some("Clearfell".to_string())];
         assert_eq!(ask(CameIn { exits: &named, ..base }).unwrap().source, "estimated");
+    }
+
+    #[test]
+    fn a_placement_jump_ends_the_sighting_as_a_target_on_the_map() {
+        let area = graph::load("G1_2");
+        let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 3);
+        named_icon(&mut nav, 0.0, -80.0, "The Grelwood");
+        let target = [exit("G1_4", "The Grelwood")];
+        let map = walls([line((-200, -40), (59, -40)), line((80, -40), (200, -40))].concat());
+        // Out of view, walked 15 cells right in one frame: still the sighting's way.
+        nav.icons(&[]);
+        nav.moved(15.0, 0.0);
+        assert!(nav.guide_on(&target, Some(&lent(&map, &[], (15, 0), None))).is_some() && nav.on_map());
+        // A frame placed 100 cells further (a wide re-find, maybe a wrong one): the
+        // sighting's place against the walls is off by as much, so no way to it.
+        nav.moved(100.0, 0.0);
+        let view = nav.guide_on(&target, Some(&lent(&map, &[], (115, 0), None)));
+        assert!(!nav.on_map(), "{view:?}");
+        assert_eq!(view, nav.guide(&target));
     }
 }
