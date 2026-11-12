@@ -2099,6 +2099,39 @@ mod tests {
         }
     }
 
+    /// Exits and their names on every capture in `SAMPLES` (read-only), with the Act 1 zone
+    /// names as candidates: `SAMPLES=… cargo test --release exits_on_samples -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn exits_on_samples() {
+        let dir = std::env::var("SAMPLES").unwrap();
+        // The zone's exit names (`NAMES`, comma-separated), as the app sets them; else all of Act 1's.
+        let all = "The Riverbank,Clearfell Encampment,Clearfell,Mud Burrow,The Grelwood,The Red Vale,The Grim Tangle,Lost Catacombs";
+        let names = std::env::var("NAMES").unwrap_or(all.into());
+        labels::set_label_candidates(names.split(',').map(String::from).collect());
+        let mut files: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|f| f.path()).filter(|p| p.extension().is_some_and(|e| e == "ppm")).collect();
+        files.sort();
+        for path in files {
+            let image = parse_ppm(&std::fs::read(&path).unwrap()).unwrap();
+            let guess = if image.width == 1286 { [643.0, 561.0] } else { [image.width as f64 - 44.0, 284.0] };
+            let centre = marker_near(&image, guess, 40.0).unwrap_or(guess);
+            let stride = if image.width == 1286 { 2 } else { 1 };
+            let candidates: Vec<String> = names.split(',').map(String::from).collect();
+            let exits: Vec<String> = icons_in(&image, centre, SCALE, 1.0, stride, &[], true)
+                .iter()
+                .filter(|i| i.kind == "exit")
+                .map(|i| {
+                    let at = [centre[0] + i.x as f64 * 2.0, centre[1] + i.y as f64 * 2.0];
+                    let mut scored = labels::scores(&image, at, 1.0, &candidates);
+                    scored.sort_by(|a, b| b.1.total_cmp(&a.1));
+                    let top: Vec<String> = scored.iter().take(3).map(|(n, v)| format!("{n} {v:.2}")).collect();
+                    format!("{} at ({:.0},{:.0}) [{}]", i.label.as_deref().unwrap_or("UNREAD"), at[0], at[1], top.join(", "))
+                })
+                .collect();
+            println!("{} {}x{}: {}", path.file_name().unwrap().to_string_lossy(), image.width, image.height, if exits.is_empty() { "-".into() } else { exits.join(", ") });
+        }
+    }
+
     #[test]
     #[ignore]
     fn exit_scores_under_cross_and_label() {

@@ -14,8 +14,9 @@ use std::sync::{Mutex, OnceLock};
 /// The game's label font, from its data (`art/2dart/fonts/fontin-regular.ttf`;
 /// `scripts/fetch-fonts.sh`).
 static FONT_BYTES: &[u8] = include_bytes!("../../data/fonts/fontin-regular.ttf");
-/// Font sizes tried, in px at 2160 px height (17 fits the live labels best).
-const SIZES: [f32; 3] = [16.8, 17.0, 17.2];
+/// Font sizes tried, in px at 2160 px height (17 fits the live labels best; a long name
+/// on the minimap, "Clearfell Encampment", fit only at another size: 0.88 → 0.93).
+const SIZES: [f32; 7] = [16.4, 16.6, 16.8, 17.0, 17.2, 17.4, 17.6];
 /// The label's top lies this far above the icon centre, in px at 2160 px height.
 const ABOVE: f64 = 25.0;
 /// How far around that place the label is looked for (x, y), in px at 2160 px height.
@@ -116,8 +117,8 @@ fn render(text: &str, px: f32) -> Mask {
 
 /// How well each name matches the label above the exit icon at `icon` (image pixels),
 /// best over the sizes and small shifts: 2PR/(P+R) with P the share of label pixels in the
-/// name's box that lie within a pixel of the drawn name, R the share of the drawn name's
-/// pixels within a pixel of label pixels. `size` is the window's height / 2160.
+/// name's box (and about a character to its left and right) that lie within a pixel of the
+/// drawn name, R the share of the drawn name's pixels within a pixel of label pixels. `size` is the window's height / 2160.
 pub fn scores(image: &Image, icon: [f64; 2], size: f64, names: &[String]) -> Vec<(String, f64)> {
     let mut state = STATE.lock().ok();
     let mut cache = state.as_mut().and_then(|s| s.as_mut()).map(|s| &mut s.rendered);
@@ -173,9 +174,13 @@ pub fn scores(image: &Image, icon: [f64; 2], size: f64, names: &[String]) -> Vec
                             }
                         }
                         let recall = near / drawn;
+                        // Text beside the name's box on its rows counts against it: a short
+                        // name must not fit inside a longer label ("Mud Burrow" scored 0.83
+                        // on "Clearfell Encampment", the owner's minimap, 2026-11-12).
+                        let side = (mask.h as f64 * 0.8).round() as i64;
                         let (mut seen, mut matched) = (0.0, 0.0);
                         for y in -1..=mask.h as i64 {
-                            for x in -1..=mask.w as i64 {
+                            for x in -side..=mask.w as i64 - 1 + side {
                                 if at(&text, x0 + x, y0 + y) {
                                     seen += 1.0;
                                     let inside = x >= 0 && y >= 0 && (x as usize) < mask.w && (y as usize) < mask.h;
