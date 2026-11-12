@@ -53,6 +53,9 @@ const MERGE_MIN_WALLS: usize = 400;
 const MERGE_MIN_PIECE: usize = 200;
 const MERGE_COARSE: i32 = 6;
 const MERGE_MATCH: f64 = 0.6;
+/// A frame that cannot be placed near the player's last place (after a gap: frames not
+/// read, a fast move) is looked for this far from it, in cells, the way pieces are joined.
+const REFIND: i32 = 150;
 /// At most this many wall cells are used to score the terrain arrow's hypotheses.
 const GUIDE_WALLS: usize = 3000;
 /// Size of the overview grid sent to the overlay.
@@ -315,9 +318,10 @@ fn register(
 }
 
 /// Finds where a separately recorded piece of the same visit lies on the current map:
-/// a coarse search over every overlap, then a fine one around the best few.
+/// a coarse search over every overlap (or only within `REFIND` of `around`), then a
+/// fine one around the best few.
 /// `piece` walls are in the piece's own coordinates; returns the shift onto `walls`.
-fn locate_piece(walls: &HashMap<(i32, i32), u32>, piece: &[(i32, i32)]) -> Option<(i32, i32)> {
+fn locate_piece(walls: &HashMap<(i32, i32), u32>, piece: &[(i32, i32)], around: Option<(i32, i32)>) -> Option<(i32, i32)> {
     if walls.len() < MERGE_MIN_WALLS || piece.len() < MERGE_MIN_PIECE {
         return None;
     }
@@ -341,9 +345,14 @@ fn locate_piece(walls: &HashMap<(i32, i32), u32>, piece: &[(i32, i32)]) -> Optio
     for &(x, y) in &map {
         grid[(y - my0) as usize * w + (x - mx0) as usize] = true;
     }
+    let (mut sx0, mut sy0, mut sx1, mut sy1) = (mx0 - px1, my0 - py1, mx1 - px0, my1 - py0);
+    if let Some((x, y)) = around {
+        (sx0, sy0) = (sx0.max((x - REFIND).div_euclid(c)), sy0.max((y - REFIND).div_euclid(c)));
+        (sx1, sy1) = (sx1.min((x + REFIND).div_euclid(c)), sy1.min((y + REFIND).div_euclid(c)));
+    }
     let mut scored = Vec::new();
-    for dy in (my0 - py1)..=(my1 - py0) {
-        for dx in (mx0 - px1)..=(mx1 - px0) {
+    for dy in sy0..=sy1 {
+        for dx in sx0..=sx1 {
             let hits = cells
                 .iter()
                 .filter(|&&(x, y)| {
@@ -380,7 +389,7 @@ fn merge_pieces(session: &mut Session) -> bool {
     for index in 0..session.recording.parts.len() {
         let part = &session.recording.parts[index];
         let piece: Vec<(i32, i32)> = part.walls.iter().map(|&[x, y, _]| (x, y)).collect();
-        let Some((dx, dy)) = locate_piece(&live.walls, &piece) else { continue };
+        let Some((dx, dy)) = locate_piece(&live.walls, &piece, None) else { continue };
         let part = session.recording.parts.remove(index);
         for [x, y, n] in part.walls {
             *live.walls.entry((x + dx, y + dy)).or_insert(0) += n as u32;
@@ -532,7 +541,9 @@ impl Recorder {
                 Some(near)
             } else {
                 let (wide, score) = register(&live.walls, &rel, live.pos, WIDE);
-                (score >= MIN_MATCH).then_some(wide)
+                // After a gap the player may be further away: a frame with enough of the map
+                // (a wide big-map frame) is looked for around the last place, unambiguous only.
+                (score >= MIN_MATCH).then_some(wide).or_else(|| locate_piece(&live.walls, &rel, Some(live.pos)))
             }
         };
         match placed {

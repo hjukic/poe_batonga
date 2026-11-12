@@ -75,15 +75,10 @@ impl Frame {
         }
     }
 
-    /// A larger frame with the player in the middle (see `BigFrame::Wide` in minimap.rs).
-    pub fn wide(cols: usize, rows: usize) -> Frame {
-        Frame {
-            cols,
-            rows,
-            player: [cols as f32 / 2.0, rows as f32 / 2.0],
-            capture_px: [cols * CELL, rows * CELL],
-            follows_minimap: false,
-        }
+    /// A larger frame with the player in the middle (see `BigFrame::Wide` in minimap.rs);
+    /// it stores the minimap's capture size `capture_px`, the same in both views.
+    pub fn wide(cols: usize, rows: usize, capture_px: [usize; 2]) -> Frame {
+        Frame { cols, rows, player: [cols as f32 / 2.0, rows as f32 / 2.0], capture_px, follows_minimap: false }
     }
 }
 
@@ -137,16 +132,16 @@ pub fn marker_near(image: &Image, at: [f64; 2], radius: f64) -> Option<[f64; 2]>
     let (x0, x1) = (clamp(at[0] - reach, image.width), clamp(at[0] + reach + 1.0, image.width));
     let (y0, y1) = (clamp(at[1] - reach, image.height), clamp(at[1] + reach + 1.0, image.height));
     let (w, h) = (x1.saturating_sub(x0), y1.saturating_sub(y0));
-    let mut orange: Vec<bool> = Vec::with_capacity(w * h);
+    let mut orange: Vec<u8> = Vec::with_capacity(w * h);
     for y in y0..y1 {
         for x in x0..x1 {
             let i = (y * image.width + x) * 3;
-            orange.push(is_marker(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]));
+            orange.push(if is_marker(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]) { 0 } else { NONE });
         }
     }
     let area = CROSS_PX * size * size;
     let mut best: Option<(f64, [f64; 2])> = None;
-    for blob in blobs(&mut orange, w, h) {
+    for (_, blob) in blobs(&mut orange, w, h) {
         // A blob cut by the box (not by the image edge) is part of something larger.
         let cut = (blob.x0 == 0 && x0 > 0)
             || (blob.y0 == 0 && y0 > 0)
@@ -176,15 +171,20 @@ struct Blob {
     y1: usize,
 }
 
-/// The 8-connected groups of `true` pixels in a `w` x `h` mask (cleared on the way).
-fn blobs(mask: &mut [bool], w: usize, h: usize) -> Vec<Blob> {
+/// No class in a `blobs` mask.
+const NONE: u8 = u8::MAX;
+
+/// The 8-connected groups of pixels of the same class in a `w` x `h` mask, with their
+/// class (`NONE`: no class; the mask is cleared on the way).
+fn blobs(mask: &mut [u8], w: usize, h: usize) -> Vec<(u8, Blob)> {
     let mut found = Vec::new();
     let mut stack = Vec::new();
     for start in 0..w * h {
-        if !mask[start] {
+        let class = mask[start];
+        if class == NONE {
             continue;
         }
-        mask[start] = false;
+        mask[start] = NONE;
         stack.push(start);
         let mut blob = Blob { n: 0, sx: 0.0, sy: 0.0, x0: w, y0: h, x1: 0, y1: 0 };
         while let Some(i) = stack.pop() {
@@ -197,14 +197,14 @@ fn blobs(mask: &mut [bool], w: usize, h: usize) -> Vec<Blob> {
                 let (nx, ny) = (x as i64 + dx, y as i64 + dy);
                 if nx >= 0 && ny >= 0 && (nx as usize) < w && (ny as usize) < h {
                     let j = ny as usize * w + nx as usize;
-                    if mask[j] {
-                        mask[j] = false;
+                    if mask[j] == class {
+                        mask[j] = NONE;
                         stack.push(j);
                     }
                 }
             }
         }
-        found.push(blob);
+        found.push((class, blob));
     }
     found
 }
@@ -241,7 +241,7 @@ pub fn read(image: &Image, plan: &Plan) -> (MinimapView, Vec<Icon>) {
         walls,
         player: Some(plan.frame.player),
     };
-    (view, icons(image, centre, SCALE, size(plan)))
+    (view, icons_in(image, centre, SCALE, size(plan), 2, &[]))
 }
 
 fn not_visible(plan: &Plan, why: String) -> MinimapView {
@@ -265,30 +265,34 @@ pub fn size(plan: &Plan) -> f64 {
 /// cell and `scale` image pixels per minimap pixel; and the mean width in image pixels of
 /// the lines kept (wall pixels per edge pixel, times two).
 fn walls_in(image: &Image, centre: [f64; 2], frame: &Frame, scale: f64) -> (Vec<[u16; 2]>, f64) {
+    const OUTSIDE: u32 = u32::MAX;
     let Frame { cols, rows, player, .. } = *frame;
     let (w, h) = (image.width, image.height);
     let cell = CELL as f64;
-    // Image pixel -> minimap pixel: (p - centre) / scale + player * CELL.
-    let to_frame = |p: f64, c: f64, at: f32| (p - c) / scale + at as f64 * cell;
-    // The frame cell of each wall pixel (u32::MAX: not a wall or outside the frame).
-    let mut cell_of = vec![u32::MAX; w * h];
+    // The frame column of each image column and the frame row of each image row:
+    // image pixel -> minimap pixel is (p - centre) / scale + player * CELL.
+    let along = |n: usize, c: f64, at: f32, cells: usize| -> Vec<u32> {
+        (0..n)
+            .map(|p| {
+                let v = (p as f64 + 0.5 - c) / scale + at as f64 * cell;
+                if v >= 0.0 && v < (cells * CELL) as f64 { (v / cell) as u32 } else { OUTSIDE }
+            })
+            .collect()
+    };
+    let (col_of, row_of) = (along(w, centre[0], player[0], cols), along(h, centre[1], player[1], rows));
+    // Wall pixels inside the frame, and wall pixels per cell.
+    let mut wall = vec![false; w * h];
     let mut counts = vec![0u32; cols * rows];
     for y in 0..h {
-        let v = to_frame(y as f64 + 0.5, centre[1], player[1]);
-        if v < 0.0 || v >= (rows * CELL) as f64 {
+        let row = row_of[y];
+        if row == OUTSIDE {
             continue;
         }
-        let row = (v / cell) as usize * cols;
         for x in 0..w {
-            let i = (y * w + x) * 3;
-            if !is_wall(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]) {
-                continue;
-            }
-            let u = to_frame(x as f64 + 0.5, centre[0], player[0]);
-            if u >= 0.0 && u < (cols * CELL) as f64 {
-                let c = row + (u / cell) as usize;
-                counts[c] += 1;
-                cell_of[y * w + x] = c as u32;
+            let (i, col) = (y * w + x, col_of[x]);
+            if col != OUTSIDE && is_wall(image.pixels[i * 3], image.pixels[i * 3 + 1], image.pixels[i * 3 + 2]) {
+                wall[i] = true;
+                counts[row as usize * cols + col as usize] += 1;
             }
         }
     }
@@ -300,16 +304,18 @@ fn walls_in(image: &Image, centre: [f64; 2], frame: &Frame, scale: f64) -> (Vec<
     for &[x, y] in &walls {
         kept[y as usize * cols + x as usize] = true;
     }
-    let is_kept = |x: usize, y: usize| cell_of[y * w + x] != u32::MAX && kept[cell_of[y * w + x] as usize];
     let (mut pixels, mut edges) = (0u32, 0u32);
     for y in 1..h.saturating_sub(1) {
+        if row_of[y] == OUTSIDE {
+            continue;
+        }
         for x in 1..w.saturating_sub(1) {
-            if !is_kept(x, y) {
+            let i = y * w + x;
+            if !wall[i] || !kept[row_of[y] as usize * cols + col_of[x] as usize] {
                 continue;
             }
             pixels += 1;
-            let wall = |x: usize, y: usize| cell_of[y * w + x] != u32::MAX;
-            if !(wall(x - 1, y) && wall(x + 1, y) && wall(x, y - 1) && wall(x, y + 1)) {
+            if !(wall[i - 1] && wall[i + 1] && wall[i - w] && wall[i + w]) {
                 edges += 1;
             }
         }
@@ -335,7 +341,7 @@ const ICONS: [(&str, u32); 3] = [("exit", 150), ("checkpoint", 60), ("waypoint",
 /// Parts of one icon (a checkpoint's crystal and base) are joined within this many pixels.
 const ICON_JOIN: f64 = 20.0;
 
-/// The icon kind of a pixel, an index into `ICONS`, or `NO_ICON`.
+/// The icon kind of a pixel, an index into `ICONS`, or `NONE`.
 fn icon_kind(r: u8, g: u8, b: u8) -> u8 {
     let (ri, gi, bi) = (r as i32, g as i32, b as i32);
     if is_marker(r, g, b) {
@@ -345,25 +351,43 @@ fn icon_kind(r: u8, g: u8, b: u8) -> u8 {
     } else if bi > 190 && ri > 130 && bi - ri > 18 && bi - ri < 75 && gi - ri < 40 {
         2
     } else {
-        NO_ICON
+        NONE
     }
 }
-const NO_ICON: u8 = u8::MAX;
 
 /// Map icons in `image`, relative to the player at pixel `centre`, with `scale` image
 /// pixels per minimap pixel. `size` is the image's pixel size relative to 2160 px height.
 pub fn icons(image: &Image, centre: [f64; 2], scale: f64, size: f64) -> Vec<Icon> {
-    let (w, h) = (image.width, image.height);
-    // One byte a pixel; most pixels are no icon, so the masks below stay cheap.
-    let kinds: Vec<u8> = image.pixels.chunks_exact(3).map(|p| icon_kind(p[0], p[1], p[2])).collect();
-    let mut found = Vec::new();
-    for (kind, &(name, least)) in ICONS.iter().enumerate() {
-        if !kinds.contains(&(kind as u8)) {
-            continue;
+    icons_in(image, centre, scale, size, 1, &[])
+}
+
+/// `icons`, looking at every `stride`-th pixel across and down (icons are 20-30 px wide,
+/// so 2 still finds them, at a quarter of the cost) and leaving out the `skip` rectangles
+/// (image pixels: x0, y0, x1, y1), where the game's or this app's own panels are.
+pub fn icons_in(image: &Image, centre: [f64; 2], scale: f64, size: f64, stride: usize, skip: &[[usize; 4]]) -> Vec<Icon> {
+    let (w, h) = (image.width.div_ceil(stride), image.height.div_ceil(stride));
+    // One byte a sample; most samples are no icon.
+    let mut kinds = Vec::with_capacity(w * h);
+    for gy in 0..h {
+        let y = gy * stride;
+        let skipped: Vec<&[usize; 4]> = skip.iter().filter(|r| y >= r[1] && y < r[3]).collect();
+        for gx in 0..w {
+            let x = gx * stride;
+            if skipped.iter().any(|r| x >= r[0] && x < r[2]) {
+                kinds.push(NONE);
+            } else {
+                let i = (y * image.width + x) * 3;
+                kinds.push(icon_kind(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]));
+            }
         }
-        let mut mask: Vec<bool> = kinds.iter().map(|&k| k == kind as u8).collect();
-        let mut parts: Vec<(u32, f64, f64)> = blobs(&mut mask, w, h).into_iter().map(|b| (b.n, b.sx, b.sy)).collect();
-        // Join blobs whose centres are close, largest first.
+    }
+    let size = size / stride as f64;
+    let found = blobs(&mut kinds, w, h);
+    let mut icons = Vec::new();
+    for (kind, &(name, least)) in ICONS.iter().enumerate() {
+        // Join blobs of this kind whose centres are close, largest first.
+        let mut parts: Vec<(u32, f64, f64)> =
+            found.iter().filter(|(k, _)| *k as usize == kind).map(|(_, b)| (b.n, b.sx, b.sy)).collect();
         parts.sort_by(|a, b| b.0.cmp(&a.0));
         let mut joined: Vec<(u32, f64, f64)> = Vec::new();
         for (n, sx, sy) in parts {
@@ -378,11 +402,12 @@ pub fn icons(image: &Image, centre: [f64; 2], scale: f64, size: f64) -> Vec<Icon
         }
         let least = (least as f64 * size * size) as u32;
         for (n, sx, sy) in joined.into_iter().filter(|&(n, _, _)| n >= least) {
-            let to_cells = |p: f64, c: f64| ((p / n as f64 - c) / scale / CELL as f64) as f32;
-            found.push(Icon { kind: name, x: to_cells(sx, centre[0]), y: to_cells(sy, centre[1]) });
+            // Sample centre (in samples) -> image pixel centre.
+            let to_cells = |p: f64, c: f64| (((p / n as f64 - 0.5) * stride as f64 + 0.5 - c) / scale / CELL as f64) as f32;
+            icons.push(Icon { kind: name, x: to_cells(sx, centre[0]), y: to_cells(sy, centre[1]) });
         }
     }
-    found
+    icons
 }
 
 /// Occupied cells in groups (touching, diagonals too) of at least `MIN_GROUP` that are

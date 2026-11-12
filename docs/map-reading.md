@@ -392,25 +392,41 @@ the frame (Clearfell: 1.7%), the frame is "not read: too much of the view looks 
 map lines". Only one real scene (Clearfell) has been measured; the scenes to check are
 listed in [the overlay test](overlay-test.md#big-map-reading).
 
-**Why the minimap's frame size.** The recorder keeps its player cell when a frame
-reports one more than 4 cells away (protection against stray marker detections). A
-frame with the player elsewhere therefore puts every wall off by that much at each
-switch: with 600x518 frames centred on the player, a walk of minimap → big map →
-minimap left 18 of 90 frames unplaced. Same-size frames need no recorder change
-(test: one part, every frame placed, position within a cell).
+**Wide frames (on since 2026-11-12, pass 3).** Big-map frames are 600x518 cells
+(1200x1036 px) centred on the player, four times a minimap frame: the big map shows
+everything explored around the player, so each frame hands the recorder that much of
+the map. The recorder takes the reported player cell when the frame size changes
+(minimap ↔ big map; `Live::frame_size`), and stores the minimap's capture size for
+both views. Minimap-sized big-map frames (`BigFrame::LikeMinimap`) stay available and
+tested.
 
-**Larger frames** (`BigFrame::Wide` in `minimap.rs`) would hand the recorder more of
-the explored map per frame: the big map shows everything explored around the player,
-so after a gap a large frame lets the recorder join the pieces again sooner, and
-walls walked while untracked get recorded. Cost per frame, live: 600x518 cells
-(1238x1074 px capture) debug 160 ms (reading 47, recorder 26), release 90 ms;
-960x540 cells debug 200 ms (reading 73, recorder 42), release about 140 ms. The
-recorder's wide search (taken when the near one fails) costs about 7 times its near
-search, so 960x540 frames can exceed the frame interval in a debug build. They
-need one recorder change: take the reported player cell when the frame size
-changes (keep a `frame_size` in the live part and skip the 4-cell rule when it
-differs). With that change the ignored test `one_track_with_wide_big_map_frames`
-passes; then set `BIG_FRAME` to `BigFrame::Wide(600, 518)`.
+**After a gap** (frames not read for a while, the player running on), the recorder
+used to search only 12 cells around where it expected the player and 32 around the
+last place; anything further was lost, and after 9 lost frames a new piece of the
+visit began. Now a frame that cannot be placed there is looked for within 150 cells
+of the last place, the way pieces are joined (coarse search, unambiguous only, 60% of
+its walls on known walls): `locate_piece` with a bound, called from `on_frame`. In a
+simulated walk through a 900x700-cell area with fog (only walls within 120 cells of
+where the player has been show), frames unread while the player runs on:
+
+| Gap | Before, either size | Minimap-sized frames | Wide frames |
+| --- | --- | --- | --- |
+| 32 cells | 8 unplaced, new piece | 0 unplaced, one piece | 0 unplaced, one piece |
+| 48 cells | 8 unplaced, new piece | 0, one piece | 0, one piece |
+| 80 cells | 8 unplaced, new piece | 0, one piece | 0, one piece |
+| 120 cells | 8 unplaced, new piece | 8 unplaced, new piece | 0, one piece |
+
+**Joining pieces** (a waypoint jump 360 cells away, beyond the 150-cell search, then
+walking back; pieces are tried every 3 s): wide frames joined the two pieces 21 frames
+after the jump, minimap-sized frames after 51 (tries every 9 frames, so ±9). A piece
+joins once 60% of its walls are on the live map; a wide frame covers that much of an
+old piece from four times as far.
+
+**Cost**, live, big map open (20 frames; `tauri dev` builds at opt-level 0): 175 ms a
+frame (captures 35 + 44, reading 71, recorder 25); release 90 ms (reading 7, recorder
+2). The reading was made cheaper for this: frame cells by column and row tables, and
+icons looked for on every second pixel (icons are 20-30 px wide). 30 s live with the
+big map open: 91 frames, all placed, slowest 227 ms.
 
 ### Map icons
 

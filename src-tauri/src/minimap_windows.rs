@@ -411,10 +411,11 @@ mod tests {
         let (big, minimap_marker, plan) = big_crop(origin, [3840, 2160], minimap);
         let marker = [big.x as f64 + plan.marker[0], big.y as f64 + plan.marker[1]];
         assert!((marker[0] - (-3840.0 + 1918.8)).abs() < 0.1 && (marker[1] - 1059.0).abs() < 0.2, "{marker:?}");
-        assert_eq!((plan.frame.cols, plan.frame.rows), (300, 259));
-        assert!(big.width >= 600 && big.height >= 518);
-        // The minimap's player, inside its own crop, matches the big map frame's player cell.
-        assert_eq!(minimap_marker, plan.frame.player.map(|v| v as f64 * 2.0));
+        // Wide frames: 600x518 cells (1200x1036 px) around the player, inside the crop.
+        assert_eq!((plan.frame.cols, plan.frame.rows, plan.frame.capture_px), (600, 518, [600, 518]));
+        assert!(big.width >= 1200 && big.height >= 1036);
+        // The minimap's cross is expected at cell 158, 142 of its own crop.
+        assert!((minimap_marker[0] - 316.0).abs() < 0.5 && (minimap_marker[1] - 284.0).abs() < 0.5, "{minimap_marker:?}");
     }
     #[test]
     fn gdi_crop_reads_top_down_rgb_without_capturing_the_desktop() {
