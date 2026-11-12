@@ -441,11 +441,11 @@ pub(super) fn walk(layout: &Layout, from: usize, goals: &[usize], seed: u64, opt
                 if cx.abs() <= vx && cy.abs() <= vy && rng.uniform() >= ICON_MISS {
                     let to = options.labels.then(|| exit.clone());
                     let (cx, cy) = (cx * cos - cy * sin, cx * sin + cy * cos);
-                    icons.push(ExitIcon { dx: cx, dy: cy, to });
+                    icons.push(ExitIcon { dx: cx, dy: cy, to, remembered: false });
                 }
             }
             if rng.uniform() < FALSE_ICON {
-                icons.push(ExitIcon { dx: rng.range(-vx, vx), dy: rng.range(-vy, vy), to: None });
+                icons.push(ExitIcon { dx: rng.range(-vx, vx), dy: rng.range(-vy, vy), to: None, remembered: false });
             }
         }
         let mut seen_checkpoints = Vec::new();

@@ -120,7 +120,7 @@ struct Live {
     walls: HashMap<(i32, i32), u32>,
     /// Big-map wall cells not yet seen from two player positions `HOLD_MOVE` apart, with
     /// the first: left out of the recording and the overview …
-    held: HashMap<(i32, i32), (i32, i32)>,
+    held: HashMap<(i32, i32), Held>,
     /// … which take these: every cell not held, with how often seen.
     kept: HashMap<(i32, i32), u32>,
     pos: (i32, i32),
@@ -138,6 +138,25 @@ struct Live {
     hint: Option<(i32, i32)>,
     tries: u32,
 }
+
+/// A big-map wall cell not kept yet (`Live::held`).
+#[derive(Clone, Copy, Debug)]
+struct Held {
+    /// Where the player was when it was first seen.
+    first: (i32, i32),
+    /// Frames that showed it, and frames whose area it lay in.
+    seen: u32,
+    in_view: u32,
+}
+
+/// A held cell is kept once seen in at least half the frames it lay in (map lines are
+/// drawn in every frame; lit twigs and foam pass the line colour in some frames only, at
+/// cells that change as the scene moves: the owner's Clearfell of 2026-11-12 grew 127,000
+/// wall cells, a white blob, from them), and dropped once seen in under a quarter of 16.
+const HELD_SHARE: f64 = 0.5;
+/// … and only once it lay in this many frames: two chance hits early on are no line.
+const HELD_MIN_VIEW: u32 = 6;
+const HELD_DROP: (u32, f64) = (16, 0.25);
 
 /// The eight cells around a cell.
 const NEIGHBOURS: [(i32, i32); 8] = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)];
@@ -196,7 +215,29 @@ impl Live {
     /// A cell that is not known but has a known neighbour is that neighbour seen a cell
     /// off: it counts for the neighbour and adds nothing, so walls seen again (a return to
     /// the zone, a frame placed a cell off) do not thicken or double.
+    #[cfg(test)]
     fn add_walls(&mut self, rel: &[(i32, i32)], pos: (i32, i32), big: bool) {
+        self.add_walls_in(rel, pos, big, None);
+    }
+
+    /// `add_walls`, with the frame's area in the part's cells (x0, y0, x1, y1): held cells
+    /// in it that the frame does not show count as missed (`Held`).
+    fn add_walls_in(&mut self, rel: &[(i32, i32)], pos: (i32, i32), big: bool, area: Option<[i32; 4]>) {
+        if let (true, Some([x0, y0, x1, y1])) = (big, area) {
+            let mut noise = Vec::new();
+            for (&(x, y), held) in self.held.iter_mut() {
+                if x >= x0 && x < x1 && y >= y0 && y < y1 {
+                    held.in_view += 1;
+                    if held.in_view >= HELD_DROP.0 && (held.seen as f64) < HELD_DROP.1 * held.in_view as f64 {
+                        noise.push((x, y));
+                    }
+                }
+            }
+            for cell in noise {
+                self.held.remove(&cell);
+                self.walls.remove(&cell);
+            }
+        }
         // Which known cell each one is, decided before this frame adds any: a line's own
         // cells touch each other and are all new.
         let cells: Vec<((i32, i32), bool)> = rel
@@ -230,9 +271,17 @@ impl Live {
             if !big {
                 self.held.remove(&cell);
             } else if n == times {
-                self.held.insert(cell, pos);
-            } else if exact && self.held.get(&cell).is_some_and(|first| (first.0 - pos.0).abs().max((first.1 - pos.1).abs()) >= HOLD_MOVE) {
-                self.held.remove(&cell);
+                self.held.insert(cell, Held { first: pos, seen: 1, in_view: 1 });
+            } else if let Some(held) = self.held.get_mut(&cell) {
+                // A neighbour's sighting is not this cell's: in a patch of scene specks every
+                // cell has neighbours seen now and then.
+                if exact {
+                    held.seen = (held.seen + 1).min(held.in_view.max(1));
+                }
+                let far = (held.first.0 - pos.0).abs().max((held.first.1 - pos.1).abs()) >= HOLD_MOVE;
+                if exact && far && held.in_view >= HELD_MIN_VIEW && held.seen as f64 >= HELD_SHARE * held.in_view as f64 {
+                    self.held.remove(&cell);
+                }
             }
             if !self.held.contains_key(&cell) {
                 self.kept.insert(cell, n);
@@ -367,6 +416,10 @@ struct CameIn {
 const ARRIVAL_WAYPOINT: f32 = 15.0;
 const ARRIVAL_EXIT: f32 = 40.0;
 
+/// The "sprite" of an exit icon that is not in the frame: an exit read earlier, or the one
+/// the player came in by, placed by the recorded map (`nav::ExitIcon::remembered`).
+const REMEMBERED: &str = "remembered";
+
 /// Seconds after the zone entry within which the first placed frame is the arrival.
 const ARRIVAL_SOON: f64 = 5.0;
 /// The arrival exit counts beside another named exit at least this far from it (cells).
@@ -387,7 +440,7 @@ fn arrival_icon(came_in: Option<&CameIn>, icons: &[crate::minimap::bigmap::Icon]
         i.kind == "exit" && icon_label(i).is_some_and(|l| l != name) && (i.x - x).hypot(i.y - y) >= ARRIVAL_APART
     };
     icons.iter().find(other)?;
-    Some(crate::minimap::bigmap::Icon { kind: "exit", x, y, label: Some(name), sprite: None })
+    Some(crate::minimap::bigmap::Icon { kind: "exit", x, y, label: Some(name), sprite: Some(REMEMBERED) })
 }
 
 /// The zone an exit icon's label names (as in the area's connectionNames), when the
@@ -448,11 +501,19 @@ fn exit_list(
     let (hw, hh) = (size.0 as f32 / 2.0, size.1 as f32 / 2.0);
     let outside = |x: f32, y: f32| x.abs() > hw || y.abs() > hh;
     let fed: Vec<&crate::minimap::bigmap::Icon> = icons.iter().filter(|i| i.kind == "exit").collect();
-    let mut list: Vec<nav::ExitIcon> = fed.iter().map(|i| nav::ExitIcon { dx: i.x as f64, dy: i.y as f64, to: icon_label(i) }).collect();
+    let mut list: Vec<nav::ExitIcon> = fed
+        .iter()
+        .map(|i| nav::ExitIcon { dx: i.x as f64, dy: i.y as f64, to: icon_label(i), remembered: i.sprite == Some(REMEMBERED) })
+        .collect();
     if whole {
         // A whole-window scan (marked by the reader): its far icons replace the
         // kept ones, none if it saw none.
-        *far_icons = fed.iter().filter(|i| outside(i.x, i.y)).map(|i| (pos.0 as f32 + i.x, pos.1 as f32 + i.y, icon_label(i))).collect();
+        // Exits not in the frame (remembered ones) are added to every frame anyway.
+        *far_icons = fed
+            .iter()
+            .filter(|i| outside(i.x, i.y) && i.sprite != Some(REMEMBERED))
+            .map(|i| (pos.0 as f32 + i.x, pos.1 as f32 + i.y, icon_label(i)))
+            .collect();
         *far_age = 0;
     } else if *far_age < FAR_FRAMES {
         *far_age += 1;
@@ -461,7 +522,7 @@ fn exit_list(
             // Not when this frame shows it already (an icon in the capture's margin).
             let shown = fed.iter().any(|i| (i.x - dx).abs() <= 10.0 && (i.y - dy).abs() <= 10.0);
             if outside(dx, dy) && !shown {
-                list.push(nav::ExitIcon { dx: dx as f64, dy: dy as f64, to: to.clone() });
+                list.push(nav::ExitIcon { dx: dx as f64, dy: dy as f64, to: to.clone(), remembered: false });
             }
         }
     }
@@ -501,7 +562,7 @@ fn remembered_exits(named: &[(f32, f32, String)], icons: &[crate::minimap::bigma
         .filter(|&(dx, dy, name)| {
             !icons.iter().any(|i| i.kind == "exit" && (i.label.as_ref() == Some(name) || (i.x - dx).hypot(i.y - dy) <= 20.0))
         })
-        .map(|(x, y, name)| crate::minimap::bigmap::Icon { kind: "exit", x, y, label: Some(name.clone()), sprite: None })
+        .map(|(x, y, name)| crate::minimap::bigmap::Icon { kind: "exit", x, y, label: Some(name.clone()), sprite: Some(REMEMBERED) })
         .collect()
 }
 
@@ -1203,7 +1264,9 @@ impl Recorder {
                 live.pos = pos;
                 live.lost_streak = 0;
                 live.part.matched += 1;
-                live.add_walls(&rel, pos, frame.message.starts_with("Reading big map"));
+                // The frame's area on the part's map, for the held cells it should show.
+                let area = [pos.0 - centre.0, pos.1 - centre.1, pos.0 - centre.0 + frame.cols as i32, pos.1 - centre.1 + frame.rows as i32];
+                live.add_walls_in(&rel, pos, frame.message.starts_with("Reading big map"), Some(area));
                 let moved = live.part.trail.last().is_none_or(|&[x, y]| (x - pos.0).abs() + (y - pos.1).abs() >= 2);
                 if moved {
                     live.part.trail.push([pos.0, pos.1]);
@@ -1709,6 +1772,38 @@ mod tests {
         recorder.on_log(&LogEvent::ZoneEntered { area: area.into(), level: 1, seed: Some(7) }, true);
     }
 
+    /// A big-map line shows in every frame; lit twigs flicker: a few cells of a patch in
+    /// each frame, never the same ones twice running.
+    #[test]
+    fn flickering_scene_pixels_are_dropped_and_lines_kept() {
+        let mut live = Live::new();
+        let line: Vec<(i32, i32)> = (-60..60).map(|x| (x, 20)).collect();
+        let mut seed = 7u64;
+        let mut rand = || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (seed >> 33) as i32
+        };
+        // The player walks 4 cells a frame; the line stays on its map cells, the twigs (a
+        // 30x30 patch in the world) show a few random cells of it in each frame.
+        for step in 0..60 {
+            let pos = (step * 4, 0);
+            let mut rel: Vec<(i32, i32)> = line.iter().map(|&(x, y)| (x - pos.0, y)).filter(|&(x, _)| x.abs() < 70).collect();
+            for _ in 0..40 {
+                let (wx, wy) = (100 + rand().rem_euclid(30), -40 + rand().rem_euclid(30));
+                if (wx - pos.0).abs() < 70 {
+                    rel.push((wx - pos.0, wy));
+                }
+            }
+            live.add_walls_in(&rel, pos, true, Some([pos.0 - 70, -65, pos.0 + 70, 65]));
+        }
+        let kept = |x0: i32, x1: i32, y0: i32, y1: i32| live.kept.keys().filter(|&&(x, y)| x >= x0 && x < x1 && y >= y0 && y < y1).count();
+        let line_kept = kept(-60, 60, 20, 21);
+        let twigs_kept = kept(100, 130, -40, -10);
+        println!("line {line_kept} of 120 kept, twigs {twigs_kept} of 900 cells");
+        assert!(line_kept >= 100, "{line_kept}");
+        assert!(twigs_kept <= 20, "{twigs_kept}");
+    }
+
     #[test]
     fn walls_seen_again_a_cell_off_add_nothing() {
         let rel: Vec<(i32, i32)> = (0..40).map(|x| (x, 5)).collect();
@@ -1902,18 +1997,16 @@ mod tests {
         recorder.on_icons(&[margin], false);
         recorder.on_frame(&frame((8, 0)), [300, 260]);
         assert_eq!(recorder.0.lock().unwrap().session.as_ref().unwrap().far_icons.len(), 1);
-        // A scan that sees no far exit keeps only what the visit's map knows by name: the
-        // Grelwood's exit, read earlier, stays at its place; nothing else does.
+        // A scan that sees no far exit clears them (the Grelwood's exit, read earlier, is
+        // handed over every frame as a remembered exit instead, not as a far icon).
         recorder.on_icons(&[], true);
         recorder.on_frame(&frame((8, 0)), [300, 260]);
-        let kept = |r: &Recorder| r.0.lock().unwrap().session.as_ref().unwrap().far_icons.clone();
-        let far = kept(&recorder);
-        assert_eq!(far.len(), 1);
-        assert_eq!(far[0].2.as_deref(), Some("The Grelwood"));
-        assert_eq!((far[0].0, far[0].1), (-136.0 + 4.0, 83.0), "where it was read, on the visit's map");
+        assert!(recorder.0.lock().unwrap().session.as_ref().unwrap().far_icons.is_empty());
         recorder.on_icons(&[], false);
         recorder.on_frame(&frame((12, 0)), [300, 260]);
-        assert_eq!(kept(&recorder).len(), 1);
+        assert!(recorder.0.lock().unwrap().session.as_ref().unwrap().far_icons.is_empty());
+        let named = recorder.0.lock().unwrap().session.as_ref().unwrap().named_exits.clone();
+        assert_eq!(named.len(), 1);
     }
 
     /// The owner's Clearfell of 2026-11-12 night (seed 2693856399, layout ClearFell_W_E_N):

@@ -1433,7 +1433,7 @@ mod tests {
             let whole = i % frames_whole == 0;
             log.icons(t, &icons, whole, size, false);
             let list: Vec<ExitIcon> =
-                icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: i.label.clone() }).collect();
+                icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: i.label.clone(), remembered: false }).collect();
             nav.icons(&list);
             if let Some(view) = nav.guide(&targets) {
                 log.needle(t, &targets, &view, false, false);
@@ -1450,7 +1450,7 @@ mod tests {
             nav.moved(dx as f64, dy as f64);
             let icon = Icon { kind: "exit", x: (at.0 - pos.0 - dx as f64) as f32, y: (at.1 - pos.1 - dy as f64) as f32, label: Some("G1_3".into()), sprite: None };
             log.icons(t, &[icon.clone()], true, size, false);
-            nav.icons(&[ExitIcon { dx: icon.x as f64, dy: icon.y as f64, to: icon.label.clone() }]);
+            nav.icons(&[ExitIcon { dx: icon.x as f64, dy: icon.y as f64, to: icon.label.clone(), remembered: false }]);
             if let Some(view) = nav.guide(&targets) {
                 log.needle(t, &targets, &view, false, false);
                 needles.push(view);
@@ -1509,7 +1509,7 @@ mod tests {
             // An exit far away, then nothing.
             let icons = if step < 3 { vec![Icon { kind: "exit", x: 200.0 - 6.0 * step as f32, y: 90.0, label: None, sprite: None }] } else { vec![] };
             log.icons(t, &icons, step % 3 == 0, (300, 260), false);
-            nav.icons(&icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: None }).collect::<Vec<_>>());
+            nav.icons(&icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: None, remembered: false }).collect::<Vec<_>>());
             if let Some(view) = nav.guide(&town) {
                 log.needle(t, &town, &view, false, false);
             }

@@ -260,6 +260,9 @@ pub struct ExitIcon {
     pub dx: f64,
     pub dy: f64,
     pub to: Option<String>,
+    /// Not in this frame: where the recorded map put it when it was read earlier (or the
+    /// exit the player came in by). Its place carries the map's drift over the way walked.
+    pub remembered: bool,
 }
 
 /// Where the visit starts.
@@ -420,6 +423,8 @@ pub struct Navigator {
     named_loose: bool,
     /// Two or more exits were read by name this visit: only then is a layout drawn.
     named_pair: bool,
+    /// Two exits were read by name in one frame this visit: their fit is the one kept.
+    named_live: bool,
     /// Checkpoints counted this visit: where the belief put each, per layout (file units).
     checkpoints_counted: Vec<Vec<(f64, f64)>>,
     /// Where the player is by dead reckoning since the last loss (world units,
@@ -507,6 +512,7 @@ impl Navigator {
             sightings: Vec::new(),
             named_loose: false,
             named_pair: false,
+            named_live: false,
             checkpoints_counted: Vec::new(),
             track: (0.0, 0.0),
             icon_walked: 0.0,
@@ -606,6 +612,19 @@ impl Navigator {
             self.area.layouts.iter().map(|l| icons.iter().map(|i| self.icon_nodes(l, i)).collect()).collect();
         // The best named-exit fit of any layout, when two or more exits are named.
         let mut named_best: Option<f64> = None;
+        // Which named exits the fit uses: two or more read in this frame (their places are
+        // exact); else, until a frame has shown two, remembered ones too (their places went
+        // through the recorded map: the owner's Clearfell of 2026-11-12 had the town's exit
+        // 400 cells off after a long walk and a death, and no layout fitted).
+        let live_named: Vec<usize> = (0..icons.len()).filter(|&j| icons[j].to.is_some() && !icons[j].remembered).collect();
+        let fit_named: Vec<usize> = if live_named.len() >= 2 {
+            self.named_live = true;
+            live_named
+        } else if self.named_live {
+            Vec::new()
+        } else {
+            (0..icons.len()).filter(|&j| icons[j].to.is_some()).collect()
+        };
         let Navigator { area, banks, rng, exits_seen, .. } = self;
         let mut learnt = Vec::new();
         for (k, (layout, bank)) in area.layouts.iter().zip(banks.iter_mut()).enumerate() {
@@ -642,7 +661,6 @@ impl Navigator {
             // Two icons: does any pair of this layout's exits lie as far apart? This
             // needs no position belief at all.
             let mut geometry = 0.0;
-            let labelled: Vec<usize> = (0..icons.len()).filter(|&j| icons[j].to.is_some()).collect();
             // How well the first of `ids` and each other lie as two of this layout's nodes do.
             let pairs = |ids: &[usize]| -> f64 {
                 let world = |i: &ExitIcon| super::guide::from_screen((i.dx / scale, i.dy / scale));
@@ -669,8 +687,8 @@ impl Navigator {
             // Two or more exits read by name: how well this layout's named exits lie
             // as the icons do decides on its own, whatever was believed before; it
             // replaces the last such fit (one scan, however often seen, counts once).
-            if labelled.len() >= 2 {
-                let fit = pairs(&labelled);
+            if fit_named.len() >= 2 {
+                let fit = pairs(&fit_named);
                 bank.named = fit.max(NAMED_BASE).ln();
                 named_best = Some(named_best.unwrap_or(0.0).max(fit));
             } else if icons.len() >= 2 {
@@ -749,7 +767,7 @@ impl Navigator {
         // `NAMED_LOOSE` would score (per pair: the fit is a product over the pairs).
         if let Some(best) = named_best {
             self.named_pair = true;
-            let pairs = icons.iter().filter(|i| i.to.is_some()).count().saturating_sub(1) as i32;
+            let pairs = fit_named.len().saturating_sub(1) as i32;
             let per_pair = (-(NAMED_LOOSE * NAMED_LOOSE) / (4.0 * ICON_TOL * ICON_TOL)).exp();
             self.named_loose = best < per_pair.powi(pairs.max(1));
         }
@@ -1673,7 +1691,7 @@ mod tests {
             let area = Area::parse("X", &near.replace("FORMAT", format)).unwrap();
             let l = &area.layouts[0];
             let (sx, sy) = super::super::guide::to_screen(((l.nodes[0].x - l.nodes[1].x) * l.unit, 0.0));
-            let icon = |to: Option<&str>| ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: to.map(String::from) };
+            let icon = |to: Option<&str>| ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: to.map(String::from), remembered: false };
             let mut nav = Navigator::new(&area, Arrival::From("B"), None, SCALE, 3);
             nav.icons(&[icon(Some("A"))]);
             // One scan's label is not enough for gold; the same name again is.
@@ -1736,7 +1754,7 @@ mod tests {
         let l = area.layouts.iter().find(|l| l.id == layout).unwrap();
         let n = l.nodes.iter().find(|n| n.exit.as_deref() == Some(to)).unwrap();
         let (sx, sy) = super::super::guide::to_screen((n.x - at.0, n.y - at.1));
-        ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: None }
+        ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: None, remembered: false }
     }
 
     #[test]
@@ -1860,7 +1878,7 @@ mod tests {
         let at = (300.0, 0.0);
         let icon = |n: (f64, f64)| {
             let (sx, sy) = super::super::guide::to_screen((n.0 - at.0, n.1 - at.1));
-            ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: Some("Aville".into()) }
+            ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: Some("Aville".into()), remembered: false }
         };
         let (near, far) = (icon((300.0, 300.0)), icon((0.0, 0.0)));
         let bearing = |icons: &[ExitIcon]| {
@@ -1957,7 +1975,7 @@ mod tests {
         assert_eq!(nav.posterior()[k], after);
         // Next to an exit icon of the same frame it adds nothing.
         let mut by_exit = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 4);
-        let exit = ExitIcon { dx: seen.0 + 30.0, dy: seen.1 - 20.0, to: None };
+        let exit = ExitIcon { dx: seen.0 + 30.0, dy: seen.1 - 20.0, to: None, remembered: false };
         by_exit.checkpoints(&[seen], std::slice::from_ref(&exit));
         assert_eq!(by_exit.posterior()[k], before);
         // Where no layout has a landmark (far outside every graph) it changes little.
@@ -2006,8 +2024,8 @@ mod tests {
     fn the_live_clearfell_case() {
         let area = graph::load("G1_2");
         let target = [exit("G1_4", "The Grelwood")];
-        let grelwood = ExitIcon { dx: -136.0, dy: 83.0, to: None };
-        let mud = ExitIcon { dx: 823.0, dy: 110.0, to: None };
+        let grelwood = ExitIcon { dx: -136.0, dy: 83.0, to: None, remembered: false };
+        let mud = ExitIcon { dx: 823.0, dy: 110.0, to: None, remembered: false };
         let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 2693856399);
         nav.icons(&[grelwood.clone()]);
         let one = nav.guide(&target).unwrap();
@@ -2041,10 +2059,10 @@ mod tests {
     /// Grelwood exit, its memory from earlier builds, then the reader's frames: the
     /// near exit unlabelled, the whole-window scan with both named, unlabelled again.
     fn live_frames(nav: &mut Navigator) {
-        let near = ExitIcon { dx: -136.0, dy: 83.0, to: None };
+        let near = ExitIcon { dx: -136.0, dy: 83.0, to: None, remembered: false };
         let scan = [
             ExitIcon { to: Some("The Grelwood".into()), ..near.clone() },
-            ExitIcon { dx: 823.0, dy: 110.0, to: Some("Mud Burrow".into()) },
+            ExitIcon { dx: 823.0, dy: 110.0, to: Some("Mud Burrow".into()), remembered: false },
         ];
         for round in 0..4 {
             nav.icons(&[near.clone()]);
@@ -2052,6 +2070,32 @@ mod tests {
             nav.icons(&scan);
             let _ = round;
         }
+    }
+
+    /// The owner's Clearfell of 2026-11-12 (seed 2192959438), later in the visit: the
+    /// Grelwood's and the Mud Burrow's exits read in one frame, 965 cells apart across (as
+    /// ClearFell_W_E_N has them), and the town's exit remembered 400 cells off where the
+    /// recorded map drifted. The pair in the frame decides; the drifted exit does not spoil it.
+    #[test]
+    fn exits_read_in_one_frame_outweigh_a_remembered_one() {
+        let area = graph::load("G1_2");
+        let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 2192959438);
+        let town = ExitIcon { dx: -37.0 - 462.0, dy: 17.0 + 628.0, to: Some("G1_town".into()), remembered: true };
+        let mud = ExitIcon { dx: 0.0, dy: 0.0, to: Some("Mud Burrow".into()), remembered: false };
+        // The remembered pair first: no layout fits it.
+        nav.icons(&[mud.clone(), town.clone()]);
+        assert!(!nav.picture().unwrap().known);
+        // Then the Grelwood's exit in the same frame as the Mud Burrow's.
+        let grelwood = ExitIcon { dx: -965.0, dy: 0.0, to: Some("The Grelwood".into()), remembered: false };
+        for _ in 0..3 {
+            nav.icons(&[mud.clone(), grelwood.clone(), town.clone()]);
+        }
+        let picture = nav.picture().unwrap();
+        assert!(picture.known, "{picture:?}");
+        assert_eq!(picture.id, "ClearFell_W_E_N");
+        // A later frame with only remembered exits does not undo it.
+        nav.icons(&[ExitIcon { remembered: true, ..mud.clone() }, ExitIcon { remembered: true, ..grelwood.clone() }, town]);
+        assert_eq!(nav.picture().unwrap().id, "ClearFell_W_E_N");
     }
 
     #[test]
@@ -2123,8 +2167,8 @@ mod tests {
         // What the recorder hands over: the Mud Burrow's icon read by name, and the exit
         // the player came in by at its place on the recorded map.
         let frame = [
-            ExitIcon { dx: 54.0, dy: -88.0, to: Some("Mud Burrow".into()) },
-            ExitIcon { dx: 54.0 - 402.0, dy: -88.0 + 612.0, to: Some("G1_town".into()) },
+            ExitIcon { dx: 54.0, dy: -88.0, to: Some("Mud Burrow".into()), remembered: false },
+            ExitIcon { dx: 54.0 - 402.0, dy: -88.0 + 612.0, to: Some("G1_town".into()), remembered: false },
         ];
         // Belief as the app had it: arrived from the town, walked, memory of earlier visits.
         let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 2192959438);
@@ -2156,8 +2200,8 @@ mod tests {
         let (wx, wy) = ((mud.x - town.x) * w_n_e.unit + 20.0, (mud.y - town.y) * w_n_e.unit);
         let (sx, sy) = super::super::guide::to_screen((wx * SCALE, wy * SCALE));
         let fits = [
-            ExitIcon { dx: 50.0, dy: -80.0, to: Some("Mud Burrow".into()) },
-            ExitIcon { dx: 50.0 - sx, dy: -80.0 - sy, to: Some("G1_town".into()) },
+            ExitIcon { dx: 50.0, dy: -80.0, to: Some("Mud Burrow".into()), remembered: false },
+            ExitIcon { dx: 50.0 - sx, dy: -80.0 - sy, to: Some("G1_town".into()), remembered: false },
         ];
         nav.icons(&fits);
         assert!(!nav.named_loose);

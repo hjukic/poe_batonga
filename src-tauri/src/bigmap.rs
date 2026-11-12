@@ -2113,9 +2113,14 @@ mod tests {
         files.sort();
         for path in files {
             let image = parse_ppm(&std::fs::read(&path).unwrap()).unwrap();
-            let guess = if image.width == 1286 { [643.0, 561.0] } else { [image.width as f64 - 44.0, 284.0] };
-            let centre = marker_near(&image, guess, 40.0).unwrap_or(guess);
-            let stride = if image.width == 1286 { 2 } else { 1 };
+            // The big-map area, a whole window (the player's cross near the middle), or the minimap.
+            let guess = match image.width {
+                1286 => [643.0, 561.0],
+                w if w >= 3000 => [w as f64 / 2.0, image.height as f64 / 2.0],
+                w => [w as f64 - 44.0, 284.0],
+            };
+            let centre = marker_near(&image, guess, if image.width >= 3000 { 120.0 } else { 40.0 }).unwrap_or(guess);
+            let stride = if image.width == 600 { 1 } else { 2 };
             let candidates: Vec<String> = names.split(',').map(String::from).collect();
             let exits: Vec<String> = icons_in(&image, centre, SCALE, 1.0, stride, &[], true)
                 .iter()
