@@ -843,8 +843,10 @@ as JSON lines in `layouts/<area>/<seed>.obs.jsonl` beside the recording
 (`src-tauri/src/layout/obs.rs`). A later visit of the same instance appends (a new
 `start`). Writes are buffered and reach the file at most once a second and at the
 visit's end; a write error is printed once and never stops the frame loop. A visit
-without a placed frame (a log catch-up at start) writes nothing. Files older than
-30 days are deleted when the app starts.
+without a placed frame (a log catch-up at start) writes nothing. When the app starts,
+files older than 180 days are deleted, then the oldest while all of them come to more
+than 300 MB (about 250 hours of play); the terminal says how many went. They are the
+only way to score the navigator on real play: copy those to keep out of `layouts/`.
 
 Each line has `t` (unix ms) and `k`. After `start`, lines have a frame `f` (placed
 minimap frames of the visit so far), left out where it follows: a `move` or `lost`
@@ -925,7 +927,10 @@ visit it prints:
 - **truth layout**: the layouts whose exits lie as the exits read by name do (two
   or more names in one part; relative places by dead reckoning, the navigator's
   named-fit formula, summed over parts); "do not fix" below 0.9. Layouts with the
-  same exit places tie (`A = B`).
+  same exit places tie (`A = B`). A name counts as the navigator trusts one: read
+  the same in two whole-window scans of that exit in a row; each name's place is the
+  median of those readings, so one misread scan changes nothing
+  (`one_misread_scan_leaves_the_truth_as_it_was`).
 - **left through**: the `seen` … `left` line, where the player stood (cells in the
   last part), and whether an exit icon (with that name) was seen within 30 cells of
   it. With no exit icon there the player left by portal, waypoint or death: the area

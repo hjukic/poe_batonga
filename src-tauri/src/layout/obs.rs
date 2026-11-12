@@ -22,8 +22,10 @@ const FLUSH_MS: u64 = 1000;
 const NEEDLE_EVERY_MS: u64 = 5000;
 /// … where "changes" is another source, target or layout, or a turn of more than this.
 const NEEDLE_TURN: f64 = 15.0;
-/// Files older than this are deleted on app start.
-const KEEP_DAYS: u64 = 30;
+/// Flight recordings are the only way to score the navigator on real play: they are
+/// kept this long, and while all of them stay under this size (oldest go first).
+const KEEP_DAYS: u64 = 180;
+const KEEP_BYTES: u64 = 300 * 1000 * 1000;
 /// More than this waiting (a file that cannot be written) is dropped.
 const MAX_BUFFER: usize = 512 * 1024;
 /// The layout history beside the area folders.
@@ -671,23 +673,45 @@ fn append_line(path: &Path, value: &impl Serialize) {
     }
 }
 
-/// Deletes `.obs.jsonl` files older than 30 days in the area folders of `dir`.
+/// Deletes `.obs.jsonl` files in the area folders of `dir` older than 180 days, and
+/// the oldest while all of them come to more than 300 MB; says so when it does.
 pub fn prune(dir: &Path) -> usize {
-    let limit = std::time::Duration::from_secs(KEEP_DAYS * 24 * 3600);
-    let mut deleted = 0;
+    let (deleted, bytes) = prune_with(dir, std::time::Duration::from_secs(KEEP_DAYS * 24 * 3600), KEEP_BYTES);
+    if deleted > 0 {
+        eprintln!(
+            "Layout: deleted {deleted} flight recording(s), {:.1} MB: older than {KEEP_DAYS} days, or the oldest over {} MB in all",
+            bytes as f64 / 1e6,
+            KEEP_BYTES / 1_000_000
+        );
+    }
+    deleted
+}
+
+/// Returns how many files it deleted, and their bytes.
+fn prune_with(dir: &Path, max_age: std::time::Duration, max_bytes: u64) -> (usize, u64) {
+    let mut files: Vec<(std::time::SystemTime, u64, PathBuf)> = Vec::new();
     for area in std::fs::read_dir(dir).into_iter().flatten().flatten() {
         for file in std::fs::read_dir(area.path()).into_iter().flatten().flatten() {
             let path = file.path();
             if !path.to_string_lossy().ends_with(".obs.jsonl") {
                 continue;
             }
-            let old = file.metadata().and_then(|m| m.modified()).ok().and_then(|m| m.elapsed().ok()).is_some_and(|age| age > limit);
-            if old && std::fs::remove_file(&path).is_ok() {
-                deleted += 1;
+            if let Ok(meta) = file.metadata() {
+                files.push((meta.modified().unwrap_or(std::time::UNIX_EPOCH), meta.len(), path));
             }
         }
     }
-    deleted
+    files.sort();
+    let mut total: u64 = files.iter().map(|f| f.1).sum();
+    let (mut deleted, mut bytes) = (0, 0);
+    for (modified, len, path) in files {
+        let old = modified.elapsed().is_ok_and(|age| age > max_age);
+        if (old || total > max_bytes) && std::fs::remove_file(&path).is_ok() {
+            total -= len;
+            (deleted, bytes) = (deleted + 1, bytes + len);
+        }
+    }
+    (deleted, bytes)
 }
 
 
@@ -703,6 +727,8 @@ pub(super) mod replay {
 
     /// An exit icon this close (cells) to where the player left confirms the exit.
     const AT_EXIT: f64 = 30.0;
+    /// Icons of two scans this close (cells; the navigator's 40 world units) are one exit.
+    const SIGHT: f64 = 31.0;
     /// Needle samples this close (cells) to the exit taken are not scored.
     const NEAR_EXIT: f64 = 10.0;
     /// A needle within this of the straight line to the exit is right.
@@ -788,6 +814,8 @@ pub(super) mod replay {
         pub belief: Vec<(u64, String, f64)>,
         /// The layouts the named exits fix (equal fits), their share, the names read.
         pub truth: Option<(Vec<String>, f64, usize)>,
+        /// Where each name was read (world units, the last part with two or more).
+        pub places: BTreeMap<String, (f64, f64)>,
         /// The exit left through, where (cells, in the last part), how it is confirmed.
         pub left: Option<(String, (i32, i32), &'static str)>,
         /// Left with no exit icon at the place (a portal, a waypoint, a death): the
@@ -824,8 +852,14 @@ pub(super) mod replay {
         open: Option<u64>,
         done: u64,
         t: u64,
-        /// Per part: label → (sum of world x, y, count) of the exits read by name.
-        named: Vec<BTreeMap<String, (f64, f64, usize)>>,
+        /// Per part: label → world places of the exits read by name, each reading
+        /// counted only when the same exit's scan before read the same name (as the
+        /// navigator trusts a label).
+        named: Vec<BTreeMap<String, Vec<(f64, f64)>>>,
+        /// The exits seen by whole-window scans in this part: place (cells), last name read.
+        sights: Vec<((f64, f64), Option<String>)>,
+        /// This frame's icons line was a whole-window scan (labels are read on those).
+        scan: bool,
         /// Exit icons seen: (part, place in cells, label).
         exits: Vec<(usize, (f64, f64), Option<String>)>,
         samples: Vec<Sample>,
@@ -869,6 +903,8 @@ pub(super) mod replay {
                 done: 0,
                 t: start.t,
                 named: vec![BTreeMap::new()],
+                sights: Vec::new(),
+                scan: false,
                 exits: Vec::new(),
                 samples: Vec::new(),
                 shown: Vec::new(),
@@ -912,13 +948,23 @@ pub(super) mod replay {
             self.nav.icons(&list);
             self.whole = false;
             self.visit.frames += 1;
+            let scan = std::mem::take(&mut self.scan);
             for icon in self.raw.iter().filter(|i| i.kind == "exit") {
                 let cells = (self.pos.0 as f64 + icon.x as f64, self.pos.1 as f64 + icon.y as f64);
                 let label = icon.label.clone().filter(|l| !l.is_empty());
-                if let Some(label) = &label {
-                    let (wx, wy) = from_screen((cells.0 / self.scale, cells.1 / self.scale));
-                    let e = self.named[self.part].entry(label.clone()).or_default();
-                    *e = (e.0 + wx, e.1 + wy, e.2 + 1);
+                if let Some(label) = label.as_ref().filter(|_| scan) {
+                    let near = self.sights.iter_mut().find(|(at, _)| (at.0 - cells.0).hypot(at.1 - cells.1) <= SIGHT);
+                    match near {
+                        Some((at, last)) => {
+                            if last.as_ref() == Some(label) {
+                                let (wx, wy) = from_screen((cells.0 / self.scale, cells.1 / self.scale));
+                                self.named[self.part].entry(label.clone()).or_default().push((wx, wy));
+                            }
+                            *at = ((at.0 + cells.0) / 2.0, (at.1 + cells.1) / 2.0);
+                            *last = Some(label.clone());
+                        }
+                        None => self.sights.push((cells, Some(label.clone()))),
+                    }
                 }
                 self.exits.push((self.part, cells, label));
             }
@@ -990,10 +1036,12 @@ pub(super) mod replay {
                     self.part += 1;
                     self.visit.parts += 1;
                     self.named.push(BTreeMap::new());
+                    self.sights.clear();
                 }
                 Entry::Icons { whole, size, icons, .. } => {
                     self.raw = icons.iter().map(LoggedIcon::icon).collect();
                     self.whole = *whole;
+                    self.scan = *whole;
                     if let Some([c, r]) = size {
                         self.size = (*c, *r);
                     }
@@ -1066,13 +1114,26 @@ pub(super) mod replay {
         fn truth(&mut self) {
             let mut fits = vec![0.0f64; self.area.layouts.len()];
             let mut read = 0;
+            let mut places = BTreeMap::new();
             for named in &self.named {
                 if named.len() < 2 {
                     continue;
                 }
                 read = read.max(named.len());
-                let at: Vec<(Vec<String>, (f64, f64))> =
-                    named.iter().map(|(l, &(x, y, n))| (self.ids(l), (x / n as f64, y / n as f64))).collect();
+                // Each name's place: the median of its readings (a misread elsewhere moves it little).
+                let median = |mut v: Vec<f64>| {
+                    v.sort_by(f64::total_cmp);
+                    let n = v.len();
+                    if n % 2 == 1 { v[n / 2] } else { (v[n / 2 - 1] + v[n / 2]) / 2.0 }
+                };
+                let at: Vec<(Vec<String>, (f64, f64))> = named
+                    .iter()
+                    .map(|(l, read)| (l, (median(read.iter().map(|p| p.0).collect()), median(read.iter().map(|p| p.1).collect()))))
+                    .map(|(l, at)| {
+                        places.insert(l.clone(), at);
+                        (self.ids(l), at)
+                    })
+                    .collect();
                 for (k, layout) in self.area.layouts.iter().enumerate() {
                     let nodes = |ids: &[String]| -> Vec<usize> {
                         (0..layout.nodes.len()).filter(|&i| layout.nodes[i].exit.as_ref().is_some_and(|e| ids.contains(e))).collect()
@@ -1096,6 +1157,7 @@ pub(super) mod replay {
                     }
                 }
             }
+            self.visit.places = places;
             if read < 2 {
                 return;
             }
@@ -1328,6 +1390,12 @@ mod tests {
     /// after every frame, and leaving through the target's exit. Returns the text and
     /// the needles given while it was written.
     fn simulated(losses: bool, view: f64) -> (String, Vec<GuideView>, String) {
+        simulated_with(losses, view, None)
+    }
+
+    /// … with the Mud Burrow's icon read as "G1_4" on the first scan from frame `misread`.
+    fn simulated_with(losses: bool, view: f64, misread: Option<usize>) -> (String, Vec<GuideView>, String) {
+        let mut misread = misread;
         let frames_whole = 3;
         let area = graph::load("G1_2");
         let layout = area.layouts.iter().find(|l| l.id == "ClearFell_W_S_N").unwrap();
@@ -1366,6 +1434,11 @@ mod tests {
                         .iter()
                         .map(|e| Icon { kind: "exit", x: e.dx as f32, y: e.dy as f32, label: e.to.clone().filter(|_| whole) })
                         .collect();
+                    let due = misread.is_some_and(|m| i >= m);
+                    if let Some(icon) = icons.iter_mut().find(|ic| due && ic.label.as_deref() == Some("G1_3")) {
+                        icon.label = Some("G1_4".into());
+                        misread = None;
+                    }
                 }
             }
             let whole = i % frames_whole == 0;
@@ -1595,6 +1668,23 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// One scan in the middle reads the Mud Burrow's icon as another exit: the truth
+    /// stays as it was (a name counts once read the same in two scans, by median).
+    #[test]
+    fn one_misread_scan_leaves_the_truth_as_it_was() {
+        let (clean_text, misread_text) = (simulated_with(false, 8.0, None).0, simulated_with(false, 8.0, Some(30)).0);
+        let named = |text: &str| text.matches(r#""label":"G1_4""#).count();
+        assert_eq!(named(&misread_text), named(&clean_text) + 1, "one scan misread");
+        let truth = |text: &str| replay(text, &Graphs::default())[0].truth.clone().unwrap();
+        let (clean, misread) = (truth(&clean_text), truth(&misread_text));
+        assert_eq!(clean.0, misread.0);
+        // The misread name was read once there: it does not count (a mean of every
+        // reading would move the Grelwood about 50 cells towards Mud Burrow).
+        let place = |text: &str| replay(text, &Graphs::default())[0].places["G1_4"];
+        assert_eq!(place(&clean_text), place(&misread_text));
+        assert!((clean.1 - misread.1).abs() < 0.01 && clean.2 == misread.2, "{clean:?} {misread:?}");
+    }
+
     /// A line torn in the middle of a file (a full disk) loses that line only.
     #[test]
     fn a_torn_middle_line_keeps_the_lines_after_it() {
@@ -1681,12 +1771,26 @@ mod tests {
         for path in [&old, &new, &other] {
             std::fs::write(path, "{}\n").unwrap();
         }
-        let month = std::time::SystemTime::now() - std::time::Duration::from_secs(31 * 24 * 3600);
-        for path in [&old, &other] {
-            std::fs::File::options().write(true).open(path).unwrap().set_modified(month).unwrap();
-        }
+        let ago = |days: u64| std::time::SystemTime::now() - std::time::Duration::from_secs(days * 24 * 3600);
+        let set = |path: &PathBuf, days: u64| std::fs::File::options().write(true).open(path).unwrap().set_modified(ago(days)).unwrap();
+        // A month old is kept now (it was deleted at 30 days); half a year is not.
+        let month = dir.join("G1_2/3.obs.jsonl");
+        std::fs::write(&month, "{}\n").unwrap();
+        set(&old, 181);
+        set(&other, 181);
+        set(&month, 31);
         assert_eq!(prune(&dir), 1);
-        assert!(!old.exists() && new.exists() && other.exists());
+        assert!(!old.exists() && new.exists() && month.exists() && other.exists());
+        // Over the size limit: the oldest go until the rest fit.
+        for (i, days) in [(4, 3), (5, 2), (6, 1)] {
+            let path = dir.join(format!("G1_2/{i}.obs.jsonl"));
+            std::fs::write(&path, vec![b'x'; 100]).unwrap();
+            set(&path, days);
+        }
+        // 3 (31 days, 3 bytes), 4, 5, 6 (100 bytes each), 2 (3 bytes): 306 bytes in all.
+        let year = std::time::Duration::from_secs(365 * 24 * 3600);
+        assert_eq!(prune_with(&dir, year, 210), (2, 103));
+        assert!(!month.exists() && !dir.join("G1_2/4.obs.jsonl").exists() && dir.join("G1_2/5.obs.jsonl").exists() && new.exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
