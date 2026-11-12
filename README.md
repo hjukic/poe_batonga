@@ -6,12 +6,27 @@ product scope. Existing Early Access guides are research references; rules and
 objectives must be validated for 1.0, including new Act 5 and Act 6 coverage.
 The target experience includes automatic progress tracking and layout-based
 navigation, conditional on GGG compliance and technical feasibility.
-An initial Tauri overlay is available. It shows a checklist for the zone you are in
-(The Riverbank, Clearfell Encampment, Clearfell) and ticks objectives automatically
-by reading the game's `Client.txt` locally (read-only); steps without a known log
-line are ticked by hand. The checklists and their triggers are in
-[data/routes/](data/routes/), one file per zone (steps from Domistae's Act 1 guide).
-Set `POE2_CLIENT_LOG` if the log is not found in a default Steam or standalone path.
+A Tauri overlay is available. It has two parts:
+
+- **A checklist** for the zone you are in: 97 zones (Acts 1–4 and the three interludes), in
+  [data/routes/](data/routes/), one file per zone (steps from Domistae's leveling guides; ids
+  and levels from the game's area table). Steps are ticked automatically by reading the game's
+  `Client.txt` locally (read-only): entering a zone, or a known NPC line. Steps without a log
+  line are ticked by hand: **Ctrl+Shift+Space** ticks the step with the bright arrow from inside
+  the game, or unlock the panel and click a step. A list of more than nine rows folds.
+- **A compass needle** around the character that points to the next step that has a target (a
+  zone exit, a boss arena). It reads the corner minimap, or the big map (Tab) while that is
+  open, to follow how the player moves, and matches that against the game's own layout graphs
+  ([data/layouts/ggg/](data/layouts/ggg/), 101 campaign areas). Gold: sure. Fainter gold:
+  likely. Gray: a best guess. How it works and what was measured:
+  [map reading](docs/map-reading.md).
+
+After a game patch, `npm run layouts:update` re-imports the layout graphs from the installed
+game (needs [poe_data_tools](https://github.com/adamthedash/poe_data_tools) on `PATH`; about
+half a minute). See [data sources](docs/data-sources.md).
+
+Set `POE2_CLIENT_LOG` if the log is not found in a default Steam or standalone path. The app
+never reads game memory and never sends input to the game.
 
 ## Run the overlay experiment
 
@@ -23,7 +38,8 @@ npm run desktop
 ```
 
 **Ctrl+Space** shows and hides the overlay; change it under the settings (gear)
-button. The lock button unlocks the panel to move it, open settings or tick a step
+button. The settings also hold the panel's opacity, whether the compass heads for
+optional steps, and a small preview of the recorded map (for checking the tracking). The lock button unlocks the panel to move it, open settings or tick a step
 by hand; while locked, only the lock button takes clicks. The restart button (unlocked)
 pulls the latest commit, runs `npm run desktop:build` and replaces the running app
 with the new build; build output goes to the app's terminal, and a failure leaves the
