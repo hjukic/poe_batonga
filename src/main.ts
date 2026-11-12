@@ -42,7 +42,8 @@ interface MinimapView {
 /** The layout the app recognised: its paths and exits in the map's screen axes. */
 interface LayoutPicture {
   known: boolean; id: string; share: number; sure: boolean; candidates: number; noFit: boolean;
-  paths: [number, number][][]; exits: [string, [number, number]][]; player: [number, number] | null;
+  /** Exits: name, place, and whether this is the place (false: one of its possible places). */
+  paths: [number, number][][]; exits: [string, [number, number], boolean][]; player: [number, number] | null;
   /** Other places the layout marks: "boss", "campsite", "bridge". */
   places: [string, [number, number]][];
 }
@@ -365,12 +366,27 @@ function renderPicture(picture: LayoutPicture | undefined) {
     context.fillStyle = kind === 'boss' ? '#ffb3b5' : '#c8f2cf';
     context.fillText(kind === 'boss' ? 'Boss' : 'Campsite', x, y + 30);
   }
-  for (const [exit, point] of picture.exits) {
+  // An exit not yet seen with several possible places: hollow boxes, its name once and dim.
+  const named = new Set<string>();
+  for (const [exit, point, certain] of picture.exits) {
     const [x, y] = at(point);
-    context.fillStyle = '#ff9a3c';
-    context.fillRect(x - 7, y - 7, 14, 14);
-    context.fillStyle = '#efe9ff';
-    context.fillText(exit, Math.min(Math.max(x, 70), layoutCanvas.width - 70), y > 40 ? y - 14 : y + 32);
+    const labelX = Math.min(Math.max(x, 70), layoutCanvas.width - 70);
+    const labelY = y > 40 ? y - 14 : y + 32;
+    if (certain) {
+      context.fillStyle = '#ff9a3c';
+      context.fillRect(x - 7, y - 7, 14, 14);
+      context.fillStyle = '#efe9ff';
+      context.fillText(exit, labelX, labelY);
+      continue;
+    }
+    context.strokeStyle = '#ff9a3c';
+    context.lineWidth = 2;
+    context.strokeRect(x - 6, y - 6, 12, 12);
+    if (!named.has(exit)) {
+      named.add(exit);
+      context.fillStyle = 'rgba(239, 233, 255, 0.55)';
+      context.fillText(`${exit}?`, labelX, labelY);
+    }
   }
   if (picture.player) {
     const [x, y] = at(picture.player);

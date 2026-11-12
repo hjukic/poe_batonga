@@ -198,7 +198,7 @@ const ICON_CONFIRM: f64 = 0.5;
 const ICON_SURE: f64 = 0.95;
 
 /// The memory format; older files are ignored.
-pub(super) const MEMORY_VERSION: u32 = 5;
+pub(super) const MEMORY_VERSION: u32 = 6;
 
 /// Icons this close (world units) on the dead-reckoned track are one exit.
 const SIGHT_MATCH: f64 = 40.0;
@@ -261,7 +261,7 @@ pub struct Picture {
     /// Each path as points (world units, screen axes).
     pub paths: Vec<Vec<[f32; 2]>>,
     /// Exits: the zone they lead to, and where.
-    pub exits: Vec<(String, [f32; 2])>,
+    pub exits: Vec<(String, [f32; 2], bool)>,
     /// Other places the layout marks: "boss" (an arena), "campsite", "bridge".
     pub places: Vec<(String, [f32; 2])>,
     pub player: Option<[f32; 2]>,
@@ -337,6 +337,9 @@ pub struct Memory {
     /// The scale the named exits fitted each layout at (`Bank::k`).
     #[serde(default)]
     pub k: BTreeMap<String, f64>,
+    /// The nodes they lay on (`Bank::named_nodes`).
+    #[serde(default)]
+    pub nodes: BTreeMap<String, Vec<usize>>,
     /// Exits seen on the map: layout id → node → where the icon put it (file units).
     #[serde(default)]
     pub exits: BTreeMap<String, BTreeMap<usize, [f32; 2]>>,
@@ -365,6 +368,9 @@ struct Bank {
     named: f64,
     /// The map scale (against the navigator's) at which the named exits fit this layout best.
     k: f64,
+    /// The nodes the named exits lie on at that fit: of an exit with several possible
+    /// places (the Cemetery's three Mausoleum entrances), the one this instance has.
+    named_nodes: Vec<usize>,
     /// What checkpoint icons added (log): in the posterior, never in gold's share.
     checkpoints: f64,
     particles: Vec<Particle>,
@@ -514,7 +520,8 @@ impl Navigator {
                 });
                 let named = evidence.map_or(0.0, |m| m.named.get(&layout.id).copied().unwrap_or(0.0));
                 let k = evidence.and_then(|m| m.k.get(&layout.id).copied()).unwrap_or(1.0);
-                let mut bank = Bank { prior, path, evidence: anchors, named, k, checkpoints: 0.0, particles };
+                let named_nodes = evidence.and_then(|m| m.nodes.get(&layout.id).cloned()).unwrap_or_default();
+                let mut bank = Bank { prior, path, evidence: anchors, named, k, named_nodes, checkpoints: 0.0, particles };
                 normalise(&mut bank.particles);
                 bank
             })
@@ -705,8 +712,8 @@ impl Navigator {
             // How well the first of `ids` and each other lie as two of this layout's nodes do.
             // How well the first of `ids` and the others lie as this layout's nodes do, at one
             // map scale for all of them (least squares, within `K_RANGE`): (the fit with the
-            // scale's prior, the fit alone, the scale).
-            let pairs = |ids: &[usize]| -> (f64, f64, f64) {
+            // scale's prior, the fit alone, the scale, the nodes the exits lie on).
+            let pairs = |ids: &[usize]| -> (f64, f64, f64, Vec<usize>) {
                 let world = |i: &ExitIcon| super::guide::from_screen((i.dx / scale, i.dy / scale));
                 let tol = if layout.dungeon { ICON_TOL * DUNGEON_TOL } else { ICON_TOL };
                 let a = world(&icons[ids[0]]);
@@ -724,11 +731,11 @@ impl Navigator {
                 };
                 let clamp = |gw: f64, gg: f64| if gg > 0.0 { (gw / gg).clamp(K_RANGE.0, K_RANGE.1) } else { 1.0 };
                 let miss = |k: f64, got: (f64, f64), want: (f64, f64)| (k * got.0 - want.0).powi(2) + (k * got.1 - want.1).powi(2);
-                let mut best = (0.0f64, 0.0f64, 1.0f64);
+                let mut best = (0.0f64, 0.0f64, 1.0f64, Vec::new());
                 for &n1 in &cands[ids[0]] {
                     // Each other exit's node (a zone may have two of one exit): the one that
                     // lies best at its own scale.
-                    let gots: Vec<((f64, f64), (f64, f64))> = ids[1..]
+                    let gots: Vec<((f64, f64), (f64, f64), usize)> = ids[1..]
                         .iter()
                         .zip(&wants)
                         .filter_map(|(&j, &want)| {
@@ -739,24 +746,24 @@ impl Navigator {
                                     let (p, q) = (at(n1), at(n2));
                                     let got = ((q.0 - p.0) * layout.unit, (q.1 - p.1) * layout.unit);
                                     let (gw, gg) = scale_for(got, want);
-                                    (miss(clamp(gw, gg), got, want), got)
+                                    (miss(clamp(gw, gg), got, want), got, n2)
                                 })
                                 .min_by(|x, y| x.0.total_cmp(&y.0))
-                                .map(|(_, got)| (got, want))
+                                .map(|(_, got, n2)| (got, want, n2))
                         })
                         .collect();
                     if gots.len() != wants.len() {
                         continue;
                     }
-                    let (gw, gg) = gots.iter().fold((0.0, 0.0), |sum, &(got, want)| {
+                    let (gw, gg) = gots.iter().fold((0.0, 0.0), |sum, &(got, want, _)| {
                         let (gw, gg) = scale_for(got, want);
                         (sum.0 + gw, sum.1 + gg)
                     });
                     let k = clamp(gw, gg);
-                    let fit: f64 = gots.iter().map(|&(got, want)| (-miss(k, got, want) / (4.0 * tol * tol)).exp()).product();
+                    let fit: f64 = gots.iter().map(|&(got, want, _)| (-miss(k, got, want) / (4.0 * tol * tol)).exp()).product();
                     let prior = (-(k.ln()).powi(2) / (2.0 * K_SIGMA * K_SIGMA)).exp();
                     if fit * prior > best.0 {
-                        best = (fit * prior, fit, k);
+                        best = (fit * prior, fit, k, std::iter::once(n1).chain(gots.iter().map(|g| g.2)).collect());
                     }
                 }
                 best
@@ -765,9 +772,10 @@ impl Navigator {
             // as the icons do decides on its own, whatever was believed before; it
             // replaces the last such fit (one scan, however often seen, counts once).
             if fit_named.len() >= 2 {
-                let (score, fit, k) = pairs(&fit_named);
+                let (score, fit, k, nodes) = pairs(&fit_named);
                 bank.named = score.max(NAMED_BASE).ln();
                 bank.k = k;
+                bank.named_nodes = nodes;
                 // Whether any layout fits at all is the fit's alone, at its own scale.
                 named_best = Some(named_best.unwrap_or(0.0).max(fit));
             } else if icons.len() >= 2 {
@@ -1203,11 +1211,21 @@ impl Navigator {
             [sx as f32, sy as f32]
         };
         let paths = layout.edges.iter().map(|e| e.points.iter().map(|&p| screen(p)).collect()).collect();
-        let exits = layout
-            .nodes
-            .iter()
-            .filter_map(|n| n.exit.as_ref().map(|to| (self.area.names.get(to).cloned().unwrap_or_else(|| to.clone()), screen((n.x, n.y)))))
-            .collect();
+        // An exit with several possible places (the Cemetery's Mausoleum and Tomb, three
+        // each): the one the named exits lay on, else all of them as maybe (drawn all alike,
+        // they looked like two layouts on top of each other: the owner, 2026-11-13).
+        let chosen = &self.banks[top].named_nodes;
+        let mut exits = Vec::new();
+        for (i, node) in layout.nodes.iter().enumerate() {
+            let Some(to) = node.exit.as_ref() else { continue };
+            let places: Vec<usize> = layout.nodes.iter().enumerate().filter(|(_, n)| n.exit.as_ref() == Some(to)).map(|(j, _)| j).collect();
+            let seen = places.iter().any(|j| chosen.contains(j));
+            if seen && !chosen.contains(&i) {
+                continue;
+            }
+            let name = self.area.names.get(to).cloned().unwrap_or_else(|| to.clone());
+            exits.push((name, screen((node.x, node.y)), seen || places.len() == 1));
+        }
         // What the layout's node tags say a place is, for the drawing.
         let place = |tag: &str| {
             let tag = tag.to_lowercase();
@@ -1454,6 +1472,7 @@ impl Navigator {
             named_pair: self.named_pair,
             named_loose: self.named_loose,
             k: ids().zip(self.banks.iter().map(|b| b.k)).collect(),
+            nodes: ids().zip(self.banks.iter().map(|b| b.named_nodes.clone())).collect(),
             walked: self.walked_before + self.walked,
             positions,
             at: self.data_at,
@@ -2268,6 +2287,34 @@ mod tests {
     }
 
     #[test]
+    fn of_an_exit_with_several_places_only_the_seen_one_is_drawn() {
+        let area = graph::load("G1_7");
+        let layout = area.layouts.iter().find(|l| l.id == "Graveyard_N_S").unwrap();
+        let node = |to: &str, x: f64, y: f64| layout.nodes.iter().position(|n| n.exit.as_deref() == Some(to) && n.x == x && n.y == y).unwrap();
+        // Read on the owner's Cemetery (2026-11-13): the Grim Tangle's exit at 0, the
+        // Mausoleum's 310 cells left and 230 up, the Tomb's 175 right and 265 up.
+        let frame = [
+            ExitIcon { dx: -4.0, dy: 17.0, to: Some("The Grim Tangle".into()), remembered: false },
+            ExitIcon { dx: -314.0, dy: -216.0, to: Some("Mausoleum of the Praetor".into()), remembered: true },
+            ExitIcon { dx: 172.0, dy: -248.0, to: Some("Tomb of the Consort".into()), remembered: true },
+        ];
+        let mut nav = Navigator::new(&area, Arrival::From("G1_6"), None, SCALE, 2651094656);
+        nav.icons(&frame);
+        let picture = nav.picture().unwrap();
+        assert!(picture.known, "{picture:?}");
+        let count = |name: &str| picture.exits.iter().filter(|e| e.0 == name).count();
+        if picture.id == "Graveyard_N_S" {
+            let chosen = &nav.banks[nav.area.layouts.iter().position(|l| l.id == "Graveyard_N_S").unwrap()].named_nodes;
+            assert!(chosen.contains(&node("G1_6", 104.0, 104.0)), "{chosen:?}");
+        }
+        assert_eq!((count("Mausoleum of the Praetor"), count("Tomb of the Consort")), (1, 1), "{:?}", picture.exits);
+        assert!(picture.exits.iter().all(|e| e.2));
+        // No exit read: every place of a several-place exit is a maybe.
+        let fresh = Navigator::new(&area, Arrival::From("G1_6"), None, SCALE, 1);
+        assert!(fresh.banks.iter().all(|b| b.named_nodes.is_empty()));
+    }
+
+    #[test]
     fn a_named_pair_stays_drawn_after_a_death() {
         let area = graph::load("G1_4");
         let frame = [
@@ -2323,14 +2370,14 @@ mod tests {
         let picture = nav.picture().unwrap();
         assert!(picture.known);
         assert_eq!(picture.id, "ClearFell_W_E_N");
-        let names: Vec<&str> = picture.exits.iter().map(|(n, _)| n.as_str()).collect();
+        let names: Vec<&str> = picture.exits.iter().map(|(n, _, _)| n.as_str()).collect();
         assert!(names.contains(&"The Grelwood") && names.contains(&"Mud Burrow"), "{names:?}");
         assert!(!picture.paths.is_empty() && picture.player.is_some());
         // Its boss arena and campsite are marked.
         let kinds: Vec<&str> = picture.places.iter().map(|(k, _)| k.as_str()).collect();
         assert!(kinds.contains(&"boss") && kinds.contains(&"campsite"), "{kinds:?}");
         // Up on screen is up on the in-game map: the Grelwood lies left of the Mud Burrow.
-        let at = |name: &str| picture.exits.iter().find(|(n, _)| n == name).unwrap().1;
+        let at = |name: &str| picture.exits.iter().find(|(n, _, _)| n == name).unwrap().1;
         assert!(at("The Grelwood")[0] < at("Mud Burrow")[0]);
     }
 
