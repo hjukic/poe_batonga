@@ -268,6 +268,8 @@ pub struct Inner {
     pub progress: Progress,
     pub log: LogStatus,
     pub save_path: Option<PathBuf>,
+    /// The compass passes over optional steps (a setting of the page).
+    pub skip_optional: bool,
 }
 
 impl Inner {
@@ -279,6 +281,7 @@ impl Inner {
         // Open steps with a target, in checklist order: what the compass may head for.
         let targets = self.routes.iter().flat_map(|r| &r.steps)
             .filter(|s| !self.progress.completed.contains_key(&s.id))
+            .filter(|s| !(self.skip_optional && s.optional))
             .filter_map(|s| s.navigation_target.as_ref().map(|t| (t.area.clone(), crate::layout::guide::NavTarget {
                 label: t.label.clone(),
                 exit: t.exit.clone(),
@@ -375,6 +378,7 @@ pub fn init(app: &AppHandle) -> Tracker {
         progress,
         log: LogStatus { connected: false, path: None, message: "Looking for Client.txt".into() },
         save_path,
+        skip_optional: false,
     }))
 }
 

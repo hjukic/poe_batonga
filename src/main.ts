@@ -100,6 +100,8 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
   <div id="settings" class="dropdown" aria-label="Settings" hidden>
     <label class="row"><span>Opacity</span><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></label>
     <div class="row"><span>Show / hide</span><button id="shortcut" class="keycap" type="button" title="Click, then press a new shortcut"></button></div>
+    <label class="row" title="Off: the compass passes over optional steps"><span>Compass: optional steps</span><input id="compass-optional" type="checkbox" checked /></label>
+    <label class="row" title="The map recorded so far, for checking the tracking"><span>Map preview</span><input id="map-preview" type="checkbox" /></label>
     <p id="shortcut-error" class="warning" hidden></p>
     <hr />
     <button id="reset-progress" class="item" type="button">Reset progress</button>
@@ -285,6 +287,24 @@ slider.addEventListener('input', () => {
   try { localStorage.setItem('panel-opacity', slider.value); } catch { /* Optional preference. */ }
 });
 
+// ---- Switches kept between starts ----
+function stored(key: string, fallback: boolean) {
+  try { return (localStorage.getItem(key) ?? String(fallback)) === 'true'; } catch { return fallback; }
+}
+function keep(key: string, value: boolean) {
+  try { localStorage.setItem(key, String(value)); } catch { /* Optional preference. */ }
+}
+const compassOptional = $<HTMLInputElement>('#compass-optional');
+compassOptional.checked = stored('compass-optional', true);
+const sendCompassOptional = () =>
+  isTauri() && void invoke('set_compass_optional', { follow: compassOptional.checked }).catch(console.error);
+compassOptional.addEventListener('change', () => { keep('compass-optional', compassOptional.checked); sendCompassOptional(); });
+const mapPreview = $<HTMLInputElement>('#map-preview');
+mapPreview.checked = stored('map-preview', false);
+const showMapPreview = () => { document.body.dataset.mapPreview = String(mapPreview.checked); };
+showMapPreview();
+mapPreview.addEventListener('change', () => { keep('map-preview', mapPreview.checked); showMapPreview(); });
+
 // ---- Show / hide shortcut ----
 function acceleratorFrom(event: KeyboardEvent): string | null {
   if (['Control', 'Alt', 'Shift', 'Meta', 'OS'].includes(event.key)) return null;
@@ -463,6 +483,7 @@ async function start() {
   renderLayout(await invoke<LayoutView | null>('layout_state'));
   render(await invoke<Status>('overlay_status'));
   renderTracker(await invoke<TrackerView>('tracker_state'));
+  sendCompassOptional();
   fitWindow();
   // The window is first shown now that the page has something to draw.
   await invoke('page_ready');

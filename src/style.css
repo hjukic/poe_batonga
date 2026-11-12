@@ -73,7 +73,7 @@ button.step:enabled:hover { background: rgb(239 235 255 / .06); }
 
 /* ---- Live minimap preview ---- */
 .minimap { padding: 0 14px 8px; }
-.minimap[hidden] { display: none; }
+.minimap[hidden], body:not([data-map-preview="true"]) .minimap { display: none; }
 .minimap canvas { display: block; width: 150px; height: 130px; margin-left: auto; }
 .row input[type="checkbox"] { width: 16px; height: 16px; margin: 0; }
 

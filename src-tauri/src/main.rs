@@ -451,6 +451,16 @@ fn toggle_step(app: AppHandle, id: String) -> Result<tracker::TrackerView, Strin
     Ok(view)
 }
 
+/// Whether the compass also heads for optional steps (on by default).
+#[tauri::command]
+fn set_compass_optional(app: AppHandle, follow: bool) -> Result<(), String> {
+    let tracker = app.state::<tracker::Tracker>();
+    let mut inner = tracker.0.lock().map_err(|e| e.to_string())?;
+    inner.skip_optional = !follow;
+    inner.sync_navigation(&app);
+    Ok(())
+}
+
 /// Clears all ticks. Log reading continues from where it is; past lines are not replayed.
 #[tauri::command]
 fn reset_progress(app: AppHandle) -> Result<tracker::TrackerView, String> {
@@ -555,6 +565,7 @@ fn main() {
             tracker_state,
             toggle_step,
             reset_progress,
+            set_compass_optional,
             minimap_state,
             layout_state,
             restart::restart_latest,
