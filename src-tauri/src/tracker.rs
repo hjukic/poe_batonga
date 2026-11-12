@@ -779,7 +779,7 @@ fn current_zone(file: &mut File, len: u64) -> std::io::Result<(Option<LogEvent>,
 
 fn set_log_status(app: &AppHandle, connected: bool, path: Option<&Path>, message: &str) {
     let tracker = app.state::<Tracker>();
-    let Ok(mut inner) = tracker.0.lock() else { return };
+    let mut inner = crate::relock(&tracker.0);
     let path = path.map(|p| p.display().to_string());
     if inner.log.connected == connected && inner.log.path == path && inner.log.message == message {
         return;
@@ -808,11 +808,12 @@ fn follow(app: &AppHandle, path: &Path) -> std::io::Result<()> {
     let path_text = path.display().to_string();
     let mut pos = {
         let tracker = app.state::<Tracker>();
-        let saved = tracker.0.lock().ok().and_then(|inner| {
+        let saved = {
+            let inner = crate::relock(&tracker.0);
             (inner.progress.log_path.as_deref() == Some(path_text.as_str()))
                 .then_some(inner.progress.log_offset)
                 .flatten()
-        });
+        };
         let len = file.metadata()?.len();
         match saved {
             Some(offset) if offset <= len => offset,
@@ -849,12 +850,16 @@ fn follow(app: &AppHandle, path: &Path) -> std::io::Result<()> {
             };
             let complete: Vec<u8> = pending.drain(..=last_newline).collect();
             let read_through = pos - pending.len() as u64;
-            process(app, &path_text, &complete, read_through, live);
+            // A panic in one batch loses that batch, not the reading (the lock is taken
+            // back with `relock`).
+            crate::guarded("Tracker: a log batch", || process(app, &path_text, &complete, read_through, live));
             continue; // more may be waiting beyond MAX_READ
         }
         live = true;
-        tick_map_kills(app);
-        settle_quiet_fight(app);
+        crate::guarded("Tracker: between log lines", || {
+            tick_map_kills(app);
+            settle_quiet_fight(app);
+        });
         std::thread::sleep(POLL);
     }
 }
@@ -883,7 +888,7 @@ fn exit_names(area: &str) -> Vec<String> {
 fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: bool) {
     let recorder = app.state::<crate::layout::Recorder>();
     let tracker = app.state::<Tracker>();
-    let Ok(mut inner) = tracker.0.lock() else { return };
+    let mut inner = crate::relock(&tracker.0);
     let fighting = inner.fight.is_some();
     let was_in_zone = inner.in_zone;
     let Inner { routes, progress, recent, fight, in_zone, .. } = &mut *inner;
@@ -948,9 +953,7 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
 /// Sets whether the player is in a zone and tells the compass.
 fn set_in_zone(app: &AppHandle, in_zone: bool) {
     let tracker = app.state::<Tracker>();
-    if let Ok(mut inner) = tracker.0.lock() {
-        inner.in_zone = in_zone;
-    }
+    crate::relock(&tracker.0).in_zone = in_zone;
     let _ = app.emit("in-zone", in_zone);
 }
 
@@ -962,7 +965,7 @@ fn tick_map_kills(app: &AppHandle) {
         return;
     }
     let tracker = app.state::<Tracker>();
-    let Ok(mut inner) = tracker.0.lock() else { return };
+    let mut inner = crate::relock(&tracker.0);
     if !inner.tick_dead_bosses(&dead) {
         return;
     }
@@ -979,7 +982,7 @@ fn tick_map_kills(app: &AppHandle) {
 /// Between log lines: ends a fight whose boss has gone quiet.
 fn settle_quiet_fight(app: &AppHandle) {
     let tracker = app.state::<Tracker>();
-    let ended = tracker.0.lock().is_ok_and(|mut inner| inner.settle_fight());
+    let ended = crate::relock(&tracker.0).settle_fight();
     if ended {
         crate::set_fight(app, false);
     }

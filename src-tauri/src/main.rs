@@ -153,7 +153,30 @@ pub fn panel_rect(app: &AppHandle) -> Option<[f64; 4]> {
 }
 
 fn snapshot(app: &AppHandle) -> Result<Status, String> {
-    app.state::<OverlayState>().0.lock().map(|s| s.clone()).map_err(|e| e.to_string())
+    Ok(relock(&app.state::<OverlayState>().0).clone())
+}
+
+/// Takes a lock even when a thread panicked while holding it. The data is the last state
+/// written (at worst a half-done update), which beats every later caller giving up.
+pub fn relock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Runs one unit of a background loop (a frame, a log batch). A panic in it is printed
+/// in the terminal and the loop carries on; `None` then.
+pub fn guarded<T>(what: &str, run: impl FnOnce() -> T) -> Option<T> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)) {
+        Ok(value) => Some(value),
+        Err(panic) => {
+            let message = panic
+                .downcast_ref::<&str>()
+                .map(|s| s.to_string())
+                .or_else(|| panic.downcast_ref::<String>().cloned())
+                .unwrap_or_default();
+            eprintln!("{what} panicked ({message}); carrying on");
+            None
+        }
+    }
 }
 
 fn publish(app: &AppHandle) {
@@ -166,7 +189,7 @@ fn publish(app: &AppHandle) {
 /// keyboard is also only taken while unlocked (for recording a shortcut).
 #[cfg(target_os = "linux")]
 fn apply_input(app: &AppHandle, window: &WebviewWindow, interactive: bool) -> Result<(), String> {
-    let rects = app.state::<InputRects>().0.lock().map_err(|e| e.to_string())?.clone();
+    let rects = relock(&app.state::<InputRects>().0).clone();
     let layer = snapshot(app)?.layer_shell;
     let window = window.clone();
     // GTK objects are not Send, so fetch and change the GTK window on the main thread.
@@ -211,7 +234,7 @@ fn watch_input_hover(app: AppHandle) {
                 over = false;
                 continue;
             }
-            let rects = app.state::<InputRects>().0.lock().map(|r| r.clone()).unwrap_or_default();
+            let rects = relock(&app.state::<InputRects>().0).clone();
             let (Ok(cursor), Ok(origin), Ok(scale)) =
                 (app.cursor_position(), window.inner_position(), window.scale_factor())
             else {
@@ -241,7 +264,7 @@ fn apply_interaction(app: &AppHandle, interactive: bool) -> Result<Status, Strin
     let window = overlay(app)?;
     apply_input(app, &window, interactive)?;
     let state = app.state::<OverlayState>();
-    let mut status = state.0.lock().map_err(|e| e.to_string())?;
+    let mut status = relock(&state.0);
     window.set_focusable(interactive).map_err(|e| e.to_string())?;
     status.interactive = interactive;
     status.last_error = None;
@@ -283,7 +306,7 @@ fn apply_visibility(app: &AppHandle, visible: bool) -> Result<Status, String> {
         show_compass(app, false);
     }
     let state = app.state::<OverlayState>();
-    let mut status = state.0.lock().map_err(|e| e.to_string())?;
+    let mut status = relock(&state.0);
     status.visible = visible;
     Ok(status.clone())
 }
@@ -291,9 +314,7 @@ fn apply_visibility(app: &AppHandle, visible: bool) -> Result<Status, String> {
 fn report(app: &AppHandle, result: Result<Status, String>) -> Result<Status, String> {
     if let Err(error) = &result {
         eprintln!("Overlay: {error}");
-        if let Ok(mut status) = app.state::<OverlayState>().0.lock() {
-            status.last_error = Some(error.clone());
-        }
+        relock(&app.state::<OverlayState>().0).last_error = Some(error.clone());
     }
     publish(app);
     result
@@ -393,38 +414,40 @@ fn watch_game(app: AppHandle) {
         let mut last_monitor: Option<i64> = None;
         loop {
             std::thread::sleep(std::time::Duration::from_secs(2));
-            let presence = app.state::<Presence>();
-            if !presence.page_ready.load(Ordering::SeqCst) {
-                continue;
-            }
-            let Some(on) = game_on_screen() else { continue };
-            // The game opened on, or moved to, another monitor: the overlay goes with it
-            // (it was left on another monitor once when the game started, 2026-11-12).
-            #[cfg(target_os = "linux")]
-            {
-                let monitor = layer_shell::game_monitor();
-                if on && monitor.is_some() && monitor != last_monitor && snapshot(&app).is_ok_and(|status| status.visible) {
-                    let _ = report(&app, apply_visibility(&app, true));
+            guarded("Game watcher", || {
+                let presence = app.state::<Presence>();
+                if !presence.page_ready.load(Ordering::SeqCst) {
+                    return;
+                }
+                let Some(on) = game_on_screen() else { return };
+                // The game opened on, or moved to, another monitor: the overlay goes with it
+                // (it was left on another monitor once when the game started, 2026-11-12).
+                #[cfg(target_os = "linux")]
+                {
+                    let monitor = layer_shell::game_monitor();
+                    if on && monitor.is_some() && monitor != last_monitor && snapshot(&app).is_ok_and(|status| status.visible) {
+                        let _ = report(&app, apply_visibility(&app, true));
+                    }
+                    if on {
+                        last_monitor = monitor;
+                    }
+                }
+                if last == Some(on) {
+                    return;
+                }
+                last = Some(on);
+                if !presence.auto_hide.load(Ordering::SeqCst) {
+                    return;
                 }
                 if on {
-                    last_monitor = monitor;
+                    if presence.hidden_by_watcher.swap(false, Ordering::SeqCst) {
+                        show_overlay(&app);
+                    }
+                } else if snapshot(&app).is_ok_and(|status| status.visible) {
+                    presence.hidden_by_watcher.store(true, Ordering::SeqCst);
+                    let _ = report(&app, apply_visibility(&app, false));
                 }
-            }
-            if last == Some(on) {
-                continue;
-            }
-            last = Some(on);
-            if !presence.auto_hide.load(Ordering::SeqCst) {
-                continue;
-            }
-            if on {
-                if presence.hidden_by_watcher.swap(false, Ordering::SeqCst) {
-                    show_overlay(&app);
-                }
-            } else if snapshot(&app).is_ok_and(|status| status.visible) {
-                presence.hidden_by_watcher.store(true, Ordering::SeqCst);
-                let _ = report(&app, apply_visibility(&app, false));
-            }
+            });
         }
     });
 }
@@ -447,7 +470,7 @@ fn parse_shortcut(accelerator: &str) -> Result<Shortcut, String> {
 
 #[tauri::command]
 fn overlay_status(state: State<'_, OverlayState>) -> Result<Status, String> {
-    state.0.lock().map(|s| s.clone()).map_err(|e| e.to_string())
+    Ok(relock(&state.0).clone())
 }
 
 #[tauri::command]
@@ -509,7 +532,7 @@ fn save_overlay_position(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn set_input_rects(app: AppHandle, rects: Vec<Rect>) -> Result<(), String> {
-    *app.state::<InputRects>().0.lock().map_err(|e| e.to_string())? = rects;
+    *relock(&app.state::<InputRects>().0) = rects;
     let status = snapshot(&app)?;
     if status.visible {
         apply_input(&app, &overlay(&app)?, status.interactive)?;
@@ -592,7 +615,7 @@ fn set_toggle_shortcut(app: AppHandle, accelerator: String) -> Result<Status, St
     save_settings(&app, &Settings { toggle_shortcut: accelerator.clone(), ..load_settings(&app) })?;
     {
         let state = app.state::<OverlayState>();
-        let mut status = state.0.lock().map_err(|e| e.to_string())?;
+        let mut status = relock(&state.0);
         status.toggle_shortcut = accelerator;
         status.shortcut_error = None;
     }
@@ -603,14 +626,14 @@ fn set_toggle_shortcut(app: AppHandle, accelerator: String) -> Result<Status, St
 // Off the UI thread: it waits on a lock the background readers may hold for a while.
 #[tauri::command(async)]
 fn tracker_state(tracker: State<'_, tracker::Tracker>) -> Result<tracker::TrackerView, String> {
-    tracker.0.lock().map(|inner| inner.view()).map_err(|e| e.to_string())
+    Ok(relock(&tracker.0).view())
 }
 
 /// Ticks or unticks a step by hand (recovery when the log misses or misreads one).
 #[tauri::command]
 fn toggle_step(app: AppHandle, id: String) -> Result<tracker::TrackerView, String> {
     let tracker = app.state::<tracker::Tracker>();
-    let mut inner = tracker.0.lock().map_err(|e| e.to_string())?;
+    let mut inner = relock(&tracker.0);
     let tracker::Inner { routes, progress, .. } = &mut *inner;
     tracker::toggle(routes, progress, &id)?;
     if inner.progress.completed.contains_key(&id) {
@@ -633,7 +656,7 @@ fn toggle_step(app: AppHandle, id: String) -> Result<tracker::TrackerView, Strin
 #[tauri::command]
 fn set_compass_optional(app: AppHandle, follow: bool) -> Result<(), String> {
     let tracker = app.state::<tracker::Tracker>();
-    let mut inner = tracker.0.lock().map_err(|e| e.to_string())?;
+    let mut inner = relock(&tracker.0);
     inner.skip_optional = !follow;
     inner.sync_navigation(&app);
     Ok(())
@@ -643,7 +666,7 @@ fn set_compass_optional(app: AppHandle, follow: bool) -> Result<(), String> {
 #[tauri::command]
 fn reset_progress(app: AppHandle) -> Result<tracker::TrackerView, String> {
     let tracker = app.state::<tracker::Tracker>();
-    let mut inner = tracker.0.lock().map_err(|e| e.to_string())?;
+    let mut inner = relock(&tracker.0);
     inner.progress.completed.clear();
     inner.progress.dismissed.clear();
     inner.sync_navigation(&app);
@@ -656,13 +679,13 @@ fn reset_progress(app: AppHandle) -> Result<tracker::TrackerView, String> {
 // Off the UI thread: it waits on a lock the background readers may hold for a while.
 #[tauri::command(async)]
 fn minimap_state(minimap: State<'_, minimap::Minimap>) -> Result<minimap::MinimapView, String> {
-    minimap.last.lock().map(|view| view.clone()).map_err(|e| e.to_string())
+    Ok(relock(&minimap.last).clone())
 }
 
 /// Whether the player is in a zone (not at the login or character screen).
 #[tauri::command]
 fn in_zone(tracker: State<'_, tracker::Tracker>) -> bool {
-    tracker.0.lock().map(|inner| inner.in_zone).unwrap_or(true)
+    relock(&tracker.0).in_zone
 }
 
 // Off the UI thread: it waits on a lock the background readers may hold for a while.
@@ -803,9 +826,7 @@ fn main() {
             let layouts = app.path().app_data_dir().ok().map(|dir| dir.join("layouts"));
             app.manage(layout::Recorder::new(layouts));
             app.manage(tracker::init(app.handle()));
-            if let Ok(inner) = app.state::<tracker::Tracker>().0.lock() {
-                inner.sync_navigation(app.handle());
-            }
+            relock(&app.state::<tracker::Tracker>().0).sync_navigation(app.handle());
             tracker::spawn(app.handle().clone());
             let reader = minimap::init();
             minimap::spawn(app.handle().clone(), &reader);
@@ -831,7 +852,7 @@ fn main() {
                 .and_then(|shortcut| app.global_shortcut().register(shortcut).map_err(|e| e.to_string()));
             if let Err(error) = registered {
                 eprintln!("Overlay: global shortcut not registered: {error}");
-                app.state::<OverlayState>().0.lock().unwrap().shortcut_error = Some(error);
+                relock(&app.state::<OverlayState>().0).shortcut_error = Some(error);
             }
             // The overlay is shown once its page has loaded (`page_ready`), and hidden
             // while the game is off screen.
@@ -855,6 +876,24 @@ mod tests {
         assert!(saved.get("readMinimap").is_none());
         assert!(saved.get("windowsCaptureOptIn").is_none());
         assert!(minimap::init().last.lock().unwrap().enabled);
+    }
+
+    #[test]
+    fn a_panic_in_one_frame_does_not_stop_the_next() {
+        let state = Mutex::new(vec![1]);
+        let first = guarded::<()>("Test: a frame", || {
+            state.lock().unwrap().push(2);
+            let _held = state.lock();
+            panic!("boom");
+        });
+        assert!(first.is_none());
+        // Poisoned while held: plain `lock()` fails from now on, `relock` does not.
+        assert!(state.is_poisoned() && state.lock().is_err());
+        let next = guarded("Test: a frame", || {
+            relock(&state).push(3);
+            relock(&state).clone()
+        });
+        assert_eq!(next, Some(vec![1, 2, 3]));
     }
 
     #[test]

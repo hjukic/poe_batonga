@@ -701,7 +701,9 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
         let mut samples = Samples::new(app.path().app_data_dir().ok().map(|dir| dir.join("samples")));
         loop {
             let started = Instant::now();
-            let view = {
+            // A panic in one frame (in the reader or the recorder) is printed and the next
+            // frame is read as usual.
+            let view = crate::guarded("Minimap: a frame", || {
                 if region.as_ref().is_none_or(|(_, at)| at.elapsed() > LOCATE_INTERVAL) {
                     region = Some((locate_minimap(), Instant::now()));
                 }
@@ -724,14 +726,19 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
                         }
                     },
                 }
-            };
-            let changed = last.lock().map(|mut l| {
+            })
+            .unwrap_or_else(|| {
+                region = None;
+                MinimapView::status(true, "A frame failed (see the terminal); reading on")
+            });
+            let changed = {
+                let mut l = crate::relock(&last);
                 // The walls change every frame but are not sent.
                 let changed = !l.same_for_pages(&view);
                 *l = view.clone();
                 changed
-            });
-            if changed.unwrap_or(true) {
+            };
+            if changed {
                 let _ = app.emit("minimap-state", view.clone());
             }
             let wait = if view.visible { FRAME_INTERVAL } else { FRAME_INTERVAL * 2 };
