@@ -351,6 +351,26 @@ dropped. It has the minimap frame's size (300x259) with the player on the minima
 player cell, and reports the minimap's capture size, so the recorder sees no
 difference.
 
+**Why the minimap's frame size.** The recorder keeps its player cell when a frame
+reports one more than 4 cells away (protection against stray marker detections). A
+frame with the player elsewhere therefore puts every wall off by that much at each
+switch: with 600x518 frames centred on the player, a walk of minimap → big map →
+minimap left 18 of 90 frames unplaced. Same-size frames need no recorder change
+(test: one part, every frame placed, position within a cell).
+
+**Larger frames** (`BigFrame::Wide` in `minimap.rs`) would hand the recorder more of
+the explored map per frame: the big map shows everything explored around the player,
+so after a gap a large frame lets the recorder join the pieces again sooner, and
+walls walked while untracked get recorded. Cost per frame, live: 600x518 cells
+(1238x1074 px capture) debug 160 ms (reading 47, recorder 26), release 90 ms;
+960x540 cells debug 200 ms (reading 73, recorder 42), release about 140 ms. The
+recorder's wide search (taken when the near one fails) costs about 7 times its near
+search, so 960x540 frames can exceed the frame interval in a debug build. They
+need one recorder change: take the reported player cell when the frame size
+changes (keep a `frame_size` in the live part and skip the 4-cell rule when it
+differs). With that change the ignored test `one_track_with_wide_big_map_frames`
+passes; then set `BIG_FRAME` to `BigFrame::Wide(600, 518)`.
+
 ### Limits
 
 - Measured at 3840x2160 with the owner's settings. Other resolutions use the same
