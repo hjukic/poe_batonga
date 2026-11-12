@@ -7,8 +7,6 @@ criterion (owner, 2026-11-12). The machine-readable catalog is
 Release target amended by the owner on 2026-11-12: **PoE 2 1.0, Acts 1–6**,
 excluding Interludes. Selected Early Access sources are references pending 1.0
 validation. Their Interlude coverage does not establish Act 5 or Act 6 coverage.
-See the [navigation-rule audit](navigation-rule-research.md) for source dates,
-candidate rules and the remaining 1.0 validation work.
 
 | Data | Source | In the repo |
 | --- | --- | --- |

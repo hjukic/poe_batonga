@@ -1,27 +1,18 @@
 # Documentation
 
-This folder will hold the project scope, architecture and decision records as
-the corresponding steps in [the plan](../PLAN.md) are completed.
+Start with [architecture](architecture.md): the parts of the app and where each lives.
 
-Current document:
+- [Map reading](map-reading.md): minimap and big-map reading, the recorder, layout
+  recognition, the navigator behind the (parked) compass, the flight recorder, and what
+  was measured.
+- [Triggers](triggers.md): which checklist steps tick themselves from the log, and how.
+- [Log findings](log-findings.md): what the game's `Client.txt` records, and what not.
+- [Data sources](data-sources.md): route, zone, layout-graph, icon, font and dialogue data,
+  and how to refresh them after a patch.
+- [Overlay test](overlay-test.md): how to run the overlay and check it over the game.
+- [Windows minimap](windows-minimap.md): the Windows capture adapter and its limits.
+- [Build log](build-log.md): what the builds of 2026-11-12 changed, measured and left open.
+- [Scope](scope.md) and [decisions](decisions.md): the agreed scope and the decision log.
 
-- [Scope](scope.md): agreed by both contributors.
-
-- [Architecture](architecture.md): Phase 1.3 proposal and Phase 2 research questions.
-- [Decisions](decisions.md): scope requirements, proposals and deferred choices.
-- [Qutm review](qutm-review.md): inspected log parser, guide/layout behavior and lessons.
-- [Local log findings](log-findings.md): observed fields and limits for quest items/navigation.
-- [Overlay experiment](overlay-test.md): run instructions, controls and platform test results.
-- [Data sources](data-sources.md): selected route/zone/layout sources and their terms.
-- [Map reading](map-reading.md): minimap and big-map reading, the recorder, the navigator behind the compass needle, and what was measured.
-- [Windows minimap](windows-minimap.md): automatic capture adapter and test coverage.
-- [Build log](build-log.md): what the night build of 2026-11-12 changed, measured and left open.
-- [Layout shapes](layout-shape-research.md): reviewed map-outline sources and limits.
-- [Navigation rules](navigation-rule-research.md): source audit and candidates for
-  the six-act PoE 2 1.0 target; earlier Interlude findings are historical only.
-
-## Repository setup status
-
-The GitHub repository, README and documentation folder are present,
-and the second contributor has collaborator access. Step 1 is complete
-(confirmed by the owner 2026-11-11).
+The GitHub repository, README and this folder are set up, and the second contributor has
+collaborator access (confirmed by the owner 2026-11-11).

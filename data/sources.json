@@ -46,19 +46,6 @@
       ]
     },
     {
-      "id": "project-layout-schematics",
-      "kind": "layout-diagrams",
-      "selection": "selected",
-      "method": "Contributor-authored abstract schematics from labelled observations of explored maps",
-      "contentImported": false,
-      "constraints": [
-        "Record author, patch, zone, observation and confidence for each diagram",
-        "Unknown variants remain unsupported",
-        "No exact-instance or hidden-map claims",
-        "Live automated capture remains subject to step 7"
-      ]
-    },
-    {
       "id": "ggg-topologies",
       "kind": "zone-layout-graphs",
       "selection": "selected",

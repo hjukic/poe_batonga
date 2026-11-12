@@ -6,8 +6,8 @@ and points the (parked) compass, and what was measured. Step 7 remains open.
 **Live minimap reading (owner decision, 2026-11-11).** The owner chose to enable
 continuous live reading of the minimap without waiting for GGG's answer, on the
 condition that no game files or memory are accessed. `src-tauri/src/minimap.rs`
-takes a screenshot of only the top-right minimap corner of the game's monitor about three
-times a second (Linux/Hyprland via `hyprctl` and `grim`; Windows via the visible
+takes a screenshot of the top-right minimap corner of the game's monitor, or of the big map
+while it is open, about eight times a second (Linux/Hyprland via `hyprctl` and `grim`; Windows via the visible
 client-area GDI adapter described in [Windows support](windows-minimap.md)). On
 Windows it pauses when the game is not foreground or the minimap is covered.
 On Hyprland the game must be on the visible workspace. It finds explored walls by their
@@ -15,8 +15,7 @@ lavender line colour (about RGB 91,91,121) and the player by the orange cross,
 and shows a live preview in the overlay. Reading starts automatically with the
 application; the owner explicitly removed the on/off setting. Raw frames stay
 in memory; explored geometry can be saved by the layout recorder below. Nothing
-is uploaded. It sends no input to the game. The layout matcher may display an
-estimated arrow, whose gameplay accuracy on Windows remains unverified. Best results with the game's map
+is uploaded. It sends no input to the game. Best results with the game's map
 landscape transparency turned off. The policy notes below still describe the
 unresolved question with GGG.
 
@@ -33,9 +32,6 @@ are saved per instance at `<app data>/layouts/<area>/<seed>.json`. A
 re-entry, a teleport or lost tracking starts a new part with its own coordinates.
 `node scripts/render-layouts.mjs` draws them as SVG. In a 60-second live test,
 all 182 frames were placed with none lost, and the walls lined up cleanly.
-Open questions for the arrow: whether instances of a zone share a layout family
-(compare several Riverbank seeds), detecting minimap icons (waypoints,
-checkpoints, transitions), and a fixed minimap zoom.
 
 ## Policy findings
 
@@ -48,7 +44,7 @@ not specifically establish permission for continuous visual layout inference or
 navigation. The owner chose live reading despite this unresolved question; that
 choice is not GGG approval under the [Terms of Use](https://www.pathofexile.com/legal/terms-of-use-and-privacy-policy).
 
-[A clarification draft](ggg-clarification-draft.md) is prepared but has not been sent.
+A clarification draft for GGG was prepared and never sent (removed in v0.1.74; git history).
 This review does not claim GGG has approved the app.
 
 ### Pre-game review (2026-11-11)

@@ -52,9 +52,11 @@ npm run desktop
 ```
 
 **Ctrl+Space** shows and hides the overlay; change it under the settings (gear)
-button. The settings also hold the panel's opacity, whether the compass heads for
-optional steps, and a small preview of the recorded map (for checking the tracking). The lock button unlocks the panel to move it, open settings or tick a step
-by hand; while locked, only the lock button takes clicks. The restart button (unlocked)
+button. The settings also hold the panel's opacity, "Optional content", "Compass
+(parked)", hiding when the game is off screen or during a boss fight, and a small preview
+of the recorded map (for checking the tracking). The lock button unlocks the panel to move
+it or open the settings; while locked, only the lock button and the checklist's rows take
+clicks (a click ticks or unticks a step). The restart button (unlocked)
 pulls the latest commit, runs `npm run desktop:build` and replaces the running app
 with the new build; build output goes to the app's terminal, and a failure leaves the
 current version running with the reason under the top bar. Under `npm run desktop`
