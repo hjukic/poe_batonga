@@ -19,8 +19,9 @@ A Tauri overlay is available. It has two parts:
   through several times (a town) shows one visit at a time: the steps up to the one that leaves
   the zone; the rest are behind "N on other visits". A list of more than nine
   rows folds. The overlay hides during a boss fight.
-- **A compass needle** around the character that points to the next step that has a target (a
-  zone exit, a boss arena). It reads the corner minimap, or the big map (Tab) while that is
+- **A compass needle** (parked, off by default: see the roadmap in [PLAN.md](PLAN.md); the
+  setting "Compass (parked)" switches it on) around the character that points to the next step
+  that has a target (a zone exit, a boss arena). It reads the corner minimap, or the big map (Tab) while that is
   open, to follow how the player moves, and matches that against the game's own layout graphs
   ([data/layouts/ggg/](data/layouts/ggg/), 101 campaign areas). Gold: sure. Fainter gold:
   likely. Gray: a best guess. How it works and what was measured:

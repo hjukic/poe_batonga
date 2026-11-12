@@ -36,6 +36,8 @@ let guide: GuideView | null = null;
 let tracking = false;
 /** False at the login and character screens: no needle before the first zone. */
 let inZone = true;
+/** The compass is parked (roadmap phase 3): shown only when switched on in the settings. */
+let enabled = (() => { try { return localStorage.getItem('compass-enabled') === 'true'; } catch { return false; } })();
 let shown: number | null = null;
 
 /** The needle is always shown while there is a target: solid gold when the layout is
@@ -43,7 +45,7 @@ let shown: number | null = null;
  *  no direction yet, or the minimap is not tracking the player (it then keeps its last
  *  direction). */
 function update() {
-  const hidden = !guide || !inZone;
+  const hidden = !guide || !inZone || !enabled;
   svg.classList.toggle('off', hidden);
   label.classList.toggle('off', hidden);
   if (!guide) return;
@@ -101,6 +103,7 @@ async function start() {
       update();
     });
     await listen<boolean>('in-zone', (event) => { inZone = event.payload; update(); });
+    await listen<boolean>('compass-enabled', (event) => { enabled = event.payload; update(); });
     inZone = await invoke<boolean>('in_zone');
     guide = (await invoke<LayoutView | null>('layout_state'))?.guide ?? null;
     const minimap = await invoke<MinimapView>('minimap_state');

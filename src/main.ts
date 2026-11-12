@@ -1,5 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import './style.css';
 
@@ -106,7 +106,8 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
   <div id="settings" class="dropdown" aria-label="Settings" hidden>
     <label class="row"><span>Opacity</span><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></label>
     <div class="row"><span>Show / hide</span><button id="shortcut" class="keycap" type="button" title="Click, then press a new shortcut"></button></div>
-    <label class="row" title="Off (speedrun): only the steps needed to progress are listed and the arrow leads to them. On: side steps marked optional are listed too, and the arrow leads to them in order."><span>Optional content</span><input id="optional-content" type="checkbox" /></label>
+    <label class="row" title="Off (speedrun): only the steps needed to progress are listed. On: side steps marked optional are listed too."><span>Optional content</span><input id="optional-content" type="checkbox" /></label>
+    <label class="row" title="Parked until the layout is recognised reliably (roadmap phase 3). On: the experimental arrow around the character."><span>Compass (parked)</span><input id="compass-enabled" type="checkbox" /></label>
     <label class="row" title="The overlay hides while the game is closed or on a workspace that is not shown"><span>Hide when game is off screen</span><input id="auto-hide" type="checkbox" checked /></label>
     <label class="row" title="The overlay hides when a zone boss starts talking and comes back when the kill is logged, you die or leave, or the boss has been quiet for 30 seconds"><span>Hide during boss fights</span><input id="fight-hide" type="checkbox" checked /></label>
     <label class="row" title="The map recorded so far, for checking the tracking"><span>Map preview</span><input id="map-preview" type="checkbox" /></label>
@@ -386,6 +387,12 @@ const autoHide = $<HTMLInputElement>('#auto-hide');
 autoHide.checked = stored('auto-hide', true);
 const sendAutoHide = () => isTauri() && void invoke('set_auto_hide', { enabled: autoHide.checked }).catch(console.error);
 autoHide.addEventListener('change', () => { keep('auto-hide', autoHide.checked); sendAutoHide(); });
+// The compass is parked (roadmap, 2026-11-12): off unless switched on here. The compass
+// window reads the same stored value at start and follows this event.
+const compassEnabled = $<HTMLInputElement>('#compass-enabled');
+compassEnabled.checked = stored('compass-enabled', false);
+const sendCompassEnabled = () => isTauri() && void emit('compass-enabled', compassEnabled.checked).catch(console.error);
+compassEnabled.addEventListener('change', () => { keep('compass-enabled', compassEnabled.checked); sendCompassEnabled(); });
 const fightHide = $<HTMLInputElement>('#fight-hide');
 fightHide.checked = stored('fight-hide', true);
 const sendFightHide = () => isTauri() && void invoke('set_fight_hide', { enabled: fightHide.checked }).catch(console.error);
@@ -586,6 +593,7 @@ async function start() {
   sendCompassOptional();
   sendAutoHide();
   sendFightHide();
+  sendCompassEnabled();
   fitWindow();
   // The window is first shown now that the page has something to draw.
   await invoke('page_ready');
