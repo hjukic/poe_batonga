@@ -22,9 +22,9 @@ const FRAME_INTERVAL: Duration = Duration::from_millis(330);
 /// Where the game is checked again (window moved, workspace switched).
 const LOCATE_INTERVAL: Duration = Duration::from_secs(2);
 
-/// The top-right minimap, as a fraction of the game's monitor (measured at 3840x2160).
-const REGION_X: f64 = 0.84375;
-const REGION_W: f64 = 0.15625;
+/// The top-right minimap capture, anchored to the game window's right edge and sized by
+/// its height as the game sizes the minimap: 600x518 px at 3840x2160 (measured there).
+const REGION_W: f64 = 600.0 / 2160.0;
 const REGION_H: f64 = 0.24;
 
 /// Native minimap pixels per cell of the wall grid.
@@ -186,9 +186,9 @@ fn regions(game: [f64; 4], monitor: [f64; 4], scale: f64) -> Result<CaptureRegio
     };
     let geometry = |(x, y, w, h): (f64, f64, f64, f64)| format!("{x},{y} {w}x{h}");
     let minimap = area(
-        (gx + gw * REGION_X).round(),
+        (gx + gw).round() - (gh * REGION_W).round(),
         gy.round(),
-        (gx + gw * REGION_X).round() + (gw * REGION_W).round(),
+        (gx + gw).round(),
         gy.round() + (gh * REGION_H).round(),
     );
     let window_px = [gw * scale, gh * scale];
@@ -372,17 +372,23 @@ fn choose(
     bigmap: impl FnOnce() -> Result<Image, String>,
 ) -> Result<Reading, String> {
     let search = plan.radius * bigmap::LEARN_LIMIT;
-    let view = analyse(minimap, memory.minimap_marker(estimate), search);
+    let mut view = analyse(minimap, memory.minimap_marker(estimate), search);
     if let Some(seen) = view.player {
-        let seen = seen.map(|v| v as f64 * CELL as f64);
-        memory.learn(estimate, seen, search);
-        let icons = bigmap::icons(minimap, seen, 1.0, bigmap::size(plan));
+        memory.learn(estimate, seen.map(|v| v as f64 * CELL as f64), search);
+        // Both views report the learnt spot, so the player cell does not step at a switch.
+        let at = memory.minimap_marker(estimate);
+        view.player = Some(at.map(|v| (v / CELL as f64) as f32));
+        let icons = bigmap::icons(minimap, at, 1.0, bigmap::size(plan));
         return Ok(Reading { view, capture_px: [minimap.width, minimap.height], icons });
     }
+    let mut frame = plan.frame;
+    if frame.follows_minimap {
+        frame.player = memory.minimap_marker(estimate).map(|v| (v / CELL as f64) as f32);
+    }
     if let Ok(image) = bigmap() {
-        let (view, icons) = bigmap::read(&image, plan);
+        let (view, icons) = bigmap::read(&image, &bigmap::Plan { frame, ..*plan });
         if view.visible {
-            return Ok(Reading { view, capture_px: plan.frame.capture_px(), icons });
+            return Ok(Reading { view, capture_px: frame.capture_px(), icons });
         }
     }
     Ok(Reading { view, capture_px: [minimap.width, minimap.height], icons: vec![] })
@@ -616,7 +622,7 @@ mod tests {
 
     /// The big map on Clearfell (bigmap-player.ppm) and how to read it.
     fn big_map() -> (Image, bigmap::Plan) {
-        let frame = bigmap::Frame { cols: 190, rows: 150, player: [150.0, 30.0] };
+        let frame = bigmap::Frame { cols: 190, rows: 150, player: [150.0, 30.0], follows_minimap: false };
         (fixture("bigmap-player.ppm"), bigmap::Plan { marker: [300.0, 60.0], radius: 16.0, frame })
     }
 
@@ -700,20 +706,25 @@ mod tests {
         // The minimap ends at the window's right edge, not the monitor's (whose last
         // 10 px show a lavender window border).
         assert_eq!(r.minimap, "3530,1 300x259");
-        assert_eq!(r.bigmap, "2702,379 319x278");
-        assert_eq!(r.plan.frame.cols, 300);
-        assert_eq!(r.plan.frame.rows, 259);
+        assert_eq!(r.bigmap, "2690,367 343x302");
+        assert_eq!((r.plan.frame.cols, r.plan.frame.rows), (300, 259));
         let [px, py] = r.plan.frame.player;
-        assert!((px - 157.9).abs() < 0.1 && (py - 142.0).abs() < 0.1, "{px},{py}");
+        assert!((px - 158.0).abs() < 0.1 && (py - 142.0).abs() < 0.1, "{px},{py}");
         // The big-map marker (1919, 1059 window px) inside the big-map capture.
         let [mx, my] = r.plan.marker;
-        assert!((mx - (1918.8 - (2702.0 - 1910.0) * 2.0)).abs() < 0.2, "{mx}");
-        assert!((my - (1059.0 - (379.0 - 1.0) * 2.0)).abs() < 0.2, "{my}");
+        assert!((mx - (1918.8 - (2690.0 - 1910.0) * 2.0)).abs() < 0.2, "{mx}");
+        assert!((my - (1059.0 - (367.0 - 1.0) * 2.0)).abs() < 0.2, "{my}");
         assert_eq!(r.minimap_marker, [px as f64 * 2.0, py as f64 * 2.0]);
         // A window filling its monitor reads the same corner as before.
         let r = regions([1920.0, 0.0, 1920.0, 1080.0], [1920.0, 0.0, 1920.0, 1080.0], 2.0).unwrap();
         assert_eq!(r.minimap, "3540,0 300x259");
         assert!(regions([0.0, 0.0, 1920.0, 1080.0], [1920.0, 0.0, 1920.0, 1080.0], 2.0).is_err());
+        // A 21:9 window (3440x1440 px): the minimap is sized by height at the right edge,
+        // its cross expected at about 3251, 189 px of the window.
+        let r = regions([0.0, 0.0, 1720.0, 720.0], [0.0, 0.0, 1720.0, 720.0], 2.0).unwrap();
+        assert_eq!(r.minimap, "1520,0 200x173");
+        let [ex, ey] = r.minimap_marker;
+        assert!((ex + 3040.0 - 3250.6).abs() < 0.5 && (ey - 189.4).abs() < 0.5, "{ex},{ey}");
     }
 
     /// A small walled area (cells): room outlines and a wiggly wall, about 240 x 200.
@@ -739,8 +750,9 @@ mod tests {
     }
 
     /// Paints wall cells and the player cross as the game would: 2 px a cell at the
-    /// minimap's scale, the player (world cell `pos`) at pixel `marker`.
-    fn screen(width: usize, height: usize, pos: (i32, i32), marker: (i32, i32)) -> Image {
+    /// minimap's scale, the player (world cell `pos`) on the pixel `marker`.
+    fn screen(size: [usize; 2], pos: (i32, i32), marker: (i32, i32)) -> Image {
+        let [width, height] = size;
         let mut img = image(width, height, |_, _| [14, 16, 22]);
         let mut put = |x: i32, y: i32, rgb: [u8; 3]| {
             if x >= 0 && y >= 0 && (x as usize) < width && (y as usize) < height {
@@ -763,48 +775,62 @@ mod tests {
         img
     }
 
-    /// Walks the player through `world` showing the minimap, then the big map, then the
-    /// minimap again, and returns the recorder's overview as JSON.
-    fn walk(minimap_marker: [f64; 2], plan: &bigmap::Plan, big_size: [usize; 2]) -> (serde_json::Value, Vec<&'static str>, (i32, i32)) {
+    /// One walk through `world`: the minimap shown, then the big map, then the minimap.
+    struct Walk {
+        /// Where the reader expects the minimap's cross, and where it is painted.
+        estimate: [f64; 2],
+        painted: [f64; 2],
+        minimap_size: [usize; 2],
+        plan: bigmap::Plan,
+        big_size: [usize; 2],
+    }
+
+    /// The recorder's overview as JSON, which view each frame was read from, and the walk.
+    fn walk(walk: &Walk) -> (serde_json::Value, Vec<&'static str>, Vec<(i32, i32)>) {
         use crate::layout::Recorder;
         use crate::tracker::LogEvent;
         let recorder = Recorder::new(None);
         recorder.on_log(&LogEvent::ZoneEntered { area: "test".into(), level: 1, seed: Some(1) }, true);
-        let mini_marker = (minimap_marker[0] as i32, minimap_marker[1] as i32);
-        let big_marker = (plan.marker[0] as i32, plan.marker[1] as i32);
-        let (start, mut pos) = ((60, 80), (60, 80));
+        let mini_marker = (walk.painted[0] as i32, walk.painted[1] as i32);
+        let big_marker = (walk.plan.marker[0] as i32, walk.plan.marker[1] as i32);
         let mut memory = Memory::default();
-        let mut seen = vec![];
+        let (mut seen, mut path) = (vec![], vec![]);
         for step in 0..90 {
-            pos = (60 + step * 2, 80 + (step as f32 / 9.0).sin() as i32 * 6 + step / 3);
+            let pos = (60 + step * 2, 80 + (step as f32 / 9.0).sin() as i32 * 6 + step / 3);
+            path.push(pos);
             let big_open = (30..60).contains(&step);
-            // With the big map open the corner shows big-map lines, which must not be read.
-            let corner = if big_open { corner_lines([600, 518]) } else { screen(600, 518, pos, mini_marker) };
-            let big = screen(big_size[0], big_size[1], pos, big_marker);
-            let reading = choose(&mut memory, &corner, minimap_marker, plan, || Ok(big)).unwrap();
+            let corner = if big_open { corner_lines(walk.minimap_size) } else { screen(walk.minimap_size, pos, mini_marker) };
+            let big = screen(walk.big_size, pos, big_marker);
+            let reading = choose(&mut memory, &corner, walk.estimate, &walk.plan, || Ok(big)).unwrap();
             seen.push(if reading.view.message == "Reading big map" { "big" } else { "minimap" });
             recorder.on_frame(&reading.view, reading.capture_px);
         }
         let json = serde_json::to_value(recorder.view().unwrap()).unwrap();
-        (json, seen, (pos.0 - start.0, pos.1 - start.1))
+        (json, seen, path)
     }
 
-    /// The recorder's overview: one part, every frame placed, and the player where the walk ended.
-    fn assert_one_track(json: &serde_json::Value, moved: (i32, i32)) {
+    /// One part, every frame placed, and the trail follows the walk step by step: no jump
+    /// at the switches between views.
+    fn assert_one_track(json: &serde_json::Value, path: &[(i32, i32)]) {
         assert_eq!(json["part"], 1, "a new part was started");
         assert_eq!(json["frames"], json["matched"], "frames left unplaced");
-        // The stitched area is under 300 x 260 cells, so the overview is unscaled.
+        // The stitched area is under 300 x 260 cells, so the overview is unscaled; every
+        // frame moved at least 2 cells, so each left a trail point.
         let at = |v: &serde_json::Value| (v[0].as_f64().unwrap(), v[1].as_f64().unwrap());
-        let (first, player) = (at(&json["trail"][0]), at(&json["player"]));
-        let (dx, dy) = (player.0 - first.0, player.1 - first.1);
-        assert!((dx - moved.0 as f64).abs() <= 1.0 && (dy - moved.1 as f64).abs() <= 1.0, "moved {dx},{dy}, walked {moved:?}");
+        let trail: Vec<(f64, f64)> = json["trail"].as_array().unwrap().iter().map(at).collect();
+        assert_eq!(trail.len(), path.len());
+        for (i, (point, pos)) in trail.iter().zip(path).enumerate() {
+            let (dx, dy) = (point.0 - trail[0].0, point.1 - trail[0].1);
+            let (wx, wy) = (pos.0 - path[0].0, pos.1 - path[0].1);
+            assert!((dx - wx as f64).abs() <= 1.0 && (dy - wy as f64).abs() <= 1.0, "frame {i}: moved {dx},{dy}, walked {wx},{wy}");
+        }
     }
 
-    /// The owner's game window (3840x2160 px, minimap capture 600x518 px at 3240,0):
-    /// where the minimap draws the player, how to read the big map, and its capture size.
-    fn owner_plan(frame: Option<bigmap::Frame>) -> ([f64; 2], bigmap::Plan, [usize; 2]) {
-        let window = [3840.0, 2160.0];
-        let mut layout = big_layout(window, [3240.0, 0.0], [600, 518]);
+    /// A game window of `window` pixels whose minimap capture is `minimap_size` at
+    /// `minimap_origin`: where the reader expects the minimap's cross, how it reads the big
+    /// map, and the big-map capture size.
+    fn plan_for(window: [f64; 2], minimap_origin: [f64; 2], minimap_size: [usize; 2], frame: Option<bigmap::Frame>) -> ([f64; 2], bigmap::Plan, [usize; 2]) {
+        let mut layout = big_layout(window, minimap_origin, minimap_size);
         if let Some(frame) = frame {
             (layout.area, _) = bigmap::area(window, &frame);
             layout.frame = frame;
@@ -816,14 +842,42 @@ mod tests {
         (layout.minimap_marker, bigmap::Plan { marker, radius: bigmap::radius(window), frame: layout.frame }, size)
     }
 
+    /// The owner's window: 3840x2160 px, minimap capture 600x518 px at 3240,0.
+    fn owner(painted_off: [f64; 2]) -> Walk {
+        let (estimate, plan, big_size) = plan_for([3840.0, 2160.0], [3240.0, 0.0], [600, 518], None);
+        let painted = [estimate[0] + painted_off[0], estimate[1] + painted_off[1]];
+        Walk { estimate, painted, minimap_size: [600, 518], plan, big_size }
+    }
+
     #[test]
     fn one_track_across_minimap_and_big_map() {
-        let (minimap_marker, plan, size) = owner_plan(None);
-        assert_eq!(size, [637, 555]);
-        let (json, seen, moved) = walk(minimap_marker, &plan, size);
+        let walk_spec = owner([0.0, 0.0]);
+        assert_eq!(walk_spec.big_size, [685, 603]);
+        let (json, seen, path) = walk(&walk_spec);
         assert_eq!(seen.iter().filter(|&&v| v == "big").count(), 30);
         assert_eq!((seen[29], seen[30], seen[59], seen[60]), ("minimap", "big", "big", "minimap"));
-        assert_one_track(&json, moved);
+        assert_one_track(&json, &path);
+    }
+
+    #[test]
+    fn one_track_when_the_minimap_cross_is_off_the_estimate() {
+        // The cross 12 px right and 10 px up of where it was expected (6 and 5 cells, more
+        // than the recorder's 4-cell rule): the reader learns its spot, and big-map frames
+        // put the player there too. (Within 4 cells there is no step either way: each view
+        // places its walls around the player cell it reports.)
+        let (json, seen, path) = walk(&owner([12.0, -10.0]));
+        assert_eq!(seen.iter().filter(|&&v| v == "big").count(), 30);
+        assert_one_track(&json, &path);
+    }
+
+    #[test]
+    fn one_track_in_a_21_9_window() {
+        // 3440x1440 px: minimap capture 400x346 px at the right edge.
+        let (estimate, plan, big_size) = plan_for([3440.0, 1440.0], [3040.0, 0.0], [400, 346], None);
+        let painted = [estimate[0] + 2.0, estimate[1] + 2.0];
+        let (json, seen, path) = walk(&Walk { estimate, painted, minimap_size: [400, 346], plan, big_size });
+        assert_eq!(seen.iter().filter(|&&v| v == "big").count(), 30);
+        assert_one_track(&json, &path);
     }
 
     /// Larger big-map frames (BigFrame::Wide) with the recorder as it is: it keeps the
@@ -832,9 +886,9 @@ mod tests {
     #[test]
     #[ignore]
     fn one_track_with_wide_big_map_frames() {
-        let (minimap_marker, plan, size) = owner_plan(Some(bigmap::Frame::wide(600, 518)));
-        let (json, _, moved) = walk(minimap_marker, &plan, size);
-        assert_one_track(&json, moved);
+        let (estimate, plan, big_size) = plan_for([3840.0, 2160.0], [3240.0, 0.0], [600, 518], Some(bigmap::Frame::wide(600, 518)));
+        let (json, _, path) = walk(&Walk { estimate, painted: estimate, minimap_size: [600, 518], plan, big_size });
+        assert_one_track(&json, &path);
     }
 
     #[test]

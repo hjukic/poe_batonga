@@ -16,9 +16,11 @@ use serde::Serialize;
 pub const SCALE: f64 = 1.0;
 /// The big map's player marker, as a fraction of the game window (1919, 1059 px of 3840x2160).
 const PLAYER: [f64; 2] = [0.4997, 0.4903];
-/// The minimap's player marker, as a fraction of the game window (about 3556, 284 px of
-/// 3840x2160; read from a quarter-size screenshot, so good to about 4 px).
-const MINIMAP_PLAYER: [f64; 2] = [0.9260, 0.1315];
+/// The minimap's player marker, from the window's right and top edges, as a fraction of
+/// the window's height: the game sizes its minimap by height and anchors it to the right
+/// edge (about 3556, 284 px of 3840x2160, from a quarter-size screenshot, so good to
+/// about 4 px; the reader then learns the real spot from the minimap itself).
+const MINIMAP_PLAYER: f64 = 0.1315;
 /// How far from the expected point the marker is looked for, in pixels at 2160 px height.
 const MARKER_RADIUS: f64 = 16.0;
 /// The player cross: 58 px at 2160 px height (11x10 px). An orange blob counts as the
@@ -44,6 +46,8 @@ pub struct Frame {
     pub cols: usize,
     pub rows: usize,
     pub player: [f32; 2],
+    /// The player cell follows where the minimap's marker is seen.
+    pub follows_minimap: bool,
 }
 
 impl Frame {
@@ -52,19 +56,31 @@ impl Frame {
     /// capture's size, `window_px` the game window's, `minimap_origin` the capture's
     /// top-left corner inside the window (all in screen pixels).
     pub fn like_minimap(minimap_px: [usize; 2], window_px: [f64; 2], minimap_origin: [f64; 2]) -> Frame {
-        let at = |i: usize| ((MINIMAP_PLAYER[i] * window_px[i] - minimap_origin[i]) / CELL as f64) as f32;
-        Frame { cols: minimap_px[0].div_ceil(CELL), rows: minimap_px[1].div_ceil(CELL), player: [at(0), at(1)] }
+        let marker = minimap_marker(window_px);
+        let at = |i: usize| ((marker[i] - minimap_origin[i]) / CELL as f64) as f32;
+        Frame {
+            cols: minimap_px[0].div_ceil(CELL),
+            rows: minimap_px[1].div_ceil(CELL),
+            player: [at(0), at(1)],
+            follows_minimap: true,
+        }
     }
 
-    /// A larger frame with the player in the middle (see `WIDE` in minimap.rs).
+    /// A larger frame with the player in the middle (see `BigFrame::Wide` in minimap.rs).
     pub fn wide(cols: usize, rows: usize) -> Frame {
-        Frame { cols, rows, player: [cols as f32 / 2.0, rows as f32 / 2.0] }
+        Frame { cols, rows, player: [cols as f32 / 2.0, rows as f32 / 2.0], follows_minimap: false }
     }
 
     /// The minimap capture size this frame stands for, in minimap pixels.
     pub fn capture_px(&self) -> [usize; 2] {
         [self.cols * CELL, self.rows * CELL]
     }
+}
+
+/// Where the minimap draws the player in a game window of `window_px` pixels.
+pub fn minimap_marker(window_px: [f64; 2]) -> [f64; 2] {
+    let from_edge = MINIMAP_PLAYER * window_px[1];
+    [window_px[0] - from_edge, from_edge]
 }
 
 /// How to read one big-map capture.
@@ -81,7 +97,9 @@ pub struct Plan {
 /// (x, y, width, height, clipped to the window), and where the marker is expected in it.
 pub fn area(window_px: [f64; 2], frame: &Frame) -> ([f64; 4], [f64; 2]) {
     let marker = [PLAYER[0] * window_px[0], PLAYER[1] * window_px[1]];
-    let margin = radius(window_px) + 2.0;
+    // Room for the marker search and for the player cell following the minimap's
+    // learnt marker (up to `LEARN_LIMIT` radii from the estimate).
+    let margin = radius(window_px) * (1.0 + LEARN_LIMIT) + 2.0;
     let cell = CELL as f64 * SCALE;
     let x0 = (marker[0] - frame.player[0] as f64 * cell - margin).max(0.0);
     let y0 = (marker[1] - frame.player[1] as f64 * cell - margin).max(0.0);
@@ -234,7 +252,7 @@ pub fn size(plan: &Plan) -> f64 {
 /// Wall cells of `frame`, with the image pixel `centre` (the player) on the frame's player
 /// cell and `scale` image pixels per minimap pixel.
 fn walls_in(image: &Image, centre: [f64; 2], frame: &Frame, scale: f64) -> Vec<[u16; 2]> {
-    let Frame { cols, rows, player } = *frame;
+    let Frame { cols, rows, player, .. } = *frame;
     let cell = CELL as f64;
     // Image pixel -> minimap pixel: (p - centre) / scale + player * CELL.
     let to_frame = |p: f64, c: f64, at: f32| (p - c) / scale + at as f64 * cell;
@@ -408,7 +426,7 @@ mod tests {
 
     /// A frame of `cols` x `rows` cells with the player at `player`.
     fn frame(cols: usize, rows: usize, player: [f32; 2]) -> Frame {
-        Frame { cols, rows, player }
+        Frame { cols, rows, player, follows_minimap: false }
     }
 
     /// Paints `rgb` on the pixels of `image` where `inside` holds.
@@ -430,7 +448,7 @@ mod tests {
     /// bigmap-player.ppm: 380x300 px of the big map on Clearfell, the player marker at
     /// about (300.5, 60.7), a frame covering the whole crop.
     fn player_plan() -> Plan {
-        Plan { marker: [300.0, 60.0], radius: 16.0, frame: Frame { cols: 190, rows: 150, player: [150.0, 30.0] } }
+        Plan { marker: [300.0, 60.0], radius: 16.0, frame: frame(190, 150, [150.0, 30.0]) }
     }
 
     /// Recorded minimap walls of the same place, relative to the player.
@@ -484,7 +502,7 @@ mod tests {
     fn plain_scene_has_almost_no_walls() {
         let image = fixture("bigmap-scene.ppm");
         let raw = image.pixels.chunks_exact(3).filter(|p| is_wall(p[0], p[1], p[2])).count();
-        let frame = Frame { cols: 128, rows: 80, player: [64.0, 40.0] };
+        let frame = frame(128, 80, [64.0, 40.0]);
         let walls = walls_in(&image, [128.0, 80.0], &frame, SCALE);
         println!("{raw} lavender pixels, {} wall cells", walls.len());
         // The lit ground behind the translucent map has lavender specks; none survive.
@@ -535,7 +553,7 @@ mod tests {
             }
         }
         let image = Image { width, height, pixels };
-        let frame = Frame { cols: 40, rows: 20, player: [10.0, 10.0] };
+        let frame = frame(40, 20, [10.0, 10.0]);
         let walls = walls_in(&image, [40.0, 30.0], &frame, 2.0);
         assert!(!walls.is_empty());
         assert!(walls.iter().all(|&[x, _]| x == 20 || x == 21), "{walls:?}");
@@ -644,11 +662,12 @@ mod tests {
 
     #[test]
     fn capture_area_covers_the_frame_around_the_marker() {
-        let frame = Frame { cols: 300, rows: 259, player: [158.0, 142.0] };
+        let frame = frame(300, 259, [158.0, 142.0]);
         let ([x, y, w, h], marker) = area([3840.0, 2160.0], &frame);
-        // Marker at 1919, 1059 px; 316 px to its left, 284 above, plus the search margin.
+        // Marker at 1919, 1059 px; 316 px to its left, 284 above, plus a margin for the
+        // marker search and the learnt player cell (2.5 radii + 2 px).
         assert!((x + marker[0] - 1918.8).abs() < 0.1 && (y + marker[1] - 1059.0).abs() < 0.2);
-        assert!((marker[0] - 316.0 - 18.0).abs() < 0.1 && (marker[1] - 284.0 - 18.0).abs() < 0.1);
-        assert!((w - (600.0 + 36.0)).abs() < 0.1 && (h - (518.0 + 36.0)).abs() < 0.1);
+        assert!((marker[0] - 316.0 - 42.0).abs() < 0.1 && (marker[1] - 284.0 - 42.0).abs() < 0.1);
+        assert!((w - (600.0 + 84.0)).abs() < 0.1 && (h - (518.0 + 84.0)).abs() < 0.1);
     }
 }

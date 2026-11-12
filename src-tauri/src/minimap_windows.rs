@@ -2,7 +2,7 @@
 //! Revalidate focus, physical client bounds and occlusion before every capture.
 //! Two crops: the corner minimap and, while the minimap is hidden, the big map
 //! around the player.
-use super::{big_layout, bigmap, Image, REGION_H, REGION_W, REGION_X};
+use super::{big_layout, bigmap, Image, REGION_H, REGION_W};
 use std::{ffi::c_void, mem::size_of, ptr::null_mut};
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HWND, LPARAM, POINT, RECT},
@@ -111,11 +111,12 @@ fn crop_bounds(origin: [i32; 2], size: [i32; 2]) -> Result<Bounds, String> {
     if size[0] < 320 || size[1] < 200 || size[0] > 32768 || size[1] > 32768 {
         return Err("PoE 2 client area is too small or invalid".into());
     }
+    // Anchored to the right edge and sized by height, as the game draws its minimap.
+    let width = ((size[1] as f64 * REGION_W).round() as i32).min(size[0]);
     let bounds = Bounds {
-        x: origin[0] + (size[0] as f64 * REGION_X).round() as i32,
+        x: origin[0] + size[0] - width,
         y: origin[1],
-        width: ((size[0] as f64 * REGION_W).round() as i32)
-            .min(size[0] - (size[0] as f64 * REGION_X).round() as i32),
+        width,
         height: (size[1] as f64 * REGION_H).round() as i32,
     };
     if bounds.width as i64 * bounds.height as i64 > 8_000_000 {

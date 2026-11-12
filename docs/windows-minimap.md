@@ -18,7 +18,9 @@ title and the executable name using limited process-metadata access. It captures
 only the minimap corner while that client is foreground and visible.
 
 Coordinates come from the physical client area, not the entire monitor, using a
-thread-local DPI-awareness context. Negative monitor coordinates are supported.
+thread-local DPI-awareness context. The minimap crop is anchored to the client's
+right edge and sized by its height (27.8% x 24% of the height), as the game draws the
+minimap; for 16:9 that is the same crop as before. Negative monitor coordinates are supported.
 Focus, geometry, virtual desktop bounds and overlapping top-level windows are
 checked before each frame; a frame is discarded if focus/geometry changes during
 the copy. Moving or resizing causes the region to be located again. If another

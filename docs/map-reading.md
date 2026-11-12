@@ -326,7 +326,11 @@ recording and one movement track continue across both views.
   The capture areas now follow the game window and are clipped to it.
 - **Minimap player.** About 3556, 284 px of the window (read from a quarter-size
   screenshot, so ±4 px): cell 158, 142 of the 300x259 minimap frame, below the
-  frame centre (150, 129.5).
+  frame centre (150, 129.5). That is 284 px from both the right and the top edge,
+  13.15% of the window's height: the game sizes the minimap by height and anchors it
+  to the right edge, so the capture (600x518 px at 2160 px height) and this estimate
+  are placed that way, and a 3440x1440 window gets a 400x346 px capture with the
+  cross expected at about 3251, 189 px.
 - **Time per frame** with the big map open (two grim captures, reading, recorder;
   20 live frames): debug build 107 ms (captures 40 + 41, reading 19, recorder 8),
   release 85 ms (captures 39 + 44, reading 0.9, recorder 0.8). With the minimap
@@ -360,6 +364,15 @@ nearest one of about the cross's size (58 px; 0.4–2.5 times that). Fire, item 
 or an exit icon next to it no longer move it, and a speck of orange is no cross. On
 the minimap this replaces the average of every orange pixel in the corner, which an
 exit icon in view (360 px against the cross's 58) pulled tens of cells off.
+
+**The player cell follows the minimap.** The reader learns where the minimap's cross
+really is from accepted minimap frames (averaged, kept within 24 px of the estimate)
+and reports that cell in both views: big-map frames place their walls around it. Within
+4 cells of each other the views would not step anyway (each places its walls around
+the cell it reports, and the recorder follows a reported cell within 4 cells), but a
+larger error (another aspect ratio, a misplaced estimate) made the recorder keep one
+view's cell for the other's walls: with the cross painted 6 and 5 cells off the
+estimate, the trail jumped by that at the first switch. Now it does not (test).
 
 **Filled areas are not walls.** The line colour also passes for bluish-grey floors,
 ice or snow showing through the translucent map. Lines are at most two cells thick,
@@ -411,12 +424,12 @@ corner's zone text give none.
 
 ### Limits
 
-- Measured at 3840x2160 with the owner's settings. Other resolutions use the same
-  fractions of the game window; untested.
+- Measured at 3840x2160 with the owner's settings. Other sizes use the same fractions
+  of the window's height (minimap, from the right edge) and of its size (big map);
+  untested on a real game.
 - If the game lets the big map be zoomed, `SCALE` changes and big-map frames stop
   matching. Not seen; the fit above is at the default zoom.
-- The minimap's player cell comes from a quarter-size screenshot (±2 cells). The
-  recorder follows a reported player cell within 4 cells, so this is enough for one
-  track; a full-size minimap screenshot would pin it.
+- The minimap's estimate comes from a quarter-size screenshot (±2 cells); the reader
+  learns the real spot from the minimap. A full-size minimap screenshot would pin it.
 - Movement across the two views is tested on synthetic pixels only; the live check
   is in [the overlay test](overlay-test.md#big-map-reading).
