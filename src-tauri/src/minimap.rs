@@ -11,6 +11,12 @@ use tauri::{AppHandle, Emitter, Manager};
 
 #[path = "bigmap.rs"]
 pub mod bigmap;
+#[path = "labels.rs"]
+pub mod labels;
+/// The zone names the current zone's exits lead to, for reading the big map's exit labels
+/// (call on zone entry with the zone's `connectionNames`; nothing is read before).
+#[allow(unused_imports)]
+pub use labels::set_label_candidates;
 #[cfg(target_os = "windows")]
 #[path = "minimap_windows.rs"]
 mod windows_capture;
@@ -518,7 +524,8 @@ fn choose(
     };
     let why = match captured {
         Ok((image, plan, skip)) => {
-            let (view, icons) = bigmap::read_with(&image, &plan, skip);
+            // Exit labels on whole-window frames only (`skip` is empty otherwise).
+            let (view, icons) = bigmap::read_with(&image, &plan, skip, !skip.is_empty());
             if view.visible {
                 return Ok(Reading { view, capture_px: frame.capture_px, icons });
             }
@@ -687,6 +694,10 @@ mod tests {
     fn live_timing() {
         use crate::layout::Recorder;
         use crate::tracker::LogEvent;
+        // LIVE_LABELS="Clearfell Encampment,Mud Burrow,The Grelwood": read exit labels too.
+        if let Ok(names) = std::env::var("LIVE_LABELS") {
+            set_label_candidates(names.split(',').map(String::from).collect());
+        }
         let region = locate_minimap().unwrap();
         let recorder = Recorder::new(None);
         recorder.on_log(&LogEvent::ZoneEntered { area: "live-test".into(), level: 0, seed: None }, false);
@@ -702,7 +713,7 @@ mod tests {
             record.push(t.elapsed());
             if frame % SCAN_EVERY as usize == 0 {
                 whole.push(took);
-                println!("whole window: {}, {} walls, icons {:?}", view.message, view.walls.len(), icons.iter().map(|i| (i.kind, i.x.round(), i.y.round())).collect::<Vec<_>>());
+                println!("whole window: {}, {} walls, icons {:?}", view.message, view.walls.len(), icons.iter().map(|i| (i.kind, i.x.round(), i.y.round(), i.label.as_deref().unwrap_or("-"))).collect::<Vec<_>>());
             } else {
                 near.push(took);
             }

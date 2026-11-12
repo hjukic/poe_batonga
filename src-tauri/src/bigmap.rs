@@ -8,7 +8,7 @@
 //! with the same orientation and line colour; its player marker sits 21 px above the
 //! centre of the game window.
 
-use super::{is_marker, is_wall, Image, MinimapView, CELL, CELL_MIN};
+use super::{is_marker, is_wall, labels, Image, MinimapView, CELL, CELL_MIN};
 use serde::Serialize;
 
 /// Big-map pixels per minimap pixel. Fit of the big map's walls onto recorded minimap
@@ -216,11 +216,12 @@ fn blobs(mask: &mut [u8], w: usize, h: usize) -> Vec<(u8, Blob)> {
 /// Also returns the map icons around the player while the big map is read.
 #[cfg(test)]
 pub fn read(image: &Image, plan: &Plan) -> (MinimapView, Vec<Icon>) {
-    read_with(image, plan, &[])
+    read_with(image, plan, &[], false)
 }
 
-/// `read`, with the icons looked for over the whole image but the `skip` rectangles.
-pub fn read_with(image: &Image, plan: &Plan, skip: &[[usize; 4]]) -> (MinimapView, Vec<Icon>) {
+/// `read`, with the icons looked for over the whole image but the `skip` rectangles, and
+/// exit labels read when `labels` (whole-window frames).
+pub fn read_with(image: &Image, plan: &Plan, skip: &[[usize; 4]], labels: bool) -> (MinimapView, Vec<Icon>) {
     let Some(centre) = marker_near(image, plan.marker, plan.radius) else {
         return (not_visible(plan, "player marker not found".into()), vec![]);
     };
@@ -247,7 +248,7 @@ pub fn read_with(image: &Image, plan: &Plan, skip: &[[usize; 4]]) -> (MinimapVie
         walls,
         player: Some(plan.frame.player),
     };
-    (view, icons_in(image, centre, SCALE, size(plan), 2, skip))
+    (view, icons_in(image, centre, SCALE, size(plan), 2, skip, labels))
 }
 
 fn not_visible(plan: &Plan, why: String) -> MinimapView {
@@ -336,6 +337,9 @@ pub struct Icon {
     pub kind: &'static str,
     pub x: f32,
     pub y: f32,
+    /// An exit's label: the zone it leads to, as given to `set_label_candidates`, when
+    /// read (whole-window frames only).
+    pub label: Option<String>,
 }
 
 /// Icon colours and least size in pixels at 2160 px height, measured on the big map
@@ -364,13 +368,14 @@ fn icon_kind(r: u8, g: u8, b: u8) -> u8 {
 /// Map icons in `image`, relative to the player at pixel `centre`, with `scale` image
 /// pixels per minimap pixel. `size` is the image's pixel size relative to 2160 px height.
 pub fn icons(image: &Image, centre: [f64; 2], scale: f64, size: f64) -> Vec<Icon> {
-    icons_in(image, centre, scale, size, 1, &[])
+    icons_in(image, centre, scale, size, 1, &[], false)
 }
 
 /// `icons`, looking at every `stride`-th pixel across and down (icons are 20-30 px wide,
 /// so 2 still finds them, at a quarter of the cost) and leaving out the `skip` rectangles
 /// (image pixels: x0, y0, x1, y1), where the game's or this app's own panels are.
-pub fn icons_in(image: &Image, centre: [f64; 2], scale: f64, size: f64, stride: usize, skip: &[[usize; 4]]) -> Vec<Icon> {
+pub fn icons_in(image: &Image, centre: [f64; 2], scale: f64, size: f64, stride: usize, skip: &[[usize; 4]], read_labels: bool) -> Vec<Icon> {
+    let window = size;
     let (w, h) = (image.width.div_ceil(stride), image.height.div_ceil(stride));
     // One byte a sample; most samples are no icon.
     let mut kinds = Vec::with_capacity(w * h);
@@ -409,8 +414,10 @@ pub fn icons_in(image: &Image, centre: [f64; 2], scale: f64, size: f64, stride: 
         let least = (least as f64 * size * size) as u32;
         for (n, sx, sy) in joined.into_iter().filter(|&(n, _, _)| n >= least) {
             // Sample centre (in samples) -> image pixel centre.
-            let to_cells = |p: f64, c: f64| (((p / n as f64 - 0.5) * stride as f64 + 0.5 - c) / scale / CELL as f64) as f32;
-            icons.push(Icon { kind: name, x: to_cells(sx, centre[0]), y: to_cells(sy, centre[1]) });
+            let at = [(sx / n as f64 - 0.5) * stride as f64 + 0.5, (sy / n as f64 - 0.5) * stride as f64 + 0.5];
+            let to_cells = |p: f64, c: f64| ((p - c) / scale / CELL as f64) as f32;
+            let label = (read_labels && name == "exit").then(|| labels::read(image, at, window)).flatten();
+            icons.push(Icon { kind: name, x: to_cells(at[0], centre[0]), y: to_cells(at[1], centre[1]), label });
         }
     }
     icons

@@ -468,14 +468,37 @@ they hold and nothing from the panels. Cost at opt-level 0: whole-window frames 
 (read 294, recorder 25), others 179 ms, 226 ms on average, so three frames a second
 hold; release 127 and 88 ms.
 
-**Exit labels (measured, not built).** The big map writes each exit's zone name
-centred above its icon, in light grey. On the live screen (3840x2160) "The Grelwood"
-is 102 px wide and "Mud Burrow" 96 px: 6% apart, for two of Clearfell's three exits.
-Measuring a label is not reliable enough: the gap between its words (about 10 px) is
-as wide as the gap to a neighbouring label ("Checkpoint" nearly touches "Mud Burrow"),
-the checkpoint's crystal overlaps its first letter, and turning a candidate name into
-an expected width would need the game font's letter widths. A glyph table measured from
-seen labels, or matching labels against rendered names, would be the way, not a width.
+**Exit labels (pass 4).** The big map writes each exit's zone name centred above its
+icon. Widths alone cannot tell the names apart ("The Grelwood" 102 px, "Mud Burrow" 96
+px), but the names an exit can have are known: the zone's `connectionNames`. So each
+candidate is drawn in the game's own font (Fontin Regular, from the game's data,
+`data/fonts/`, `scripts/fetch-fonts.sh`) and compared with the label's light-grey
+pixels (`src-tauri/src/labels.rs`):
+
+- Font and size found on the live screen: Fontin Regular at 17 px (16.8-17.2 tried) per
+  2160 px of height; the text's top 25 px above the icon centre (searched ±6 px across,
+  ±4 down).
+- Score: 2PR/(P+R), P the share of label pixels in the name's box within a pixel of the
+  drawn name, R the share of the drawn name within a pixel of label pixels, best over
+  sizes and places. "Checkpoint" and "Waypoint" are always scored too.
+- Read only when a zone name is best, scores at least 0.90 and leads the next by 0.10.
+
+| Label (live fixtures) | Best | Next |
+| --- | --- | --- |
+| The Grelwood exit | The Grelwood 0.996 | Mud Burrow 0.773 |
+| Mud Burrow exit (crystal over its M) | Mud Burrow 0.954 | Checkpoint 0.788 |
+| Checkpoints | Checkpoint 0.970 | Waypoint 0.818-0.878 |
+| Waypoint | Waypoint 0.919 | Checkpoint 0.825 |
+| The Grelwood, left half covered | The Grelwood 0.744 | unread |
+| The Grelwood with The Grelwood zone's names | The Red Vale 0.850 | lead 0.08, unread |
+
+Live (7 whole-window scans): both exits read right every time, checkpoints and the
+waypoint get no label. Labels are read only for exit icons, on whole-window frames,
+and kept per icon place; a first read costs about 12 ms (opt-level 2). The reader
+reads nothing until `minimap::set_label_candidates` gets the zone's names, which the
+recorder's zone entry must call. The corner minimap draws labels too (the quarter-size
+screenshot shows "The Grelwood" and "Checkpoint" by their icons, at the big map's
+scale); reading them there is not built (no full-size minimap screenshot to test on).
 
 Quality: on the whole Clearfell screenshot all six map icons are found (2 exits, 3
 checkpoints, 1 waypoint) at their centres within a pixel or two, with no false ones
