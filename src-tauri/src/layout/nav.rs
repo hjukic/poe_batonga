@@ -107,13 +107,13 @@ pub enum Seen<'a> {
 pub struct Memory {
     /// Layout id → probability.
     pub layouts: BTreeMap<String, f64>,
-    /// World units walked with tracking, over all visits.
+    /// World units walked with tracking, over all visits (gold counts only this visit's).
     #[serde(default)]
     pub walked: f64,
     /// Where the player was: layout id → equally weighted [x, y, scale error].
     #[serde(default)]
     pub positions: BTreeMap<String, Vec<[f32; 3]>>,
-    /// Unix seconds when this was taken.
+    /// Unix seconds of the last data it holds.
     #[serde(default)]
     pub at: u64,
 }
@@ -167,8 +167,13 @@ pub struct Navigator {
     scale: f64,
     rng: Rng,
     banks: Vec<Bank>,
-    /// World units walked with tracking (this visit and remembered ones).
+    /// World units walked with tracking this visit, and before it (remembered).
     walked: f64,
+    walked_before: f64,
+    /// Data came in since the start (movement, an anchor): only then is the
+    /// memory worth writing; and when the last came (unix seconds).
+    changed: bool,
+    data_at: u64,
     since_weigh: f64,
     /// Movement not yet applied to the particles: world units at the nominal
     /// scale, and the sum of squared step lengths (for the noise).
@@ -221,19 +226,40 @@ impl Navigator {
                 bank
             })
             .collect();
-        Navigator {
+        let mut nav = Navigator {
             area: area.clone(),
             scale,
             rng,
             banks,
-            walked: memory.map_or(0.0, |m| m.walked),
+            walked: 0.0,
+            walked_before: memory.map_or(0.0, |m| m.walked),
+            changed: false,
+            data_at: memory.map_or(0, |m| m.at),
             since_weigh: 0.0,
             pending: (0.0, 0.0),
             pending_sq: 0.0,
             heading: (0.0, 0.0),
             anchored: false,
             guidance: RefCell::default(),
+        };
+        // The player may have walked on since the position was saved.
+        if let Some(m) = resume {
+            let elapsed = unix_now().saturating_sub(m.at) as f64;
+            if elapsed >= 1.0 {
+                nav.lost(elapsed);
+            }
         }
+        nav
+    }
+
+    /// Data came in since the start: the memory changed.
+    pub fn changed(&self) -> bool {
+        self.changed
+    }
+
+    fn touched(&mut self) {
+        self.changed = true;
+        self.data_at = unix_now();
     }
 
     /// Movement in minimap cells, screen axes (x right, y down).
@@ -245,6 +271,9 @@ impl Navigator {
         let keep = (-step / HEADING_LENGTH).exp();
         self.heading = (self.heading.0 * keep + wx, self.heading.1 * keep + wy);
         self.walked += step;
+        if step > 0.0 {
+            self.touched();
+        }
         self.since_weigh += step;
         if self.since_weigh >= WEIGH_EVERY {
             self.apply();
@@ -307,6 +336,7 @@ impl Navigator {
         }
         self.anchored = true;
         self.since_weigh = 0.0;
+        self.touched();
         let Navigator { area, banks, rng, .. } = self;
         for ((layout, bank), goals) in area.layouts.iter().zip(banks.iter_mut()).zip(&goals) {
             if goals.is_empty() {
@@ -461,9 +491,9 @@ impl Navigator {
         }
         Memory {
             layouts: self.area.layouts.iter().map(|l| l.id.clone()).zip(posterior).collect(),
-            walked: self.walked,
+            walked: self.walked_before + self.walked,
             positions,
-            at: unix_now(),
+            at: self.data_at,
         }
     }
 
@@ -764,6 +794,16 @@ mod tests {
         let view = resumed.guide(&target).unwrap();
         assert!(super::super::guide::angle_between(view.degrees.unwrap(), needle.degrees.unwrap()) < 30.0, "{needle:?} {view:?}");
         assert_eq!(view.variant, needle.variant);
+        // Saved 5 minutes ago: the player may be anywhere within reach, and nothing
+        // is gold before this visit has data of its own.
+        let aged = Memory { at: memory.at - 300, ..memory.clone() };
+        let later = Navigator::new(&area, Arrival::Unknown, Some(&aged), SCALE, 7);
+        let first = later.guide(&target).unwrap();
+        assert_ne!(first.source, "estimated", "{first:?}");
+        assert!(first.confidence < view.confidence, "{first:?} {view:?}");
+        assert_eq!(later.progress().0, 0.0, "walked counts this visit only");
+        assert_eq!(later.memory().walked, memory.walked);
+        assert!(!later.changed());
         // Older than `RESUME`: the layout only.
         let stale = Memory { at: memory.at - RESUME - 1, ..memory.clone() };
         let cold = Navigator::new(&area, Arrival::Unknown, Some(&stale), SCALE, 7);

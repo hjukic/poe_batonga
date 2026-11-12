@@ -681,7 +681,9 @@ impl State {
 
     fn save(&self) {
         let Some(session) = &self.session else { return };
-        if let (Some(nav), Some(path)) = (&session.navigator, session.nav_file()) {
+        // Only a navigator that got data has something new to keep (a log catch-up
+        // replays old zone entries without any).
+        if let (Some(nav), Some(path)) = (session.navigator.as_ref().filter(|n| n.changed()), session.nav_file()) {
             write_json(&path, &nav.memory());
         }
         let mut parts = session.recording.parts.clone();
@@ -707,6 +709,8 @@ impl State {
 
     /// A navigator for a new visit, in areas with layout graphs; it starts from
     /// what an earlier visit of the same instance learnt.
+    /// Instances are told apart by area and seed; towns share seed 1 but have no
+    /// graph, so no two instances share a `.nav.json` while that holds.
     fn navigator(&self, session: &Session) -> Option<nav::Navigator> {
         let area = self.catalog.graph(&session.recording.area)?;
         let memory: Option<nav::Memory> = session
@@ -1005,10 +1009,33 @@ mod tests {
         enter(&recorder, "G1_2");
         let state = recorder.0.lock().unwrap();
         let nav = state.session.as_ref().unwrap().navigator.as_ref().unwrap();
-        assert_eq!(nav.progress().0, memory.walked);
+        // This visit has walked nothing yet; the total is kept.
+        assert_eq!(nav.progress().0, 0.0);
+        assert_eq!(nav.memory().walked, memory.walked);
+        // The walk was weighed: the layouts are no longer equally likely.
+        let (lo, hi) = memory.layouts.values().fold((1.0f64, 0.0f64), |(lo, hi), &p| (lo.min(p), hi.max(p)));
+        assert!(hi > 1.5 * lo, "{lo} {hi}");
         let top = memory.layouts.iter().max_by(|a, b| a.1.total_cmp(b.1)).unwrap().0;
         assert!(nav.ranking().iter().take(3).any(|(id, _)| id == top), "{:?}", &nav.ranking()[..3]);
         drop(state);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_log_catch_up_leaves_the_navigator_memory_untouched() {
+        let dir = scratch("catchup");
+        let file = dir.join("G1_2").join("7.nav.json");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        let memory = nav::Memory { layouts: [("ClearFell_W_E_N".to_string(), 0.7)].into(), walked: 900.0, at: 12345, ..Default::default() };
+        let bytes = serde_json::to_vec(&memory).unwrap();
+        std::fs::write(&file, &bytes).unwrap();
+        // History from the log at start: zone entries, no frames.
+        let recorder = Recorder::new(Some(dir.clone()));
+        for area in ["G1_2", "G1_town", "G1_2", "G1_3"] {
+            recorder.on_log(&LogEvent::ZoneEntered { area: area.into(), level: 1, seed: Some(7) }, false);
+        }
+        recorder.save_now();
+        assert_eq!(std::fs::read(&file).unwrap(), bytes);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
