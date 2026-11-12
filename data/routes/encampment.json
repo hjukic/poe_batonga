@@ -60,8 +60,8 @@
       "id": "town-to-grelwood",
       "kind": "objective",
       "parts": [{ "text": "Waypoint to The Grelwood" }],
-      "trigger": { "type": "zoneEntered", "area": "G1_4", "after": "renly-runed-spikes" },
-      "evidence": "Zone-generation line for G1_4, counted only once renly-runed-spikes is done: the zone was entered before."
+      "trigger": { "type": "zoneEntered", "area": "G1_4", "after": "red-vale-portal-town" },
+      "evidence": "Zone-generation line, counted only once red-vale-portal-town is done (the town was reached from The Red Vale): the log cannot see renly-runed-spikes, the step meant."
     },
     {
       "id": "town-una-roots",

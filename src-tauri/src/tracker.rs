@@ -308,7 +308,36 @@ pub fn apply(routes: &[Route], progress: &mut Progress, timestamp: &str, event: 
         );
         changed = true;
     }
+    imply_earlier(routes, progress, timestamp, &done_before);
     changed
+}
+
+/// The log shows zone entries and a few spoken lines; a talk in a dialogue panel, a
+/// pick-up or a waypoint leaves no line (measured 2026-11-12: talks with Renly and Una
+/// in the Clearfell Encampment wrote nothing). The lists are in walking order, so when
+/// the log ticks a step, the steps before it in its list that the log cannot see are
+/// taken as done too (source "implied"). Not optional steps, not boss kills and not
+/// steps the compass leads to: those stay open until they are logged or ticked by hand.
+fn imply_earlier(routes: &[Route], progress: &mut Progress, timestamp: &str, done_before: &BTreeSet<String>) {
+    for route in routes {
+        let newly = |step: &Step| {
+            !done_before.contains(&step.id) && progress.completed.get(&step.id).is_some_and(|c| c.source == "log")
+        };
+        let Some(last) = route.steps.iter().rposition(newly) else { continue };
+        for step in &route.steps[..last] {
+            let unseen = step.kind == "objective"
+                && !step.optional
+                && step.navigation_target.is_none()
+                && !step.parts.iter().any(|p| p.style.as_deref() == Some("boss"));
+            if !unseen || progress.completed.contains_key(&step.id) || progress.dismissed.contains(&step.id) {
+                continue;
+            }
+            progress.completed.insert(
+                step.id.clone(),
+                Completion { at: timestamp.to_string(), source: "implied".into(), evidence: format!("Before {}", route.steps[last].id) },
+            );
+        }
+    }
 }
 
 /// Ticks or unticks a step by hand.
@@ -913,7 +942,8 @@ mod tests {
                 line("INFO", "Wounded Man: Reach... Clearfell... Find the Miller..."),
             ],
         );
-        assert!(!progress.completed.contains_key("talk-wounded-man"));
+        // Not ticked by the line (the town entry takes the step before it as done).
+        assert_eq!(progress.completed["talk-wounded-man"].source, "implied");
         assert!(progress.completed.contains_key("enter-clearfell-encampment"));
     }
 
@@ -1094,7 +1124,12 @@ mod tests {
             let before = progress.completed.clone();
             say(&routes, &mut progress, &speaker, &text);
             // What the line ticked (zone entries tick steps of their own).
-            progress.completed.keys().filter(|k| !before.contains_key(*k)).cloned().collect::<Vec<_>>()
+            progress
+                .completed
+                .iter()
+                .filter(|(k, c)| !before.contains_key(*k) && c.source == "log")
+                .map(|(k, _)| k.clone())
+                .collect::<Vec<_>>()
         };
         assert_eq!(line_of("kill-lachlann"), ("Lachlann of Endless Lament".into(), "Together... at last...".into()));
         assert_eq!(run("G1_7", "kill-lachlann"), ["kill-lachlann"]);
@@ -1165,6 +1200,48 @@ mod tests {
 
     fn done(progress: &mut Progress, id: &str) {
         progress.completed.insert(id.into(), Completion { at: "now".into(), source: "manual".into(), evidence: String::new() });
+    }
+
+    #[test]
+    fn a_logged_step_takes_the_unseen_steps_before_it_as_done() {
+        let routes = one_route(
+            r#"{"id":"talk","kind":"objective","parts":[{"text":"Talk to Una"}]},
+               {"id":"note","kind":"note","parts":[]},
+               {"id":"side","kind":"objective","optional":true,"parts":[]},
+               {"id":"boss","kind":"objective","parts":[{"text":"Kill "},{"text":"Beira","style":"boss"}]},
+               {"id":"gate","kind":"objective","navigationTarget":{"area":"A","label":"Gate","tag":"gate"},"parts":[]},
+               {"id":"undone","kind":"objective","parts":[]},
+               {"id":"leave","kind":"objective","parts":[],"trigger":{"type":"zoneEntered","area":"B"}},
+               {"id":"later","kind":"objective","parts":[]}"#,
+        );
+        let mut progress = Progress::default();
+        // Unticked by hand before: it stays unticked.
+        progress.dismissed.insert("undone".into());
+        enter_zone(&routes, &mut progress, "A");
+        assert!(progress.completed.is_empty());
+        enter_zone(&routes, &mut progress, "B");
+        assert_eq!(progress.completed["leave"].source, "log");
+        assert_eq!(progress.completed["talk"].source, "implied");
+        assert_eq!(progress.completed["talk"].evidence, "Before leave");
+        // Not a note, an optional step, a boss kill, a step the compass leads to,
+        // one unticked by hand, or a step after the logged one.
+        for id in ["note", "side", "boss", "gate", "undone", "later"] {
+            assert!(!progress.completed.contains_key(id), "{id}");
+        }
+    }
+
+    #[test]
+    fn leaving_the_encampment_ticks_the_talk_with_renly() {
+        let routes = load_routes();
+        let mut progress = Progress::default();
+        enter_zone(&routes, &mut progress, "G1_town");
+        assert!(!progress.completed.contains_key("talk-renly"));
+        enter_zone(&routes, &mut progress, "G1_2");
+        assert_eq!(progress.completed["enter-clearfell"].source, "log");
+        assert_eq!(progress.completed["talk-renly"].source, "implied");
+        // Later talks in the town's list stay open.
+        assert!(!progress.completed.contains_key("renly-runed-spikes"));
+        assert!(!progress.completed.contains_key("town-una-roots"));
     }
 
     #[test]

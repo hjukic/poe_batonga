@@ -99,8 +99,8 @@
       "id": "grelwood-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": { "type": "zoneEntered", "area": "G1_town", "after": "grelwood-una-seals" },
-      "evidence": "Zone-generation line for G1_town, counted only once grelwood-una-seals is done: the zone was entered before."
+      "trigger": { "type": "zoneEntered", "area": "G1_town", "after": "town-to-grelwood" },
+      "evidence": "Zone-generation line, counted only once town-to-grelwood is done (the waypoint trip back to The Grelwood): the log cannot see grelwood-una-seals, the step meant."
     }
   ]
 }

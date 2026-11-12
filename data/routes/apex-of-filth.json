@@ -24,8 +24,8 @@
       "id": "apex-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": { "type": "zoneEntered", "area": "G3_town", "after": "kill-queen-of-filth" },
-      "evidence": "Zone-generation line for G3_town, counted only once kill-queen-of-filth is done: the zone was entered before."
+      "trigger": { "type": "zoneEntered", "area": "G3_town", "after": "ziggurat-to-apex" },
+      "evidence": "Zone-generation line, counted only once ziggurat-to-apex is done (the trip to the Apex of Filth): the log cannot see kill-queen-of-filth, the step meant."
     }
   ]
 }

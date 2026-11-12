@@ -1,9 +1,26 @@
 # Triggers: checklist steps that tick themselves
 
 A step in `data/routes/<zone>.json` may carry a `trigger`: a line of the game's log
-(`Client.txt`) that ticks it. Steps without one are ticked by hand (Ctrl+Shift+Space); a hand
-tick also stores the last 30 dialogue lines in `step-observations.jsonl` beside
-`progress.json`, so play shows which lines really come before each step.
+(`Client.txt`) that ticks it. Steps without one are ticked by a click on their row (at any
+time, also while the panel is locked); a hand tick also stores the last 30 dialogue lines in
+`step-observations.jsonl` beside `progress.json`, so play shows which lines really come before
+each step.
+
+**Measured on 2026-11-12 (the owner playing a new character): text of a dialogue panel is not
+logged.** Talks with Renly and Una in the Clearfell Encampment wrote no line; from entering the
+town to leaving it the log held only connection and shop lines. The `panel` triggers below
+therefore do not fire. The log shows zone entries, level-ups, world speech (boss barks, shouts
+such as Mortimer's) and cutscene conversations.
+
+## Implied ticks
+
+The lists are in walking order. When the log ticks a step, the steps before it in the same list
+that the log cannot see are taken as done too (`"source": "implied"` in `progress.json`,
+`imply_earlier` in `tracker.rs`): "Talk to Renly" ticks when Clearfell is entered. Never implied:
+optional steps, boss kills, steps the compass leads to (they have a `navigationTarget`), and
+steps unticked by hand. Five return steps (`red-vale-portal-town`, `town-to-grelwood`,
+`grelwood-portal-town`, `apex-portal-town`, `molten-portal-town`) had an `after` naming a step
+the log cannot tick; they now name the nearest earlier step it can.
 
 ## How a trigger works
 

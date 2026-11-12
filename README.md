@@ -11,9 +11,12 @@ A Tauri overlay is available. It has two parts:
 - **A checklist** for the zone you are in: 97 zones (Acts 1–4 and the three interludes), in
   [data/routes/](data/routes/), one file per zone (steps from Domistae's leveling guides; ids
   and levels from the game's area table). Steps are ticked automatically by reading the game's
-  `Client.txt` locally (read-only): entering a zone, or a known NPC line. Steps without a log
-  line are ticked by hand: **Ctrl+Shift+Space** ticks the step with the bright arrow from inside
-  the game, or unlock the panel and click a step. A list of more than nine rows folds.
+  `Client.txt` locally (read-only): entering a zone, or a known NPC line. The log does not show
+  talks, pick-ups or waypoints: those steps are taken as done when a later step of their list is
+  logged, and **a click on a step** marks it done or not done at any time (the rows take the
+  mouse also while the panel is locked; the arrow heads for the first open step). With
+  "Optional content" off (the default) optional steps are not listed. A list of more than nine
+  rows folds. The overlay hides during a boss fight.
 - **A compass needle** around the character that points to the next step that has a target (a
   zone exit, a boss arena). It reads the corner minimap, or the big map (Tab) while that is
   open, to follow how the player moves, and matches that against the game's own layout graphs

@@ -8,8 +8,6 @@ interface Status {
   /** false = locked: click-through except the header buttons. */
   interactive: boolean;
   toggleShortcut: string;
-  /** Global shortcut that ticks the current step. */
-  tickShortcut: string;
   shortcutError: string | null;
   lastError: string | null;
   /** Wayland layer surface: moved with move_overlay_by instead of window dragging. */
@@ -94,7 +92,6 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     </header>
     <p class="restart-status" id="restart-status" role="status" hidden></p>
     <div class="route" id="route"></div>
-    <p class="tick-hint" id="tick-hint" hidden></p>
     <div class="minimap" id="minimap" hidden>
       <canvas id="minimap-canvas" width="300" height="260"></canvas>
     </div>
@@ -103,7 +100,6 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
   <div id="settings" class="dropdown" aria-label="Settings" hidden>
     <label class="row"><span>Opacity</span><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></label>
     <div class="row"><span>Show / hide</span><button id="shortcut" class="keycap" type="button" title="Click, then press a new shortcut"></button></div>
-    <div class="row"><span>Tick current step</span><span id="tick-shortcut" class="keycap static"></span></div>
     <label class="row" title="Off (speedrun): only the steps needed to progress are listed and the arrow leads to them. On: side steps marked optional are listed too, and the arrow leads to them in order."><span>Optional content</span><input id="optional-content" type="checkbox" /></label>
     <label class="row" title="The overlay hides while the game is closed or on a workspace that is not shown"><span>Hide when game is off screen</span><input id="auto-hide" type="checkbox" checked /></label>
     <label class="row" title="The overlay hides when a zone boss starts talking and comes back when the kill is logged, you die or leave, or the boss has been quiet for 30 seconds"><span>Hide during boss fights</span><input id="fight-hide" type="checkbox" checked /></label>
@@ -144,7 +140,6 @@ function render(next: Status) {
   markHeading();
   if (!next.interactive) setSettingsOpen(false);
   if (!recording) shortcutButton.textContent = shortcutLabel(next.toggleShortcut);
-  $('#tick-shortcut').textContent = shortcutLabel(next.tickShortcut);
   showMessage('#shortcut-error', next.shortcutError);
   showMessage('#error', next.lastError);
   syncInput();
@@ -254,11 +249,6 @@ function markHeading() {
     ?? open.find((row) => !row.classList.contains('optional'))
     ?? open[0];
   for (const row of open) row.classList.toggle('heading', row === heading);
-  // A step the log can't tick: say how to tick it from inside the game.
-  const byHand = heading?.classList.contains('manual') ?? false;
-  const hint = $('#tick-hint');
-  hint.hidden = !byHand || !status;
-  if (byHand && status) hint.textContent = `${shortcutLabel(status.tickShortcut)} ticks the step`;
 }
 function setGuideTarget(target: string | null) {
   if (target === guideTarget) return;
@@ -266,19 +256,14 @@ function setGuideTarget(target: string | null) {
   markHeading();
 }
 
+/** A click on a step marks it done or not done, locked or not; the arrow then heads for
+ *  the first step that is still open. */
 function syncStepControls() {
   document.querySelectorAll<HTMLButtonElement>('#route button.step').forEach((row) => {
-    row.disabled = !status?.interactive;
-    if (row.classList.contains('summary')) return;
-    row.title = status?.interactive ? 'Mark complete / incomplete' : 'Unlock the overlay to correct progress';
+    row.disabled = false;
+    if (!row.classList.contains('summary')) row.title = 'Click: done / not done';
   });
-}
-
-/** The global "tick current step" shortcut: ticks the step with the bright arrow. */
-function tickCurrent() {
-  const id = document.querySelector<HTMLElement>('#route .step.heading')?.dataset.id;
-  if (!id) return;
-  void invoke<TrackerView>('toggle_step', { id }).then(renderTracker).catch((error) => showMessage('#error', String(error)));
+  syncInput();
 }
 
 // ---- Live minimap ----
@@ -434,12 +419,14 @@ const header = $('#drag');
 let lastSize = '';
 let lastRects = '';
 /**
- * Only these areas take the mouse; the route is always click-through to the game.
- * Locked: just the lock button. Unlocked: the whole top bar, plus the open menu.
+ * Only these areas take the mouse; the rest of the panel is click-through to the game.
+ * Locked: the lock button and the checklist's rows (a click ticks a step). Unlocked:
+ * the whole top bar and the open menu as well.
  */
 function syncInput() {
   if (!isTauri() || !status) return;
-  const areas = status.interactive ? [header, ...(settings.hidden ? [] : [settings])] : [lockButton];
+  const rows = Array.from(document.querySelectorAll<HTMLElement>('#route button.step'));
+  const areas = [...(status.interactive ? [header, ...(settings.hidden ? [] : [settings])] : [lockButton]), ...rows];
   const rects = areas.map((element) => {
     const box = element.getBoundingClientRect();
     return { x: box.left, y: box.top, width: box.width, height: box.height };
@@ -561,14 +548,13 @@ window.addEventListener('unhandledrejection', (event) => report(`unhandled rejec
 
 async function start() {
   if (!isTauri()) {
-    render({ visible: true, interactive: true, toggleShortcut: 'Ctrl+Space', tickShortcut: 'Ctrl+Shift+Space', shortcutError: null, lastError: null, layerShell: false });
+    render({ visible: true, interactive: true, toggleShortcut: 'Ctrl+Space', shortcutError: null, lastError: null, layerShell: false });
     renderTracker(browserPreview);
     return;
   }
   await listen<{ step: string; error: string | null }>('restart-status', (event) => renderRestart(event.payload.step, event.payload.error));
   await listen<Status>('overlay-status', (event) => render(event.payload));
   await listen<TrackerView>('tracker-state', (event) => renderTracker(event.payload));
-  await listen('tick-current', tickCurrent);
   await listen<MinimapView>('minimap-state', (event) => renderMinimap(event.payload));
   renderMinimap(await invoke<MinimapView>('minimap_state'));
   await listen<LayoutView>('layout-state', (event) => renderLayout(event.payload));

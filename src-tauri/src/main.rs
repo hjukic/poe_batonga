@@ -15,7 +15,6 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 const DEFAULT_TOGGLE_SHORTCUT: &str = "Ctrl+Space";
 /// Ticks the checklist's current step (most steps have no log line to tick them).
-const TICK_SHORTCUT: &str = "Ctrl+Shift+Space";
 const SETTINGS_FILE: &str = "settings.json";
 
 #[derive(Clone, serde::Serialize)]
@@ -25,8 +24,6 @@ struct Status {
     /// false = locked: click-through except the header buttons, and not draggable.
     interactive: bool,
     toggle_shortcut: String,
-    /// Global shortcut that ticks the current step.
-    tick_shortcut: String,
     shortcut_error: Option<String>,
     last_error: Option<String>,
     /// Wayland layer-shell surface: moved by margins (move_overlay_by), not window dragging.
@@ -576,12 +573,10 @@ fn set_toggle_shortcut(app: AppHandle, accelerator: String) -> Result<Status, St
     let old = snapshot(&app)?.toggle_shortcut;
     let shortcuts = app.global_shortcut();
     let _ = shortcuts.unregister_all();
-    let tick = parse_shortcut(TICK_SHORTCUT).map(|s| shortcuts.register(s));
     if let Err(error) = shortcuts.register(new) {
         let _ = parse_shortcut(&old).map(|s| shortcuts.register(s));
         return Err(format!("{accelerator} can't be used: {error}"));
     }
-    let _ = tick;
     save_settings(&app, &Settings { toggle_shortcut: accelerator.clone(), ..load_settings(&app) })?;
     {
         let state = app.state::<OverlayState>();
@@ -781,7 +776,6 @@ fn main() {
                 visible: false,
                 interactive: false,
                 toggle_shortcut: settings.toggle_shortcut.clone(),
-                tick_shortcut: TICK_SHORTCUT.into(),
                 shortcut_error: None,
                 last_error: None,
                 layer_shell,
@@ -800,18 +794,14 @@ fn main() {
             #[cfg(not(target_os = "linux"))]
             watch_input_hover(app.handle().clone());
 
-            // Two global shortcuts: show/hide, and tick the current step (the page knows
-            // which step that is). A failure is shown in the settings menu.
+            // One global shortcut: show/hide. A failure is shown in the settings menu.
             let plugin = tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
                     if event.state() != ShortcutState::Pressed {
                         return;
                     }
-                    if parse_shortcut(TICK_SHORTCUT).is_ok_and(|tick| &tick == shortcut) {
-                        let _ = app.emit("tick-current", ());
-                    } else {
-                        toggle_visibility(app);
-                    }
+                    let _ = shortcut;
+                    toggle_visibility(app);
                 })
                 .build();
             let registered = app
@@ -819,8 +809,6 @@ fn main() {
                 .plugin(plugin)
                 .map_err(|e| e.to_string())
                 .and_then(|()| parse_shortcut(&settings.toggle_shortcut))
-                .and_then(|shortcut| app.global_shortcut().register(shortcut).map_err(|e| e.to_string()))
-                .and_then(|()| parse_shortcut(TICK_SHORTCUT))
                 .and_then(|shortcut| app.global_shortcut().register(shortcut).map_err(|e| e.to_string()));
             if let Err(error) = registered {
                 eprintln!("Overlay: global shortcut not registered: {error}");

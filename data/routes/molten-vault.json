@@ -16,8 +16,8 @@
       "id": "molten-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": { "type": "zoneEntered", "area": "G3_town", "after": "kill-mektul" },
-      "evidence": "Zone-generation line for G3_town, counted only once kill-mektul is done: the zone was entered before."
+      "trigger": { "type": "zoneEntered", "area": "G3_town", "after": "drowned-to-molten-vault" },
+      "evidence": "Zone-generation line, counted only once drowned-to-molten-vault is done (the trip to The Molten Vault): the log cannot see kill-mektul, the step meant."
     }
   ]
 }
