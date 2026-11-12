@@ -42,6 +42,10 @@ const LEARN_RATE: f64 = 0.2;
 /// Every this many big-map frames (about once a second) the whole game window is read,
 /// for map icons far from the player (they move on screen only as fast as the player).
 pub const SCAN_EVERY: u32 = 8;
+/// While the big map is being read the corner shows no minimap (the game hides it), so
+/// the corner is captured only every this many frames, and whenever the big map is not
+/// read: one screenshot a frame instead of two.
+const CORNER_EVERY: u32 = 8;
 /// Room left around this app's panel, in logical pixels (its shadow, rounding).
 #[cfg(not(target_os = "windows"))]
 const PANEL_MARGIN: f64 = 8.0;
@@ -445,6 +449,10 @@ struct Memory {
     minimap_marker: Option<([f64; 2], [f64; 2])>,
     /// Big-map frames read so far (every `SCAN_EVERY`-th reads the whole window).
     big_frames: u32,
+    /// The last frame was read from the big map.
+    on_big: bool,
+    /// Frames since the corner was last captured, while `on_big`.
+    corner_skipped: u32,
 }
 
 impl Memory {
@@ -483,34 +491,48 @@ fn read(memory: &mut Memory, region: &CaptureRegion, panel: &dyn Fn() -> Option<
         }
         scan
     };
-    choose(memory, capture(region), region.minimap_marker, &region.plan, Some(&scan), big)
+    choose(memory, || capture(region), region.minimap_marker, &region.plan, Some(&scan), big)
 }
 
-/// `minimap` is the corner's capture; when it failed (on Windows: covered by a window) the
+/// The corner's capture read as the minimap, when it shows its player cross.
+fn corner_reading(memory: &mut Memory, image: &Image, estimate: [f64; 2], plan: &bigmap::Plan) -> Option<Reading> {
+    let search = plan.radius * bigmap::LEARN_LIMIT;
+    let mut view = analyse(image, memory.minimap_marker(estimate), search);
+    let seen = view.player?;
+    memory.learn(estimate, seen.map(|v| v as f64 * CELL as f64), search);
+    // Both views report the learnt spot, so the player cell does not step at a switch.
+    let at = memory.minimap_marker(estimate);
+    view.player = Some(at.map(|v| (v / CELL as f64) as f32));
+    // With the exits' names: the minimap draws them as the big map does (read
+    // on the owner's capture of the Clearfell Encampment, 0.97 against 0.71).
+    let icons = bigmap::icons_in(image, at, 1.0, bigmap::size(plan), 1, &[], true);
+    Some(Reading { view, capture_px: [image.width, image.height], icons, whole: false })
+}
+
+/// `minimap()` captures the corner; when that fails (on Windows: covered by a window) the
 /// big map is still tried, and the error is returned only if that is not read either.
-/// `bigmap(whole)` captures the big map around the player, or the whole game window,
-/// which is read every `SCAN_EVERY`-th big-map frame (with `scan`) for icons far away.
+/// While the big map is read, the corner is captured only every `CORNER_EVERY`-th frame,
+/// and in any frame whose big map is not read. `bigmap(whole)` captures the big map
+/// around the player, or the whole game window, which is read every `SCAN_EVERY`-th
+/// big-map frame (with `scan`) for icons far away.
 fn choose(
     memory: &mut Memory,
-    minimap: Result<Image, String>,
+    minimap: impl Fn() -> Result<Image, String>,
     estimate: [f64; 2],
     plan: &bigmap::Plan,
     scan: Option<&dyn Fn() -> Scan>,
     bigmap: impl Fn(bool) -> Result<Image, String>,
 ) -> Result<Reading, String> {
-    let search = plan.radius * bigmap::LEARN_LIMIT;
-    if let Ok(image) = &minimap {
-        let mut view = analyse(image, memory.minimap_marker(estimate), search);
-        if let Some(seen) = view.player {
-            memory.learn(estimate, seen.map(|v| v as f64 * CELL as f64), search);
-            // Both views report the learnt spot, so the player cell does not step at a switch.
-            let at = memory.minimap_marker(estimate);
-            view.player = Some(at.map(|v| (v / CELL as f64) as f32));
-            // With the exits' names: the minimap draws them as the big map does (read
-            // on the owner's capture of the Clearfell Encampment, 0.97 against 0.71).
-            let icons = bigmap::icons_in(image, at, 1.0, bigmap::size(plan), 1, &[], true);
-            return Ok(Reading { view, capture_px: [image.width, image.height], icons, whole: false });
+    let look = !memory.on_big || memory.corner_skipped + 1 >= CORNER_EVERY;
+    memory.corner_skipped = if look { 0 } else { memory.corner_skipped + 1 };
+    let mut corner = None;
+    if look {
+        let image = minimap();
+        if let Some(reading) = image.as_ref().ok().and_then(|image| corner_reading(memory, image, estimate, plan)) {
+            memory.on_big = false;
+            return Ok(reading);
         }
+        corner = Some(image);
     }
     let mut frame = plan.frame;
     if frame.follows_minimap {
@@ -537,13 +559,25 @@ fn choose(
                     let inside = |v: f32, at: f32, n: usize| v >= -at && v <= n as f32 - at;
                     icons.retain(|i| inside(i.x, px, frame.cols) && inside(i.y, py, frame.rows));
                 }
+                memory.on_big = true;
                 return Ok(Reading { view, capture_px: frame.capture_px, icons, whole });
             }
             view.message
         }
         Err(error) => format!("Big map not read: {error}"),
     };
-    let image = minimap?;
+    memory.on_big = false;
+    // The big map closed between two looks at the corner: the corner now.
+    let image = match corner {
+        Some(image) => image,
+        None => {
+            let image = minimap();
+            if let Some(reading) = image.as_ref().ok().and_then(|image| corner_reading(memory, image, estimate, plan)) {
+                return Ok(reading);
+            }
+            image
+        }
+    }?;
     let view = MinimapView { cols: image.width.div_ceil(CELL), rows: image.height.div_ceil(CELL), ..MinimapView::status(true, &format!("Minimap not visible. {why}")) };
     Ok(Reading { view, capture_px: [image.width, image.height], icons: vec![], whole: false })
 }
@@ -940,6 +974,63 @@ mod tests {
         println!("read, whole-window frames: {}; other frames: {}; recorder {}", stat(&whole), stat(&near), stat(&record));
     }
 
+    /// What a big-map frame costs with the corner captured every frame (as before v0.1.83)
+    /// and every `CORNER_EVERY`-th: real `grim` captures of the owner's regions on DP-1
+    /// (whatever is on screen), the big map read from one of the owner's big-map captures
+    /// (BIG, default the newest `samples/bigmap-*.ppm`). No whole-window scans.
+    /// `cargo test --release big_map_frame_cost -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    #[cfg(target_os = "linux")]
+    fn big_map_frame_cost() {
+        let region = regions([1910.0, 1.0, 1920.0, 1080.0], [1920.0, 0.0, 1920.0, 1080.0], 2.0).unwrap();
+        let big_path = std::env::var("BIG").unwrap_or_else(|_| {
+            let dir = std::path::PathBuf::from(std::env::var("HOME").unwrap()).join(".local/share/com.poebatonga.overlaytest/samples");
+            let mut files: Vec<_> = std::fs::read_dir(dir).unwrap().flatten().map(|f| f.path())
+                .filter(|p| p.file_name().unwrap().to_string_lossy().starts_with("bigmap-")).collect();
+            files.sort();
+            files.pop().unwrap().display().to_string()
+        });
+        let big = parse_ppm(&std::fs::read(&big_path).unwrap()).unwrap();
+        // CPU of this process (all its threads) and of its finished children (grim), in ms.
+        let cpu = || {
+            let stat = std::fs::read_to_string("/proc/self/stat").unwrap();
+            let fields: Vec<f64> = stat.rsplit(") ").next().unwrap().split(' ').map(|f| f.parse().unwrap_or(0.0)).collect();
+            // utime, stime, cutime, cstime are fields 14-17 (here 11-14), in 10 ms ticks.
+            ((fields[11] + fields[12]) * 10.0, (fields[13] + fields[14]) * 10.0)
+        };
+        const FRAMES: usize = 64;
+        for every_frame in [true, false] {
+            let mut memory = Memory::default();
+            let (own0, kids0) = cpu();
+            let started = Instant::now();
+            let mut read = 0;
+            for _ in 0..FRAMES {
+                if every_frame {
+                    memory.on_big = false;
+                }
+                let reading = choose(&mut memory, || grim(&region.minimap), region.minimap_marker, &region.plan, None, |_| {
+                    grim(&region.bigmap).map(|_| big.clone())
+                })
+                .unwrap();
+                if read == 0 && reading.view.message != "Reading big map" {
+                    println!("{}", reading.view.message);
+                }
+                read += usize::from(reading.view.message == "Reading big map");
+            }
+            let wall = started.elapsed().as_secs_f64() * 1000.0 / FRAMES as f64;
+            let (own1, kids1) = cpu();
+            let (own, kids) = ((own1 - own0) / FRAMES as f64, (kids1 - kids0) / FRAMES as f64);
+            let share = |ms: f64| ms / FRAME_INTERVAL.as_secs_f64() / 10.0;
+            println!(
+                "corner {}: {read}/{FRAMES} big-map frames; per frame {wall:.1} ms wall, {own:.1} ms CPU in the reader process, {kids:.1} ms in grim; at 8 frames a second {:.0} % + {:.0} % of a core",
+                if every_frame { "every frame" } else { "every 8th frame" },
+                share(own),
+                share(kids),
+            );
+        }
+    }
+
     /// Records the live game for LIVE_SECONDS (default 45) into LIVE_OUT (a layouts folder):
     /// `LIVE_OUT=/tmp/x cargo test --release live_record -- --ignored --nocapture`.
     #[test]
@@ -1005,9 +1096,34 @@ mod tests {
     }
 
     #[test]
+    fn while_the_big_map_is_read_the_corner_is_captured_every_eighth_frame() {
+        let corner = fixture("corner-bigmap-open.ppm");
+        let (big, plan) = big_map();
+        let looks = std::cell::Cell::new(0);
+        let capture_corner = || {
+            looks.set(looks.get() + 1);
+            Ok(corner.clone())
+        };
+        let mut memory = Memory::default();
+        for _ in 0..16 {
+            let reading = choose(&mut memory, capture_corner, [100.0, 80.0], &plan, None, |_| Ok(big.clone())).unwrap();
+            assert_eq!(reading.view.message, "Reading big map");
+        }
+        // Frames 1 and 9 (the first, and every CORNER_EVERY-th after it).
+        assert_eq!(looks.get(), 2);
+        // The big map closes between two looks: the corner is read in the same frame.
+        let scene = fixture("bigmap-scene.ppm");
+        let reading = choose(&mut memory, || { looks.set(looks.get() + 1); Ok(minimap()) }, [60.5, 50.5], &plan, None, |_| Ok(scene.clone())).unwrap();
+        assert_eq!((reading.view.message.as_str(), looks.get()), ("Reading minimap", 3));
+        // Back on the minimap, the corner is captured every frame again.
+        choose(&mut memory, || { looks.set(looks.get() + 1); Ok(minimap()) }, [60.5, 50.5], &plan, None, |_| panic!("big map read")).unwrap();
+        assert_eq!(looks.get(), 4);
+    }
+
+    #[test]
     fn minimap_wins_while_it_shows_its_player() {
         let (_, plan) = big_map();
-        let reading = choose(&mut Memory::default(), Ok(minimap()), [60.5, 50.5], &plan, None, |_| panic!("big map read")).unwrap();
+        let reading = choose(&mut Memory::default(), || Ok(minimap()), [60.5, 50.5], &plan, None, |_| panic!("big map read")).unwrap();
         assert_eq!((reading.view.message.as_str(), reading.capture_px), ("Reading minimap", [120, 100]));
     }
 
@@ -1016,7 +1132,7 @@ mod tests {
         // The corner while the big map is open: zone name and league text, no minimap.
         let corner = fixture("corner-bigmap-open.ppm");
         let (big, plan) = big_map();
-        let Reading { view, capture_px, icons, .. } = choose(&mut Memory::default(), Ok(corner), [100.0, 80.0], &plan, None, |_| Ok(big.clone())).unwrap();
+        let Reading { view, capture_px, icons, .. } = choose(&mut Memory::default(), || Ok(corner.clone()), [100.0, 80.0], &plan, None, |_| Ok(big.clone())).unwrap();
         assert_eq!(view.message, "Reading big map");
         // The Grelwood exit and its checkpoint, in cells from the player.
         let icons: Vec<_> = icons.iter().map(|i| (i.kind, i.x.round() as i32, i.y.round() as i32)).collect();
@@ -1037,11 +1153,11 @@ mod tests {
         let lines = corner_lines([120, 100]);
         assert!(analyse(&lines, [0.0, 0.0], 0.0).walls.is_empty());
         // The big map not readable (capture failed, or only scene): not visible, with why.
-        let reading = choose(&mut Memory::default(), Ok(corner_lines([120, 100])), [60.5, 50.5], &plan, None, |_| Err("grim failed".into())).unwrap();
+        let reading = choose(&mut Memory::default(), || Ok(corner_lines([120, 100])), [60.5, 50.5], &plan, None, |_| Err("grim failed".into())).unwrap();
         assert!(!reading.view.visible && reading.view.walls.is_empty());
         assert_eq!(reading.view.message, "Minimap not visible. Big map not read: grim failed");
         let scene = fixture("bigmap-scene.ppm");
-        let reading = choose(&mut Memory::default(), Ok(corner_lines([120, 100])), [60.5, 50.5], &plan, None, |_| Ok(scene.clone())).unwrap();
+        let reading = choose(&mut Memory::default(), || Ok(corner_lines([120, 100])), [60.5, 50.5], &plan, None, |_| Ok(scene.clone())).unwrap();
         assert!(!reading.view.visible);
         assert_eq!(reading.view.message, "Minimap not visible. Big map not read: player marker not found");
         // An exit icon (or fire) in the corner is no cross.
@@ -1051,7 +1167,7 @@ mod tests {
                 with_exit.pixels[(y * 120 + x) * 3..][..3].copy_from_slice(&[205, 96, 38]);
             }
         }
-        let reading = choose(&mut Memory::default(), Ok(with_exit), [60.5, 50.5], &plan, None, |_| Err("grim failed".into())).unwrap();
+        let reading = choose(&mut Memory::default(), || Ok(with_exit.clone()), [60.5, 50.5], &plan, None, |_| Err("grim failed".into())).unwrap();
         assert!(!reading.view.visible && reading.view.player.is_none());
     }
 
@@ -1060,7 +1176,7 @@ mod tests {
         let (_, plan) = big_map();
         let mut memory = Memory::default();
         // Expected at (75, 50), seen at (60, 50): learnt.
-        let reading = choose(&mut memory, Ok(minimap()), [75.5, 50.5], &plan, None, |_| panic!("big map read")).unwrap();
+        let reading = choose(&mut memory, || Ok(minimap()), [75.5, 50.5], &plan, None, |_| panic!("big map read")).unwrap();
         assert_eq!(reading.view.player, Some([30.25, 25.25]));
         assert_eq!(memory.minimap_marker([75.5, 50.5]), [60.5, 50.5]);
         // A new estimate (the window moved) starts over; the spot stays near the estimate.
@@ -1073,11 +1189,11 @@ mod tests {
     fn a_covered_minimap_does_not_stop_the_big_map() {
         let (big, plan) = big_map();
         let covered = || Err::<Image, String>("Minimap covered by another window; capture paused".into());
-        let reading = choose(&mut Memory::default(), covered(), [60.5, 50.5], &plan, None, |_| Ok(big.clone())).unwrap();
+        let reading = choose(&mut Memory::default(), || covered(), [60.5, 50.5], &plan, None, |_| Ok(big.clone())).unwrap();
         assert_eq!(reading.view.message, "Reading big map");
         // Neither: the minimap's own error, so the reader locates the game again.
         let scene = fixture("bigmap-scene.ppm");
-        let error = choose(&mut Memory::default(), covered(), [60.5, 50.5], &plan, None, |_| Ok(scene.clone())).err().unwrap();
+        let error = choose(&mut Memory::default(), || covered(), [60.5, 50.5], &plan, None, |_| Ok(scene.clone())).err().unwrap();
         assert!(error.starts_with("Minimap covered"), "{error}");
     }
 
@@ -1088,7 +1204,7 @@ mod tests {
         assert_eq!((frame.cols, frame.capture_px), (301, [601, 518]));
         let (big, plan) = big_map();
         let plan = bigmap::Plan { frame: bigmap::Frame { capture_px: [601, 518], ..plan.frame }, ..plan };
-        let reading = choose(&mut Memory::default(), Ok(corner_lines([120, 100])), [60.5, 50.5], &plan, None, |_| Ok(big.clone())).unwrap();
+        let reading = choose(&mut Memory::default(), || Ok(corner_lines([120, 100])), [60.5, 50.5], &plan, None, |_| Ok(big.clone())).unwrap();
         assert_eq!(reading.capture_px, [601, 518]);
     }
 
@@ -1222,8 +1338,9 @@ mod tests {
             path.push(pos);
             let big_open = (30..60).contains(&step);
             let corner = if big_open { corner_lines(walk.minimap_size) } else { screen(walk.minimap_size, pos, mini_marker, walk.line) };
-            let big = screen(walk.big_size, pos, big_marker, walk.line);
-            let reading = choose(&mut memory, Ok(corner), walk.estimate, &walk.plan, None, |_| Ok(big.clone())).unwrap();
+            // Closed, the big map's area shows the scene: no map is read there.
+            let big = if big_open { screen(walk.big_size, pos, big_marker, walk.line) } else { fixture("bigmap-scene.ppm") };
+            let reading = choose(&mut memory, || Ok(corner.clone()), walk.estimate, &walk.plan, None, |_| Ok(big.clone())).unwrap();
             seen.push(if reading.view.message == "Reading big map" { "big" } else { "minimap" });
             recorder.on_frame(&reading.view, reading.capture_px);
         }
@@ -1366,7 +1483,7 @@ mod tests {
         // Frame 1: the whole window. Every icon on the screenshot, in cells from the player:
         // the Grelwood exit and its checkpoint; 750-820 cells right, the waypoint, a
         // checkpoint and the Mud Burrow exit. Nothing from the panels.
-        let reading = choose(&mut memory, dark(), estimate, &near_plan, Some(&|| scan.clone()), |whole_window| {
+        let reading = choose(&mut memory, dark, estimate, &near_plan, Some(&|| scan.clone()), |whole_window| {
             if whole_window { Ok(whole.clone()) } else { panic!("the area around the player was read") }
         })
         .unwrap();
@@ -1381,7 +1498,7 @@ mod tests {
         }
         // Frames 2 and 3: the area around the player only.
         for _ in 0..2 {
-            let reading = choose(&mut memory, dark(), estimate, &near_plan, Some(&|| scan.clone()), |whole_window| {
+            let reading = choose(&mut memory, dark, estimate, &near_plan, Some(&|| scan.clone()), |whole_window| {
                 assert!(!whole_window);
                 Ok(near.clone())
             })
@@ -1390,7 +1507,7 @@ mod tests {
             assert_eq!(cells(&reading.icons), [("exit", -136, 83), ("checkpoint", -97, 102)]);
         }
         // A failed whole-window capture falls back to the area around the player.
-        let reading = choose(&mut memory, dark(), estimate, &near_plan, Some(&|| scan.clone()), |whole_window| {
+        let reading = choose(&mut memory, dark, estimate, &near_plan, Some(&|| scan.clone()), |whole_window| {
             if whole_window { Err("covered".into()) } else { Ok(near.clone()) }
         })
         .unwrap();
@@ -1407,7 +1524,7 @@ mod tests {
         let plan = bigmap::Plan { marker: [300.0, 60.0], radius: 16.0, frame };
         let near = fixture("bigmap-player.ppm");
         let mut memory = Memory { big_frames: 1, ..Memory::default() };
-        let reading = choose(&mut memory, Err("big map open".into()), [316.0, 284.0], &plan, None, |_| Ok(near.clone())).unwrap();
+        let reading = choose(&mut memory, || Err("big map open".into()), [316.0, 284.0], &plan, None, |_| Ok(near.clone())).unwrap();
         assert!(reading.view.visible, "{}", reading.view.message);
         assert!(!reading.whole);
         let found: Vec<_> = reading.icons.iter().map(|i| (i.kind, i.x.round() as i32, i.y.round() as i32)).collect();
@@ -1439,7 +1556,7 @@ mod tests {
             let mut scan = scan.clone();
             scan.skip[0] = skip0;
             let plan = scan.plan;
-            let reading = choose(&mut Memory::default(), Ok(image(600, 518, |_, _| [14, 16, 22])), [316.0, 284.0], &plan, Some(&|| scan.clone()), |_| Ok(whole.clone())).unwrap();
+            let reading = choose(&mut Memory::default(), || Ok(image(600, 518, |_, _| [14, 16, 22])), [316.0, 284.0], &plan, Some(&|| scan.clone()), |_| Ok(whole.clone())).unwrap();
             reading.icons.iter().filter(|i| i.kind == "exit").count()
         };
         // Fixed place only: the moved panel's three blobs read as more "exits".
