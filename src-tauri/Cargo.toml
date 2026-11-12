@@ -26,3 +26,9 @@ gtk-layer-shell = { version = "0.8", features = ["v0_6"] }
 # The navigator's simulated walks run in every `cargo test`: unoptimised they take 90 s.
 [profile.test]
 opt-level = 1
+
+# `npm run desktop` (tauri dev) is how the app is run day to day: the frame reader and the
+# navigator are several times faster optimised. Dependencies stay as they are, so
+# rebuilds stay short.
+[profile.dev.package.poe-batonga]
+opt-level = 2
