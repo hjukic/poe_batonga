@@ -13,6 +13,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+
 /// World units per file unit of a dungeon room grid ("dgr") without a
 /// `roomUnitSize` (with one: `roomUnitSize - 1`, derived from the room files, not
 /// checked in play). The navigator gives dungeon particles a wide scale prior.
@@ -21,7 +22,7 @@ const DGR_UNIT: f64 = 8.0;
 const CELL: f64 = 8.0;
 /// Room around the corridors in the field.
 const MARGIN: f64 = 200.0;
-/// Corridor distances are capped here; outside the field counts as this far.
+/// The needle's distance counts at most this far from a corridor to it.
 pub(super) const FAR: f64 = 150.0;
 /// Spacing of the points sampled along the corridors, in world units.
 const SPACING: f64 = 4.0;
@@ -256,9 +257,10 @@ impl Layout {
         Some(Layout { id: file.id, dungeon, unit, nodes: file.nodes, edges, samples, field })
     }
 
-    /// The nearest corridor sample and how far away it is (world units, capped at `FAR`).
+    /// The nearest corridor sample and how far away it is (world units); outside
+    /// the field (more than its margin from every corridor) infinitely far.
     pub fn corridor(&self, at: (f64, f64)) -> (f64, Option<usize>) {
-        let Some(j) = self.field.near(at) else { return (FAR, None) };
+        let Some(j) = self.field.near(at) else { return (f64::INFINITY, None) };
         // The cell's sample is nearest to the cell's centre: its neighbours on the
         // same corridor may be nearer to the point itself.
         let gap = |k: usize| {
@@ -268,7 +270,7 @@ impl Layout {
         let edge = self.samples[j].edge;
         let (lo, hi) = (j.saturating_sub(3), (j + 3).min(self.samples.len() - 1));
         let best = (lo..=hi).filter(|&k| self.samples[k].edge == edge).min_by(|&a, &b| gap(a).total_cmp(&gap(b))).unwrap_or(j);
-        ((gap(best) * self.unit).min(FAR), Some(best))
+        (gap(best) * self.unit, Some(best))
     }
 
     /// Walks `left` units along the corridors from sample `j` (forward = towards
@@ -565,8 +567,8 @@ mod tests {
         let e = &layout.edges[0];
         let mid = e.at(e.length() / 2.0);
         assert!(layout.corridor(mid).0 < SPACING, "{:?}", layout.corridor(mid));
-        // Far outside the layout: as far as it gets.
-        assert_eq!(layout.corridor((-1e5, -1e5)).0, FAR);
+        // Far outside the layout: infinitely far.
+        assert_eq!(layout.corridor((-1e5, -1e5)), (f64::INFINITY, None));
         // A brute-force check at random points near the corridors.
         let mut seed = 7u64;
         for _ in 0..200 {
@@ -574,7 +576,7 @@ mod tests {
             let j = (seed >> 33) as usize % layout.samples.len();
             let off = (((seed >> 20) & 0xff) as f64 - 128.0) * 0.6;
             let p = (layout.samples[j].at.0 + off, layout.samples[j].at.1 - off * 0.7);
-            let exact = layout.samples.iter().map(|s| (s.at.0 - p.0).hypot(s.at.1 - p.1)).fold(f64::MAX, f64::min).min(FAR);
+            let exact = layout.samples.iter().map(|s| (s.at.0 - p.0).hypot(s.at.1 - p.1)).fold(f64::MAX, f64::min);
             let (got, _) = layout.corridor(p);
             assert!(got - exact < CELL / 2.0, "{got} vs {exact}");
         }

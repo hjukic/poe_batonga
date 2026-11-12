@@ -43,7 +43,7 @@ const SCALE_LIMIT: f64 = 0.15;
 const DUNGEON_SCALE: f64 = 2.5;
 /// When the particles fit this badly on average, some are redrawn along the corridors.
 const LOST_FIT: f64 = 0.15;
-const RESEED: f64 = 0.05;
+const RESEED: f64 = 0.1;
 /// What a player walks per second (world units), and the most a loss spreads.
 const WALK_SPEED: f64 = 60.0;
 const MAX_REACH: f64 = 2400.0;
@@ -639,6 +639,25 @@ mod tests {
                 Event::Lost(s) => nav.lost(s),
             }
         }
+    }
+
+    #[test]
+    fn particles_far_from_every_corridor_cost_the_floor_and_are_reseeded() {
+        let area = graph::load("G1_2");
+        let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 2);
+        for bank in &mut nav.banks {
+            bank.particles.iter_mut().for_each(|p| (p.x, p.y) = (p.x - 5000.0, p.y + 5000.0));
+        }
+        let before = nav.banks[0].evidence;
+        nav.weigh();
+        // Each weighing far off costs the floor, not a capped distance.
+        assert!((nav.banks[0].evidence - before - FLOOR.ln()).abs() < 1e-9, "{}", nav.banks[0].evidence - before);
+        // A share of every layout's particles is redrawn near its corridors.
+        let near: usize = area.layouts.iter().zip(&nav.banks)
+            .map(|(layout, bank)| bank.particles.iter().filter(|p| layout.corridor((p.x, p.y)).0 <= FLAT).count())
+            .sum();
+        let expected = RESEED * (PARTICLES * area.layouts.len()) as f64;
+        assert!(near as f64 >= 0.8 * expected, "{near} of {expected}");
     }
 
     #[test]
