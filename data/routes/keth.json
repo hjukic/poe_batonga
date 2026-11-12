@@ -1,0 +1,38 @@
+{
+  "formatVersion": 1,
+  "order": 300,
+  "zone": { "id": "G2_4_1", "name": "Keth", "level": 21 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kabala-clan-relic",
+      "kind": "objective",
+      "parts": [{ "text": "Snakes: Kabala Clan Relic" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "abandoned-prayer",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Abandoned Prayer (stairs)" }, { "text": "Magic Amulet", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-kabala",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Kabala", "style": "boss" }, { "text": " (Venom Pit)" }, { "text": "2 Skill Points", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "enter-lost-city",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_4_1", "label": "The Lost City", "exit": "G2_4_2" },
+      "parts": [{ "text": "Enter The Lost City" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_4_2" },
+      "evidence": "Zone-generation line for G2_4_2."
+    }
+  ]
+}

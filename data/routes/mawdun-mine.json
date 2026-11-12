@@ -1,0 +1,35 @@
+{
+  "formatVersion": 1,
+  "order": 240,
+  "zone": { "id": "G2_10_2", "name": "Mawdun Mine", "level": 18 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-mawdun-mine",
+      "kind": "note",
+      "parts": [{ "text": "Stay on the connected rail tracks", "style": "direction" }]
+    },
+    {
+      "id": "kill-rudja",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_10_2", "label": "Rudja", "tag": "bossman" },
+      "parts": [{ "text": "Kill " }, { "text": "Rudja", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'bossman' node in all 4 layouts."
+    },
+    {
+      "id": "mine-risu",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Risu", "style": "npc" }, { "text": " (cage)" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "mine-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "The Ardura Caravan was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

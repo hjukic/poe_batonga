@@ -1,0 +1,32 @@
+{
+  "formatVersion": 1,
+  "order": 310,
+  "zone": { "id": "G2_4_2", "name": "The Lost City", "level": 22 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-ninth-treasure",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Ninth Treasure", "style": "boss" }, { "text": "Jewel", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "golden-tomb",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Golden Tomb" }, { "text": "Spirit Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-buried-shrines",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_4_2", "label": "Buried Shrines", "exit": "G2_4_3" },
+      "parts": [{ "text": "Enter Buried Shrines" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_4_3" },
+      "evidence": "Zone-generation line for G2_4_3."
+    }
+  ]
+}

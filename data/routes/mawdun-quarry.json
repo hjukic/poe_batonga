@@ -1,0 +1,29 @@
+{
+  "formatVersion": 1,
+  "order": 230,
+  "zone": { "id": "G2_10_1", "name": "Mawdun Quarry", "level": 17 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-mawdun-quarry",
+      "kind": "note",
+      "parts": [{ "text": "Follow the checkpoints to the mine", "style": "direction" }]
+    },
+    {
+      "id": "faridun-war-cache",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Faridun War Cache" }, { "text": "Artificer's Orb", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-mawdun-mine",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_10_1", "label": "Mawdun Mine", "exit": "G2_10_2" },
+      "parts": [{ "text": "Enter Mawdun Mine" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_10_2" },
+      "evidence": "Zone-generation line for G2_10_2."
+    }
+  ]
+}

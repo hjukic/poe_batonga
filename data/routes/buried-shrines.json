@@ -1,0 +1,58 @@
+{
+  "formatVersion": 1,
+  "order": 320,
+  "zone": { "id": "G2_4_3", "name": "Buried Shrines", "level": 23 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "guarded-sarcophagus",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Guarded sarcophagus" }, { "text": "Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "choose-offering",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Choose an Offering" }, { "text": "Resist Ring", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "directions-buried-shrines",
+      "kind": "note",
+      "parts": [{ "text": "Descend the Vestibule to the Halani Shrine", "style": "direction" }]
+    },
+    {
+      "id": "down-to-heart-of-keth",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_4_3", "label": "Heart of Keth", "tag": "bossentrance" },
+      "parts": [{ "text": "Down to the Heart of Keth" }],
+      "trigger": null,
+      "evidence": "The Heart of Keth is part of Buried Shrines (no area of its own; Azarian is this area's boss). No log line known. Tick by hand. Target: the one 'bossentrance' node in all 8 layouts."
+    },
+    {
+      "id": "kill-azarian",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Azarian", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "ignite-water-goddess",
+      "kind": "objective",
+      "parts": [{ "text": "Ignite the " }, { "text": "Water Goddess", "style": "npc" }, { "text": "Essence of Water", "style": "reward" }],
+      "trigger": null,
+      "evidence": "Talk to her, take the Everburning Cinders, ignite her. No log line known. Tick by hand."
+    },
+    {
+      "id": "buried-shrines-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "The Ardura Caravan was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

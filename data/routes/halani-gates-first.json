@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "order": 220,
+  "zone": { "id": "G2_3a", "name": "The Halani Gates", "level": 20 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "halani-first-asala",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "halani-first-back",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_3a", "label": "The Ardura Caravan", "exit": "G2_town" },
+      "parts": [{ "text": "Back to the caravan" }],
+      "trigger": null,
+      "evidence": "The Ardura Caravan was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

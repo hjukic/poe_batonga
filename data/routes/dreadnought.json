@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "order": 380,
+  "zone": { "id": "G2_12", "name": "Dreadnought", "level": 31 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-jamanra-abomination",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_12", "label": "Jamanra", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Jamanra", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in its only layout."
+    },
+    {
+      "id": "dreadnought-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "The Ardura Caravan was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "order": 280,
+  "zone": { "id": "G2_5_1", "name": "Mastodon Badlands", "level": 21 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "shrine-of-bones",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Shrine of Bones (Effigy)" }, { "text": "Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-bone-pits",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_5_1", "label": "The Bone Pits", "exit": "G2_5_2" },
+      "parts": [{ "text": "Enter The Bone Pits" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_5_2" },
+      "evidence": "Zone-generation line for G2_5_2."
+    }
+  ]
+}

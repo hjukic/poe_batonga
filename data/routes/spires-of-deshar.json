@@ -1,0 +1,30 @@
+{
+  "formatVersion": 1,
+  "order": 370,
+  "zone": { "id": "G2_9_2", "name": "The Spires of Deshar", "level": 30 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "sisters-of-garukhan",
+      "kind": "objective",
+      "parts": [{ "text": "Sisters of Garukhan shrine" }, { "text": "+10% Light Res", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-tor-gul",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_9_2", "label": "Tor Gul", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Tor Gul", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 4 layouts."
+    },
+    {
+      "id": "spires-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "The Ardura Caravan was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "formatVersion": 1,
+  "order": 270,
+  "zone": { "id": "G2_13", "name": "Trial of the Sekhemas", "level": 22 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "trial-waypoint",
+      "kind": "objective",
+      "parts": [{ "text": "Take the waypoint" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "trial-pick-barya",
+      "kind": "objective",
+      "parts": [{ "text": "Lvl 28: pick Deshar Barya" }],
+      "trigger": null,
+      "evidence": "Pick the level 28 Djinn Barya from the Deshar vultures, not Balbala's. No log line known. Tick by hand."
+    },
+    {
+      "id": "trial-complete",
+      "kind": "objective",
+      "parts": [{ "text": "Complete the trial" }, { "text": "Ascendancy", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    }
+  ]
+}

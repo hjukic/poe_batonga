@@ -1,0 +1,29 @@
+{
+  "formatVersion": 1,
+  "order": 360,
+  "zone": { "id": "G2_9_1", "name": "Path of Mourning", "level": 29 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-path-of-mourning",
+      "kind": "note",
+      "parts": [{ "text": "Follow the big map to the exit", "style": "direction" }]
+    },
+    {
+      "id": "hushed-urn",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Hushed Urn encounter" }, { "text": "Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-spires-of-deshar",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_9_1", "label": "The Spires of Deshar", "exit": "G2_9_2" },
+      "parts": [{ "text": "Enter The Spires of Deshar" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_9_2" },
+      "evidence": "Zone-generation line for G2_9_2."
+    }
+  ]
+}

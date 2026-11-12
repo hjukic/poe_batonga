@@ -1,0 +1,35 @@
+{
+  "formatVersion": 1,
+  "order": 330,
+  "zone": { "id": "G2_6", "name": "Valley of the Titans", "level": 21 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-valley-of-titans",
+      "kind": "note",
+      "parts": [{ "text": "Each titan head marks a canyon with a seal", "style": "direction" }]
+    },
+    {
+      "id": "valley-ancient-seals",
+      "kind": "objective",
+      "parts": [{ "text": "Find 3 Ancient Seals" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "relic-altar",
+      "kind": "objective",
+      "parts": [{ "text": "Relic Altar: place relics" }, { "text": "+1 Charm Slot", "style": "reward" }],
+      "trigger": null,
+      "evidence": "The Medallion is at the altar; place both clan relics. No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-titan-grotto",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_6", "label": "The Titan Grotto", "exit": "G2_7" },
+      "parts": [{ "text": "Enter The Titan Grotto" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_7" },
+      "evidence": "Zone-generation line for G2_7."
+    }
+  ]
+}

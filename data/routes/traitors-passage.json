@@ -1,0 +1,45 @@
+{
+  "formatVersion": 1,
+  "order": 250,
+  "zone": { "id": "G2_2", "name": "Traitor's Passage", "level": 19 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-traitors-passage",
+      "kind": "note",
+      "parts": [{ "text": "Parchment branch: Balbala; the other: exit", "style": "direction" }]
+    },
+    {
+      "id": "ancient-seal-door",
+      "kind": "objective",
+      "parts": [{ "text": "Ancient Seal + Runic Seals" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-balbala",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_2", "label": "Balbala", "tag": "boss_entrance" },
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Balbala", "style": "boss" }, { "text": "Djinn Barya", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss_entrance' node in all 8 layouts."
+    },
+    {
+      "id": "bell-chest",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Bell Chest in dead end" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-halani-gates",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_2", "label": "The Halani Gates", "exit": "G2_3" },
+      "parts": [{ "text": "Enter The Halani Gates" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_3" },
+      "evidence": "Zone-generation line for G2_3."
+    }
+  ]
+}

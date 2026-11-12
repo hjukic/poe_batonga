@@ -1,0 +1,212 @@
+{
+  "formatVersion": 1,
+  "order": 210,
+  "zone": { "id": "G2_town", "name": "The Ardura Caravan", "level": 32 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "caravan-hooded-one",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "caravan-asala-twice",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }, { "text": " twice" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "travel-halani-gates-first",
+      "kind": "objective",
+      "parts": [{ "text": "Desert Map: Halani Gates" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_3a" },
+      "evidence": "Zone-generation line for G2_3a, the Halani Gates the caravan reaches (town Connections; seen in the log). G2_3 is the one reached from Traitor's Passage."
+    },
+    {
+      "id": "caravan-asala-halani",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After the first Halani Gates visit. No log line known. Tick by hand."
+    },
+    {
+      "id": "travel-mawdun-quarry",
+      "kind": "objective",
+      "parts": [{ "text": "Travel to Mawdun Quarry" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_10_1" },
+      "evidence": "Zone-generation line for G2_10_1."
+    },
+    {
+      "id": "caravan-risu",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Risu", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After Mawdun Mine. No log line known. Tick by hand."
+    },
+    {
+      "id": "caravan-asala-risu",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "travel-traitors-passage",
+      "kind": "objective",
+      "parts": [{ "text": "Travel to Traitor's Passage" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_2" },
+      "evidence": "Zone-generation line for G2_2."
+    },
+    {
+      "id": "caravan-shambrin",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Shambrin", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After the Halani Gates. No log line known. Tick by hand."
+    },
+    {
+      "id": "caravan-zarka-trial",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "caravan-asala-trial",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "travel-trial-waypoint",
+      "kind": "objective",
+      "parts": [{ "text": "Trial waypoint, come back" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_13" },
+      "evidence": "Zone-generation line for G2_13 (Trial of the Sekhemas): only the waypoint now, the trial at level 28."
+    },
+    {
+      "id": "travel-mastodon-badlands",
+      "kind": "objective",
+      "parts": [{ "text": "Travel to Mastodon Badlands" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_5_1" },
+      "evidence": "Zone-generation line for G2_5_1."
+    },
+    {
+      "id": "caravan-zarka-relic",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After The Bone Pits. No log line known. Tick by hand."
+    },
+    {
+      "id": "travel-keth",
+      "kind": "objective",
+      "parts": [{ "text": "Travel to Keth" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_4_1" },
+      "evidence": "Zone-generation line for G2_4_1."
+    },
+    {
+      "id": "caravan-zarka-keth",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After the Heart of Keth. No log line known. Tick by hand."
+    },
+    {
+      "id": "travel-valley-titans",
+      "kind": "objective",
+      "parts": [{ "text": "Travel to Valley of Titans" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_6" },
+      "evidence": "Zone-generation line for G2_6."
+    },
+    {
+      "id": "caravan-zarka-grotto",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After The Titan Grotto. No log line known. Tick by hand."
+    },
+    {
+      "id": "caravan-asala-grotto",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "caravan-to-traitors-passage",
+      "kind": "objective",
+      "parts": [{ "text": "Caravan: Traitor's Passage" }],
+      "trigger": null,
+      "evidence": "Traitor's Passage was entered before, so its zone line would tick this early. Tick by hand."
+    },
+    {
+      "id": "sound-the-horn",
+      "kind": "objective",
+      "parts": [{ "text": "Sound the Horn (top)" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "caravan-asala-horn",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "travel-deshar",
+      "kind": "objective",
+      "parts": [{ "text": "Travel to Deshar" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_8" },
+      "evidence": "Zone-generation line for G2_8."
+    },
+    {
+      "id": "deliver-lihl-lima-letter",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Letter to " }, { "text": "Shambrin", "style": "npc" }],
+      "trigger": null,
+      "evidence": "The guide's Deshar tip: Lihl Lima's letter goes to Shambrin. No log line known. Tick by hand."
+    },
+    {
+      "id": "caravan-asala-spires",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }, { "text": " twice" }],
+      "trigger": null,
+      "evidence": "After The Spires of Deshar. No log line known. Tick by hand."
+    },
+    {
+      "id": "caravan-to-trial",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to the Trial" }],
+      "trigger": null,
+      "evidence": "Trial of the Sekhemas was entered before, so its zone line would tick this early. Tick by hand."
+    },
+    {
+      "id": "travel-dreadnought",
+      "kind": "objective",
+      "parts": [{ "text": "Travel to Dreadnought" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_12" },
+      "evidence": "Zone-generation line for G2_12."
+    },
+    {
+      "id": "caravan-hooded-one-outside",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Hooded One", "style": "npc" }, { "text": " outside" }],
+      "trigger": null,
+      "evidence": "After Jamanra. Out of the caravan, top left. No log line known. Tick by hand."
+    },
+    {
+      "id": "travel-sandswept-marsh",
+      "kind": "objective",
+      "parts": [{ "text": "Travel to Sandswept Marsh" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_1" },
+      "evidence": "Zone-generation line for G3_1 (Act 3, in the caravan's Connections)."
+    }
+  ]
+}

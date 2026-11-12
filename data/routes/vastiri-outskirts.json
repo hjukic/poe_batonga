@@ -1,0 +1,45 @@
+{
+  "formatVersion": 1,
+  "order": 200,
+  "zone": { "id": "G2_1", "name": "Vastiri Outskirts", "level": 16 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "vastiri-hooded-one",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-rathbreaker",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_1", "label": "Rathbreaker", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Rathbreaker", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 8 layouts."
+    },
+    {
+      "id": "vastiri-back-to-start",
+      "kind": "objective",
+      "parts": [{ "text": "Portal back to the start" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "vastiri-zarka",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }, { "text": "Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-ardura-caravan",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_1", "label": "The Ardura Caravan", "exit": "G2_town" },
+      "parts": [{ "text": "Enter The Ardura Caravan" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_town" },
+      "evidence": "Zone-generation line for G2_town."
+    }
+  ]
+}

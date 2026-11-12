@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "order": 340,
+  "zone": { "id": "G2_7", "name": "The Titan Grotto", "level": 22 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act2_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-zalmarath",
+      "kind": "objective",
+      "navigationTarget": { "area": "G2_7", "label": "Zalmarath", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Zalmarath", "style": "boss" }, { "text": "Flame Ruby", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 8 layouts."
+    },
+    {
+      "id": "grotto-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "The Ardura Caravan was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}
