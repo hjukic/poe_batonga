@@ -117,19 +117,9 @@ Of the 170 triggers, 145 zone entries and 2 seen lines are measured, and 23 bark
 be logged like the barks seen (the Miller's second variant, a bark, is not seen yet). The 145
 `zoneEntered` triggers are unchanged.
 
-The checker's warnings on the shipped triggers (2026-11-12 tables) are all "said another way";
-none is known to tick early, and only the first was looked at closely:
-- `caravan-asala-halani`: Asala's Halani line is also the Desert Map's option "Travel to the
-  Halani Gates" (flag `NEVER_SET`). The route puts the step after the first Halani visit, so a
-  tick from the map should do no harm.
-- `caravan-asala-grotto`: the same text is also `AsalaA2MapUIAncientGatesSeven` (Asala or the
-  Desert Map).
-- `caravan-hooded-one-outside`: hood-up and hood-down rows of the same "To Utzaal" talk.
-- `journeys-end-tujen`: two intro rows with the same text, by who was met first.
-- `vastiri-hooded-one`: `HoodedOneDockA2Intro` has the same text; where it plays is not in the
-  tables.
-- `hammer-to-oswald`: two Oswald options ("The Hammer", "Forgemaster") name the line, with
-  different flags.
+On the installed game's tables (2026-11-12) the checker reports 25 `npcLine` triggers, 0 errors
+and 0 warnings. Its earlier "said another way" warnings (Asala's, the Hooded One's, Tujen's and
+Oswald's lines) were all on panel triggers, removed in v0.1.74.
 
 ## Steps still ticked by hand
 
