@@ -351,6 +351,13 @@ dropped. It has the minimap frame's size (300x259) with the player on the minima
 player cell, and reports the minimap's capture size, so the recorder sees no
 difference.
 
+**The player cross** is found the same way in both views: of the orange blobs whose
+centre is within 16 px (at 2160 px height) of where the view draws the player, the
+nearest one of about the cross's size (58 px; 0.4–2.5 times that). Fire, item labels
+or an exit icon next to it no longer move it, and a speck of orange is no cross. On
+the minimap this replaces the average of every orange pixel in the corner, which an
+exit icon in view (360 px against the cross's 58) pulled tens of cells off.
+
 **Filled areas are not walls.** The line colour also passes for bluish-grey floors,
 ice or snow showing through the translucent map. Lines are at most two cells thick,
 so a group of cells of which more than a quarter are inside cells (all eight

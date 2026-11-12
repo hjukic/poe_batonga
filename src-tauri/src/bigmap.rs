@@ -21,7 +21,10 @@ const PLAYER: [f64; 2] = [0.4997, 0.4903];
 const MINIMAP_PLAYER: [f64; 2] = [0.9260, 0.1315];
 /// How far from the expected point the marker is looked for, in pixels at 2160 px height.
 const MARKER_RADIUS: f64 = 16.0;
-const MARKER_MIN: u32 = 4;
+/// The player cross: 58 px at 2160 px height (11x10 px). An orange blob counts as the
+/// cross between 0.4 and 2.5 times that; an exit icon is 360 px, fire specks a few.
+const CROSS_PX: f64 = 58.0;
+const CROSS_RANGE: [f64; 2] = [0.4, 2.5];
 /// Touching wall cells fewer than this are dropped: map lines are long, lit ground
 /// behind the translucent map leaves specks (Clearfell, 600x518 cells around the player:
 /// 226 groups of which 212 under 15 cells; every line cell kept at 12).
@@ -91,24 +94,88 @@ pub fn radius(window_px: [f64; 2]) -> f64 {
     MARKER_RADIUS * window_px[1] / 2160.0
 }
 
-/// Centre of the orange marker pixels within `radius` of `at` (pixel-centre coordinates),
-/// if there are enough of them.
+/// The player cross near `at` (pixel-centre coordinates): of the orange blobs whose centre
+/// is within `radius`, the nearest one of about the cross's size. Fire, item labels or an
+/// exit icon next to it don't move it; a blob that touches the cross is too large and
+/// gives none.
 pub fn marker_near(image: &Image, at: [f64; 2], radius: f64) -> Option<[f64; 2]> {
+    let size = radius / MARKER_RADIUS;
+    // The box holds every whole blob whose centre is within `radius`.
+    let reach = radius + 10.0 * size;
     let clamp = |v: f64, n: usize| (v.max(0.0) as usize).min(n);
-    let (x0, x1) = (clamp(at[0] - radius, image.width), clamp(at[0] + radius + 1.0, image.width));
-    let (y0, y1) = (clamp(at[1] - radius, image.height), clamp(at[1] + radius + 1.0, image.height));
-    let (mut n, mut sx, mut sy) = (0u32, 0f64, 0f64);
+    let (x0, x1) = (clamp(at[0] - reach, image.width), clamp(at[0] + reach + 1.0, image.width));
+    let (y0, y1) = (clamp(at[1] - reach, image.height), clamp(at[1] + reach + 1.0, image.height));
+    let (w, h) = (x1.saturating_sub(x0), y1.saturating_sub(y0));
+    let mut orange: Vec<bool> = Vec::with_capacity(w * h);
     for y in y0..y1 {
         for x in x0..x1 {
             let i = (y * image.width + x) * 3;
-            if is_marker(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]) {
-                n += 1;
-                sx += x as f64 + 0.5;
-                sy += y as f64 + 0.5;
-            }
+            orange.push(is_marker(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]));
         }
     }
-    (n >= MARKER_MIN).then(|| [sx / n as f64, sy / n as f64])
+    let area = CROSS_PX * size * size;
+    let mut best: Option<(f64, [f64; 2])> = None;
+    for blob in blobs(&mut orange, w, h) {
+        // A blob cut by the box (not by the image edge) is part of something larger.
+        let cut = (blob.x0 == 0 && x0 > 0)
+            || (blob.y0 == 0 && y0 > 0)
+            || (blob.x1 == w - 1 && x1 < image.width)
+            || (blob.y1 == h - 1 && y1 < image.height);
+        let n = blob.n as f64;
+        if cut || n < CROSS_RANGE[0] * area || n > CROSS_RANGE[1] * area {
+            continue;
+        }
+        let centre = [x0 as f64 + blob.sx / n, y0 as f64 + blob.sy / n];
+        let distance = (centre[0] - at[0]).hypot(centre[1] - at[1]);
+        if distance <= radius && best.is_none_or(|(d, _)| distance < d) {
+            best = Some((distance, centre));
+        }
+    }
+    best.map(|(_, centre)| centre)
+}
+
+/// A group of touching pixels: count, sums of pixel-centre coordinates, bounding box.
+struct Blob {
+    n: u32,
+    sx: f64,
+    sy: f64,
+    x0: usize,
+    y0: usize,
+    x1: usize,
+    y1: usize,
+}
+
+/// The 8-connected groups of `true` pixels in a `w` x `h` mask (cleared on the way).
+fn blobs(mask: &mut [bool], w: usize, h: usize) -> Vec<Blob> {
+    let mut found = Vec::new();
+    let mut stack = Vec::new();
+    for start in 0..w * h {
+        if !mask[start] {
+            continue;
+        }
+        mask[start] = false;
+        stack.push(start);
+        let mut blob = Blob { n: 0, sx: 0.0, sy: 0.0, x0: w, y0: h, x1: 0, y1: 0 };
+        while let Some(i) = stack.pop() {
+            let (x, y) = (i % w, i / w);
+            blob.n += 1;
+            blob.sx += x as f64 + 0.5;
+            blob.sy += y as f64 + 0.5;
+            (blob.x0, blob.y0, blob.x1, blob.y1) = (blob.x0.min(x), blob.y0.min(y), blob.x1.max(x), blob.y1.max(y));
+            for (dx, dy) in [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)] {
+                let (nx, ny) = (x as i64 + dx, y as i64 + dy);
+                if nx >= 0 && ny >= 0 && (nx as usize) < w && (ny as usize) < h {
+                    let j = ny as usize * w + nx as usize;
+                    if mask[j] {
+                        mask[j] = false;
+                        stack.push(j);
+                    }
+                }
+            }
+        }
+        found.push(blob);
+    }
+    found
 }
 
 /// Reads a big-map capture into a frame in minimap units: the walls around the player,
@@ -511,6 +578,38 @@ mod tests {
         for icon in icons(&image, [0.0, 0.0], SCALE, size) {
             println!("{} at {:.0}, {:.0}", icon.kind, icon.x * 2.0, icon.y * 2.0);
         }
+    }
+
+    #[test]
+    fn orange_next_to_the_cross_does_not_move_it() {
+        let image = fixture("bigmap-player.ppm");
+        let plan = player_plan();
+        let (clean, _) = read(&image, &plan);
+        // A 100 px orange smear (fire, an item label) 6 px right of the cross, which spans
+        // 295-305 x 56-66 px.
+        let mut smeared = fixture("bigmap-player.ppm");
+        paint(&mut smeared, [230, 110, 30], |x, y| (312..322).contains(&x) && (55..65).contains(&y));
+        let (view, _) = read(&smeared, &plan);
+        assert!(view.visible, "{}", view.message);
+        assert_eq!(view.walls, clean.walls);
+        let [x, y] = marker_near(&smeared, plan.marker, plan.radius).unwrap();
+        assert!((x - 300.5).abs() < 1.0 && (y - 60.7).abs() < 1.0, "{x},{y}");
+        // An exit icon's size (360 px) at the spot is not the cross either.
+        let mut exit = fixture("bigmap-scene.ppm");
+        paint(&mut exit, [205, 96, 38], |x, y| (120..138).contains(&x) && (70..90).contains(&y));
+        assert!(marker_near(&exit, [128.0, 80.0], 16.0).is_none());
+    }
+
+    #[test]
+    fn a_speck_of_orange_on_lines_is_not_the_big_map() {
+        // Map lines but no cross, only a 5 px ember where the cross would be.
+        let mut image = fixture("bigmap-player.ppm");
+        paint(&mut image, [20, 18, 16], |x, y| (290..312).contains(&x) && (50..72).contains(&y));
+        paint(&mut image, [230, 110, 30], |x, y| (299..302).contains(&x) && (60..62).contains(&y) && x + y != 360);
+        let (view, icons) = read(&image, &player_plan());
+        assert!(!view.visible);
+        assert!(view.walls.is_empty() && view.player.is_none() && icons.is_empty());
+        assert_eq!(view.message, "Big map not read: player marker not found");
     }
 
     #[test]

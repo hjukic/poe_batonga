@@ -31,7 +31,6 @@ const REGION_H: f64 = 0.24;
 pub const CELL: usize = 2;
 /// Wall pixels a cell needs, so single stray pixels are ignored.
 const CELL_MIN: u32 = 2;
-const MARKER_MIN: u32 = 4;
 const WALLS_MIN: u32 = 40;
 
 #[derive(Clone, Serialize, PartialEq, Debug)]
@@ -75,23 +74,20 @@ fn is_marker(r: u8, g: u8, b: u8) -> bool {
     r > 150 && g > 40 && g < 191 && b < 89 && (r as i32 - g as i32) > 60
 }
 
-pub fn analyse(image: &Image, enabled: bool) -> MinimapView {
+/// Reads a minimap capture: its wall cells, and the player cross near `marker` (pixels, the
+/// spot where the minimap draws it) within `radius`. Orange elsewhere (an exit icon, fire)
+/// does not move the player.
+pub fn analyse(image: &Image, marker: [f64; 2], radius: f64) -> MinimapView {
     let cols = image.width.div_ceil(CELL);
     let rows = image.height.div_ceil(CELL);
     let mut cells = vec![0u32; cols * rows];
-    let (mut wall_count, mut marker_count) = (0u32, 0u32);
-    let (mut mx, mut my) = (0f64, 0f64);
+    let mut wall_count = 0u32;
     for y in 0..image.height {
         for x in 0..image.width {
             let i = (y * image.width + x) * 3;
-            let (r, g, b) = (image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]);
-            if is_wall(r, g, b) {
+            if is_wall(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]) {
                 wall_count += 1;
                 cells[(y / CELL) * cols + x / CELL] += 1;
-            } else if is_marker(r, g, b) {
-                marker_count += 1;
-                mx += x as f64;
-                my += y as f64;
             }
         }
     }
@@ -101,17 +97,14 @@ pub fn analyse(image: &Image, enabled: bool) -> MinimapView {
         .filter(|(_, &n)| n >= CELL_MIN)
         .map(|(i, _)| [(i % cols) as u16, (i / cols) as u16])
         .collect();
-    let player = (marker_count >= MARKER_MIN).then(|| {
-        let n = marker_count as f64;
-        [((mx / n + 0.5) / CELL as f64) as f32, ((my / n + 0.5) / CELL as f64) as f32]
-    });
+    let player = bigmap::marker_near(image, marker, radius).map(|p| p.map(|v| (v / CELL as f64) as f32));
     let visible = wall_count >= WALLS_MIN || player.is_some();
     let message = match (visible, player.is_some()) {
         (false, _) => "Minimap not visible",
         (true, false) => "Reading minimap, player marker not found",
         (true, true) => "Reading minimap",
     };
-    MinimapView { enabled, visible, message: message.into(), cols, rows, walls, player }
+    MinimapView { enabled: true, visible, message: message.into(), cols, rows, walls, player }
 }
 
 /// Parses binary PPM (P6, 8-bit), which is what `grim -t ppm` writes.
@@ -340,7 +333,7 @@ fn choose(
     plan: &bigmap::Plan,
     bigmap: impl FnOnce() -> Result<Image, String>,
 ) -> Result<(MinimapView, [usize; 2], Vec<bigmap::Icon>), String> {
-    let view = analyse(minimap, true);
+    let view = analyse(minimap, minimap_marker, plan.radius * 1.5);
     let size = [minimap.width, minimap.height];
     let minimap_icons = |view: &MinimapView| {
         let centre = view.player.map_or(minimap_marker, |p| p.map(|v| v as f64 * CELL as f64));
@@ -348,7 +341,7 @@ fn choose(
     };
     // The player marker where the minimap draws it: the minimap is showing. Without it,
     // map lines in the corner may be the big map's, so the big map is checked first.
-    if view.visible && bigmap::marker_near(minimap, minimap_marker, plan.radius * 1.5).is_some() {
+    if view.player.is_some() {
         let icons = minimap_icons(&view);
         return Ok((view, size, icons));
     }
@@ -436,15 +429,20 @@ mod tests {
         Image { width, height, pixels }
     }
 
+    /// The player cross, about the game's size (61 px), centred on pixel (cx, cy).
+    fn cross(x: usize, y: usize, cx: usize, cy: usize) -> bool {
+        x.abs_diff(cx) + y.abs_diff(cy) <= 5
+    }
+
     #[test]
     fn finds_walls_and_player_and_ignores_terrain() {
         let frame = image(64, 64, |x, y| match (x, y) {
             (_, 20 | 21) => [91, 91, 121],                     // wall line
-            (30..=32, 40..=42) => [230, 110, 30],              // player cross
+            _ if cross(x, y, 31, 41) => [230, 110, 30],         // player cross
             _ if (x + y) % 3 == 0 => [120, 110, 95],           // brownish terrain
             _ => [10, 14, 20],
         });
-        let view = analyse(&frame, true);
+        let view = analyse(&frame, [31.5, 41.5], 24.0);
         assert!(view.visible);
         assert_eq!((view.cols, view.rows), (32, 32));
         assert_eq!(view.walls.len(), 32);
@@ -455,9 +453,28 @@ mod tests {
 
     #[test]
     fn dark_frame_is_not_a_minimap() {
-        let view = analyse(&image(64, 64, |_, _| [12, 13, 18]), true);
+        let view = analyse(&image(64, 64, |_, _| [12, 13, 18]), [32.0, 32.0], 24.0);
         assert!(!view.visible);
         assert!(view.walls.is_empty() && view.player.is_none());
+    }
+
+    #[test]
+    fn the_minimap_cross_is_not_pulled_by_exits_or_fire() {
+        // The cross at (60, 50), an exit icon (360 px) 40 px away and an ember beside it:
+        // the old whole-frame average moved the player towards the exit.
+        let frame = image(120, 100, |x, y| match (x, y) {
+            (_, 20 | 21) => [91, 91, 121],
+            _ if cross(x, y, 60, 50) => [230, 110, 30],
+            (92..=109, 40..=59) => [205, 96, 38],
+            (68..=69, 50..=51) => [230, 110, 30],
+            _ => [10, 14, 20],
+        });
+        let view = analyse(&frame, [62.0, 49.0], 24.0);
+        let [px, py] = view.player.unwrap();
+        assert!((px - 30.25).abs() < 0.01 && (py - 25.25).abs() < 0.01, "{px},{py}");
+        // Only the exit icon at the spot: not a minimap.
+        let exit_only = image(120, 100, |x, y| if (52..=69).contains(&x) && (40..=59).contains(&y) { [205, 96, 38] } else { [10, 14, 20] });
+        assert!(!analyse(&exit_only, [60.5, 50.5], 24.0).visible);
     }
 
     /// Needs the game on screen: `cargo test live_minimap -- --ignored --nocapture`.
@@ -570,7 +587,7 @@ mod tests {
     fn minimap() -> Image {
         image(120, 100, |x, y| match (x, y) {
             (_, 20 | 21) => [91, 91, 121],
-            (57..=63, 47..=53) => [230, 110, 30],
+            _ if cross(x, y, 60, 50) => [230, 110, 30],
             _ => [10, 14, 20],
         })
     }
@@ -673,10 +690,12 @@ mod tests {
                 put(x + dx, y + dy, [91, 91, 121]);
             }
         }
-        for d in -3..=3 {
-            put(marker.0 + d, marker.1, [230, 110, 30]);
-            put(marker.0, marker.1 + d, [230, 110, 30]);
-            put(marker.0 + d, marker.1 + d.abs() % 2, [230, 110, 30]);
+        for dy in -5i32..=5 {
+            for dx in -5i32..=5 {
+                if dx.abs() + dy.abs() <= 5 {
+                    put(marker.0 + dx, marker.1 + dy, [230, 110, 30]);
+                }
+            }
         }
         img
     }
