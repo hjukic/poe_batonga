@@ -763,6 +763,23 @@ mod tests {
         }
     }
 
+    /// The gates with icons at three seeds (or SEEDS).
+    #[test]
+    #[ignore]
+    fn icons_report() {
+        let seeds = std::env::var("SEEDS").ok().and_then(|s| s.parse().ok()).unwrap_or(3);
+        for (name, options) in [
+            ("exit icons, minimap view, unlabelled", Options { view: Some(1.0), ..Default::default() }),
+            ("exit icons, wide view, labelled", Options { view: Some(2.0), labels: true, ..Default::default() }),
+        ] {
+            let (c, _) = all(seeds, true, &options);
+            print(name, &c);
+            let failing: Vec<String> = c.layouts.iter().filter(|(_, &(g, o))| o >= 3 && o as f64 > 0.1 * g as f64)
+                .map(|(id, (g, o))| format!("{id} {o} of {g}")).collect();
+            eprintln!("  layouts over the bar: {failing:?}; ClearFell_S_N_E {:?}", c.layouts.get("ClearFell_S_N_E"));
+        }
+    }
+
     #[test]
     #[ignore]
     fn report() {
