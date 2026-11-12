@@ -300,6 +300,27 @@ struct Sighting {
 /// (its place against the walls may be off by the jump); it still counts as evidence.
 const JUMPED: f64 = 20.0;
 
+/// A layout is drawn under the checklist once it carries this much of the belief.
+const PICTURE_FROM: f64 = 0.5;
+
+/// The recognised layout, for the panel (`Navigator::picture`).
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Picture {
+    /// A layout carries enough of the belief to be drawn; else only `candidates` counts.
+    pub known: bool,
+    pub id: String,
+    pub share: f32,
+    pub sure: bool,
+    /// Layouts still possible.
+    pub candidates: usize,
+    /// Each path as points (world units, screen axes).
+    pub paths: Vec<Vec<[f32; 2]>>,
+    /// Exits: the zone they lead to, and where.
+    pub exits: Vec<(String, [f32; 2])>,
+    pub player: Option<[f32; 2]>,
+}
+
 /// An exit icon of a map frame: its offset from the player in minimap cells
 /// (screen axes) and, when its label could be read, the area it leads to (an
 /// area id or the zone's name). Unlabelled it is "some exit".
@@ -1266,6 +1287,46 @@ impl Navigator {
         let raw: Vec<f64> = logs.iter().map(|l| (l - top).exp()).collect();
         let sum: f64 = raw.iter().sum();
         raw.into_iter().map(|p| p / sum).collect()
+    }
+
+    /// The layout the evidence points to, as a picture for the panel: its paths and exits
+    /// in the map's screen axes (world units, turned as the in-game map is), and where the
+    /// belief puts the player on it. None while no layout carries `PICTURE_FROM` of the
+    /// belief. `sure` once one carries `GOLD` and the named exits fit it.
+    pub fn picture(&self) -> Option<Picture> {
+        let posterior = self.posterior();
+        let (top, share) = posterior.iter().copied().enumerate().max_by(|a, b| a.1.total_cmp(&b.1))?;
+        let candidates = posterior.iter().filter(|&&p| p >= NEGLIGIBLE).count();
+        if share < PICTURE_FROM {
+            return Some(Picture { known: false, candidates, ..Picture::default() });
+        }
+        let layout = &self.area.layouts[top];
+        let screen = |(x, y): (f64, f64)| {
+            let (sx, sy) = super::guide::to_screen((x * layout.unit, y * layout.unit));
+            [sx as f32, sy as f32]
+        };
+        let paths = layout.edges.iter().map(|e| e.points.iter().map(|&p| screen(p)).collect()).collect();
+        let exits = layout
+            .nodes
+            .iter()
+            .filter_map(|n| n.exit.as_ref().map(|to| (self.area.names.get(to).cloned().unwrap_or_else(|| to.clone()), screen((n.x, n.y)))))
+            .collect();
+        let bank = &self.banks[top];
+        let weight: f64 = bank.particles.iter().map(|p| p.w).sum();
+        let player = (weight > 0.0).then(|| {
+            let (x, y) = bank.particles.iter().fold((0.0, 0.0), |(x, y), p| (x + p.x * p.w, y + p.y * p.w));
+            screen((x / weight, y / weight))
+        });
+        Some(Picture {
+            known: true,
+            id: layout.id.clone(),
+            share: share as f32,
+            sure: share >= GOLD && !self.named_loose,
+            candidates,
+            paths,
+            exits,
+            player,
+        })
     }
 
     /// The layout ids, most likely first, with their probabilities.
@@ -2418,6 +2479,27 @@ mod tests {
             nav.icons(&scan);
             let _ = round;
         }
+    }
+
+    #[test]
+    fn the_recognised_layout_is_drawn_and_an_unknown_one_is_not() {
+        let area = graph::load("G1_2");
+        let nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 2693856399);
+        let picture = nav.picture().unwrap();
+        assert!(!picture.known && picture.paths.is_empty());
+        assert_eq!(picture.candidates, 33);
+        // The known instance: its two exits read by name (as in `live_frames`).
+        let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 2693856399);
+        live_frames(&mut nav);
+        let picture = nav.picture().unwrap();
+        assert!(picture.known);
+        assert_eq!(picture.id, "ClearFell_W_E_N");
+        let names: Vec<&str> = picture.exits.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(names.contains(&"The Grelwood") && names.contains(&"Mud Burrow"), "{names:?}");
+        assert!(!picture.paths.is_empty() && picture.player.is_some());
+        // Up on screen is up on the in-game map: the Grelwood lies left of the Mud Burrow.
+        let at = |name: &str| picture.exits.iter().find(|(n, _)| n == name).unwrap().1;
+        assert!(at("The Grelwood")[0] < at("Mud Burrow")[0]);
     }
 
     #[test]

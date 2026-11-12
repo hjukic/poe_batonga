@@ -19,6 +19,9 @@ A Tauri overlay is available. It has two parts:
   through several times (a town) shows one visit at a time: the steps up to the one that leaves
   the zone; the rest are behind "N on other visits". A list of more than nine
   rows folds. The overlay hides during a boss fight.
+- **The layout under the checklist**: once the app recognises which of the zone's layouts
+  (from the game's own layout graphs) this instance is, the panel draws it: its paths, its exits
+  by name and where you are; until then it says "Layout not known yet · N possible".
 - **A compass needle** (parked, off by default: see the roadmap in [PLAN.md](PLAN.md); the
   setting "Compass (parked)" switches it on) around the character that points to the next step
   that has a target (a zone exit, a boss arena). It reads the corner minimap, or the big map (Tab) while that is

@@ -74,6 +74,13 @@ button.step:enabled:hover { background: rgb(239 235 255 / .06); }
 .step.done .boss, .step.done .npc, .step.done .reward, .step.done .side { color: inherit; }
 
 
+/* ---- The recognised layout, under the checklist ---- */
+.layout-pick { padding: 2px 14px 8px; }
+.layout-pick[hidden] { display: none; }
+.layout-name { margin: 0 0 4px; font-size: 11px; line-height: 14px; color: var(--muted); }
+.layout-pick canvas { display: block; width: 292px; height: 200px; }
+.layout-pick canvas[hidden] { display: none; }
+
 /* ---- Live minimap preview ---- */
 .minimap { padding: 0 14px 8px; }
 .minimap[hidden], body:not([data-map-preview="true"]) .minimap { display: none; }

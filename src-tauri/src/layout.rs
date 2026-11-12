@@ -825,6 +825,9 @@ pub struct LayoutView {
     /// Only the needle is new: the map (walls, trail, pois) is left out and the page
     /// keeps the one it has. Sent on the frames between two full views.
     light: bool,
+    /// The recognised layout (full views only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    layout: Option<nav::Picture>,
 }
 
 fn now() -> u64 {
@@ -1691,6 +1694,7 @@ impl State {
             pois: vec![],
             guide: self.guide(session),
             light: true,
+            layout: None,
         })
     }
 
@@ -1741,6 +1745,7 @@ impl State {
                 .collect(),
             guide: self.guide(session),
             light: false,
+            layout: session.navigator.as_ref().and_then(|n| n.picture()),
         })
     }
 }

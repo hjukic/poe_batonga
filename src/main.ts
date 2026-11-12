@@ -40,6 +40,11 @@ interface MinimapView {
 }
 
 /** The stitched map of the current zone visit, scaled to a cols x rows grid. */
+/** The layout the app recognised: its paths and exits in the map's screen axes. */
+interface LayoutPicture {
+  known: boolean; id: string; share: number; sure: boolean; candidates: number;
+  paths: [number, number][][]; exits: [string, [number, number]][]; player: [number, number] | null;
+}
 interface LayoutView {
   area: string;
   seed: number | null;
@@ -55,6 +60,8 @@ interface LayoutView {
   guide: GuideView | null;
   /** Only the needle is new: keep the map drawn. */
   light: boolean;
+  /** The recognised layout (full views only). */
+  layout?: LayoutPicture;
 }
 
 /** The compass arrow (its own window): direction along the walkable path to the next exit, from poe2way's terrain. */
@@ -98,6 +105,10 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     </header>
     <p class="restart-status" id="restart-status" role="status" hidden></p>
     <div class="route" id="route"></div>
+    <div class="layout-pick" id="layout-pick" hidden>
+      <p class="layout-name" id="layout-name"></p>
+      <canvas id="layout-canvas" width="584" height="400"></canvas>
+    </div>
     <div class="minimap" id="minimap" hidden>
       <canvas id="minimap-canvas" width="300" height="260"></canvas>
     </div>
@@ -300,9 +311,62 @@ function renderMinimap(view: MinimapView) {
 }
 
 const POI_COLORS: Record<string, string> = { arrived: '#7fd18b', start: '#7fd18b', left: '#8edce8', npc: '#f2d36b' };
+// ---- The recognised layout ----
+const layoutBox = $('#layout-pick');
+const layoutCanvas = $<HTMLCanvasElement>('#layout-canvas');
+/** Draws the layout the app recognised under the checklist, or says that it does not
+ *  know it yet. Up on screen is up on the in-game map. */
+function renderPicture(picture: LayoutPicture | undefined) {
+  layoutBox.hidden = !picture;
+  if (!picture) return;
+  const name = $('#layout-name');
+  const context = layoutCanvas.getContext('2d');
+  context?.clearRect(0, 0, layoutCanvas.width, layoutCanvas.height);
+  layoutCanvas.hidden = !picture.known;
+  if (!picture.known) {
+    name.textContent = `Layout not known yet · ${picture.candidates} possible`;
+    return;
+  }
+  name.textContent = `Layout ${picture.id} · ${picture.sure ? 'sure' : `likely, ${Math.round(picture.share * 100)}%`}`;
+  if (!context) return;
+  const points = [...picture.paths.flat(), ...picture.exits.map(([, at]) => at), ...(picture.player ? [picture.player] : [])];
+  const xs = points.map(([x]) => x), ys = points.map(([, y]) => y);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const pad = 40;
+  const scale = Math.min((layoutCanvas.width - 2 * pad) / Math.max(x1 - x0, 1), (layoutCanvas.height - 2 * pad) / Math.max(y1 - y0, 1));
+  const ox = (layoutCanvas.width - (x1 - x0) * scale) / 2, oy = (layoutCanvas.height - (y1 - y0) * scale) / 2;
+  const at = ([x, y]: [number, number]): [number, number] => [ox + (x - x0) * scale, oy + (y - y0) * scale];
+  context.lineCap = 'round';
+  context.lineJoin = 'round';
+  context.strokeStyle = picture.sure ? 'rgb(185 180 230 / .9)' : 'rgb(185 180 230 / .55)';
+  context.lineWidth = 7;
+  for (const path of picture.paths) {
+    context.beginPath();
+    path.forEach((point, i) => (i ? context.lineTo(...at(point)) : context.moveTo(...at(point))));
+    context.stroke();
+  }
+  context.font = '600 20px "Segoe UI", system-ui, sans-serif';
+  context.textAlign = 'center';
+  for (const [exit, point] of picture.exits) {
+    const [x, y] = at(point);
+    context.fillStyle = '#ff9a3c';
+    context.fillRect(x - 7, y - 7, 14, 14);
+    context.fillStyle = '#efe9ff';
+    context.fillText(exit, Math.min(Math.max(x, 70), layoutCanvas.width - 70), y > 40 ? y - 14 : y + 32);
+  }
+  if (picture.player) {
+    const [x, y] = at(picture.player);
+    context.fillStyle = '#ffd27a';
+    context.beginPath();
+    context.arc(x, y, 9, 0, Math.PI * 2);
+    context.fill();
+  }
+}
+
 function renderLayout(view: LayoutView | null) {
   setGuideTarget(view?.guide?.target || null);
   if (view?.light) return;
+  renderPicture(view?.layout);
   const context = minimapCanvas.getContext('2d');
   if (!context) return;
   context.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
@@ -579,6 +643,8 @@ async function start() {
   if (!isTauri()) {
     render({ visible: true, interactive: true, toggleShortcut: 'Ctrl+Space', shortcutError: null, lastError: null, layerShell: false });
     renderTracker(browserPreview);
+    // A real layout of Clearfell (ClearFell_W_E_N), to see the drawing in a browser.
+    renderPicture(JSON.parse('{"known":true,"id":"ClearFell_W_E_N","share":0.93,"sure":true,"candidates":1,"paths":[[[-7481,-16101],[-81,-1090]],[[13466,-21338],[-81,-1090]],[[15710,-23582],[13466,-21338]],[[-14588,-17971],[-17581,-23956]],[[-6359,-32185],[-10848,-21712]],[[-3367,-26949],[-10848,-21712]],[[-14588,-33682],[-19825,-26200],[-17581,-23956]],[[-6359,-32185],[-1496,-34056]],[[-1496,-34056],[2992,-38544]],[[17337,-17597],[13466,-21338]],[[-6359,-32185],[-10100,-35926]],[[-5611,-38170],[-1496,-34056]],[[-10100,-35926],[-14588,-33682]],[[-20947,-21338],[-17581,-23956]],[[-10100,-35926],[-5611,-38170]],[[-10848,-21712],[-7481,-16101]],[[5611,-22460],[-81,-1090]],[[-6359,-32185],[-3367,-26949]],[[11222,-31063],[15710,-23582]],[[-10848,-21712],[-14588,-17971]],[[5611,-22460],[-7481,-16101]],[[2992,-38544],[11222,-31063]],[[11222,-31063],[-4489,-21338]]],"exits":[["Clearfell Encampment",[-81,-1090]],["The Grelwood",[-14588,-33682]],["Mud Burrow",[11222,-31063]]],"player":[-14588,-33682]}') as LayoutPicture);
     return;
   }
   await listen<{ step: string; error: string | null }>('restart-status', (event) => renderRestart(event.payload.step, event.payload.error));
