@@ -15,7 +15,9 @@
 //!   reader's one- and two-cell gaps) and leaves every opening of 11 or more open
 //!   (9-10 depend on where the grid falls); real openings are wider;
 //! - cells the player walked through are open whatever was drawn there (the
-//!   trail, steps up to `JUMP`): in the owner's recordings 8-46% of the walked
+//!   trail, steps up to `JUMP`), and a line only where the walk crossed it: a
+//!   walk that dips into a line and comes out on the same side (open ground joins
+//!   the two within `CROSSING`) opens nothing; in the owner's recordings 8-46% of the walked
 //!   line lies within a cell of a recorded wall (the recording's error, not the
 //!   ground's);
 //! - moves go in 8 directions, never diagonally past a closed cell.
@@ -55,6 +57,10 @@ pub const LOOK: f64 = 40.0;
 /// Ground counts as recorded within this many search cells (15 minimap cells)
 /// of a cell seen twice or walked.
 const RECORDED_NEAR: i32 = 5;
+/// A walk through closed cells crossed a line (and opens it) when the open cells
+/// before and after are not joined by open ground within this many search cells
+/// (30 minimap cells).
+const CROSSING: i32 = 10;
 /// Cells of the way kept from the last call cost this share (percent): the
 /// needle stays on its way unless another is clearly shorter.
 const KEEP: u32 = 90;
@@ -97,6 +103,9 @@ pub struct Way {
     /// Search cells expanded (for the time bound).
     #[allow(dead_code)] // tests and measurements
     pub expanded: usize,
+    /// Its search cells that are wall cells the walk opened.
+    #[allow(dead_code)] // tests and measurements
+    pub opened: usize,
     /// Share of its search cells within 15 minimap cells of recorded ground (a
     /// wall cell seen twice, or the walked trail), and of the walked trail alone.
     pub recorded: f64,
@@ -266,21 +275,49 @@ fn build(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> Gr
             }
         }
     }
-    // The walked trail is open.
-    let near = |p: &[i32; 2]| index(p[0], p[1]).is_some();
-    for pair in map.trail.windows(2) {
-        let (a, b) = (pair[0], pair[1]);
-        if (b[0] - a[0]).abs().max((b[1] - a[1]).abs()) > JUMP || !(near(&a) || near(&b)) {
+    // The walked trail is open, and a line it crossed: where the walk went into closed
+    // cells from one open cell and came out at another that open ground does not join
+    // to the first nearby. A walk that only dips into a line and comes back out on
+    // the same side, or stays inside its band (running beside it, drift), opens
+    // nothing there; the player standing in one starts from the open cells by it.
+    let mut run: Vec<usize> = Vec::new();
+    let mut before: Option<(i32, i32)> = None;
+    let mut last: Option<[i32; 2]> = None;
+    for &p in map.trail {
+        let jump = last.is_none_or(|a| (p[0] - a[0]).abs().max((p[1] - a[1]).abs()) > JUMP);
+        if jump {
+            run.clear();
+            before = None;
+        }
+        let Some(a) = last.replace(p).filter(|_| !jump) else { continue };
+        if index(a[0], a[1]).is_none() && index(p[0], p[1]).is_none() {
             continue;
         }
-        let (pa, pb) = (grid.at((a[0] as f64, a[1] as f64)), grid.at((b[0] as f64, b[1] as f64)));
-        let flags = &mut grid.flags;
-        traverse(pa, pb, |(i, j)| {
-            if i >= 0 && j >= 0 && i < w && j < h {
-                flags[(j * w + i) as usize] |= WALKED;
-            }
+        let (pa, pb) = (grid.at((a[0] as f64, a[1] as f64)), grid.at((p[0] as f64, p[1] as f64)));
+        let mut cells = Vec::new();
+        traverse(pa, pb, |c| {
+            cells.push(c);
             true
         });
+        for c in cells {
+            let Some(k) = grid.index(c) else { continue };
+            if closed(grid.flags[k]) {
+                if !run.contains(&k) {
+                    run.push(k);
+                }
+                continue;
+            }
+            if !run.is_empty() {
+                if before.is_some_and(|b| !joined(&grid, b, c)) {
+                    for &k in &run {
+                        grid.flags[k] |= WALKED;
+                    }
+                }
+                run.clear();
+            }
+            grid.flags[k] |= WALKED;
+            before = Some(c);
+        }
     }
     for &(x, y) in keep {
         let (i, j) = ((x - x0).div_euclid(COARSE), (y - y0).div_euclid(COARSE));
@@ -293,6 +330,25 @@ fn build(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> Gr
         }
     }
     grid
+}
+
+/// Whether open ground joins two open cells within `CROSSING` search cells of the
+/// first (4-connected, as the search moves without cutting a closed corner).
+fn joined(grid: &Grid, a: (i32, i32), b: (i32, i32)) -> bool {
+    let mut seen = std::collections::HashSet::from([a]);
+    let mut queue = std::collections::VecDeque::from([a]);
+    while let Some((i, j)) = queue.pop_front() {
+        if (i, j) == b {
+            return true;
+        }
+        for next in [(i + 1, j), (i - 1, j), (i, j + 1), (i, j - 1)] {
+            if (next.0 - a.0).abs() > CROSSING || (next.1 - a.1).abs() > CROSSING || !grid.open(next) || !seen.insert(next) {
+                continue;
+            }
+            queue.push_back(next);
+        }
+    }
+    false
 }
 
 /// The open cells to start or end at for a point in `cell`: the cell itself when
@@ -439,12 +495,14 @@ pub fn way(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> 
     };
     let share = |mask: u8| cells.iter().filter(|&&c| near(c, mask)).count() as f64 / cells.len().max(1) as f64;
     let (recorded, walked) = (share(SEEN | WALKED), share(WALKED));
+    let opened = cells.iter().filter(|&&c| grid.index(c).is_some_and(|k| grid.flags[k] & (WALL | NEAR) != 0)).count();
     Some(Way {
         ahead: point_along(&points, LOOK),
         cells: cells.iter().map(|&c| grid.centre(c)).map(|(x, y)| (x.round() as i32, y.round() as i32)).collect(),
         points,
         length,
         expanded,
+        opened,
         recorded,
         walked,
     })
@@ -668,6 +726,26 @@ pub(super) mod tests {
         assert!(super::way(&Map { walls: &map, trail: &jump }, (0.0, 120.0), (0.0, 0.0), &[]).is_none());
     }
 
+    #[test]
+    fn a_trail_that_runs_beside_a_wall_opens_no_door() {
+        // A wall across, ending at x = 40; the walk ran along it 4 cells off,
+        // wobbling 4 cells over it twice (drift); the target is just behind it.
+        let map = walls(line((-200, 0), (40, 0)));
+        let trail: Vec<[i32; 2]> = (0..=12).map(|k| [-60 + 5 * k, if k == 4 || k == 8 { -4 } else { 4 }]).collect();
+        let (player, target) = ((0.0, 10.0), (0.0, -20.0));
+        let way = way(&Map { walls: &map, trail: &trail }, player, target, &[]).expect("round the end");
+        println!("length {:.0}, opened {}", way.length, way.opened);
+        assert_eq!(way.opened, 0);
+        // Round the wall's end at x = 40, not through the grazed line.
+        assert!(crossings(&way.points, 0.0).iter().all(|&x| x > 40.0), "{:?}", way.points);
+        // A walk that went across, from 10 cells one side to 10 the other, opens it.
+        let closed = walls(line((-200, 0), (200, 0)));
+        let walked: Vec<[i32; 2]> = (0..=4).map(|k| [-20, 10 - 5 * k]).collect();
+        let across = super::way(&Map { walls: &closed, trail: &walked }, player, target, &[]).expect("walked across");
+        assert!(across.opened > 0);
+        assert!(super::way(&Map { walls: &closed, trail: &trail }, player, target, &[]).is_none(), "the wobble opened it");
+    }
+
     /// 40,000 wall cells: room outlines over 1,600 x 1,600 cells.
     fn big_map() -> HashMap<(i32, i32), u32> {
         let mut rng = Rng(11);
@@ -806,6 +884,7 @@ pub(super) mod tests {
         }
         let (mut found, mut cross_way, mut cross_line, mut ratio) = (0, 0, 0, Vec::new());
         let (mut back_near, mut back_ratio, mut slowest) = (Vec::new(), Vec::new(), std::time::Duration::ZERO);
+        let (mut back_opened, mut ahead_opened) = (0, 0);
         for &(i, j) in &pairs {
             let walked: Vec<(f64, f64)> = (i..=j).map(pt).collect();
             let length: f64 = walked.windows(2).map(|p| (p[1].0 - p[0].0).hypot(p[1].1 - p[0].1)).sum();
@@ -822,6 +901,7 @@ pub(super) mod tests {
             cross_line += crossed(&grid, &[pt(i), pt(j)]);
             if let Some(way) = found_way {
                 found += 1;
+                ahead_opened += (way.opened > 0) as usize;
                 // Only where it starts in a wall (the trail lies on one), and on the
                 // last step to a target on one (at most `ESCAPE` search cells).
                 let last = way.points.len() - 1;
@@ -834,20 +914,26 @@ pub(super) mod tests {
             let started = Instant::now();
             let back = super::way(&Map { walls: &map, trail: &trail[..=j] }, pt(j), pt(i), &[]);
             slowest = slowest.max(started.elapsed());
-            let back = back.expect("the walked way back");
+            let Some(back) = back else { continue };
             back_near.push(near(&back.points));
             back_ratio.push(back.length / length);
+            back_opened += (back.opened > 0) as usize;
         }
         println!(
-            "{} pairs. Ahead: way found {found}, way/straight {:.2} (median); unwalked wall cells crossed: straight {cross_line}, way {cross_way}. \
-             Back: within 20 cells of the trail {:.2}, way/walked {:.2} (medians). Slowest {slowest:?}",
+            "{} pairs. Ahead: way found {found} ({ahead_opened} through a line the walk crossed), way/straight {:.2} (median); \
+             unwalked wall cells crossed: straight {cross_line}, way {cross_way}. \
+             Back: found {}, within 20 cells of the trail {:.2}, way/walked {:.2} (medians), {back_opened} through a line the walk crossed. \
+             Slowest {slowest:?}",
             pairs.len(),
             median(ratio.clone()),
+            back_near.len(),
             median(back_near.clone()),
             median(back_ratio.clone()),
         );
         assert!(pairs.len() >= 30);
-        assert!(found * 10 >= pairs.len() * 9, "{found} of {}", pairs.len());
+        // A walk that ran inside a line's band (drift) opens nothing: fewer ways ahead.
+        assert!(found * 100 >= pairs.len() * 85, "{found} of {}", pairs.len());
+        assert!(back_near.len() * 100 >= pairs.len() * 95, "{} of {}", back_near.len(), pairs.len());
         assert!(cross_line >= 100 && cross_way == 0, "{cross_line} {cross_way}");
         assert!(median(back_near) >= 0.85);
         assert!(back_ratio.iter().all(|&r| r <= 1.05), "{back_ratio:?}");

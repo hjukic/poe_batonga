@@ -745,6 +745,15 @@ no recorded wall, on a grid of 3x3 minimap cells:
   recording, not the ground: the big-map screenshot shows these outlines as obstacles
   the player walks round. Likely cause: the minimap's player cell was estimated badly
   before the cross was found by its blob (see "Big map").
+  A line opens only where the walk crossed it (fix pass 1, review B-4): the walk went
+  into closed cells from open ground and came out on open ground that open ground does
+  not join to where it went in within 30 cells. A walk that dips into a line and comes
+  back out on the same side, or stays inside its band (running beside it with drift),
+  opens nothing: before, its chords punched one-cell doors into lines the player only
+  grazed (`a_trail_that_runs_beside_a_wall_opens_no_door`: a walk 4 cells off a line,
+  wobbling 4 cells over it twice; the way goes round the line's end). A cost on opened
+  cells instead (the review's other fix) pulled the way back off the walk on the real
+  map (within 20 cells of it: 0.78 against 0.90).
 - A player in a closed cell (next to a line) starts from the open cells within 3
   search cells reached without crossing a wall cell; a target in one (an exit drawn
   on a cliff line, a point on a line drawn twice) is reached from either side (that
@@ -784,14 +793,15 @@ lock about once a second.
 trail, 52 KB). 44 pairs of trail points 40 points apart along stretches without a jump
 (300-500 cells walked):
 
-- To a target ahead (the walls and the trail up to the player only): a way for 41 of
-  44 (for the 3 others the walk crossed recorded lines); the straight lines cross 404
-  unwalked wall cells, the ways none; median way 1.06 times the straight line. Where
-  the player walked across a recorded line (above) the way goes round it, so on this
-  recording it can be longer than the walk.
-- Going back (the trail recorded): a way for all 44, 90% of it within 20 cells of the
+- To a target ahead (the walls and the trail up to the player only): a way for 38 of
+  44 (41 before lines opened only where the walk crossed them; for the others the walk
+  crossed recorded lines, or ran inside their band); 9 of the 38 go through a line the
+  walk crossed. The straight lines cross 404 unwalked wall cells, the ways none; median
+  way 1.09 times the straight line. Where the player walked across a recorded line
+  (above) the way goes round it, so on this recording it can be longer than the walk.
+- Going back (the trail recorded): a way for 43 of 44, 86% of it within 20 cells of the
   trail (median), half the walked length (the walk wanders; the way cuts across open
-  ground).
+  ground); 20 of the 43 go through a line the walk crossed.
 - Gaps: of 30 lines (groups of 20 or more cells seen twice), 8 have a gap of 1-8 cells
   to another line (widths 1, 1, 1, 3, 3, 5, 5, 6), which the raw grid would leak
   through; all 8 are closed. Two more have a narrowest gap of 9-11 cells, left open.
