@@ -41,7 +41,7 @@ interface MinimapView {
 
 /** The layout the app recognised: its paths and exits in the map's screen axes. */
 interface LayoutPicture {
-  known: boolean; id: string; share: number; sure: boolean; candidates: number; noFit: boolean;
+  known: boolean; id: string; share: number; sure: boolean; candidates: number; noFit: boolean; fromPath: boolean;
   /** Exits: name, place, and whether this is the place (false: one of its possible places). */
   paths: [number, number][][]; exits: [string, [number, number], boolean][]; player: [number, number] | null;
   /** Other places the layout marks: "boss", "campsite", "bridge". */
@@ -331,7 +331,9 @@ function renderPicture(picture: LayoutPicture | undefined) {
       : `Layout not known yet · ${picture.candidates} possible`;
     return;
   }
-  name.textContent = `Layout ${picture.id} · ${picture.sure ? 'sure' : `likely, ${Math.round(picture.share * 100)}%`}`;
+  name.textContent = picture.fromPath
+    ? `Layout ${picture.id} · from your path (no two exits read)`
+    : `Layout ${picture.id} · ${picture.sure ? 'sure' : `likely, ${Math.round(picture.share * 100)}%`}`;
   if (!context) return;
   const points = [...picture.paths.flat(), ...picture.exits.map(([, at]) => at), ...(picture.player ? [picture.player] : [])];
   const xs = points.map(([x]) => x), ys = points.map(([, y]) => y);

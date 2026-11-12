@@ -258,6 +258,9 @@ pub struct Picture {
     pub candidates: usize,
     /// The exits read by name fit none of the zone's layouts.
     pub no_fit: bool,
+    /// Drawn from the path and the exits' icons alone, without two exits read by name:
+    /// every other layout was ruled out (the Mud Burrow, one exit: "1 possible", 2026-11-13).
+    pub from_path: bool,
     /// Each path as points (world units, screen axes).
     pub paths: Vec<Vec<[f32; 2]>>,
     /// Exits: the zone they lead to, and where.
@@ -1199,10 +1202,14 @@ impl Navigator {
         let top_exits = exits_of(top);
         let share: f64 = (0..posterior.len()).filter(|&i| exits_of(i) == top_exits).map(|i| posterior[i]).sum();
         let candidates = posterior.iter().filter(|&&p| p >= NEGLIGIBLE).count();
+        // Only one layout left (with its variants): drawn, though no two exits were read by
+        // name (a zone with one exit never shows two).
+        let alone = (0..posterior.len()).all(|i| posterior[i] < NEGLIGIBLE || exits_of(i) == top_exits);
+        let from_path = !self.named_pair && alone && !self.named_loose;
         // A layout is drawn only once two exits read by name fit it: the walked line and a
         // remembered belief alone showed wrong layouts (the owner's Clearfell of 2026-11-12:
         // ClearFell_W_N_E, then W_N_S, its exits misplaced).
-        if share < PICTURE_FROM || self.named_loose || !self.named_pair {
+        if !from_path && (share < PICTURE_FROM || self.named_loose || !self.named_pair) {
             return Some(Picture { known: false, candidates, no_fit: self.named_loose, ..Picture::default() });
         }
         let layout = &self.area.layouts[top];
@@ -1258,6 +1265,7 @@ impl Navigator {
             sure: share >= GOLD,
             candidates,
             no_fit: false,
+            from_path,
             paths,
             exits,
             places,
@@ -1268,7 +1276,7 @@ impl Navigator {
     /// The zone's map scale (minimap cells per world unit across) its named exits showed,
     /// once they make a layout drawn: kept per zone, the next visit expects it.
     pub fn zone_scale(&self) -> Option<f64> {
-        let picture = self.picture().filter(|p| p.known)?;
+        let picture = self.picture().filter(|p| p.known && !p.from_path)?;
         let top = self.area.layouts.iter().position(|l| l.id == picture.id)?;
         Some(self.scale * self.banks[top].k).filter(|s| (SCALE_RANGE.0..=SCALE_RANGE.1).contains(s))
     }
@@ -2312,6 +2320,24 @@ mod tests {
         // No exit read: every place of a several-place exit is a maybe.
         let fresh = Navigator::new(&area, Arrival::From("G1_6"), None, SCALE, 1);
         assert!(fresh.banks.iter().all(|b| b.named_nodes.is_empty()));
+    }
+
+    #[test]
+    fn the_only_layout_left_is_drawn_from_the_path() {
+        let json = r#"{"connections": ["A", "B"], "topologies": [
+            {"id": "both", "nodes": [{"x": 0, "y": 0, "exit": "A"}, {"x": 600, "y": 0, "exit": "B"}], "edges": [{"a": 0, "b": 1}]},
+            {"id": "one", "nodes": [{"x": 0, "y": 0, "exit": "A"}, {"x": 600, "y": 0}], "edges": [{"a": 0, "b": 1}]}]}"#;
+        let area = Area::parse("T", json).unwrap();
+        let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 3).trusted();
+        assert!(!nav.picture().unwrap().known, "two possible");
+        for _ in 0..3 {
+            nav.seen(Seen::Exit("B"));
+        }
+        let ranking = nav.ranking();
+        assert!(ranking[1].1 < NEGLIGIBLE, "{ranking:?}");
+        let picture = nav.picture().unwrap();
+        assert!(picture.known && picture.from_path && picture.id == "both", "{picture:?}");
+        assert_eq!(nav.zone_scale(), None, "no scale learnt from the path");
     }
 
     #[test]
