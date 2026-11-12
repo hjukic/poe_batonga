@@ -391,9 +391,7 @@ impl Navigator {
     /// The exits a map icon can be in one layout: those leading to its label's area,
     /// or every exit when it has none.
     fn icon_nodes(&self, layout: &Layout, icon: &ExitIcon) -> Vec<usize> {
-        let to = icon.to.as_deref().map(|t| {
-            self.area.names.iter().find(|(id, name)| id.as_str() == t || name.eq_ignore_ascii_case(t)).map_or(t, |(id, _)| id.as_str())
-        });
+        let to = icon.to.as_deref().map(|t| self.exit_id(t));
         (0..layout.nodes.len())
             .filter(|&i| match (&layout.nodes[i].exit, to) {
                 (Some(exit), Some(to)) => exit == to,
@@ -542,11 +540,15 @@ impl Navigator {
         }
     }
 
+    /// The area id an exit label names: the area whose name it is, else the label itself.
+    fn exit_id<'s>(&'s self, label: &'s str) -> &'s str {
+        self.area.names.iter().find(|(id, name)| id.as_str() == label || name.eq_ignore_ascii_case(label)).map_or(label, |(id, _)| id.as_str())
+    }
+
     /// The share of the belief that puts icon `icon` on one of the target's exits.
     fn icon_is_target(&self, icon: &ExitIcon, target: &NavTarget, posterior: &[f64]) -> f64 {
-        let named = |t: &str| self.area.names.iter().find(|(id, name)| id.as_str() == t || name.eq_ignore_ascii_case(t)).map(|(id, _)| id.clone());
         if let (Some(to), Some(exit)) = (&icon.to, &target.exit) {
-            return if named(to).as_deref() == Some(exit.as_str()) { 1.0 } else { 0.0 };
+            return if self.exit_id(to) == exit.as_str() { 1.0 } else { 0.0 };
         }
         let mut share = 0.0;
         for (k, (layout, bank)) in self.area.layouts.iter().zip(&self.banks).enumerate() {
@@ -837,7 +839,10 @@ impl Navigator {
                 target_kind: if target.exit.is_some() { "entrance".into() } else { target.tag.clone().unwrap_or_default() },
                 target: target.label.clone(),
                 degrees: screen_bearing(icon.dx, icon.dy),
-                source: self.cap_source(sure, &posterior).into(),
+                // A labelled icon of the target in view is direct evidence, not layout
+                // inference: gold in every area. An unlabelled one leans on the belief
+                // and keeps its cap (rough in unmeasured areas, unconfirmed in dungeons).
+                source: if named && near { "estimated".into() } else { self.cap_source(sure, &posterior).into() },
                 distance: icon.dx.hypot(icon.dy) as f32,
                 confidence: share.min(1.0) as f32,
                 measured: false,
@@ -1237,6 +1242,23 @@ mod tests {
         assert_eq!(source("tgr", false), "rough", "an area without a replayed recording");
         assert_eq!(source("dgr", false), "unconfirmed", "a dungeon");
         assert_eq!(source("dgr", true), "unconfirmed", "a dungeon, until its scale is measured");
+        // The target's own labelled icon in view, the way there straight: gold anywhere.
+        let near = r#"{"connections": ["A", "B"], "topologies": [
+            {"id": "near", "format": "FORMAT", "roomUnitSize": 2, "nodes": [{"x": 0, "y": 0, "exit": "A"}, {"x": 180, "y": 0, "exit": "B"}], "edges": [{"a": 0, "b": 1}]}]}"#;
+        for format in ["tgr", "dgr"] {
+            let area = Area::parse("X", &near.replace("FORMAT", format)).unwrap();
+            let l = &area.layouts[0];
+            let (sx, sy) = super::super::guide::to_screen(((l.nodes[0].x - l.nodes[1].x) * l.unit, 0.0));
+            let icon = |to: Option<&str>| ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: to.map(String::from) };
+            let mut nav = Navigator::new(&area, Arrival::From("B"), None, SCALE, 3);
+            nav.icons(&[icon(Some("A"))]);
+            let view = nav.guide(&[exit("A", "A")]).unwrap();
+            assert_eq!(view.source, "estimated", "{format}: {view:?}");
+            // Unlabelled, the same icon is inferred: capped.
+            let mut nav = Navigator::new(&area, Arrival::From("B"), None, SCALE, 3);
+            nav.icons(&[icon(None)]);
+            assert_ne!(nav.guide(&[exit("A", "A")]).unwrap().source, "estimated", "{format}");
+        }
     }
 
     #[test]
