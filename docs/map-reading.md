@@ -1325,7 +1325,7 @@ part when that is at least 60% of it):
 | Checkpoints, own sprite score | 0.55–0.66 (Clearfell 3, Riverbank 4, one cut by the edge 0.67) | at most 0.06 |
 | Waypoint | 0.67 (Clearfell) | at most 0.39 |
 
-On the four Riverbank captures the old reader made 15 waypoints and 9 checkpoints that are not there; now
+On the four Riverbank captures the old reader made 18 waypoints and 9 checkpoints that are not there (every pixel; 16 and 9 every second); now
 none, and all four real checkpoints stay (`scene_pixels_are_no_waypoint_or_checkpoint`, fixtures
 `bigmap-riverbank-foam.ppm`, `bigmap-riverbank-glow.ppm`). Clearfell's six icons are unchanged. Exits are
 kept whatever they score (no false exit was seen).
@@ -1409,5 +1409,19 @@ seen like exit icons):
 
 They help the layout (+4–5 points) and add no wrong gold, but the needle at 60% is no better (−1.5 to −3
 points at one seed): a checkpoint says "some landmark", and a wrong one shifts the belief as much as a right
-one helps. The owner's only zone with checkpoints today is the Riverbank, which has one exit and no layout
-fixed by names: the rule is not checked on a real visit yet.
+one helps.
+
+**The owner's Riverbank (seed 3615065120, `truth/riverbank-3615065120.md`)**, the only zone played today: one
+exit, no layout fixed by names, the instance one of `Riverbed_1/3/6`. Its two real checkpoints, from the
+boss capture (the player in the Miller's arena, about (1148, −77) cells from the spawn): (−74, 21) and
+(−267, 275) cells from the player. Placed from each layout's start node, as measured and scaled by the
+layout's own spawn-to-town length (the measured walk is 1.14–1.18 times the graphs'):
+
+| Layout | Checkpoint by the arena | The other |
+| --- | --- | --- |
+| Riverbed_3 (best fit) | 75 cells from the town exit (118 scaled) | 65 from `lumberjack` (71 from `tutorial2_creekbend` scaled) |
+| Riverbed_1 | 203 from `lumberjack` (51 scaled) | 210 (151 scaled) |
+| Riverbed_6 | 119 from the town exit (106 scaled) | 179 (82 scaled) |
+
+In the best-fitting layout both lie within the 94 cells the tolerance allows; the check is rough while the
+Riverbank's scale is in question.
