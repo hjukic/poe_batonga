@@ -16,16 +16,7 @@
       "id": "kill-tavakai",
       "kind": "objective",
       "navigationTarget": { "area": "G4_11_2", "label": "Tavakai", "tag": "boss" },
-      "parts": [{ "text": "Kill " }, { "text": "Tavakai", "style": "boss" }, { "text": ", talk to him" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G4_11_2",
-        "lines": [
-          { "id": "TavakaiA4_EndFight_B3_Sin", "speaker": "The Hooded One", "text": "Return to Kingsmarch. We must prepare to bring the fight to Oriana. With the Weapon in hand... we must face the Beast." }
-        ]
-      },
-      "evidence": "Panel: TavakaiA4_EndFight_B3_Sin. The Hooded One's last line of the talk with Tavakai after the fight ('Blood Fever'); the step includes that talk. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged. Target: the one 'boss' node in all 3 layouts.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Kill " }, { "text": "Tavakai", "style": "boss" }, { "text": ", talk to him" }]
     },
     {
       "id": "tribe-portal-town",

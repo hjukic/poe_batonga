@@ -7,18 +7,7 @@
     {
       "id": "grelwood-talk-una",
       "kind": "objective",
-      "parts": [{ "text": "Find and talk to " }, { "text": "Una", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G1_4",
-        "lines": [
-          { "id": "UnaNewRedValeUnexplored", "speaker": "Una", "text": "There is a battlefield not far from here that runs red with rust, where the weapons and armour of countless Ezomytes still remain... We call it the Red Vale. You should search the area. There may still be power in some of those centuries old relics. Renly will know how to forge them. Bring the runes to him, and then, perhaps, we shall find some answers." },
-          { "id": "UnaNewRedValeExploredPartial", "speaker": "Una", "text": "I see you've already found the vale, and some of the runes we need. But I don't think they will be enough. Return to the vale and search for more. Renly will know how to forge them." },
-          { "id": "UnaNewRedValeExploredFull", "speaker": "Una", "text": "I see you've already found relics with the runes we need. What luck! The First Ones are truly watching over us. Renly will know how to forge them. Bring what you've gathered to him, and then, perhaps, we shall find some answers." }
-        ]
-      },
-      "evidence": "Panel: UnaNewRedValeUnexplored, UnaNewRedValeExploredPartial, UnaNewRedValeExploredFull. Una's three rune talks at the Tree of Souls, one per rune state; hidden once the spikes are forged. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Find and talk to " }, { "text": "Una", "style": "npc" }]
     },
     {
       "id": "grelwood-waypoint",
@@ -85,16 +74,7 @@
     {
       "id": "grelwood-una-seals",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Una", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G1_4",
-        "lines": [
-          { "id": "UnaNewUnconciousComment", "speaker": "Una", "text": "He's unconscious, but he's breathing. Though... this wound... We should take him back to Clearfell. He may be the only one who knows what truly happened out here." }
-        ]
-      },
-      "evidence": "Panel: UnaNewUnconciousComment. Una's 'The Wound' (needs TreeOfSoulsMentorReleased: the seals are done). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Una", "style": "npc" }]
     },
     {
       "id": "grelwood-portal-town",

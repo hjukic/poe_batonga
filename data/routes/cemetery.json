@@ -7,16 +7,7 @@
     {
       "id": "talk-lachlann",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Lachlann", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G1_7",
-        "lines": [
-          { "id": "LachlannGreeting", "speaker": "Lachlann the Lost", "text": "That bastard tyrant, Praetor Draven! He's taken my family hostage! They're being held somewhere beyond these gates. I never thought he would stoop this low! I sent for reinforcements... but... it's been so long... I must get through the gate... The keys... where are the blasted keys? I... I believe those cowards took them..." }
-        ]
-      },
-      "evidence": "Panel: LachlannGreeting. Lachlann's introduction (sets BitterGuyQuestReceived); bound to the Cemetery, he also stands in the Tomb and the Mausoleum. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Lachlann", "style": "npc" }]
     },
     {
       "id": "ancient-ruins",

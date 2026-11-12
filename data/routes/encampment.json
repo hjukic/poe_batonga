@@ -7,17 +7,7 @@
     {
       "id": "talk-renly",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Renly", "style": "npc" }, { "text": "Skill Gem", "style": "reward" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G1_town",
-        "lines": [
-          { "id": "RenlyIntro", "speaker": "Renly", "text": "Renly's the name. You're skilled with the violence, if what you did out there in the riverbank is any sign. Another refugee from the Count's 'justice,' I take it. Well have no fear. This place is something of a hideaway for many of us now, and we could sorely use your skills in these dark times. I'll smith for you what I can, if you're willing to bend your violence toward our defence." },
-          { "id": "RenlyIntroSon", "speaker": "Renly", "text": "Where've you been, lad? I've been worried sick! I looked for you everywhere after those soldiers came for you, but when I found neither hide nor hair, I had to believe, well... It's a good thing you managed to escape the Count's 'justice', let's just say that. It seems the First Ones have graced us with fortune. We could sorely use your strength in these dark times." }
-        ]
-      },
-      "evidence": "Panel: RenlyIntro, RenlyIntroSon. Renly's introduction, said once on the first talk; the Miller reward is taken in the same talk. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Renly", "style": "npc" }, { "text": "Skill Gem", "style": "reward" }]
     },
     {
       "id": "enter-clearfell",
@@ -31,30 +21,12 @@
       "id": "renly-support-gem",
       "kind": "objective",
       "optional": true,
-      "parts": [{ "text": "After The Devourer: " }, { "text": "Renly", "style": "npc" }, { "text": "Support Gem", "style": "reward" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G1_town",
-        "lines": [
-          { "id": "RenlyDevourerKilled", "speaker": "Renly", "text": "Ahh, finally! Took down the Devourer, did you? That's incredible! This is the first real success we've had against the darkness. We can breathe a bit easier now, perhaps even go out and gather food. This won't cover our debt to you, not nearly, but take it as thanks." }
-        ]
-      },
-      "evidence": "Panel: RenlyDevourerKilled. Renly's 'Devourer Slain' hand-in (needs MudBurrowerQuestDefeatedMudBurrower, gone once the reward is taken). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "After The Devourer: " }, { "text": "Renly", "style": "npc" }, { "text": "Support Gem", "style": "reward" }]
     },
     {
       "id": "renly-runed-spikes",
       "kind": "objective",
-      "parts": [{ "text": "Runed Spikes from " }, { "text": "Renly", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G1_town",
-        "lines": [
-          { "id": "RenlyRuneSpikes", "speaker": "Renly", "text": "Here are your spikes but... be cautious. They stayed warm after forging no matter how many times I quenched them. I would ask what you need these for, but I'm putting my trust in you." }
-        ]
-      },
-      "evidence": "Panel: RenlyRuneSpikes. Renly's 'Runed Spikes' hand-in (sets TreeOfSoulsRedValeRunesForged, then hidden). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Runed Spikes from " }, { "text": "Renly", "style": "npc" }]
     },
     {
       "id": "town-to-grelwood",
@@ -67,16 +39,7 @@
     {
       "id": "town-una-roots",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Una", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G1_town",
-        "lines": [
-          { "id": "UnaNewTreeOfSoulsEnd", "speaker": "Una", "text": "The wound... It should be fatal, but somehow he clings to life... I fear it will not be long until his song ends. He will never heal while the count's binding still holds sway. Only by a Count's hand can this binding be released. I know an old tale. One that speaks of a ring we might be able to recover, buried three centuries ago in our ancient graveyard... A count's signet ring, bearing his rune of Authority. But how to reach it in time... The Grim Tangle! The overgrown sinkholes and gullies that run beneath Ogham can lead you there. The path is dangerous but... go back to the Grelwood. Find the entrance. We shall see if the spirits of this land still have the will to see you through." }
-        ]
-      },
-      "evidence": "Panel: UnaNewTreeOfSoulsEnd. Una's 'The Count's Binding' (only on the injured-Hooded-One Una; sets UnaHoodedOneInjuredGoToGrimTangle). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Una", "style": "npc" }]
     },
     {
       "id": "town-to-grim-tangle",
@@ -112,16 +75,7 @@
     {
       "id": "town-hooded-one",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G1_town",
-        "lines": [
-          { "id": "HoodedOneNewCountWarning", "speaker": "The Hooded One", "text": "How long has it been? I was hunted... The Count... He stole something that is beyond dangerous... It will cause sickness... Then madness... It can still be contained... We must put the Seed back..." }
-        ]
-      },
-      "evidence": "Panel: HoodedOneNewCountWarning. The Hooded One's 'A Warning', his first line once awake (needs RingOfTheCountUsed). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {
       "id": "town-to-hunting-grounds",
@@ -135,30 +89,12 @@
       "id": "finn-charm",
       "kind": "objective",
       "optional": true,
-      "parts": [{ "text": "After Ominous Altars: " }, { "text": "Finn", "style": "npc" }, { "text": "Charm", "style": "reward" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G1_town",
-        "lines": [
-          { "id": "FinnCanopySummonInAfterKing", "speaker": "Finn", "text": "So, the cultists really did have a king lurking out there in the shadows. Shame. I might have followed him myself if he'd simply promised decent meals instead. Thank you, hero. It's not the result I was hoping for, but at least I know the truth. Clearfell's all I have left now. If I was a drinking man, it'd be a sobering thought." }
-        ]
-      },
-      "evidence": "Panel: FinnCanopySummonInAfterKing. Finn's 'The King in the Mists' hand-in (needs CanopyQuestBossDefeated); bound to the town, Finn says it in Freythorn too. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "After Ominous Altars: " }, { "text": "Finn", "style": "npc" }, { "text": "Charm", "style": "reward" }]
     },
     {
       "id": "deliver-unas-lute",
       "kind": "objective",
-      "parts": [{ "text": "Give the Lute to " }, { "text": "Una", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G1_town",
-        "lines": [
-          { "id": "UnaLuteQuestEnd", "speaker": "Una", "text": "You found my lute! I can't quite believe my eyes. This feels like having a small part of my family back again. I cannot thank you enough. I think I shall begin by composing a song about you. In the meantime, I would be happy to play for you, if you like." }
-        ]
-      },
-      "evidence": "Panel: UnaLuteQuestEnd. Una's 'Lost Lute Found' hand-in (needs UnaLuteQuestHaveLute, sets UnaLuteQuestDeliveredLute). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Give the Lute to " }, { "text": "Una", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }]
     },
     {
       "id": "town-talk-all",
@@ -170,16 +106,7 @@
     {
       "id": "town-beasts-trail",
       "kind": "objective",
-      "parts": [{ "text": "Hooded One", "style": "npc" }, { "text": ": Beast's Trail" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G1_town",
-        "lines": [
-          { "id": "HoodedOneNewTravelEast", "speaker": "The Hooded One", "text": "The trail of Corruption leads east, so east we shall go. It seems fate conspires to return me to the Plains of Vastiri..." }
-        ]
-      },
-      "evidence": "Panel: HoodedOneNewTravelEast. The Hooded One's 'Follow the Beast's trail' option: a one-step dialogue (NPCTalkDialogueSteps names the row in its NPCTalkDialogueTextAudio column; its script travels to G2_1). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Hooded One", "style": "npc" }, { "text": ": Beast's Trail" }]
     },
     {
       "id": "enter-vastiri-outskirts",

@@ -1280,13 +1280,8 @@ mod tests {
         assert_eq!(line_of("kill-lachlann"), ("Lachlann of Endless Lament".into(), "Together... at last...".into()));
         assert_eq!(run("G1_7", "kill-lachlann"), ["kill-lachlann"]);
         assert!(run("G1_8", "kill-lachlann").is_empty());
-        // Finn says the same line when summoned in Freythorn; only the town talk is the hand-in.
-        assert!(run("G1_12", "finn-charm").is_empty());
-        assert_eq!(run("G1_town", "finn-charm"), ["finn-charm"]);
-        // The Hooded One's Weapon-piece talk is the same on all three islands.
-        assert_eq!(run("G4_7", "shrike-hooded-one"), ["shrike-hooded-one"]);
-        assert_eq!(run("G4_3_2", "shrike-hooded-one"), ["caverns-hooded-one"]);
-        assert_eq!(run("G4_5_2", "shrike-hooded-one"), ["prison-hooded-one"]);
+        assert_eq!(run("G1_12", "kill-king-in-the-mists"), ["kill-king-in-the-mists"]);
+        assert!(run("G1_town", "kill-king-in-the-mists").is_empty());
     }
 
     #[test]

@@ -7,45 +7,17 @@
     {
       "id": "kingsmarch-doryani",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Doryani", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G4_town",
-        "lines": [
-          { "id": "DoryaniA4_Intro_C", "speaker": "Doryani", "text": "We will need a vessel to navigate the archipelago. We must begin our search to locate the pieces of the Weapon." }
-        ]
-      },
-      "evidence": "Panel: DoryaniA4_Intro_C. Doryani's last line of the 'Kingsmarch' talk (sets KingsmarchDoryaniTheSearchSeen). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Doryani", "style": "npc" }]
     },
     {
       "id": "kingsmarch-alva",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Alva", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G4_town",
-        "lines": [
-          { "id": "AlvaA4_Intro_B", "speaker": "Alva", "text": "Ah, there you are! This is my contact Rog, a trader with a keen eye for valuable artefacts! Rog, my friends are after a ship... And it just so happens we've a cart load of Vaal treasure to cover the charter." }
-        ]
-      },
-      "evidence": "Panel: AlvaA4_Intro_B. Alva's 'Kingsmarch' talk introducing Rog (needs KingsmarchDoryaniTheSearchSeen). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Alva", "style": "npc" }]
     },
     {
       "id": "kingsmarch-tujen",
       "kind": "objective",
-      "parts": [{ "text": "Take " }, { "text": "Tujen", "style": "npc" }, { "text": "'s quest" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G4_town",
-        "lines": [
-          { "id": "TujenA4_FogQuest_A1a", "speaker": "Tujen", "text": "Before you go... perhaps I can ask a favour. See, Kingsmarch trade has seen better days. Ships go out and they don't come back. And that kinda shite is bad for business..." },
-          { "id": "TujenA4_FogQuest_A1b", "speaker": "Tujen", "text": "Hmm...before you set off... perhaps you could look into a little problem of ours. See, Kingsmarch trade has seen better days. Ships go out and they don't come back. And that kinda shite is bad for business." }
-        ]
-      },
-      "evidence": "Panel: TujenA4_FogQuest_A1a, TujenA4_FogQuest_A1b. Tujen's 'Dark Mists' quest start, two variants (hidden once A4DarkMistsQuestStarted). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Take " }, { "text": "Tujen", "style": "npc" }, { "text": "'s quest" }]
     },
     {
       "id": "kingsmarch-farrow",
@@ -64,16 +36,7 @@
     {
       "id": "kingsmarch-ange",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Ange", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G4_town",
-        "lines": [
-          { "id": "Ange_Introduction_A1", "speaker": "Ange", "text": "Oh... hello. Yes, yes, I'm Ange. A marketeer! Oh gosh, where are my notes? I'm terrible at introductions... Never mind!" }
-        ]
-      },
-      "evidence": "Panel: Ange_Introduction_A1. Ange's introduction. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Ange", "style": "npc" }]
     },
     {
       "id": "enter-shoreline-hideout",
@@ -120,16 +83,7 @@
     {
       "id": "verisium-spikes",
       "kind": "objective",
-      "parts": [{ "text": "Spikes from " }, { "text": "Dannig", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G4_town",
-        "lines": [
-          { "id": "DannigA4_OnVerisium_C1", "speaker": "Dannig", "text": "There we go. That should do it. Be careful out there." }
-        ]
-      },
-      "evidence": "Panel: DannigA4_OnVerisium_C1. Dannig's 'Spike Forging' (needs Act4KalguuranVerisiumHeld), its last line. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Spikes from " }, { "text": "Dannig", "style": "npc" }]
     },
     {
       "id": "kingsmarch-to-journeys-end",
@@ -142,31 +96,12 @@
     {
       "id": "kingsmarch-tujen-reward",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Tujen", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G4_town",
-        "lines": [
-          { "id": "TujenA4_ShroudedWatersEnd_B1", "speaker": "Tujen", "text": "Aye, perhaps. Nonetheless, the fog is cleared, and a Kalguuran always pays up. As promised - this is for you." }
-        ]
-      },
-      "evidence": "Panel: TujenA4_ShroudedWatersEnd_B1. Tujen's 'Dark Mists' hand-in (needs Act4DeliriumEncounterComplete, once). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Tujen", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }]
     },
     {
       "id": "maps-to-makoru",
       "kind": "objective",
-      "parts": [{ "text": "Give 4 maps to Makoru" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G4_town",
-        "lines": [
-          { "id": "Makoru_RoA_CompleteMap_B2", "speaker": "Makoru", "text": "This is my best guess. And I'm not usually wrong. Shall we take a look?" },
-          { "id": "Rhodri_RoA_CompleteMap_B1", "speaker": "Rhodri", "text": "Not just the ship's cook, after all, eh? We can head there whenever you like. What do you say?" }
-        ]
-      },
-      "evidence": "Panel: Makoru_RoA_CompleteMap_B2, Rhodri_RoA_CompleteMap_B1. The 'Plunder's Point' talk once all four map pieces are used: Makoru, or Rhodri when Makoru is away. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Give 4 maps to Makoru" }]
     },
     {
       "id": "sail-plunders-point",
@@ -192,16 +127,7 @@
     {
       "id": "kingsmarch-hooded-one-act-end",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G4_town",
-        "lines": [
-          { "id": "Sin_OnEndAct_A1", "speaker": "The Hooded One", "text": "Now, we need allies. I believe we have earned good will throughout Wraeclast. It is time to call upon those debts. One last journey, recruiting any who will join us, before we assault Oriath. The Karui are already with us. We should call upon the Ezomytes and the Maraketh." }
-        ]
-      },
-      "evidence": "Panel: Sin_OnEndAct_A1. The Hooded One's 'Allies' (needs Act4CompleteGoToInterlude). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {
       "id": "shark-fin-kaimana",
@@ -235,16 +161,7 @@
     {
       "id": "interludes-done-hooded-one",
       "kind": "objective",
-      "parts": [{ "text": "All 3 done: " }, { "text": "The Hooded One", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G4_town",
-        "lines": [
-          { "id": "Sin_OnEndInterludes_A1", "speaker": "The Hooded One", "text": "It has been thousands of years since I've seen an alliance such as this. Wraeclast has finally united the way I always hoped it would. Come, let us plan our assault on Oriath." }
-        ]
-      },
-      "evidence": "Panel: Sin_OnEndInterludes_A1. The Hooded One's 'Unity' (needs the three interlude-end flags). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "All 3 done: " }, { "text": "The Hooded One", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }]
     }
   ]
 }

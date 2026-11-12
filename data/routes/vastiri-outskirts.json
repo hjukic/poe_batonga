@@ -7,16 +7,7 @@
     {
       "id": "vastiri-hooded-one",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G2_1",
-        "lines": [
-          { "id": "HoodedOneA2Intro", "speaker": "The Hooded One", "text": "This outpost seems to be part of a trade route, so we should be able to find a Maraketh caravan. They are an honourable people, and I have no doubt they will assist us." }
-        ]
-      },
-      "evidence": "Panel: HoodedOneA2Intro. The Hooded One's 'Our Next Move' at the dock, his only talk there. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {
       "id": "kill-rathbreaker",
@@ -36,17 +27,7 @@
     {
       "id": "vastiri-zarka",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }, { "text": "Skill Gem", "style": "reward" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G2_1",
-        "lines": [
-          { "id": "ZarkaA2ReturnFromHyenas", "speaker": "Zarka", "text": "You defeated the raiders? Fate sends us a fortuitous stranger! Welcome to the Ardura akhara. You may travel with us in exchange for your service, as a jingakh, and you will have nearly the respect of one of our own for as long as you stay." },
-          { "id": "ZarkaA2ReturnFromHyenasSorceress", "speaker": "Zarka", "text": "You defeated the raiders? Despite your past, we could use someone of your skill. Welcome to the Ardura akhara. You may travel with us in exchange for your service. You will even have the respect of one of our own for as long as you stay. If anyone says otherwise, tell them to speak to me." }
-        ]
-      },
-      "evidence": "Panel: ZarkaA2ReturnFromHyenas, ZarkaA2ReturnFromHyenasSorceress. Zarka's 'You defeated the raiders?' after Rathbreaker (and the Sorceress variant). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }, { "text": "Skill Gem", "style": "reward" }]
     },
     {
       "id": "enter-ardura-caravan",

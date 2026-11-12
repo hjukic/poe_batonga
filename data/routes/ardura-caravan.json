@@ -7,16 +7,7 @@
     {
       "id": "caravan-hooded-one",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G2_town",
-        "lines": [
-          { "id": "HoodedOneA2OurNextMoveOne", "speaker": "The Hooded One", "text": "The Beast is on the move, twisting the desert as it goes, waking ancient dead and unknown horrors alike. The Countess brought it here as part of some nefarious plan. I assume she has allies here. We must track them down and convince them to give up this madness." }
-        ]
-      },
-      "evidence": "Panel: HoodedOneA2OurNextMoveOne. The Hooded One's first 'Our Next Move' in the caravan (hidden once the defector was met). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {
       "id": "caravan-asala-twice",
@@ -35,16 +26,7 @@
     {
       "id": "caravan-asala-halani",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G2_town",
-        "lines": [
-          { "id": "AsalaA2MapUIAncientGatesTwo", "speaker": "Sekhema Asala", "text": "The Halani Gates are closed for the first time in one thousand years! This can only be related to the Beast. We should investigate the Faridun camp and demand answers." }
-        ]
-      },
-      "evidence": "Panel: AsalaA2MapUIAncientGatesTwo. Asala's 'The Closed Gates' (needs LockedGateSeen); only Asala, the Desert Map shares the line. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }]
     },
     {
       "id": "travel-mawdun-quarry",
@@ -56,31 +38,12 @@
     {
       "id": "caravan-risu",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Risu", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G2_town",
-        "lines": [
-          { "id": "RisuA2GatesAreClosed", "speaker": "Risu", "text": "The Halani Gates are closed! Then Jamanra must have succeeded in capturing them. He planned to close the gates to prevent the Maraketh from interrupting his... harvest. A siege from the front would be impossible now. But there is another way. An ancient passage lost to time. It was used by the traitor Balbala. I can show you where it is, if you will use it to stop Jamanra before it is too late." },
-          { "id": "RisuA2PerennialKingAlternate", "speaker": "Risu", "text": "I know what Jamanra intends. Atop the burial spires of Deshar lie the Maraketh's most honoured dead. The King has become driven by madness to seek any trace of ancient flesh from those of renown or power in life. He intends to feed their bodies to the horrific creature he keeps in a cage behind his throne. They call it the Beast. I have seen it, and the sight haunts my nightmares..." }
-        ]
-      },
-      "evidence": "Panel: RisuA2GatesAreClosed, RisuA2PerennialKingAlternate. Risu's two talks in the council cart; bound to the caravan, the same lines come at the gates. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Risu", "style": "npc" }]
     },
     {
       "id": "caravan-asala-risu",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G2_town",
-        "lines": [
-          { "id": "AsalaA2ResponseAboutBurialSpires", "speaker": "Sekhema Asala", "text": "So, the outcasts have raised their new 'King' from the grave, and he seeks to violate Deshar— to feed our honoured dead to the Beast. Such a transgression... those vile dogs! Our city of the dead lies beyond the Halani Gates—we should move to crush the Faridun immediately. Let us see if this defector's information is truthful. Infiltrate this supposed passage, find your way to the top of the Gates without being detected, and then call for aid. I shall answer." }
-        ]
-      },
-      "evidence": "Panel: AsalaA2ResponseAboutBurialSpires. Asala's 'Assaulting the Gates' (needs RisuRevealedTraitorsPassage, set by the Risu talk). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }]
     },
     {
       "id": "travel-traitors-passage",
@@ -99,30 +62,12 @@
     {
       "id": "caravan-zarka-trial",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G2_town",
-        "lines": [
-          { "id": "ZarkaA2HornQuestGive", "speaker": "Zarka", "text": "Jamanra can control the sands? This was not an ability he had in life. It must be born of Corruption. There is something in the tales that could help us overcome such a power. It was said that the Horn of the Vastiri could control the winds. I believe the Horn's location has been lost to time... but... perhaps it is possible that we can reconstruct it. We would have to retrace the steps of our greatest heroine, Orbala, on her final adventure. Speak to Asala. She knows the tale, and where it might take us. Let her know how you wish to begin. Or, you may seek my wisdom if you have further questions." }
-        ]
-      },
-      "evidence": "Panel: ZarkaA2HornQuestGive. Zarka's 'Dispelling the Sandstorm' (needs DesertSandstormSeen), the talk after the Halani Gates fight. 'The Trial of the Sekhemas' (ZarkaA2ResponseToBalbalaSoulCoin*) is left out: it needs the Djinn Barya from Traitor's Passage and can come before the Gates, so it would tick this step early. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }]
     },
     {
       "id": "caravan-asala-trial",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G2_town",
-        "lines": [
-          { "id": "AsalaA2HornOfVastiriQuestGo", "speaker": "Sekhema Asala", "text": "Ah, yes, the Horn of the Vastiri... I know the tale. The ancient city of Keth, the Badlands, and the Valley of the Titans... We can retrace Orbala's steps in any order." }
-        ]
-      },
-      "evidence": "Panel: AsalaA2HornOfVastiriQuestGo. Asala's 'The Horn of the Vastiri' (needs DesertSandstormSeen). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }]
     },
     {
       "id": "travel-trial-waypoint",
@@ -141,16 +86,7 @@
     {
       "id": "caravan-zarka-relic",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G2_town",
-        "lines": [
-          { "id": "ZarkaA2AcceptsTusks", "speaker": "Zarka", "text": "These tusks are truly worthy of Orbala's steed!" }
-        ]
-      },
-      "evidence": "Panel: ZarkaA2AcceptsTusks. Zarka takes the Mastodon Tusks (needs MastodonTusksHeld, once). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }]
     },
     {
       "id": "travel-keth",
@@ -162,16 +98,7 @@
     {
       "id": "caravan-zarka-keth",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G2_town",
-        "lines": [
-          { "id": "ZarkaA2AcceptsEssenceOfWater", "speaker": "Zarka", "text": "There was a goddess of water lying at the heart of Keth? I wonder what her role in the past involved. It is my sacred duty to keep our tales, but I know nothing of this goddess! How could we Maraketh have forgotten something so important?" }
-        ]
-      },
-      "evidence": "Panel: ZarkaA2AcceptsEssenceOfWater. Zarka takes the Essence of Water (needs EssenceOfTheWaterGodHeld, once). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }]
     },
     {
       "id": "travel-valley-titans",
@@ -183,30 +110,12 @@
     {
       "id": "caravan-zarka-grotto",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G2_town",
-        "lines": [
-          { "id": "ZarkaA2AcceptsFlameRuby", "speaker": "Zarka", "text": "This ruby is beautiful and quite haunting. Perhaps it is simply my imagination, but I feel as if there is something staring back at me from deep inside." }
-        ]
-      },
-      "evidence": "Panel: ZarkaA2AcceptsFlameRuby. Zarka takes the Flame Ruby (needs FlameRubyHeld, once). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }]
     },
     {
       "id": "caravan-asala-grotto",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G2_town",
-        "lines": [
-          { "id": "AsalaA2TravelToSandstorm", "speaker": "Sekhema Asala", "text": "It is time to use the reforged Horn of the Vastiri to open the way through. Prepare yourself. War is nigh." }
-        ]
-      },
-      "evidence": "Panel: AsalaA2TravelToSandstorm. Asala's 'Clear the Sandstorm' (needs HornOfTheVastiriSeen: the horn is made). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }]
     },
     {
       "id": "caravan-to-traitors-passage",
@@ -269,16 +178,7 @@
     {
       "id": "caravan-hooded-one-outside",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Hooded One", "style": "npc" }, { "text": " outside" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G2_town",
-        "lines": [
-          { "id": "HoodedOneA2RevealConfessionContinue_HoodDown", "speaker": "The Hooded One", "text": "The Beast has grown beyond our ability to contain it. We must search for something greater than we currently possess, something that can drain its power and bring it back to a more manageable form. While I slumbered under the numbing effects of Corruption, there was an empire that mastered the use of that deadly energy. We must go to the jungles of the long-ago Vaal. Their ruins may yet hold the secrets we need. That is where we must go, to the sunken city of Utzaal. It is our only hope." }
-        ]
-      },
-      "evidence": "Panel: HoodedOneA2RevealConfessionContinue_HoodDown. The Hooded One's 'To Utzaal', the last of the four reveal talks. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Talk to " }, { "text": "Hooded One", "style": "npc" }, { "text": " outside" }]
     },
     {
       "id": "travel-sandswept-marsh",

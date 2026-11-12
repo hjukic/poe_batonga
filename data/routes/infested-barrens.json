@@ -7,16 +7,7 @@
     {
       "id": "barrens-alva",
       "kind": "objective",
-      "parts": [{ "text": "Find and talk to " }, { "text": "Alva", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G3_2_1",
-        "lines": [
-          { "id": "Alva_G3_Waterways_Quest", "speaker": "Alva", "text": "The Vaal used this device to operate the mechanisms in the canal, but we would need a special artefact to power it. From the translations I've made, I believe they were called 'Soul Cores'. I've never even seen an in-tact Soul Core large enough for something like this though... I suppose if you want to try and find one you could ask our guide, Servi." }
-        ]
-      },
-      "evidence": "Panel: Alva_G3_Waterways_Quest. Alva's 'Powering the Mechanism' at the waterways device. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Find and talk to " }, { "text": "Alva", "style": "npc" }]
     },
     {
       "id": "barrens-waypoint",

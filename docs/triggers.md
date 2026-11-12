@@ -8,8 +8,9 @@ each step.
 
 **Measured on 2026-11-12 (the owner playing a new character): text of a dialogue panel is not
 logged.** Talks with Renly and Una in the Clearfell Encampment wrote no line; from entering the
-town to leaving it the log held only connection and shop lines. The `panel` triggers below
-therefore do not fire. The log shows zone entries, level-ups, world speech (boss barks, shouts
+town to leaving it the log held only connection and shop lines. So the 58 triggers on
+dialogue-panel lines (quest talks) were removed in v0.1.74: those steps tick by inference (see
+below) or a click. The log shows zone entries, level-ups, world speech (boss barks, shouts
 such as Mortimer's) and cutscene conversations.
 
 ## Implied ticks
@@ -56,16 +57,15 @@ Two kinds, read by `src-tauri/src/tracker.rs`:
   - **seen**: the line is in the owner's log;
   - **bark**: world speech (not part of a dialogue panel), the kind the log is known to show;
     from the game data, not yet seen;
-  - **panel**: text of a dialogue panel (a quest talk). Not known to be logged. Allowed when
-    the line is said once, at the step's completion, so it is harmless if never logged.
+  - a dialogue-panel line (a quest talk) is no trigger: panel text is not logged. The checker
+    still tells panel rows from barks, so a `bark` trigger that is really a panel line shows up.
 
-What qualifies (rules used for the 81 triggers added on 2026-11-12): a boss's own death line,
-another character's line about that death, a line that ends a scripted scene the step is
-about, or a quest hand-in line that the quest flags of `NPCTalk` tie to the step (the flags an
-option needs, hides on and sets). Not: fight barks and taunts, lines for the player's death,
+What qualifies (rules used for the triggers added on 2026-11-12): a boss's own death line,
+another character's line about that death, or a line that ends a scripted scene the step is
+about (quest hand-in lines were panel text: removed). Not: fight barks and taunts, lines for the player's death,
 greetings and vendor lines, lines also said earlier or elsewhere, and anything whose timing the
-data does not show. The same line in two zones is told apart by `area` (Finn's line after the
-King in the Mists is said in Freythorn and in town; only the town talk is the hand-in). A boss
+data does not show. The same line in two zones would be told apart by `area` (a trigger counts
+only in its own zone). A boss
 with phases or a scripted death scene gets only its last lines: the King in the Mists only his
 treant death lines (not `KingInTheMists_Druid_Death`), Doryani not "Do not fail me...",
 Jamanra only `PostStabDeath` and `DeathFinal` (not the opening "Give me a warrior's death!").
@@ -76,12 +76,7 @@ Measured and assumed: every NPC line in the owner's log so far (36 lines: the Wo
 Mortimer, The Bloated Miller, Renly, Una) is an `NPCTextAudio` row with the same text and its
 NPC's `Name` as the speaker. That bosses' death lines and the other barks are logged the same
 way is assumed (same table, same kind of line). That the log shows the full `Name` where it
-differs from `ShortName` is assumed. Whether panel text is logged, and whether a long panel
-line with `<continue>` breaks is logged whole or page by page, is not known: if it is logged
-by page, those triggers stay silent and the observations will show it. A hint against it
-(not proof): Renly's intro row (`RenlyIntro`) is not in the old log, where his first logged line
-is the shop greeting a minute after the Miller died. The owner started a new character on
-2026-11-12; that log will show whether Renly's intro in the Clearfell Encampment is logged.
+differs from `ShortName` is assumed. Panel text is not logged (measured, above).
 
 ## After a game patch
 
@@ -112,16 +107,14 @@ rest.
 | | Kill | Talk | Other | All |
 | --- | --- | --- | --- | --- |
 | With a trigger, before (v0.1.50) | 1 | 1 | 145 | 147 |
-| With a trigger, now | 20 | 46 | 162 | 228 |
+| With a trigger, v0.1.73 | 20 | 46 | 162 | 228 |
+| With a trigger, now (v0.1.74: the 58 panel ones removed) | 19 | 2 | 149 | 170 |
 | of these: zone entry (`zoneEntered`) | 0 | 0 | 145 | 145 |
 | of these: seen or bark (`npcLine`, the kind the log shows) | 19 | 2 | 4 | 25 |
-| of these: panel (`npcLine`, fires only if the log shows panel text) | 1 | 44 | 13 | 58 |
-| Ticked by hand, now | 54 | 15 | 105 | 174 |
+| No trigger (inference or a click), now | 55 | 59 | 118 | 232 |
 
-So 228 steps carry a trigger, but not 228 working ones: 145 zone entries and 2 seen lines are
-measured, 23 barks are assumed to be logged like the barks seen, and the 58 panel ones work
-only if panel text turns out to be logged, whole. The 83 `npcLine` triggers by evidence: seen 2 (the
-Riverbank's; the Miller's second variant, a bark, is not seen yet), bark 23, panel 58. The 145
+Of the 170 triggers, 145 zone entries and 2 seen lines are measured, and 23 barks are assumed to
+be logged like the barks seen (the Miller's second variant, a bark, is not seen yet). The 145
 `zoneEntered` triggers are unchanged.
 
 The checker's warnings on the shipped triggers (2026-11-12 tables) are all "said another way";
@@ -139,6 +132,10 @@ none is known to tick early, and only the first was looked at closely:
   different flags.
 
 ## Steps still ticked by hand
+
+Besides the steps below (looked up on 2026-11-12), the 58 whose trigger was a dialogue-panel line
+are ticked by inference or a click since v0.1.74 (git history has their rows: `git log -S
+'"evidenceKind": "panel"' -- data/routes`).
 
 "No line found" means the tables were searched for the step's NPCs and ids and nothing said at
 completion turned up; "not looked up" means the step was not searched in depth.

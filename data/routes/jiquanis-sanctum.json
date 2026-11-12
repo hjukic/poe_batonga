@@ -7,16 +7,7 @@
     {
       "id": "sanctum-alva",
       "kind": "objective",
-      "parts": [{ "text": "Summon and talk to " }, { "text": "Alva", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G3_6_2",
-        "lines": [
-          { "id": "Alva_G3_Machinarium_2_How_To_Charge", "speaker": "Alva", "text": "There is still latent energy residing here... From what I can gather, these lines in the stonework should lead to generators. You might need to find some more Soul Cores to spin them up, but everything looks to be in surprisingly decent condition. Maybe the constructs have been maintaining all this... In any case, let's hope it still functions. We'll then have to remove that large Soul Core from the wall of course, but that shouldn't be a problem." }
-        ]
-      },
-      "evidence": "Panel: Alva_G3_Machinarium_2_How_To_Charge. Summoned Alva's 'The Generators'. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
-      "evidenceKind": "panel"
+      "parts": [{ "text": "Summon and talk to " }, { "text": "Alva", "style": "npc" }]
     },
     {
       "id": "medium-soul-cores",

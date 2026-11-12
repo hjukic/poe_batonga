@@ -165,7 +165,8 @@ test('every npcLine trigger in data/routes is bound to its zone, names its rows 
       count++;
       const where = `${r.file} ${s.id}`;
       assert.equal(s.trigger.area, r.zone.id, where);
-      assert.ok(['seen', 'bark', 'panel'].includes(s.evidenceKind) || s.id === 'talk-wounded-man', `${where}: evidenceKind`);
+      // Dialogue-panel text is not logged (measured 2026-11-12): no panel triggers.
+      assert.ok(['seen', 'bark'].includes(s.evidenceKind) || s.id === 'talk-wounded-man', `${where}: evidenceKind`);
       for (const line of triggerLines(s.trigger)) {
         assert.ok(line.speaker && line.text, where);
         assert.equal(shownText(line.text), line.text, `${where}: text in shown form`);
@@ -176,7 +177,7 @@ test('every npcLine trigger in data/routes is bound to its zone, names its rows 
       }
     }
   }
-  assert.ok(count >= 83, `${count} npcLine triggers`);
+  assert.ok(count >= 25, `${count} npcLine triggers`);
 });
 
 test('the triggers match the game tables in TRIGGER_TABLES', { skip: !process.env.TRIGGER_TABLES && 'TRIGGER_TABLES not set' }, () => {
