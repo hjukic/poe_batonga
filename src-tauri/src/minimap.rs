@@ -558,11 +558,79 @@ pub fn init() -> Minimap {
     }
 }
 
+/// Keeps a few real captures for later work on the reader (exit labels on the corner
+/// minimap, wall colours in zones not seen yet), under `samples/` in the app's data
+/// folder: a minimap that shows an exit at most once a minute (8 in all), the big map
+/// once every ten minutes; only the newest 40 files stay.
+struct Samples {
+    dir: Option<std::path::PathBuf>,
+    minimap_exits: usize,
+    last_minimap: Option<Instant>,
+    last_big: Option<Instant>,
+}
+
+impl Samples {
+    const MINIMAP_EXITS: usize = 8;
+    const KEEP: usize = 40;
+
+    fn new(dir: Option<std::path::PathBuf>) -> Samples {
+        let minimap_exits = dir
+            .as_ref()
+            .and_then(|d| std::fs::read_dir(d).ok())
+            .map_or(0, |files| files.flatten().filter(|f| f.file_name().to_string_lossy().starts_with("minimap-exit-")).count());
+        Samples { dir, minimap_exits, last_minimap: None, last_big: None }
+    }
+
+    /// Called after a frame was read; captures again and saves when a sample is due.
+    fn maybe(&mut self, view: &MinimapView, icons: &[bigmap::Icon], region: &CaptureRegion) {
+        if self.dir.is_none() || !view.visible {
+            return;
+        }
+        let due = |last: Option<Instant>, secs: u64| last.is_none_or(|t| t.elapsed() >= Duration::from_secs(secs));
+        if view.message == "Reading minimap" {
+            let exit = icons.iter().any(|icon| icon.kind == "exit");
+            if exit && self.minimap_exits < Self::MINIMAP_EXITS && due(self.last_minimap, 60) {
+                self.last_minimap = Some(Instant::now());
+                if self.save("minimap-exit", capture(region)) {
+                    self.minimap_exits += 1;
+                }
+            }
+        } else if due(self.last_big, 600) {
+            self.last_big = Some(Instant::now());
+            self.save("bigmap", capture_bigmap(region));
+        }
+    }
+
+    fn save(&self, name: &str, image: Result<Image, String>) -> bool {
+        let (Some(dir), Ok(image)) = (&self.dir, image) else { return false };
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        let mut bytes = format!("P6\n{} {}\n255\n", image.width, image.height).into_bytes();
+        bytes.extend_from_slice(&image.pixels);
+        if std::fs::create_dir_all(dir).and_then(|()| std::fs::write(dir.join(format!("{name}-{stamp}.ppm")), bytes)).is_err() {
+            return false;
+        }
+        // Only the newest stay (the names sort by time within a kind; sort by modification).
+        let mut files: Vec<_> = std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter_map(|f| Some((f.metadata().ok()?.modified().ok()?, f.path())))
+            .collect();
+        files.sort();
+        let extra = files.len().saturating_sub(Self::KEEP);
+        for (_, path) in files.into_iter().take(extra) {
+            let _ = std::fs::remove_file(path);
+        }
+        true
+    }
+}
+
 pub fn spawn(app: AppHandle, minimap: &Minimap) {
     let last = minimap.last.clone();
     std::thread::spawn(move || {
         let mut region: Option<(Result<CaptureRegion, String>, Instant)> = None;
         let mut memory = Memory::default();
+        let mut samples = Samples::new(app.path().app_data_dir().ok().map(|dir| dir.join("samples")));
         loop {
             let started = Instant::now();
             let view = {
@@ -579,6 +647,7 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
                             if let Some(layout) = recorder.on_frame(&view, capture_px) {
                                 let _ = app.emit("layout-state", layout);
                             }
+                            samples.maybe(&view, &icons, area);
                             view
                         }
                         Err(error) => {

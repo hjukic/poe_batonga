@@ -93,13 +93,29 @@ pub fn hyprland_request(request: &str) -> Option<String> {
     Some(reply)
 }
 
+fn is_game(client: &serde_json::Value) -> bool {
+    client["class"].as_str().is_some_and(|class| class == "steam_app_2694490")
+        || client["title"].as_str() == Some("Path of Exile 2")
+}
+
+/// Hyprland: whether the game's window is on screen, i.e. it exists and its workspace
+/// is the one its monitor shows. None when Hyprland does not answer (another desktop).
+pub fn game_on_screen() -> Option<bool> {
+    let clients: serde_json::Value = serde_json::from_str(&hyprland_request("j/clients")?).ok()?;
+    let Some(game) = clients.as_array()?.iter().find(|client| is_game(client)) else { return Some(false) };
+    let monitors: serde_json::Value = serde_json::from_str(&hyprland_request("j/monitors")?).ok()?;
+    let (monitor, workspace) = (game["monitor"].as_i64()?, game["workspace"]["id"].as_i64()?);
+    Some(monitors.as_array()?.iter().any(|m| {
+        m["id"].as_i64() == Some(monitor)
+            && (m["activeWorkspace"]["id"].as_i64() == Some(workspace)
+                || m["specialWorkspace"]["id"].as_i64() == Some(workspace))
+    }))
+}
+
 /// Hyprland: the centre of the Path of Exile 2 window, in global logical pixels.
 pub fn game_center() -> Option<(i32, i32)> {
     let clients: serde_json::Value = serde_json::from_str(&hyprland_request("j/clients")?).ok()?;
-    let game = clients.as_array()?.iter().find(|client| {
-        client["class"].as_str().is_some_and(|class| class == "steam_app_2694490")
-            || client["title"].as_str() == Some("Path of Exile 2")
-    })?;
+    let game = clients.as_array()?.iter().find(|client| is_game(client))?;
     let coord = |key: &str, i: usize| game[key][i].as_i64().map(|v| v as i32);
     Some((coord("at", 0)? + coord("size", 0)? / 2, coord("at", 1)? + coord("size", 1)? / 2))
 }

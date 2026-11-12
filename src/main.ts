@@ -105,6 +105,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <div class="row"><span>Show / hide</span><button id="shortcut" class="keycap" type="button" title="Click, then press a new shortcut"></button></div>
     <div class="row"><span>Tick current step</span><span id="tick-shortcut" class="keycap static"></span></div>
     <label class="row" title="Off: the compass passes over optional steps"><span>Compass: optional steps</span><input id="compass-optional" type="checkbox" checked /></label>
+    <label class="row" title="The overlay hides while the game is closed or on a workspace that is not shown"><span>Hide when game is off screen</span><input id="auto-hide" type="checkbox" checked /></label>
     <label class="row" title="The map recorded so far, for checking the tracking"><span>Map preview</span><input id="map-preview" type="checkbox" /></label>
     <p id="shortcut-error" class="warning" hidden></p>
     <hr />
@@ -366,6 +367,10 @@ compassOptional.checked = stored('compass-optional', true);
 const sendCompassOptional = () =>
   isTauri() && void invoke('set_compass_optional', { follow: compassOptional.checked }).catch(console.error);
 compassOptional.addEventListener('change', () => { keep('compass-optional', compassOptional.checked); sendCompassOptional(); });
+const autoHide = $<HTMLInputElement>('#auto-hide');
+autoHide.checked = stored('auto-hide', true);
+const sendAutoHide = () => isTauri() && void invoke('set_auto_hide', { enabled: autoHide.checked }).catch(console.error);
+autoHide.addEventListener('change', () => { keep('auto-hide', autoHide.checked); sendAutoHide(); });
 const mapPreview = $<HTMLInputElement>('#map-preview');
 mapPreview.checked = stored('map-preview', false);
 const showMapPreview = () => { document.body.dataset.mapPreview = String(mapPreview.checked); };
@@ -558,6 +563,7 @@ async function start() {
   render(await invoke<Status>('overlay_status'));
   renderTracker(await invoke<TrackerView>('tracker_state'));
   sendCompassOptional();
+  sendAutoHide();
   fitWindow();
   // The window is first shown now that the page has something to draw.
   await invoke('page_ready');

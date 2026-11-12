@@ -305,7 +305,88 @@ fn report(app: &AppHandle, result: Result<Status, String>) -> Result<Status, Str
 
 fn toggle_visibility(app: &AppHandle) {
     if let Ok(status) = snapshot(app) {
-        let _ = report(app, apply_visibility(app, !status.visible));
+        // The owner's own choice: the watcher no longer owes a show.
+        app.state::<Presence>().hidden_by_watcher.store(false, std::sync::atomic::Ordering::SeqCst);
+        if status.visible {
+            let _ = report(app, apply_visibility(app, false));
+        } else {
+            show_overlay(app);
+        }
+    }
+}
+
+/// Hides the overlay while the game is not on screen and brings it back when it is
+/// (Hyprland; elsewhere the game is taken to be on screen).
+struct Presence {
+    /// The setting "Hide when the game is off screen".
+    auto_hide: std::sync::atomic::AtomicBool,
+    /// The watcher hid the overlay and will show it again.
+    hidden_by_watcher: std::sync::atomic::AtomicBool,
+    /// The overlay page has loaded: the window may be shown.
+    page_ready: std::sync::atomic::AtomicBool,
+}
+
+/// Shows the overlay; the very first time with `first_show`'s extra hide-and-show.
+fn show_overlay(app: &AppHandle) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static FIRST_DONE: AtomicBool = AtomicBool::new(false);
+    if FIRST_DONE.swap(true, Ordering::SeqCst) {
+        let _ = report(app, apply_visibility(app, true));
+    } else {
+        first_show(app);
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn game_on_screen() -> Option<bool> {
+    layer_shell::game_on_screen()
+}
+#[cfg(not(target_os = "linux"))]
+fn game_on_screen() -> Option<bool> {
+    None
+}
+
+/// Every two seconds: when the game leaves the screen (closed, or its workspace is not
+/// shown) the overlay hides; when it comes back, an overlay hidden that way shows again.
+fn watch_game(app: AppHandle) {
+    use std::sync::atomic::Ordering;
+    std::thread::spawn(move || {
+        let mut last: Option<bool> = None;
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            let presence = app.state::<Presence>();
+            if !presence.page_ready.load(Ordering::SeqCst) {
+                continue;
+            }
+            let Some(on) = game_on_screen() else { continue };
+            if last == Some(on) {
+                continue;
+            }
+            last = Some(on);
+            if !presence.auto_hide.load(Ordering::SeqCst) {
+                continue;
+            }
+            if on {
+                if presence.hidden_by_watcher.swap(false, Ordering::SeqCst) {
+                    show_overlay(&app);
+                }
+            } else if snapshot(&app).is_ok_and(|status| status.visible) {
+                presence.hidden_by_watcher.store(true, Ordering::SeqCst);
+                let _ = report(&app, apply_visibility(&app, false));
+            }
+        }
+    });
+}
+
+/// The setting "Hide when the game is off screen". Switched off, an overlay the watcher
+/// hid comes back.
+#[tauri::command]
+fn set_auto_hide(app: AppHandle, enabled: bool) {
+    use std::sync::atomic::Ordering;
+    let presence = app.state::<Presence>();
+    presence.auto_hide.store(enabled, Ordering::SeqCst);
+    if !enabled && presence.hidden_by_watcher.swap(false, Ordering::SeqCst) {
+        show_overlay(&app);
     }
 }
 
@@ -325,6 +406,7 @@ fn set_interaction(app: AppHandle, interactive: bool) -> Result<Status, String> 
 
 #[tauri::command]
 fn set_visibility(app: AppHandle, visible: bool) -> Result<Status, String> {
+    app.state::<Presence>().hidden_by_watcher.store(false, std::sync::atomic::Ordering::SeqCst);
     report(&app, apply_visibility(&app, visible))
 }
 
@@ -553,10 +635,15 @@ fn first_show(app: &AppHandle) {
 /// The overlay page has loaded: show the windows for the first time.
 #[tauri::command]
 fn page_ready(app: AppHandle, window: tauri::Window) -> Result<(), String> {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    static SHOWN: AtomicBool = AtomicBool::new(false);
-    if window.label() == "overlay" && !SHOWN.swap(true, Ordering::SeqCst) && !snapshot(&app)?.visible {
-        first_show(&app);
+    use std::sync::atomic::Ordering;
+    let presence = app.state::<Presence>();
+    if window.label() == "overlay" && !presence.page_ready.swap(true, Ordering::SeqCst) && !snapshot(&app)?.visible {
+        // With the game off screen the overlay stays hidden until the game shows up.
+        if presence.auto_hide.load(Ordering::SeqCst) && game_on_screen() == Some(false) {
+            presence.hidden_by_watcher.store(true, Ordering::SeqCst);
+        } else {
+            show_overlay(&app);
+        }
     }
     Ok(())
 }
@@ -588,8 +675,15 @@ fn main() {
     tauri::Builder::default()
         // Only one copy runs: a second launch shows the existing overlay and exits.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            let _ = report(app, apply_visibility(app, true));
+            // A second launch asks for the overlay: show it whatever the watcher did.
+            app.state::<Presence>().hidden_by_watcher.store(false, std::sync::atomic::Ordering::SeqCst);
+            show_overlay(app);
         }))
+        .manage(Presence {
+            auto_hide: std::sync::atomic::AtomicBool::new(true),
+            hidden_by_watcher: Default::default(),
+            page_ready: Default::default(),
+        })
         .manage(InputRects(Mutex::new(Vec::new())))
         .manage(Dragging(Default::default()))
         .invoke_handler(tauri::generate_handler![
@@ -607,6 +701,7 @@ fn main() {
             toggle_step,
             reset_progress,
             set_compass_optional,
+            set_auto_hide,
             minimap_state,
             layout_state,
             restart::restart_latest,
@@ -680,7 +775,9 @@ fn main() {
                 eprintln!("Overlay: global shortcut not registered: {error}");
                 app.state::<OverlayState>().0.lock().unwrap().shortcut_error = Some(error);
             }
-            // The overlay is shown once its page has loaded (`page_ready`).
+            // The overlay is shown once its page has loaded (`page_ready`), and hidden
+            // while the game is off screen.
+            watch_game(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())
