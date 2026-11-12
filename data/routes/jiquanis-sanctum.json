@@ -42,6 +42,7 @@
     {
       "id": "sanctum-to-jungle-ruins",
       "kind": "objective",
+      "navigationTarget": { "area": "G3_6_2", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint to Jungle Ruins" }],
       "trigger": { "type": "zoneEntered", "area": "G3_3", "after": "enter-jiquanis-sanctum" },
       "evidence": "Zone-generation line for G3_3, counted only once enter-jiquanis-sanctum is done: the zone was entered before."

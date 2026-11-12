@@ -23,6 +23,7 @@
     {
       "id": "grelwood-waypoint",
       "kind": "objective",
+      "navigationTarget": { "area": "G1_4", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Take the waypoint" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."

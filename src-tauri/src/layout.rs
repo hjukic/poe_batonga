@@ -255,6 +255,8 @@ struct Session {
     named_exits: Vec<(f32, f32, String)>,
     /// Every exit icon's place seen during this part, named or not (the part's cells).
     exit_places: Vec<(f32, f32)>,
+    /// Where this part saw the zone's waypoint icon (the part's cells).
+    waypoint_at: Option<(f32, f32)>,
     /// The last arrow of this visit, kept while a new one cannot be worked out.
     last_guide: std::cell::RefCell<Option<guide::GuideView>>,
     /// The flight recorder: what the navigator is fed (with a folder only).
@@ -436,6 +438,32 @@ fn note_named_exits(named: &mut Vec<(f32, f32, String)>, icons: &[crate::minimap
             None => named.push((at.0, at.1, to)),
         }
     }
+}
+
+/// The tag of a target that is the zone's waypoint icon (`tracker::NavigationTarget::icon`).
+const WAYPOINT_TARGET: &str = "icon:waypoint";
+
+/// A target that is a map icon, not a place of the layout graphs.
+fn is_icon_target(target: &guide::NavTarget) -> bool {
+    target.tag.as_deref().is_some_and(|tag| tag.starts_with("icon:"))
+}
+
+/// The needle straight to a target's icon at `at` (the part's cells), sure: the icon is
+/// the thing. None until the map has shown it.
+fn icon_guide(target: &guide::NavTarget, at: Option<(f32, f32)>, pos: (i32, i32)) -> Option<guide::GuideView> {
+    let (x, y) = at?;
+    let (dx, dy) = (x - pos.0 as f32, y - pos.1 as f32);
+    Some(guide::GuideView {
+        variant: "icon".into(),
+        target_kind: "waypoint".into(),
+        target: target.label.clone(),
+        degrees: Some(dy.atan2(dx).to_degrees()),
+        source: "estimated".into(),
+        distance: dx.hypot(dy),
+        confidence: 1.0,
+        measured: true,
+        turned: false,
+    })
 }
 
 /// Remembers where the frame's exit icons are, one place per exit (icons within
@@ -990,6 +1018,7 @@ impl Recorder {
                     far_age: FAR_FRAMES,
                     named_exits: Vec::new(),
                     exit_places: Vec::new(),
+                    waypoint_at: None,
                     last_guide: Default::default(),
                     obs: Default::default(),
                     bosses_heard: Vec::new(),
@@ -1091,6 +1120,9 @@ impl Recorder {
                 session.feed_icons(&icons, whole, pos, (frame.cols, frame.rows), bosses);
                 note_named_exits(&mut session.named_exits, &icons, pos);
                 note_exit_places(&mut session.exit_places, &icons, pos);
+                if let Some(icon) = icons.iter().find(|i| i.kind == "waypoint") {
+                    session.waypoint_at = Some((pos.0 as f32 + icon.x, pos.1 as f32 + icon.y));
+                }
                 let live = &mut session.live;
                 live.velocity = ((pos.0 - live.pos.0).clamp(-NEAR, NEAR), (pos.1 - live.pos.1).clamp(-NEAR, NEAR));
                 live.pos = pos;
@@ -1133,6 +1165,7 @@ impl Recorder {
                     session.far_icons.clear();
                     session.named_exits.clear();
                     session.exit_places.clear();
+                    session.waypoint_at = None;
                     session.came_in = None;
                     // Places of the old part mean nothing in the new one's cells.
                     session.boss_places.clear();
@@ -1402,7 +1435,18 @@ impl State {
                 *session.last_guide.borrow_mut() = Some(view.clone());
                 Some(view)
             }
-            None => session.last_guide.borrow().clone().map(|view| guide::GuideView { source: "unconfirmed".into(), ..view }),
+            // Where there is no navigator (a town) a kept needle must still be for the
+            // step now first: a needle to the exit is not kept once the waypoint is next.
+            None => {
+                let area = session.recording.area.as_str();
+                let wanted = self.targets.get(area).and_then(|targets| targets.first()).map(|t| t.label.as_str());
+                session
+                    .last_guide
+                    .borrow()
+                    .clone()
+                    .filter(|view| session.navigator.is_some() || Some(view.target.as_str()) == wanted)
+                    .map(|view| guide::GuideView { source: "unconfirmed".into(), ..view })
+            }
         };
         if let (Some(view), Some(log)) = (&view, session.obs.borrow_mut().as_mut()) {
             let stale = session.fed_at.is_none_or(|t| t.elapsed() > STALE);
@@ -1429,6 +1473,7 @@ impl State {
         let area = session.recording.area.as_str();
         let completed = self.completed.get(area).map(Vec::as_slice).unwrap_or_default();
         let mut targets = self.targets.get(area).cloned().unwrap_or_default();
+        targets.retain(|t| !is_icon_target(t));
         if let Some(graph) = self.catalog.graph(area) {
             targets.extend(graph::target(&graph, &session.came_from, completed));
         }
@@ -1443,10 +1488,16 @@ impl State {
         }
         let completed = self.completed.get(area).map(Vec::as_slice).unwrap_or_default();
         let scale = self.scale(area);
+        // A step that leads to the waypoint: straight to its icon once the map showed it.
+        let first = self.targets.get(area).and_then(|targets| targets.first());
+        if let Some(target) = first.filter(|t| t.tag.as_deref() == Some(WAYPOINT_TARGET)) {
+            return icon_guide(target, session.waypoint_at, live.pos);
+        }
         if let Some(nav) = &session.navigator {
             // The checklist's open targets, then the onward exit (zones without a
             // checklist, or targets no layout has).
             let mut targets = self.targets.get(area).cloned().unwrap_or_default();
+            targets.retain(|t| !is_icon_target(t));
             if let Some(graph) = self.catalog.graph(area) {
                 targets.extend(graph::target(&graph, &session.came_from, completed));
             }
@@ -1476,6 +1527,11 @@ impl State {
         if let Some(view) = first.and_then(|target| only_exit_guide(target, &session.exit_places, live.pos)) {
             return Some(view);
         }
+        // What is left is the terrain match, a guess from the outline walked so far. It
+        // pointed the wrong way on the owner's town visits (2026-11-12), so it is shown
+        // gray, and only toward the exit the checklist asks for on this visit: a visit
+        // without an exit to head for (a talk, the waypoint) has no needle.
+        let wanted = first.filter(|target| target.exit.is_some())?;
         // Everything relative to the (first) arrival point, where the terrain match starts;
         // a piece without one (tracking lost, overlay restarted) is placed anywhere.
         let arrival = live.part.pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at);
@@ -1499,6 +1555,8 @@ impl State {
                 scale,
             },
         )
+        .filter(|view| view.target.eq_ignore_ascii_case(&wanted.label))
+        .map(|view| guide::GuideView { source: "unconfirmed".into(), ..view })
     }
 
     /// The view with only the needle (`LayoutView::light`).
@@ -1609,6 +1667,12 @@ mod tests {
         assert!(only_exit_guide(&target("Clearfell", None), &places, (0, 0)).is_none());
         note_exit_places(&mut places, &[exit(-200.0, 0.0, None)], (0, 0));
         assert!(only_exit_guide(&target("Clearfell", Some("G1_2")), &places, (0, 0)).is_none());
+        // A step that leads to the waypoint: its icon, once seen.
+        let waypoint = guide::NavTarget { label: "Waypoint".into(), exit: None, tag: Some(WAYPOINT_TARGET.into()), optional: false };
+        assert!(is_icon_target(&waypoint) && !is_icon_target(&target("Clearfell", Some("G1_2"))));
+        assert!(icon_guide(&waypoint, None, (0, 0)).is_none());
+        let view = icon_guide(&waypoint, Some((30.0, 40.0)), (0, 0)).unwrap();
+        assert_eq!((view.source.as_str(), view.target.as_str(), view.distance), ("estimated", "Waypoint", 50.0));
     }
 
     /// A wiggly corridor, as wall cells in world coordinates.
@@ -2440,7 +2504,7 @@ fn join_real_recording() {
     let parts = recording.parts.len();
     let mut session = Session {
         recording, live, arrived_from: None, came_from: String::new(), started: true, file: None, navigator: None,
-        fed: None, fed_at: None, far_icons: Vec::new(), far_age: FAR_FRAMES, named_exits: Vec::new(), exit_places: Vec::new(),
+        fed: None, fed_at: None, far_icons: Vec::new(), far_age: FAR_FRAMES, named_exits: Vec::new(), exit_places: Vec::new(), waypoint_at: None,
         last_guide: Default::default(),
         obs: Default::default(), entered: Instant::now(), came_in: None,
         bosses_heard: Vec::new(), boss_places: Vec::new(), dead: Vec::new(), named_seen: Vec::new(), frame_no: 0, checkpoint_marks: Vec::new(),

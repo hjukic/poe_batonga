@@ -254,6 +254,7 @@
     {
       "id": "caravan-to-trial",
       "kind": "objective",
+      "navigationTarget": { "area": "G2_town", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint to the Trial" }],
       "trigger": { "type": "zoneEntered", "area": "G2_13", "after": "enter-spires-of-deshar" },
       "evidence": "Zone-generation line for G2_13, counted only once enter-spires-of-deshar is done: the zone was entered before."

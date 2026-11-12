@@ -22,6 +22,7 @@
     {
       "id": "glade-to-glacial-tarn",
       "kind": "objective",
+      "navigationTarget": { "area": "P3_Town", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint to Glacial Tarn" }],
       "trigger": { "type": "zoneEntered", "area": "P3_3", "after": "enter-howling-caves" },
       "evidence": "Zone-generation line for P3_3, counted only once enter-howling-caves is done: the zone was entered before."

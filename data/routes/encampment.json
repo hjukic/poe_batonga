@@ -59,6 +59,7 @@
     {
       "id": "town-to-grelwood",
       "kind": "objective",
+      "navigationTarget": { "area": "G1_town", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint to The Grelwood" }],
       "trigger": { "type": "zoneEntered", "area": "G1_4", "after": "red-vale-portal-town" },
       "evidence": "Zone-generation line, counted only once red-vale-portal-town is done (the town was reached from The Red Vale): the log cannot see renly-runed-spikes, the step meant."
@@ -80,6 +81,7 @@
     {
       "id": "town-to-grim-tangle",
       "kind": "objective",
+      "navigationTarget": { "area": "G1_town", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint to Grim Tangle" }],
       "trigger": { "type": "zoneEntered", "area": "G1_6", "after": "enter-red-vale" },
       "evidence": "Zone-generation line for G1_6, counted only once enter-red-vale is done: the zone was entered before."
@@ -124,6 +126,7 @@
     {
       "id": "town-to-hunting-grounds",
       "kind": "objective",
+      "navigationTarget": { "area": "G1_town", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint to Hunting Grounds" }],
       "trigger": { "type": "zoneEntered", "area": "G1_11", "after": "enter-hunting-grounds" },
       "evidence": "Zone-generation line for G1_11, counted only once enter-hunting-grounds is done: the zone was entered before."

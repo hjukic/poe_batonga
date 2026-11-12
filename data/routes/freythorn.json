@@ -46,6 +46,7 @@
     {
       "id": "freythorn-to-farmlands",
       "kind": "objective",
+      "navigationTarget": { "area": "G1_12", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint to Farmlands" }],
       "trigger": { "type": "zoneEntered", "area": "G1_13_1", "after": "farmlands-wp" },
       "evidence": "Zone-generation line for G1_13_1, counted only once farmlands-wp is done: the zone was entered before."

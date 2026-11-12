@@ -35,6 +35,7 @@
     {
       "id": "jungle-ruins-waypoint",
       "kind": "objective",
+      "navigationTarget": { "area": "G3_3", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint by Venom Crypts" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."

@@ -43,6 +43,7 @@
     {
       "id": "journeys-end-to-town",
       "kind": "objective",
+      "navigationTarget": { "area": "G4_2_2", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint to town" }],
       "trigger": { "type": "zoneEntered", "area": "G4_town", "after": "enter-journeys-end" },
       "evidence": "Zone-generation line for G4_town, counted only once enter-journeys-end is done: the zone was entered before."

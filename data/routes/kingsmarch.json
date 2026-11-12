@@ -134,6 +134,7 @@
     {
       "id": "kingsmarch-to-journeys-end",
       "kind": "objective",
+      "navigationTarget": { "area": "G4_town", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint to Journey's End" }],
       "trigger": { "type": "zoneEntered", "area": "G4_2_2", "after": "enter-journeys-end" },
       "evidence": "Zone-generation line for G4_2_2, counted only once enter-journeys-end is done: the zone was entered before."

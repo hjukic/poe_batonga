@@ -163,6 +163,9 @@ pub struct NavigationTarget {
     pub exit: Option<String>,
     #[serde(default)]
     pub tag: Option<String>,
+    /// A map icon the step leads to instead ("waypoint": the zone's waypoint).
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -564,7 +567,8 @@ impl Inner {
             .filter_map(|s| s.navigation_target.as_ref().map(|t| (t.area.clone(), crate::layout::guide::NavTarget {
                 label: t.label.clone(),
                 exit: t.exit.clone(),
-                tag: t.tag.clone(),
+                // An icon target travels as a tag the layouts do not have ("icon:waypoint").
+                tag: t.tag.clone().or_else(|| t.icon.as_ref().map(|icon| format!("icon:{icon}"))),
                 optional: s.optional,
             })))
             .collect();

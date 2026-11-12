@@ -72,6 +72,7 @@
     {
       "id": "ziggurat-to-jungle-ruins",
       "kind": "objective",
+      "navigationTarget": { "area": "G3_town", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint to Jungle Ruins" }],
       "trigger": { "type": "zoneEntered", "area": "G3_3", "after": "enter-venom-crypts" },
       "evidence": "Zone-generation line for G3_3, counted only once enter-venom-crypts is done: the zone was entered before."
@@ -128,6 +129,7 @@
     {
       "id": "ziggurat-to-apex",
       "kind": "objective",
+      "navigationTarget": { "area": "G3_town", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint to Apex of Filth" }],
       "trigger": { "type": "zoneEntered", "area": "G3_11", "after": "apex-of-filth-wp" },
       "evidence": "Zone-generation line for G3_11, counted only once apex-of-filth-wp is done: the zone was entered before."
