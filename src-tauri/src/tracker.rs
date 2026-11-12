@@ -44,6 +44,10 @@ pub struct Part {
 pub struct NpcLine {
     pub speaker: String,
     pub text: String,
+    /// The game-table row the line comes from (NPCTextAudio or NPCTalkDialogueTextAudio),
+    /// for scripts/check-triggers.mjs. Not used to match.
+    #[serde(default)]
+    pub id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -89,13 +93,13 @@ impl TryFrom<RawTrigger> for Trigger {
             RawTrigger::ZoneEntered { area, after } => Ok(Trigger::ZoneEntered { area, after }),
             RawTrigger::NpcLine { area, speaker, text, lines, after } => {
                 let lines = match (speaker, text, lines.is_empty()) {
-                    (Some(speaker), Some(text), true) => vec![NpcLine { speaker, text }],
+                    (Some(speaker), Some(text), true) => vec![NpcLine { speaker, text, id: None }],
                     (None, None, false) => lines,
                     _ => return Err("npcLine needs either speaker and text, or lines".into()),
                 };
                 let lines = lines
                     .into_iter()
-                    .map(|l| NpcLine { speaker: shown_text(&l.speaker), text: shown_text(&l.text) })
+                    .map(|l| NpcLine { speaker: shown_text(&l.speaker), text: shown_text(&l.text), id: l.id })
                     .collect();
                 Ok(Trigger::NpcLine { area, lines, after })
             }

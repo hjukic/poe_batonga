@@ -237,6 +237,36 @@ one fitted on the encampment (`to_screen` in `guide.rs`).
 (`art/2dart/fonts/fontin-regular.ttf`, extracted with poe_data_tools, `scripts/fetch-fonts.sh`),
 compiled in to read the big map's exit labels. Private project; not redistributed.
 
+## Game dialogue tables (datamined)
+
+The `npcLine` triggers in `data/routes/` come from the game's dialogue tables, dumped with
+poe_data_tools (`dump-tables --mode json`, Steam build of 2026-11-12):
+
+| Table | What it gives |
+| --- | --- |
+| `NPCTextAudio` | Every spoken line: `Id`, `Text`, `NPCs` (rows of `NPCs`: who says it). World speech (boss barks, shouts, cutscenes) and the lines of most panel talks. |
+| `NPCTalkDialogueTextAudio` | The lines of newer multi-step panel talks (Act 4, interludes); the speaker is in `NPC1`. 41 ids also appear in `NPCTextAudio` (endgame). |
+| `NPCs` | `Name` and `ShortName` per NPC row (`Metadata/NPC/…`, `Metadata/Monsters/…`). |
+| `NPCTalk` | The options of an NPC's panel: `DialogueOption`, the lines (`NPCTextAudioKeys` or `TalkDialogue`), the quest flags it needs (`unknown_1`), hides on (`unknown_2`) and sets (`QuestFlags1`). |
+| `NPCTalkDialogue`, `NPCTalkDialogueSteps` | A panel talk's lines in order. |
+
+Measured, from the owner's log (`Client.txt`, 2026-11-11/12): every NPC line seen (the Wounded
+Man, Mortimer, The Bloated Miller, Renly, Una; 36 lines) is an `NPCTextAudio` row with the same
+text, and the speaker is that row's NPC `Name` (for those five `Name` equals `ShortName`).
+Derived from the tables: `Name` is the field to match, because `ShortName` is empty for 81 NPCs
+that speak; that the log shows the full `Name` where they differ ("Lachlann the Lost", not
+"Lachlann") is assumed, not yet seen. Texts carry markup (`<i>{word}`, `<italic>{…}`,
+`<b>{…}`, `<continue>`, `<br/>`, `\r\n`), no `[Tag|shown]` links; the tracker and the checker
+compare both sides in a shown form with it removed. Not known: whether panel text is logged.
+
+Bark or panel: a line named by an `NPCTalk` option or a dialogue's steps, and every
+`NPCTalkDialogueTextAudio` line, is panel text; any other `NPCTextAudio` line is world speech.
+
+After a patch: `scripts/check-triggers.sh` dumps those tables from the install and runs
+`scripts/check-triggers.mjs`, which reports lines that are gone, changed text, speakers that
+no longer match and variants a trigger lacks (exit code 1 on the first three). See
+[triggers](triggers.md).
+
 ## Other candidates
 
 - [Exile-UI](https://github.com/Lailloken/Exile-UI) Act-Decoder layouts: its
