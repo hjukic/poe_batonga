@@ -106,10 +106,10 @@ test('Clearfell and the Riverbank keep their layout counts', () => {
   assert.equal(areas.get('G1_2').topologies.length, 33);
 });
 
-test('campaign rule: acts and interludes, no maps, hideouts, world maps or unused areas', () => {
+test('campaign rule: acts, no interludes, maps, hideouts, world maps or unused areas', () => {
   const row = (Id, extra = {}) => ({ Id, Name: 'x', Topologies: { Ids: ['t'] }, ...extra });
   assert.ok(isCampaignArea(row('G1_2')));
-  assert.ok(isCampaignArea(row('P2_Town')));
+  assert.ok(!isCampaignArea(row('P2_Town')));
   assert.ok(!isCampaignArea(row('G1_WorldMap')));
   assert.ok(!isCampaignArea(row('MapCrypt', { IsMapArea: true })));
   assert.ok(!isCampaignArea(row('HideoutCave')));

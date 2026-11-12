@@ -67,9 +67,9 @@ records the Steam build id and update time from `appmanifest_2694490.acf`, the i
 date and the tool version, and per area its id, name, act, level, number of layouts and
 format.
 
-**Which areas:** ids `G<act>_…` and `P<part>_…` (the interludes, act 6 in the table)
-with at least one topology; not `…_WorldMap`, map areas, hideouts, or areas named
-`[DNT…]` (unused: `G4_ship`, `G4_6`, `G4_12`, `P2_4`).
+**Which areas:** ids `G<act>_…` with at least one topology; not `…_WorldMap`, map areas,
+hideouts, or areas named `[DNT…]` (unused: `G4_ship`, `G4_6`, `G4_12`). The interludes
+(`P<part>_…`, act 6 in the table) are left out: the 1.0 scope has none (owner, 2026-11-12).
 
 **Coverage** (import of 2026-11-12, Steam build 26579160):
 
@@ -79,8 +79,7 @@ with at least one topology; not `…_WorldMap`, map areas, hideouts, or areas na
 | 2 | 20 | 126 | 8 | 118 | 32 | 394 KiB | |
 | 3 | 20 | 134 | 0 | 134 | 22 | 497 KiB | G3_town (exits inside the fixed town rooms), G3_15 (no connections) |
 | 4 | 22 | 82 | 0 | 82 | 0 | 229 KiB | |
-| 6 (interludes) | 22 | 29 | 2 | 27 | 3 | 76 KiB | |
-| **All** | **101** | **584** | **69** | **515** | **97** | **1.8 MiB** | |
+| **All** | **79** | **555** | **67** | **488** | **94** | **1.7 MiB** | |
 
 The app bundles every file (`build.rs`) but so far only uses `G1_1` and `G1_2`
 .

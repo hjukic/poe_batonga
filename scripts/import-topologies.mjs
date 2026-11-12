@@ -26,11 +26,11 @@ import { pathToFileURL } from 'node:url';
 
 const OUT_DIR = 'data/layouts/ggg';
 
-/** Campaign areas: acts 1–4 (`G1_…` to `G4_…`) and the interludes (`P1_…` to `P3_…`, act 6 in the table),
- *  with at least one topology. Not world maps, map areas, hideouts, or areas named "[DNT…]" (unused). */
+/** Campaign areas: acts 1–4 (`G1_…` to `G4_…`; the interludes `P1_…` to `P3_…` are left out: the 1.0 scope
+ *  has no interludes, owner 2026-11-12), with at least one topology. Not world maps, map areas, hideouts, or areas named "[DNT…]" (unused). */
 export function isCampaignArea(row) {
   return (
-    /^(G\d+|P\d+)_/.test(row.Id) &&
+    /^G\d+_/.test(row.Id) &&
     !row.Id.endsWith('_WorldMap') &&
     !row.IsMapArea &&
     !row.IsHideout &&

@@ -136,32 +136,6 @@
       "parts": [{ "text": "Shark Fin to " }, { "text": "Kaimana", "style": "npc" }, { "text": "Gem + blessing", "style": "reward" }],
       "trigger": null,
       "evidence": "Tribal Medicine: at Ngakanu early, or on the docks after Tavakai. No log line known. Tick by hand."
-    },
-    {
-      "id": "travel-the-refuge",
-      "kind": "objective",
-      "parts": [{ "text": "Travel to The Refuge" }],
-      "trigger": { "type": "zoneEntered", "area": "P1_Town" },
-      "evidence": "Zone-generation line for P1_Town. Interlude 5.1, by The Hooded One."
-    },
-    {
-      "id": "travel-khari-bazaar",
-      "kind": "objective",
-      "parts": [{ "text": "Travel to Khari Bazaar" }],
-      "trigger": { "type": "zoneEntered", "area": "P2_Town" },
-      "evidence": "Zone-generation line for P2_Town. Interlude 5.2, by The Hooded One."
-    },
-    {
-      "id": "travel-the-glade",
-      "kind": "objective",
-      "parts": [{ "text": "Travel to The Glade" }],
-      "trigger": { "type": "zoneEntered", "area": "P3_Town" },
-      "evidence": "Zone-generation line for P3_Town. Interlude 5.3, by The Hooded One."
-    },
-    {
-      "id": "interludes-done-hooded-one",
-      "kind": "objective",
-      "parts": [{ "text": "All 3 done: " }, { "text": "The Hooded One", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }]
     }
   ]
 }

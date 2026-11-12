@@ -8,7 +8,7 @@ The target experience includes automatic progress tracking and layout-based
 navigation, conditional on GGG compliance and technical feasibility.
 A Tauri overlay is available. It has two parts:
 
-- **A checklist** for the zone you are in: 97 zones (Acts 1–4 and the three interludes), in
+- **A checklist** for the zone you are in: 75 zones (Acts 1–4), in
   [data/routes/](data/routes/), one file per zone (steps from Domistae's leveling guides; ids
   and levels from the game's area table). Steps are ticked automatically by reading the game's
   `Client.txt` locally (read-only): entering a zone, or a known NPC line. The log does not show
