@@ -447,8 +447,17 @@ wall frame from it as usual, and looks for icons over all of it, on every second
 except where panels sit (fractions of the window: this app's checklist panel at its
 default place, top left 19% x 40%; the zone and quest text, right 21% x 46%; the life
 orb and flasks, left 32% of the bottom 22%; the mana orb and skills, right 28% of the
-bottom 22%; the bottom 8%). If the panel is moved elsewhere, its orange boss names can
-show up as exits. Those frames hand the recorder (`Recorder::on_icons`) every icon on
+bottom 22%; the bottom 8%). This app's panel can be dragged anywhere: on whole-window
+frames the reader asks `panel_rect` (`main.rs`; layer surface only) where it is and
+leaves out that rectangle plus 8 logical px instead of the default place (a test pins
+that a moved panel's orange boss name otherwise reads as exits). Without a layer
+surface (Windows) the default place stays. The compass (needle #ffd27a, fainter when
+rough, gray #9a9a9a when unsure, faint ring, label #ffe2a6 or #c4c4c4) passes none of
+the colour tests over plain ground, at any opacity. Over an icon it can only widen that
+icon (the needle over an exit stays orange), with one exception pinned in a test: the
+gray "unsure" label's edge pixels half over a checkpoint's cyan blend into the
+waypoint's pale blue, too few for a waypoint (it needs 80 px). The compass is not left
+out, since that would lose the icons nearest the player. Those frames hand the recorder (`Recorder::on_icons`) every icon on
 screen, in cells from the player; the other frames only the ones around the player.
 If the whole-window capture fails, the area around the player is read as usual.
 Live (Clearfell, idle near the Grelwood exit): every one of 7 whole-window scans found

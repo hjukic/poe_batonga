@@ -124,6 +124,38 @@ fn show_compass(app: &AppHandle, visible: bool) {
     let _ = window.center();
 }
 
+/// The checklist panel's rectangle in global logical pixels (x, y, width, height), for the
+/// map reader to leave out of its icon search; None when the overlay is hidden or not a
+/// layer surface. Callable from any thread: GTK is asked on the main thread.
+pub fn panel_rect(app: &AppHandle) -> Option<[f64; 4]> {
+    #[cfg(target_os = "linux")]
+    {
+        let status = snapshot(app).ok()?;
+        if !status.visible || !status.layer_shell {
+            return None;
+        }
+        let window = overlay(app).ok()?;
+        let (send, receive) = std::sync::mpsc::channel();
+        app.run_on_main_thread(move || {
+            use gtk::prelude::{MonitorExt, WidgetExt};
+            let rect = window.gtk_window().ok().and_then(|gtk_window| {
+                let (left, top) = layer_shell::position(&gtk_window);
+                let (width, height) = layer_shell::content_size(&gtk_window);
+                let area = gtk_window.display().monitor_at_window(&gtk_window.window()?)?.geometry();
+                Some([(area.x() + left) as f64, (area.y() + top) as f64, width as f64, height as f64])
+            });
+            let _ = send.send(rect);
+        })
+        .ok()?;
+        receive.recv_timeout(std::time::Duration::from_millis(200)).ok().flatten()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = app;
+        None
+    }
+}
+
 fn snapshot(app: &AppHandle) -> Result<Status, String> {
     app.state::<OverlayState>().0.lock().map(|s| s.clone()).map_err(|e| e.to_string())
 }

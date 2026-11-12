@@ -129,7 +129,7 @@ pub fn set_content_size(width: i32, height: i32) {
     }
 }
 
-fn content_size(window: &gtk::ApplicationWindow) -> (i32, i32) {
+pub fn content_size(window: &gtk::ApplicationWindow) -> (i32, i32) {
     use gtk::prelude::GtkWindowExt;
     CONTENT_SIZE.lock().ok().and_then(|size| *size).unwrap_or_else(|| window.size())
 }

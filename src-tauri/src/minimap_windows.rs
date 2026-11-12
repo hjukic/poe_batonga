@@ -219,6 +219,14 @@ unsafe extern "system" fn check_window(window: HWND, parameter: LPARAM) -> i32 {
     1
 }
 
+impl Region {
+    /// Where this app's panel is, for the icon search: only known for a layer surface
+    /// (Linux), so the fixed place stays.
+    pub fn skip_of(&self, _rect: [f64; 4]) -> [usize; 4] {
+        self.scan.skip[0]
+    }
+}
+
 /// The minimap crop.
 pub fn capture(region: &Region) -> Result<Image, String> {
     capture_crop(region, region.bounds, None)

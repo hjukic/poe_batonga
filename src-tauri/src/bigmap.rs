@@ -764,6 +764,48 @@ mod tests {
     }
 
     #[test]
+    fn the_compass_passes_no_colour_test() {
+        // The compass (src/compass.css): needle #ffd27a, fainter (70%) when rough, gray
+        // #9a9a9a when unsure, ring 18% gold, label #ffe2a6 or #c4c4c4 with a black
+        // shadow; each blended over dark ground, a map line, a checkpoint and an exit.
+        let colours = [[255, 210, 122], [154, 154, 154], [255, 226, 166], [196, 196, 196], [20, 20, 20]];
+        let grounds = [[0, 0, 0], [16, 15, 18], [60, 55, 50], [95, 96, 128], [100, 170, 220], [205, 96, 38]];
+        let mut passed = vec![];
+        // Over plain ground nothing of the compass passes at all.
+        for colour in colours {
+            for alpha in [0.18, 0.5, 0.7, 0.85, 1.0] {
+                for ground in [[0, 0, 0], [16, 15, 18], [60, 55, 50]] {
+                    let mix: Vec<u8> = (0..3).map(|i| (colour[i] as f64 * alpha + ground[i] as f64 * (1.0 - alpha)).round() as u8).collect();
+                    assert!(!is_wall(mix[0], mix[1], mix[2]) && icon_kind(mix[0], mix[1], mix[2]) == NONE, "{colour:?} at {alpha}");
+                }
+            }
+        }
+        for colour in colours {
+            for ground in grounds {
+                for alpha in [0.18, 0.5, 0.7, 0.85, 1.0] {
+                    let mix: Vec<u8> = (0..3).map(|i| (colour[i] as f64 * alpha + ground[i] as f64 * (1.0 - alpha)).round() as u8).collect();
+                    let (r, g, b) = (mix[0], mix[1], mix[2]);
+                    let (gr, gg, gb) = (ground[0], ground[1], ground[2]);
+                    // A blend over a line or an icon may keep that line's or icon's class (it
+                    // only widens what is there: the needle over an exit, the gray label over
+                    // a checkpoint); it must never pass as anything new.
+                    let new_wall = is_wall(r, g, b) && !is_wall(gr, gg, gb);
+                    let new_icon = icon_kind(r, g, b) != NONE && icon_kind(r, g, b) != icon_kind(gr, gg, gb);
+                    // Known: the gray "unsure" label half over a checkpoint's cyan blends
+                    // into the waypoint's pale blue. Only label edge pixels over a crystal
+                    // (under 80 px) do, too few for a waypoint; the compass is not left out,
+                    // as that would lose the icons nearest the player.
+                    let known = colour == [196, 196, 196] && ground == [100, 170, 220] && icon_kind(r, g, b) == 2;
+                    if (new_wall || new_icon) && !known {
+                        passed.push((colour, ground, alpha, mix));
+                    }
+                }
+            }
+        }
+        assert!(passed.is_empty(), "{passed:?}");
+    }
+
+    #[test]
     fn capture_area_covers_the_frame_around_the_marker() {
         let frame = frame(300, 259, [158.0, 142.0]);
         let ([x, y, w, h], marker) = area([3840.0, 2160.0], &frame);

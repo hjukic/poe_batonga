@@ -38,8 +38,11 @@ const LEARN_RATE: f64 = 0.2;
 const SCAN_EVERY: u32 = 3;
 /// Panels over the big map, left out of the whole-window icon search, as fractions of
 /// the game window (x0, y0, x1, y1; measured at 3840x2160): this app's checklist panel
-/// at its default place, the zone and quest text top right, the life orb and flasks,
-/// the mana orb and skills, and the bottom bar.
+/// at its default place (first: replaced by where the panel really is, when known), the
+/// zone and quest text top right, the life orb and flasks, the mana orb and skills, and
+/// the bottom bar.
+/// Room left around this app's panel, in logical pixels (its shadow, rounding).
+const PANEL_MARGIN: f64 = 8.0;
 const PANELS: [[f64; 4]; 5] = [
     [0.0, 0.0, 0.19, 0.40],
     [0.79, 0.0, 1.0, 0.46],
@@ -174,12 +177,27 @@ const BIG_FRAME: BigFrame = BigFrame::Wide(600, 518);
 pub struct CaptureRegion {
     minimap: String,
     bigmap: String,
-    /// The visible part of the whole game window.
+    /// The visible part of the whole game window: grim geometry, its top-left corner in
+    /// logical pixels, its size in pixels, and pixels per logical pixel.
     window: String,
+    window_origin: [f64; 2],
+    window_size: [usize; 2],
+    scale: f64,
     /// Where the minimap draws the player, inside the minimap capture, in its pixels.
     minimap_marker: [f64; 2],
     plan: bigmap::Plan,
     scan: Scan,
+}
+
+#[cfg(not(target_os = "windows"))]
+impl CaptureRegion {
+    /// A rectangle in global logical pixels (x, y, width, height), with `PANEL_MARGIN`
+    /// around it, as a skip rectangle of the whole-window capture.
+    fn skip_of(&self, [x, y, w, h]: [f64; 4]) -> [usize; 4] {
+        let px = |v: f64, i: usize| (((v - self.window_origin[i]) * self.scale).max(0.0) as usize).min(self.window_size[i]);
+        let m = PANEL_MARGIN;
+        [px(x - m, 0), px(y - m, 1), px(x + w + m, 0), px(y + h + m, 1)]
+    }
 }
 
 /// Reading the whole game window: the big map's frame and every icon on it.
@@ -252,6 +270,9 @@ fn regions(game: [f64; 4], monitor: [f64; 4], scale: f64) -> Result<CaptureRegio
         minimap: geometry(minimap),
         bigmap: geometry(big),
         window: geometry(window),
+        window_origin: [window.0, window.1],
+        window_size,
+        scale,
         minimap_marker: layout.minimap_marker,
         plan: bigmap::Plan { marker, radius: bigmap::radius(window_px), frame: layout.frame },
         scan: scan_layout(window_px, window_origin, window_size, &layout),
@@ -445,10 +466,18 @@ impl Memory {
 
 /// One frame from whichever map is showing: the corner minimap while it shows its player
 /// cross, else the big map (Tab), which hides the minimap; else not visible, with why the
-/// big map was not read.
-fn read(memory: &mut Memory, region: &CaptureRegion) -> Result<Reading, String> {
+/// big map was not read. `panel` gives where this app's checklist panel is (global
+/// logical pixels), asked only for whole-window frames.
+fn read(memory: &mut Memory, region: &CaptureRegion, panel: &dyn Fn() -> Option<[f64; 4]>) -> Result<Reading, String> {
     let big = |whole: bool| if whole { capture_window(region) } else { capture_bigmap(region) };
-    choose(memory, capture(region), region.minimap_marker, &region.plan, Some(&region.scan), big)
+    let scan = || {
+        let mut scan = region.scan.clone();
+        if let Some(rect) = panel() {
+            scan.skip[0] = region.skip_of(rect);
+        }
+        scan
+    };
+    choose(memory, capture(region), region.minimap_marker, &region.plan, Some(&scan), big)
 }
 
 /// `minimap` is the corner's capture; when it failed (on Windows: covered by a window) the
@@ -460,7 +489,7 @@ fn choose(
     minimap: Result<Image, String>,
     estimate: [f64; 2],
     plan: &bigmap::Plan,
-    scan: Option<&Scan>,
+    scan: Option<&dyn Fn() -> Scan>,
     bigmap: impl Fn(bool) -> Result<Image, String>,
 ) -> Result<Reading, String> {
     let search = plan.radius * bigmap::LEARN_LIMIT;
@@ -479,10 +508,10 @@ fn choose(
     if frame.follows_minimap {
         frame.player = memory.minimap_marker(estimate).map(|v| (v / CELL as f64) as f32);
     }
-    let scan = scan.filter(|_| memory.big_frames % SCAN_EVERY == 0);
+    let scan = scan.filter(|_| memory.big_frames % SCAN_EVERY == 0).map(|make| make());
     memory.big_frames = memory.big_frames.wrapping_add(1);
     // The whole window when it is time (else, or if that capture fails, the area around the player).
-    let whole = scan.and_then(|scan| bigmap(true).ok().map(|image| (image, bigmap::Plan { frame, ..scan.plan }, &scan.skip[..])));
+    let whole = scan.as_ref().and_then(|scan| bigmap(true).ok().map(|image| (image, bigmap::Plan { frame, ..scan.plan }, &scan.skip[..])));
     let captured = match whole {
         Some(whole) => Ok(whole),
         None => bigmap(false).map(|image| (image, bigmap::Plan { frame, ..*plan }, &[][..])),
@@ -526,7 +555,7 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
                 match &region {
                     None => MinimapView::status(true, "Starting"),
                     Some((Err(error), _)) => MinimapView::status(true, error),
-                    Some((Ok(area), _)) => match read(&mut memory, area) {
+                    Some((Ok(area), _)) => match read(&mut memory, area, &|| crate::panel_rect(&app)) {
                         Ok(Reading { view, capture_px, icons }) => {
                             let recorder = app.state::<crate::layout::Recorder>();
                             recorder.on_icons(&icons);
@@ -625,7 +654,7 @@ mod tests {
     fn live_minimap() {
         let region = locate_minimap().unwrap();
         let started = Instant::now();
-        let Reading { view, capture_px, icons } = read(&mut Memory::default(), &region).unwrap();
+        let Reading { view, capture_px, icons } = read(&mut Memory::default(), &region, &|| None).unwrap();
         println!(
             "regions {} / {}: {capture_px:?} px in {:?}; {}; {} wall cells of {}x{}; player {:?} (estimate {:?}); icons {icons:?}",
             region.minimap,
@@ -665,7 +694,7 @@ mod tests {
         let (mut whole, mut near, mut record) = (vec![], vec![], vec![]);
         for frame in 0..21 {
             let t = Instant::now();
-            let Reading { view, capture_px, icons } = read(&mut memory, &region).unwrap();
+            let Reading { view, capture_px, icons } = read(&mut memory, &region, &|| None).unwrap();
             let took = t.elapsed();
             let t = Instant::now();
             recorder.on_icons(&icons);
@@ -705,7 +734,7 @@ mod tests {
         while started.elapsed() < Duration::from_secs(seconds) {
             let t = Instant::now();
             let Ok(region) = locate_minimap() else { continue };
-            let Ok(Reading { view, capture_px, .. }) = read(&mut memory, &region) else { continue };
+            let Ok(Reading { view, capture_px, .. }) = read(&mut memory, &region, &|| None) else { continue };
             recorder.on_frame(&view, capture_px);
             frames += 1;
             slowest = slowest.max(t.elapsed());
@@ -861,6 +890,9 @@ mod tests {
         assert_eq!(r.window, "1920,1 1910x1079");
         assert!((r.scan.plan.marker[0] - 1898.8).abs() < 0.2 && (r.scan.plan.marker[1] - 1059.0).abs() < 0.2);
         assert_eq!(r.scan.skip[0], [0, 0, 709, 864]);
+        // The panel at 2000,600 logical (300x400) in the whole-window capture's pixels, with
+        // the margin: the capture starts at 1920,1 logical, 2 px a logical pixel.
+        assert_eq!(r.skip_of([2000.0, 600.0, 300.0, 400.0]), [144, 1182, 776, 2014]);
         // A window filling its monitor reads the same corner as before.
         let r = regions([1920.0, 0.0, 1920.0, 1080.0], [1920.0, 0.0, 1920.0, 1080.0], 2.0).unwrap();
         assert_eq!(r.minimap, "3540,0 300x259");
@@ -1095,7 +1127,7 @@ mod tests {
         // Frame 1: the whole window. Every icon on the screenshot, in cells from the player:
         // the Grelwood exit and its checkpoint; 750-820 cells right, the waypoint, a
         // checkpoint and the Mud Burrow exit. Nothing from the panels.
-        let reading = choose(&mut memory, dark(), estimate, &near_plan, Some(&scan), |whole_window| {
+        let reading = choose(&mut memory, dark(), estimate, &near_plan, Some(&|| scan.clone()), |whole_window| {
             if whole_window { Ok(whole.clone()) } else { panic!("the area around the player was read") }
         })
         .unwrap();
@@ -1109,7 +1141,7 @@ mod tests {
         }
         // Frames 2 and 3: the area around the player only.
         for _ in 0..2 {
-            let reading = choose(&mut memory, dark(), estimate, &near_plan, Some(&scan), |whole_window| {
+            let reading = choose(&mut memory, dark(), estimate, &near_plan, Some(&|| scan.clone()), |whole_window| {
                 assert!(!whole_window);
                 Ok(near.clone())
             })
@@ -1117,11 +1149,45 @@ mod tests {
             assert_eq!(cells(&reading.icons), [("exit", -136, 83), ("checkpoint", -97, 102)]);
         }
         // A failed whole-window capture falls back to the area around the player.
-        let reading = choose(&mut memory, dark(), estimate, &near_plan, Some(&scan), |whole_window| {
+        let reading = choose(&mut memory, dark(), estimate, &near_plan, Some(&|| scan.clone()), |whole_window| {
             if whole_window { Err("covered".into()) } else { Ok(near.clone()) }
         })
         .unwrap();
         assert_eq!(reading.view.message, "Reading big map");
+    }
+
+    #[test]
+    fn the_panel_is_left_out_where_it_really_is() {
+        // The checklist panel dragged over the map: its orange boss name reads as an exit
+        // unless the panel's rectangle (from `panel_rect`) is skipped.
+        let window = [3840.0, 2160.0];
+        let layout = big_layout(window, [3240.0, 0.0], [600, 518]);
+        let scan = scan_layout(window, [0.0, 0.0], [3840, 2160], &layout);
+        let mut whole = whole_window(&scan);
+        // Moved: no panel at its default place (top left), its words over the map instead.
+        for y in 280..340 {
+            for x in 180..300 {
+                whole.pixels[(y * 3840 + x) * 3..][..3].copy_from_slice(&[16, 15, 18]);
+            }
+        }
+        for letter in 0..8 {
+            for y in 1500..1514 {
+                for x in 2400 + letter * 10..2407 + letter * 10 {
+                    whole.pixels[(y * 3840 + x) * 3..][..3].copy_from_slice(&[206, 120, 50]);
+                }
+            }
+        }
+        let read_with_skip = |skip0: [usize; 4]| {
+            let mut scan = scan.clone();
+            scan.skip[0] = skip0;
+            let plan = scan.plan;
+            let reading = choose(&mut Memory::default(), Ok(image(600, 518, |_, _| [14, 16, 22])), [316.0, 284.0], &plan, Some(&|| scan.clone()), |_| Ok(whole.clone())).unwrap();
+            reading.icons.iter().filter(|i| i.kind == "exit").count()
+        };
+        // Fixed place only: the moved panel's word reads as more "exits" (three here).
+        assert!(read_with_skip(scan.skip[0]) > 2);
+        // Its real place (a 640x200 px panel there) left out: the two real exits.
+        assert_eq!(read_with_skip([2380, 1480, 3020, 1680]), 2);
     }
 
     /// A larger walled area for gap tests: 900 x 700 cells of rooms of many sizes.
