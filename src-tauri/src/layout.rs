@@ -967,7 +967,13 @@ impl State {
                 targets.extend(graph::target(&graph, &session.came_from, completed));
             }
             // The part's recorded map, lent: the way to a target whose place on it is known.
-            let place = nav::Place { map: route::Map { walls: &live.walls, trail: &live.part.trail }, player: live.pos };
+            let mut arrivals: Vec<&Poi> = live.part.pois.iter().filter(|p| p.kind == "arrived" && !p.label.is_empty()).collect();
+            arrivals.sort_by_key(|p| p.at);
+            let place = nav::Place {
+                map: route::Map { walls: &live.walls, trail: &live.part.trail },
+                player: live.pos,
+                arrivals: arrivals.iter().map(|p| (p.label.as_str(), (p.x, p.y))).collect(),
+            };
             return nav
                 .guide_on(&targets, Some(&place))
                 .map(|view| not_stale(guide::GuideView { measured: scale.is_some(), ..view }, session.fed_at));

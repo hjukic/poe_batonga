@@ -778,13 +778,17 @@ when (in this order):
    target's, as for the needle at the icon;
 2. it was seen earlier in this part: a sighting's place on the dead-reckoned track is
    turned back into cells from the player (sightings end at every loss, and a new part
-   starts with one).
+   starts with one);
+3. it is the exit the player arrived through (the target's `exit` is the area of one
+   of the part's "arrived" points, earliest first): that point. Not from a town:
+   waypoints and portals put the player anywhere.
 
 Then the way there. If one is found and is at most 4 times the straight line (or 150
 cells more), the needle looks 40 cells along it and the distance shown is its length.
 Gold keeps the icon's conditions (named and read the same twice, not against a sure
 belief, within 200 cells; or unlabelled with one layout at 90%, measured areas only)
-but no longer needs the graph route to be about straight: the way is the route.
+but no longer needs the graph route to be about straight: the way is the route. The
+way back to the arrival point is gold in every area, dungeons too: walked and recorded.
 Otherwise the needle is as before.
 
 Before and after, the wall-between case (`a_named_icon_behind_a_wall_is_reached_through_the_doorway`):

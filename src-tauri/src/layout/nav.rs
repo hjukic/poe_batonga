@@ -375,6 +375,15 @@ pub struct Place<'a> {
     pub map: route::Map<'a>,
     /// The player's cell (minimap cells, the part's coordinates).
     pub player: (i32, i32),
+    /// The part's arrival points, earliest first: the area id the player came from
+    /// and where the player appeared.
+    pub arrivals: Vec<(&'a str, (i32, i32))>,
+}
+
+/// Towns are left and entered by waypoints and portals: an arrival from one is
+/// no exit's place.
+fn town(area: &str) -> bool {
+    area.ends_with("_town") || area.ends_with("_Town")
 }
 
 fn unix_now() -> u64 {
@@ -1093,7 +1102,8 @@ impl Navigator {
 
     /// Where the target is on the part's map, when known: its icon in view (as
     /// `guide` finds it), else a sighting of it in this part (sightings are
-    /// cleared at every loss, and a new part starts with one). Then the way there through the recorded map, if
+    /// cleared at every loss, and a new part starts with one), else the place the
+    /// player arrived through it. Then the way there through the recorded map, if
     /// there is one and it is not absurdly long: the needle looks `route::LOOK`
     /// along it and the distance is its length. None leaves the needle to `guide`.
     fn on_the_map(&self, target: &NavTarget, posterior: &[f64], place: &Place) -> Option<GuideView> {
@@ -1125,7 +1135,19 @@ impl Navigator {
                 .collect();
             best(list)
         };
-        let (icon, read_twice, share) = best(self.icons_now.clone()).or_else(sighted)?;
+        let arrived = || {
+            let exit = target.exit.as_deref()?;
+            let (_, (x, y)) = place.arrivals.iter().find(|(from, _)| *from == exit && !town(from))?;
+            let (dx, dy) = ((x - place.player.0) as f64, (y - place.player.1) as f64);
+            Some((ExitIcon { dx, dy, to: None }, true, 1.0))
+        };
+        let (icon, read_twice, share, arrival) = match best(self.icons_now.clone()).or_else(sighted) {
+            Some((icon, twice, share)) => (icon, twice, share, false),
+            None => {
+                let (icon, twice, share) = arrived()?;
+                (icon, twice, share, true)
+            }
+        };
         let from = (place.player.0 as f64, place.player.1 as f64);
         let to = (from.0 + icon.dx, from.1 + icon.dy);
         let straight = icon.dx.hypot(icon.dy);
@@ -1138,14 +1160,19 @@ impl Navigator {
             return None;
         }
         *self.way.borrow_mut() = Some((target.label.clone(), way.cells.clone()));
-        // As at the icon in `guide`, without "the route is about straight": the way
-        // through the recorded map is the route.
-        let unlabelled = ExitIcon { to: None, ..icon.clone() };
-        let against = icon.to.is_some() && p_top >= GOLD_LAYOUT && self.icon_is_target(&unlabelled, target, posterior) < 0.5;
-        let named = icon.to.is_some() && read_twice && !against;
-        let near = straight <= ICON_GOLD_WITHIN;
-        let sure = if near && !against && (named || p_top >= GOLD_LAYOUT) { "estimated" } else { "rough" };
-        let source = if named && near { "estimated" } else { self.cap_source(sure, posterior) };
+        let source = if arrival {
+            // The way back to where the player came in: walked and recorded.
+            "estimated"
+        } else {
+            // As at the icon in `guide`, without "the route is about straight": the
+            // way through the recorded map is the route.
+            let unlabelled = ExitIcon { to: None, ..icon.clone() };
+            let against = icon.to.is_some() && p_top >= GOLD_LAYOUT && self.icon_is_target(&unlabelled, target, posterior) < 0.5;
+            let named = icon.to.is_some() && read_twice && !against;
+            let near = straight <= ICON_GOLD_WITHIN;
+            let sure = if near && !against && (named || p_top >= GOLD_LAYOUT) { "estimated" } else { "rough" };
+            if named && near { "estimated" } else { self.cap_source(sure, posterior) }
+        };
         Some(GuideView {
             variant: if p_top >= SURE { self.area.layouts[top].id.clone() } else { String::new() },
             target_kind: if target.exit.is_some() { "entrance".into() } else { target.tag.clone().unwrap_or_default() },
@@ -1945,8 +1972,8 @@ mod tests {
     use super::super::guide::angle_between;
     use super::super::route::tests::{line, outline, walls};
 
-    fn lent<'a>(walls: &'a HashMap<(i32, i32), u32>, trail: &'a [[i32; 2]], player: (i32, i32)) -> Place<'a> {
-        Place { map: route::Map { walls, trail }, player }
+    fn lent<'a>(walls: &'a HashMap<(i32, i32), u32>, trail: &'a [[i32; 2]], player: (i32, i32), arrivals: Vec<(&'a str, (i32, i32))>) -> Place<'a> {
+        Place { map: route::Map { walls, trail }, player, arrivals }
     }
 
     fn bearing(dx: f64, dy: f64) -> f32 {
@@ -1965,7 +1992,7 @@ mod tests {
         let target = [exit("G1_4", "The Grelwood")];
         let map = walls([line((-200, -40), (59, -40)), line((80, -40), (200, -40))].concat());
         let before = nav.guide(&target).unwrap();
-        let after = nav.guide_on(&target, Some(&lent(&map, &[], (0, 0)))).unwrap();
+        let after = nav.guide_on(&target, Some(&lent(&map, &[], (0, 0), vec![]))).unwrap();
         let doorway = bearing(70.0, -40.0);
         println!("before {:?}° {} {:.0} cells; after {:?}° {} {:.0} cells; doorway {doorway:.0}°",
             before.degrees, before.source, before.distance, after.degrees, after.source, after.distance);
@@ -1981,7 +2008,7 @@ mod tests {
         // sighting keeps its place, the way still goes through the doorway.
         nav.icons(&[]);
         nav.moved(30.0, 0.0);
-        let later = nav.guide_on(&target, Some(&lent(&map, &[], (30, 0)))).unwrap();
+        let later = nav.guide_on(&target, Some(&lent(&map, &[], (30, 0), vec![]))).unwrap();
         assert!(angle_between(later.degrees.unwrap(), bearing(40.0, -40.0)) < 10.0, "{later:?}");
         assert!((125.0..150.0).contains(&later.distance), "{later:?}");
         assert_eq!(later.source, "estimated");
@@ -1990,7 +2017,7 @@ mod tests {
         // A loss ends the sighting and the kept way.
         nav.lost(5.0);
         assert!(nav.way.borrow().is_none());
-        assert_eq!(nav.guide_on(&target, Some(&lent(&map, &[], (30, 0)))), nav.guide(&target));
+        assert_eq!(nav.guide_on(&target, Some(&lent(&map, &[], (30, 0), vec![]))), nav.guide(&target));
     }
 
     #[test]
@@ -2003,8 +2030,41 @@ mod tests {
         let target = [exit("G1_4", "The Grelwood")];
         // The exit walled in (as recorded): no way, the icon's needle as today.
         let map = walls(outline(-30, -110, 30, -50));
-        let view = nav.guide_on(&target, Some(&lent(&map, &[], (0, 0))));
+        let view = nav.guide_on(&target, Some(&lent(&map, &[], (0, 0), vec![])));
         assert_eq!(view, nav.guide(&target));
         assert!(angle_between(view.unwrap().degrees.unwrap(), -90.0) < 5.0);
+    }
+
+    #[test]
+    fn the_way_back_follows_the_recorded_walk_and_is_gold() {
+        // Mud Burrow (a dungeon: inferred needles are never gold there).
+        let area = graph::load("G1_3");
+        let nav = Navigator::new(&area, Arrival::From("G1_2"), None, SCALE, 5);
+        // In at (0, 0), down 100, right 60, up 100 round a wall between; now 60
+        // cells from the arrival, the wall between.
+        let map = walls(line((30, -200), (30, 80)));
+        let mut trail: Vec<[i32; 2]> = (0..=10).map(|k| [0, 10 * k]).collect();
+        trail.extend((1..=6).map(|k| [10 * k, 100]));
+        trail.extend((1..=10).map(|k| [60, 100 - 10 * k]));
+        let target = [exit("G1_2", "Clearfell")];
+        let view = nav.guide_on(&target, Some(&lent(&map, &trail, (60, 0), vec![("G1_2", (0, 0))]))).unwrap();
+        // Round the wall's end (35, 87), not across it: down and a little left.
+        assert!(angle_between(view.degrees.unwrap(), bearing(-25.0, 87.0)) < 10.0, "{view:?}");
+        assert!((175.0..200.0).contains(&view.distance), "{view:?}");
+        assert_eq!(view.source, "estimated");
+        assert_eq!(view.target, "Clearfell");
+        let inferred = nav.guide(&target).unwrap();
+        assert_ne!(inferred.source, "estimated");
+    }
+
+    #[test]
+    fn an_arrival_from_a_town_is_no_exits_place() {
+        // From town the player may have come by waypoint or portal.
+        let area = graph::load("G1_2");
+        let nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 5);
+        let map = walls(line((30, -200), (30, 80)));
+        let target = [exit("G1_town", "Clearfell Encampment")];
+        let place = lent(&map, &[], (60, 0), vec![("G1_town", (0, 0))]);
+        assert_eq!(nav.guide_on(&target, Some(&place)), nav.guide(&target));
     }
 }
