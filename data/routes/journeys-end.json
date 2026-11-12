@@ -8,16 +8,30 @@
       "id": "journeys-end-tujen",
       "kind": "objective",
       "parts": [{ "text": "Talk to " }, { "text": "Tujen", "style": "npc" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G4_2_2",
+        "lines": [
+          { "id": "TujenA4_JE_Intro_F", "speaker": "Tujen", "text": "I'll stay with Freya." }
+        ]
+      },
+      "evidence": "Panel: TujenA4_JE_Intro_F. Summoned Tujen's 'Freya Hartlin' talk, its last line. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "kill-captain-hartlin",
       "kind": "objective",
       "navigationTarget": { "area": "G4_2_2", "label": "Captain Hartlin", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Captain Hartlin", "style": "boss" }, { "text": "Verisium", "style": "reward" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 9 layouts."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G4_2_2",
+        "lines": [
+          { "id": "CaptainRothDeath", "speaker": "Captain Hartlin", "text": "Do not... believe his lies..." }
+        ]
+      },
+      "evidence": "Bark: CaptainRothDeath. Captain Hartlin's death line. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log. Target: the one 'boss' node in all 9 layouts.",
+      "evidenceKind": "bark"
     },
     {
       "id": "journeys-end-freya",

@@ -20,8 +20,22 @@
       "id": "kill-geonor",
       "kind": "objective",
       "parts": [{ "text": "Kill " }, { "text": "Count Geonor", "style": "boss" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G1_15",
+        "lines": [
+          { "id": "CorruptWolf_DeathSequenceFirst", "speaker": "Geonor, the Putrid Wolf", "text": "The madness... It consumed my being. Oriana used it against me." },
+          { "id": "CorruptWolf_DeathSequenceSecond", "speaker": "Geonor, the Putrid Wolf", "text": "I found messages... From the desert." },
+          { "id": "CorruptWolf_DeathSequenceThird", "speaker": "Geonor, the Putrid Wolf", "text": "Yes... Find her. Kill her. But first, please stop the madness." },
+          { "id": "HoodedOneGeonorDeathSequenceFirst", "speaker": "The Hooded One", "text": "Allow me to clear your mind, if only for a moment." },
+          { "id": "HoodedOneGeonorDeathSequenceSecond", "speaker": "The Hooded One", "text": "Where has she taken the Beast?" },
+          { "id": "HoodedOneGeonorDeathSequenceThird", "speaker": "The Hooded One", "text": "Hmm... From the Vastiri?" },
+          { "id": "HoodedOneGeonorDeathSequenceFourth", "speaker": "The Hooded One", "text": "As you wish." },
+          { "id": "HoodedOneGeonorDeathSequenceFifth", "speaker": "The Hooded One", "text": "We must make haste. Let us return to Clearfell to make our preparations." }
+        ]
+      },
+      "evidence": "Bark: CorruptWolf_DeathSequenceFirst, CorruptWolf_DeathSequenceSecond, CorruptWolf_DeathSequenceThird, HoodedOneGeonorDeathSequenceFirst, HoodedOneGeonorDeathSequenceSecond, HoodedOneGeonorDeathSequenceThird, HoodedOneGeonorDeathSequenceFourth, HoodedOneGeonorDeathSequenceFifth. Geonor's death scene: his three lines and the Hooded One's five. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log.",
+      "evidenceKind": "bark"
     },
     {
       "id": "manor-portal-town",

@@ -8,8 +8,15 @@
       "id": "talk-lachlann",
       "kind": "objective",
       "parts": [{ "text": "Talk to " }, { "text": "Lachlann", "style": "npc" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G1_7",
+        "lines": [
+          { "id": "LachlannGreeting", "speaker": "Lachlann the Lost", "text": "That bastard tyrant, Praetor Draven! He's taken my family hostage! They're being held somewhere beyond these gates. I never thought he would stoop this low! I sent for reinforcements... but... it's been so long... I must get through the gate... The keys... where are the blasted keys? I... I believe those cowards took them..." }
+        ]
+      },
+      "evidence": "Panel: LachlannGreeting. Lachlann's introduction (sets BitterGuyQuestReceived); bound to the Cemetery, he also stands in the Tomb and the Mausoleum. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "ancient-ruins",
@@ -40,16 +47,30 @@
       "kind": "objective",
       "navigationTarget": { "area": "G1_7", "label": "Memorial Gate", "tag": "arena_gate" },
       "parts": [{ "text": "Open the Memorial Gate" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand. Target: the one 'arena_gate' node in all 12 layouts."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G1_7",
+        "lines": [
+          { "id": "LachlannWildOpeningGate", "speaker": "Lachlann the Lost", "text": "At last! It's open! Praise the First Ones!" }
+        ]
+      },
+      "evidence": "Bark: LachlannWildOpeningGate. Lachlann's shout when the gate opens. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log. Target: the one 'arena_gate' node in all 12 layouts.",
+      "evidenceKind": "bark"
     },
     {
       "id": "kill-lachlann",
       "kind": "objective",
       "navigationTarget": { "area": "G1_7", "label": "Lachlann", "tag": "arena" },
       "parts": [{ "text": "Kill " }, { "text": "Lachlann", "style": "boss" }, { "text": ", loot Ring" }, { "text": "Skill Gem", "style": "reward" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand. Target: the one 'arena' node in all 12 layouts."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G1_7",
+        "lines": [
+          { "id": "BitterGuyDeath", "speaker": "Lachlann of Endless Lament", "text": "Together... at last..." }
+        ]
+      },
+      "evidence": "Bark: BitterGuyDeath. Lachlann of Endless Lament's death line. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log. Target: the one 'arena' node in all 12 layouts.",
+      "evidenceKind": "bark"
     },
     {
       "id": "enter-hunting-grounds",

@@ -16,8 +16,16 @@
       "kind": "objective",
       "navigationTarget": { "area": "G2_3", "label": "Jamanra", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Jamanra", "style": "boss" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 12 layouts."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G2_3",
+        "lines": [
+          { "id": "FaridunKingG2_3FightEscapeLine", "speaker": "Jamanra, the Risen King", "text": "We will finish this, but not today." },
+          { "id": "FaridunKingG2_3FightEscapeLineNoAsala", "speaker": "Jamanra, the Risen King", "text": "Leave our culture be, meddler!" }
+        ]
+      },
+      "evidence": "Bark: FaridunKingG2_3FightEscapeLine, FaridunKingG2_3FightEscapeLineNoAsala. Jamanra's escape line that ends the Halani Gates fight (with and without Asala). From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log. Target: the one 'boss' node in all 12 layouts.",
+      "evidenceKind": "bark"
     },
     {
       "id": "halani-stairs-down",

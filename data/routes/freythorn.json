@@ -20,8 +20,21 @@
       "id": "kill-king-in-the-mists",
       "kind": "objective",
       "parts": [{ "text": "Kill " }, { "text": "King in the Mists", "style": "boss" }, { "text": "+30 Spirit", "style": "reward" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G1_12",
+        "lines": [
+          { "id": "TheKingInTheMists_Treant_DeathRandom", "speaker": "The King in the Mists", "text": "So long as you know me, I will always exist..." },
+          { "id": "TheKingInTheMists_Treant_Death2", "speaker": "The King in the Mists", "text": "So long as you know me, I will always exist..." },
+          { "id": "TheKingInTheMists_Treant_Death3", "speaker": "The King in the Mists", "text": "Why do you hate us for wanting to exist?" },
+          { "id": "TheKingInTheMists_Treant_Death4", "speaker": "The King in the Mists", "text": "Why do you hate us for wanting to exist?" },
+          { "id": "TheKingInTheMists_Treant_Death5", "speaker": "The King in the Mists", "text": "This is not the end..." },
+          { "id": "TheKingInTheMists_Treant_Death6", "speaker": "The King in the Mists", "text": "This is not the end..." },
+          { "id": "KingInTheMists_Druid_Death", "speaker": "The King in the Mists", "text": "Hahahaha! Your path will always lead back to me..." }
+        ]
+      },
+      "evidence": "Bark: TheKingInTheMists_Treant_DeathRandom, TheKingInTheMists_Treant_Death2, TheKingInTheMists_Treant_Death3, TheKingInTheMists_Treant_Death4, TheKingInTheMists_Treant_Death5, TheKingInTheMists_Treant_Death6, KingInTheMists_Druid_Death. The King's death lines in his last (treant) form, and the Druid's variant. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log.",
+      "evidenceKind": "bark"
     },
     {
       "id": "ominous-altars",

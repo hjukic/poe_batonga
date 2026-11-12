@@ -8,8 +8,15 @@
       "id": "matiki-well",
       "kind": "objective",
       "parts": [{ "text": "Well: talk to " }, { "text": "Matiki", "style": "npc" }],
-      "trigger": null,
-      "evidence": "He is at the well, not in town. No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G4_4_1",
+        "lines": [
+          { "id": "Matiki_EyeofHinekIntro_A1", "speaker": "Matiki", "text": "We call this place... the Eye of Hinekora. Far below, Hinekora herself resides. She, The Mother of Death, sees the choices we have made, and from that... has foresight of the path ahead. Now. This here... this is Navali. She is the Speaker. The word of the will of Hinekora. Oh! And that on her shoulder... that's Yama. He's a good boy." }
+        ]
+      },
+      "evidence": "Panel: Matiki_EyeofHinekIntro_A1. Matiki's first talk at the Eye of Hinekora (hidden once NavaliFirstGreetingSeen). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "waterfall-chest",

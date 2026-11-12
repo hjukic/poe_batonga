@@ -8,8 +8,15 @@
       "id": "refuge-hooded-one",
       "kind": "objective",
       "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "P1_Town",
+        "lines": [
+          { "id": "MentorP1_Intro", "speaker": "The Hooded One", "text": "There is something very wrong in these lands. It is not Corruption... it is something far older, far darker... I must search my memories... give me time..." }
+        ]
+      },
+      "evidence": "Panel: MentorP1_Intro. The Hooded One's 'Dark Forces' in the Refuge, the first talk there. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "enter-scorched-farmlands",

@@ -9,8 +9,17 @@
       "kind": "objective",
       "navigationTarget": { "area": "G3_17", "label": "Doryani", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Doryani", "style": "boss" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in its only layout."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_17",
+        "lines": [
+          { "id": "DoryaniPastBoss_MechDeathDoNotFailMe", "speaker": "Doryani", "text": "Gah! No! Do not fail me... Not now!" },
+          { "id": "DoryaniPastBoss_MechDeathHowCouldThisHappen", "speaker": "Doryani", "text": "Ugh... how could this happen...? All I have done. All that I sacrificed..." },
+          { "id": "DoryaniPastBoss_MechDeathContainBeast", "speaker": "Doryani", "text": "Hmm... the legacy of the Vaal must be protected... I do know of a way to contain the Beast." }
+        ]
+      },
+      "evidence": "Bark: DoryaniPastBoss_MechDeathDoNotFailMe, DoryaniPastBoss_MechDeathHowCouldThisHappen, DoryaniPastBoss_MechDeathContainBeast. Doryani's three lines when his construct dies. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log. Target: the one 'boss' node in its only layout.",
+      "evidenceKind": "bark"
     },
     {
       "id": "doryani-loot",

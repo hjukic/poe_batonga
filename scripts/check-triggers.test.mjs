@@ -130,7 +130,7 @@ test('every npcLine trigger in data/routes is bound to its zone, names its rows 
       }
     }
   }
-  assert.ok(count >= 2, `${count} npcLine triggers`);
+  assert.ok(count >= 83, `${count} npcLine triggers`);
 });
 
 test('the triggers match the game tables in TRIGGER_TABLES', { skip: !process.env.TRIGGER_TABLES && 'TRIGGER_TABLES not set' }, () => {

@@ -8,15 +8,29 @@
       "id": "sanctum-alva",
       "kind": "objective",
       "parts": [{ "text": "Summon and talk to " }, { "text": "Alva", "style": "npc" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_6_2",
+        "lines": [
+          { "id": "Alva_G3_Machinarium_2_How_To_Charge", "speaker": "Alva", "text": "There is still latent energy residing here... From what I can gather, these lines in the stonework should lead to generators. You might need to find some more Soul Cores to spin them up, but everything looks to be in surprisingly decent condition. Maybe the constructs have been maintaining all this... In any case, let's hope it still functions. We'll then have to remove that large Soul Core from the wall of course, but that shouldn't be a problem." }
+        ]
+      },
+      "evidence": "Panel: Alva_G3_Machinarium_2_How_To_Charge. Summoned Alva's 'The Generators'. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "medium-soul-cores",
       "kind": "objective",
       "parts": [{ "text": "2 Medium Cores: generators" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_6_2",
+        "lines": [
+          { "id": "Alva_G3_Machinarium_2_Charged_Exclamation", "speaker": "Alva", "text": "The Soul Core is charged! Why don't you do the honours?" }
+        ]
+      },
+      "evidence": "Bark: Alva_G3_Machinarium_2_Charged_Exclamation. Alva's 'The Soul Core is charged!' once both generators are done; docs/log-findings.md saw an uncharged-then-charged pair of Alva lines here in the 2025-26 log. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log.",
+      "evidenceKind": "bark"
     },
     {
       "id": "kill-zicoatl",

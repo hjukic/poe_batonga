@@ -37,8 +37,16 @@
       "id": "lever-leitis",
       "kind": "objective",
       "parts": [{ "text": "Pull lever, talk to " }, { "text": "Leitis", "style": "npc" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G1_13_2",
+        "lines": [
+          { "id": "LeitisWildRescued", "speaker": "Leitis", "text": "He killed Eamon. Just killed him. I... I don't know what to do... I..." },
+          { "id": "LeitisWildClearfell", "speaker": "Leitis", "text": "Clearfell is safe... we have to get out of here. We can talk there." }
+        ]
+      },
+      "evidence": "Panel: LeitisWildRescued, LeitisWildClearfell. Leitis's 'Rescued' and 'Return to Clearfell' talks, said once after the lever frees her. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "enter-manor-ramparts",

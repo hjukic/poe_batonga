@@ -22,8 +22,15 @@
       "navigationTarget": { "area": "G2_2", "label": "Balbala", "tag": "boss_entrance" },
       "optional": true,
       "parts": [{ "text": "Kill " }, { "text": "Balbala", "style": "boss" }, { "text": "Djinn Barya", "style": "reward" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand. Target: the one 'boss_entrance' node in all 8 layouts."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G2_2",
+        "lines": [
+          { "id": "BalbalaDeath", "speaker": "Balbala", "text": "I have not yet... earned my rest!" }
+        ]
+      },
+      "evidence": "Bark: BalbalaDeath. Balbala's death line. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log. Target: the one 'boss_entrance' node in all 8 layouts.",
+      "evidenceKind": "bark"
     },
     {
       "id": "bell-chest",

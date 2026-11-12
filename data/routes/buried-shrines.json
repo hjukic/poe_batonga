@@ -37,8 +37,15 @@
       "id": "kill-azarian",
       "kind": "objective",
       "parts": [{ "text": "Kill " }, { "text": "Azarian", "style": "boss" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G2_4_3",
+        "lines": [
+          { "id": "ForsakenSonDeathLine", "speaker": "Azarian, the Forsaken Son", "text": "She didn't... want me..." }
+        ]
+      },
+      "evidence": "Bark: ForsakenSonDeathLine. Azarian's death line. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log.",
+      "evidenceKind": "bark"
     },
     {
       "id": "ignite-water-goddess",

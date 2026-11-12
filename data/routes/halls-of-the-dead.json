@@ -16,8 +16,16 @@
       "kind": "objective",
       "navigationTarget": { "area": "G4_4_2", "label": "Yama", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Yama the White", "style": "boss" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in its only layout."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G4_4_2",
+        "lines": [
+          { "id": "YamaBoss_CombatDefeat_1", "speaker": "Yama The White", "text": "Ahhh! Okay, okay. Yama sees you. You are worthy." },
+          { "id": "NavaliA4_Wild_DefeatYamaGV", "speaker": "Navali", "text": "It is done! The guest is worthy to meet the Mother of Death!" }
+        ]
+      },
+      "evidence": "Bark: YamaBoss_CombatDefeat_1, NavaliA4_Wild_DefeatYamaGV. Yama's 'You are worthy' when beaten and Navali's 'It is done!'. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log. Target: the one 'boss' node in its only layout.",
+      "evidenceKind": "bark"
     },
     {
       "id": "enter-trial-of-ancestors",

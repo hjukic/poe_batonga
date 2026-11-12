@@ -979,6 +979,38 @@ mod tests {
     }
 
     #[test]
+    fn game_data_triggers_tick_their_step_in_its_zone_only() {
+        let routes = load_routes();
+        // The first line of a shipped trigger, as the log would show it.
+        let line_of = |id: &str| {
+            let step = routes.iter().flat_map(|r| &r.steps).find(|s| s.id == id).unwrap();
+            match &step.trigger {
+                Some(Trigger::NpcLine { lines, .. }) => (lines[0].speaker.clone(), lines[0].text.clone()),
+                other => panic!("{id}: {other:?}"),
+            }
+        };
+        let run = |area: &str, id: &str| {
+            let (speaker, text) = line_of(id);
+            let mut progress = Progress::default();
+            enter_zone(&routes, &mut progress, area);
+            let before = progress.completed.clone();
+            say(&routes, &mut progress, &speaker, &text);
+            // What the line ticked (zone entries tick steps of their own).
+            progress.completed.keys().filter(|k| !before.contains_key(*k)).cloned().collect::<Vec<_>>()
+        };
+        assert_eq!(line_of("kill-lachlann"), ("Lachlann of Endless Lament".into(), "Together... at last...".into()));
+        assert_eq!(run("G1_7", "kill-lachlann"), ["kill-lachlann"]);
+        assert!(run("G1_8", "kill-lachlann").is_empty());
+        // Finn says the same line when summoned in Freythorn; only the town talk is the hand-in.
+        assert!(run("G1_12", "finn-charm").is_empty());
+        assert_eq!(run("G1_town", "finn-charm"), ["finn-charm"]);
+        // The Hooded One's Weapon-piece talk is the same on all three islands.
+        assert_eq!(run("G4_7", "shrike-hooded-one"), ["shrike-hooded-one"]);
+        assert_eq!(run("G4_3_2", "shrike-hooded-one"), ["caverns-hooded-one"]);
+        assert_eq!(run("G4_5_2", "shrike-hooded-one"), ["prison-hooded-one"]);
+    }
+
+    #[test]
     fn every_after_names_another_step() {
         let routes = load_routes();
         let ids: BTreeSet<&str> = routes.iter().flat_map(|r| &r.steps).map(|s| s.id.as_str()).collect();

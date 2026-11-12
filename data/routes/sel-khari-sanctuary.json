@@ -24,8 +24,16 @@
       "kind": "objective",
       "navigationTarget": { "area": "P2_3", "label": "Elzarah", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Elzarah", "style": "boss" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in both layouts."
+      "trigger": {
+        "type": "npcLine",
+        "area": "P2_3",
+        "lines": [
+          { "id": "Elzarah_Dialogue_Death_Random", "speaker": "Elzarah, the Cobra Lord", "text": "The Serpent Clan shall rise again..." },
+          { "id": "Elzarah_Dialogue_Death_2", "speaker": "Elzarah, the Cobra Lord", "text": "Strike us down... we will return..." }
+        ]
+      },
+      "evidence": "Bark: Elzarah_Dialogue_Death_Random, Elzarah_Dialogue_Death_2. Elzarah's death lines. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log. Target: the one 'boss' node in both layouts.",
+      "evidenceKind": "bark"
     },
     {
       "id": "sanctuary-to-crossing",

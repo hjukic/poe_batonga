@@ -13,8 +13,18 @@
       "id": "kill-ketzuli",
       "kind": "objective",
       "parts": [{ "text": "Kill " }, { "text": "Ketzuli", "style": "boss" }, { "text": " (upstairs)" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_12",
+        "lines": [
+          { "id": "SunWorshipper_Death_Random", "speaker": "Ketzuli, High Priest of the Sun", "text": "Kopec.. will return..." },
+          { "id": "SunWorshipper_Death_2", "speaker": "Ketzuli, High Priest of the Sun", "text": "Kopec's... will..." },
+          { "id": "SunWorshipper_Death_3", "speaker": "Ketzuli, High Priest of the Sun", "text": "The light shall... remain..." },
+          { "id": "SunWorshipper_Death_4", "speaker": "Ketzuli, High Priest of the Sun", "text": "The Vaal will be saved!" }
+        ]
+      },
+      "evidence": "Bark: SunWorshipper_Death_Random, SunWorshipper_Death_2, SunWorshipper_Death_3, SunWorshipper_Death_4. Ketzuli's death lines. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log.",
+      "evidenceKind": "bark"
     },
     {
       "id": "kopec-alva",

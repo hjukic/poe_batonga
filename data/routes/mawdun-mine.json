@@ -14,8 +14,17 @@
       "kind": "objective",
       "navigationTarget": { "area": "G2_10_2", "label": "Rudja", "tag": "bossman" },
       "parts": [{ "text": "Kill " }, { "text": "Rudja", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand. Target: the one 'bossman' node in all 4 layouts."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G2_10_2",
+        "lines": [
+          { "id": "Rudja_Death", "speaker": "Rudja, Dread Engineer", "text": "The King will have your head!" },
+          { "id": "Rudja_Death_Sorc", "speaker": "Rudja, Dread Engineer", "text": "The Maraketh will fall!" },
+          { "id": "RisuA2WildKillRudja", "speaker": "Risu, Faridun Defector", "text": "Quickly, break the lock!" }
+        ]
+      },
+      "evidence": "Bark: Rudja_Death, Rudja_Death_Sorc, RisuA2WildKillRudja. Rudja's death line (and the Sorceress variant) and Risu's shout after it. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log. Target: the one 'bossman' node in all 4 layouts.",
+      "evidenceKind": "bark"
     },
     {
       "id": "mine-risu",

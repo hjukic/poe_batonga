@@ -8,8 +8,15 @@
       "id": "obelisks-of-rust",
       "kind": "objective",
       "parts": [{ "text": "Find 3 Obelisks of Rust" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G1_5",
+        "lines": [
+          { "id": "RustKingEmerge", "speaker": "The Rust King", "text": "This is our land. We stand united!" }
+        ]
+      },
+      "evidence": "Bark: RustKingEmerge. The Rust King's emerge line; he rises at the third obelisk (guide: 'spawns on last obelisk'). From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log.",
+      "evidenceKind": "bark"
     },
     {
       "id": "kill-rust-king",

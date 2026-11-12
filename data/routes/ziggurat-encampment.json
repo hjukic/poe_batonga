@@ -8,22 +8,44 @@
       "id": "ziggurat-alva",
       "kind": "objective",
       "parts": [{ "text": "Talk to " }, { "text": "Alva", "style": "npc" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_town",
+        "lines": [
+          { "id": "Alva_G3_Town_Introduction", "speaker": "Alva", "text": "Oh, hello. I'm Alva Valai. We can always use another pair of hands around here. Be sure to talk to Oswald as he usually likes to greet newcomers. In any case, welcome!" },
+          { "id": "Alva_G3_IntroAfterOswald", "speaker": "Alva", "text": "Hello there, I'm Alva Valai. Sorry about Oswald... He can be a bit... rough with newcomers. But he's really not a bad sort. In any case, we can always use another pair of hands around here. Welcome!" }
+        ]
+      },
+      "evidence": "Panel: Alva_G3_Town_Introduction, Alva_G3_IntroAfterOswald. Alva's introduction (before or after Oswald's), said once. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "ziggurat-oswald",
       "kind": "objective",
       "parts": [{ "text": "Talk to " }, { "text": "Oswald", "style": "npc" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_town",
+        "lines": [
+          { "id": "Oswald_G3_Town_Introduction", "speaker": "Oswald", "text": "What kind of stunt was that, traversing the Marsh? Have to be smarter if you're to survive. As Quartermaster, I'll do my best to keep you alive. I can buy what equipment you find, or sell you what others have unearthed before we ship it back to Kingsmarch. If you disappear in the jungle, I'll also be the one to note your death in our logs. You're welcome." }
+        ]
+      },
+      "evidence": "Panel: Oswald_G3_Town_Introduction. Oswald's introduction, said once. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "ziggurat-hooded-one",
       "kind": "objective",
       "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_town",
+        "lines": [
+          { "id": "HoodedOneA3TownIntro", "speaker": "The Hooded One", "text": "Somewhere in this region, there were sophisticated canals and waterways. We might be able to use them to drain this lake. We must hope that the mechanisms are still functioning, despite their age. It is the only way to reverse the drowning of this once thriving city... the first step in our search for the secret knowledge of the Vaal." }
+        ]
+      },
+      "evidence": "Panel: HoodedOneA3TownIntro. The Hooded One's town introduction (needs both introductions above). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "enter-jungle-ruins",
@@ -37,8 +59,15 @@
       "id": "orok-poison-servi",
       "kind": "objective",
       "parts": [{ "text": "Orok Poison to " }, { "text": "Servi", "style": "npc" }, { "text": "Permanent buff", "style": "reward" }],
-      "trigger": null,
-      "evidence": "After The Venom Crypts. The buff is a permanent choice. No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_town",
+        "lines": [
+          { "id": "Servi_G3_Snake_Pit_Venom_Vial_Town", "speaker": "Servi", "text": "Heh heh. Drink this. A foul brew, but you'll thank me... if you survive." }
+        ]
+      },
+      "evidence": "Panel: Servi_G3_Snake_Pit_Venom_Vial_Town. Servi's 'Poison Alchemy' hand-in in town (needs CrazySnakeLadyPotionAcquired). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "ziggurat-to-jungle-ruins",
@@ -51,15 +80,29 @@
       "id": "spear-to-servi",
       "kind": "objective",
       "parts": [{ "text": "Ignagduk's Spear to " }, { "text": "Servi", "style": "npc" }, { "text": "Charm", "style": "reward" }],
-      "trigger": null,
-      "evidence": "After The Azak Bog. No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_town",
+        "lines": [
+          { "id": "Servi_G3_Bog_Witch_Slain", "speaker": "Servi", "text": "You have slain the Bog Witch? Then you have healed a wound on the heart of my people. Today, these swamps be blessed by a touch of sunlight." }
+        ]
+      },
+      "evidence": "Panel: Servi_G3_Bog_Witch_Slain. Servi's 'The Bog Witch, Slain' hand-in (needs BogWitchBroomHeld, once); bound to the town, summoned Servi says it in the waterways too. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "ziggurat-alva-downstairs",
       "kind": "objective",
       "parts": [{ "text": "Downstairs: talk to " }, { "text": "Alva", "style": "npc" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_town",
+        "lines": [
+          { "id": "Alva_G3_Town_Bottom_Of_Stairs", "speaker": "Alva", "text": "Beyond this sealed door is the Temple of the Sun God, Kopec. I've seen writings by a fellow named Ketzuli that mention his research in this temple, but I can't quite make sense of what the device was or how it functioned. Unfortunately we can't use Kalguuran explosives without risking whatever's inside. However... there's a piece missing from the door. Knowing the Vaal, it'll be made of gold, of course! I recommend heading into the city to search for it. Try looking around the Aggorat area, as that was well known for its opulence and golden tributes, especially at the main temple's apex. Hurry back if you find it!" }
+        ]
+      },
+      "evidence": "Panel: Alva_G3_Town_Bottom_Of_Stairs. Alva's 'The Sealed Gate' at the bottom of the drained stairs (sets AlvaG3BarrierQuestSeen); her bark on the way down is left out, it comes before the talk. From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "enter-drowned-city",
@@ -72,8 +115,15 @@
       "id": "hammer-to-oswald",
       "kind": "objective",
       "parts": [{ "text": "Hammer to " }, { "text": "Oswald", "style": "npc" }, { "text": "Reforging Bench", "style": "reward" }],
-      "trigger": null,
-      "evidence": "After The Molten Vault: the Hammer of Kamasa (first character). No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_town",
+        "lines": [
+          { "id": "Oswald_G3_TreasureVault_Return_With_Hammer", "speaker": "Oswald", "text": "Came back alive, did you? I'll organise the men. We'll start carting the gold out of there. No sign of ol' Kamasa, eh? Then he won't miss it. Keep anything you were able to lift out of there yourself. Let's call it a finder's fee. I'm feeling generous today, considering we actually found treasure, and all came out alive." }
+        ]
+      },
+      "evidence": "Panel: Oswald_G3_TreasureVault_Return_With_Hammer. Oswald's 'The Hammer' / 'Forgemaster' hand-in (needs the hammer or Mektul dead). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "ziggurat-to-apex",
@@ -86,8 +136,15 @@
       "id": "ziggurat-alva-idol",
       "kind": "objective",
       "parts": [{ "text": "Downstairs: talk to " }, { "text": "Alva", "style": "npc" }],
-      "trigger": null,
-      "evidence": "After Apex of Filth. No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_town",
+        "lines": [
+          { "id": "Alva_G3_Key_to_Ziggurat_Exclamation", "speaker": "Alva", "text": "You found it! Try placing the idol in the door... Maybe we'll get lucky!" }
+        ]
+      },
+      "evidence": "Panel: Alva_G3_Key_to_Ziggurat_Exclamation. Alva's 'Temple of Kopec' (needs ZigguratDoorKeyHeld: the idol). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "enter-temple-of-kopec",
@@ -114,8 +171,15 @@
       "id": "ziggurat-doryani",
       "kind": "objective",
       "parts": [{ "text": "Talk to " }, { "text": "Doryani", "style": "npc" }],
-      "trigger": null,
-      "evidence": "After The Black Chambers. No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_town",
+        "lines": [
+          { "id": "DoryaniPresentUtzaalReaction", "speaker": "Doryani", "text": "Utzaal... my people... they're all long dead. It is one thing to hear it, but... another to see it. This city is nothing but a grave. I can't change their fate, but the Vaal are not entirely gone. Alva—and her Vaal ancestry—is proof of that. I will do what I must to protect what remains, and perhaps one day we can rebuild. For that to happen, we need the Weapon. We must travel to the archipelago the Karui call Ngamakanui. If the pieces still exist, that is where they will be found." }
+        ]
+      },
+      "evidence": "Panel: DoryaniPresentUtzaalReaction. Doryani's 'The Ruins of Utzaal' (sets DoryaniPresentRuinedUtzaalSeen). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "ziggurat-doryani-again",
@@ -128,8 +192,15 @@
       "id": "ziggurat-end-talks",
       "kind": "objective",
       "parts": [{ "text": "Then " }, { "text": "Alva", "style": "npc" }, { "text": ", Hooded One, Alva" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G3_town",
+        "lines": [
+          { "id": "AlvaA3_TravelToKingsmarch", "speaker": "Alva", "text": "It's a long journey... but relatively safe once we're clear of the jungle. The Kalguurans keep the road pretty secure. Shall we?" }
+        ]
+      },
+      "evidence": "Panel: AlvaA3_TravelToKingsmarch. Alva's 'Travel to Kingsmarch', the last of the three talks (hidden once Kingsmarch was visited). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     }
   ]
 }

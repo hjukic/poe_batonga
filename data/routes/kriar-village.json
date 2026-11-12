@@ -13,8 +13,16 @@
       "id": "kill-lythara",
       "kind": "objective",
       "parts": [{ "text": "Kill " }, { "text": "Lythara", "style": "boss" }, { "text": "+40 Spirit", "style": "reward" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "P3_2",
+        "lines": [
+          { "id": "Lythara_Death_SpiritForgiveMe_Random", "speaker": "Lythara, The Wayward Spear", "text": "Argh... forgive me..." },
+          { "id": "Lythara_Death_SpiritForgiveMe_2", "speaker": "Lythara, The Wayward Spear", "text": "Argh... was I...?" }
+        ]
+      },
+      "evidence": "Bark: Lythara_Death_SpiritForgiveMe_Random, Lythara_Death_SpiritForgiveMe_2. Lythara's death lines. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log.",
+      "evidenceKind": "bark"
     },
     {
       "id": "enter-glacial-tarn",

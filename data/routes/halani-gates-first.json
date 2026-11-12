@@ -8,8 +8,15 @@
       "id": "halani-first-asala",
       "kind": "objective",
       "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G2_3a",
+        "lines": [
+          { "id": "MatriarchGatesVisitMeLater", "speaker": "Sekhema Asala", "text": "Save the formalities. We must question this Defector. Meet me in the council den in the lead cart of my caravan." }
+        ]
+      },
+      "evidence": "Panel: MatriarchGatesVisitMeLater. Asala's 'Return to the Caravan' at the closed gates (needs DefectorTalkedToAtGates). From the game's dialogue tables (2026-11-12). Dialogue-panel text: not known to be logged.",
+      "evidenceKind": "panel"
     },
     {
       "id": "halani-first-back",
