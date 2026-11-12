@@ -720,7 +720,9 @@ truth.
 
 ### The way through the recorded map (2026-11-12, day build)
 
-`src-tauri/src/layout/route.rs`.
+`src-tauri/src/layout/route.rs`; used by `Navigator::guide_on`. The recorder lends the
+navigator the live part's walls and trail and the player's cell at each needle
+(`nav::Place`, borrowed, about once a second); nothing is copied per frame.
 
 **The search.** From the player's cell to the target's, the shortest way that crosses
 no recorded wall, on a grid of 3x3 minimap cells:
@@ -768,6 +770,29 @@ no recorded wall, on a grid of 3x3 minimap cells:
 (room outlines over 1,600x1,600 cells): a target 330 cells off 0.4 ms (815 search cells),
 2,150 cells across 3.9 ms (41,000), a walled-in target 5.5 ms (gives up). It runs on the recorder's
 lock about once a second.
+
+**The needle** (`guide_on`). The target's place in the part's coordinates is known
+when (in this order):
+
+1. its exit icon is in view and the label (or 95% of the belief) says it is the
+   target's, as for the needle at the icon;
+2. it was seen earlier in this part: a sighting's place on the dead-reckoned track is
+   turned back into cells from the player (sightings end at every loss, and a new part
+   starts with one).
+
+Then the way there. If one is found and is at most 4 times the straight line (or 150
+cells more), the needle looks 40 cells along it and the distance shown is its length.
+Gold keeps the icon's conditions (named and read the same twice, not against a sure
+belief, within 200 cells; or unlabelled with one layout at 90%, measured areas only)
+but no longer needs the graph route to be about straight: the way is the route.
+Otherwise the needle is as before.
+
+Before and after, the wall-between case (`a_named_icon_behind_a_wall_is_reached_through_the_doorway`):
+The Grelwood's icon 80 cells up, read twice, a wall across halfway with a 20-cell
+doorway 70 cells to the right. Before: −87° (the layout's corridors from where the icon
+puts the player: through the wall), rough, 80 cells. After: −28°, at the doorway (−30°),
+gold, 157 cells. Walked 30 cells right with the icon out of view: −45° to the doorway,
+gold, from the sighting.
 
 ## Flight recorder (2026-11-12, day build)
 

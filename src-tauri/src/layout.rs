@@ -18,7 +18,6 @@ mod nav;
 #[cfg(test)]
 mod nav_sim;
 mod obs;
-#[cfg(test)]
 mod route;
 
 use crate::minimap::MinimapView;
@@ -967,8 +966,10 @@ impl State {
             if let Some(graph) = self.catalog.graph(area) {
                 targets.extend(graph::target(&graph, &session.came_from, completed));
             }
+            // The part's recorded map, lent: the way to a target whose place on it is known.
+            let place = nav::Place { map: route::Map { walls: &live.walls, trail: &live.part.trail }, player: live.pos };
             return nav
-                .guide(&targets)
+                .guide_on(&targets, Some(&place))
                 .map(|view| not_stale(guide::GuideView { measured: scale.is_some(), ..view }, session.fed_at));
         }
         // Everything relative to the (first) arrival point, where the terrain match starts;
