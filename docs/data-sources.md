@@ -123,7 +123,7 @@ with at least one topology; not `…_WorldMap`, map areas, hideouts, or areas na
 | **All** | **101** | **584** | **69** | **515** | **97** | **1.8 MiB** | |
 
 The app bundles every file (`build.rs`) but so far only uses `G1_1` and `G1_2`
-(`AREAS` in `src-tauri/src/layout/graph.rs`).
+.
 
 ### The JSON
 
