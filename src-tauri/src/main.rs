@@ -390,6 +390,7 @@ fn watch_game(app: AppHandle) {
     use std::sync::atomic::Ordering;
     std::thread::spawn(move || {
         let mut last: Option<bool> = None;
+        let mut last_monitor: Option<i64> = None;
         loop {
             std::thread::sleep(std::time::Duration::from_secs(2));
             let presence = app.state::<Presence>();
@@ -397,6 +398,18 @@ fn watch_game(app: AppHandle) {
                 continue;
             }
             let Some(on) = game_on_screen() else { continue };
+            // The game opened on, or moved to, another monitor: the overlay goes with it
+            // (it was left on another monitor once when the game started, 2026-11-12).
+            #[cfg(target_os = "linux")]
+            {
+                let monitor = layer_shell::game_monitor();
+                if on && monitor.is_some() && monitor != last_monitor && snapshot(&app).is_ok_and(|status| status.visible) {
+                    let _ = report(&app, apply_visibility(&app, true));
+                }
+                if on {
+                    last_monitor = monitor;
+                }
+            }
             if last == Some(on) {
                 continue;
             }

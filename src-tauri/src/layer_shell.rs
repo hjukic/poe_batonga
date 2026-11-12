@@ -112,6 +112,12 @@ pub fn game_on_screen() -> Option<bool> {
     }))
 }
 
+/// Hyprland: the monitor the game's window is on (Hyprland's id).
+pub fn game_monitor() -> Option<i64> {
+    let clients: serde_json::Value = serde_json::from_str(&hyprland_request("j/clients")?).ok()?;
+    clients.as_array()?.iter().find(|client| is_game(client))?["monitor"].as_i64()
+}
+
 /// Hyprland: the centre of the Path of Exile 2 window, in global logical pixels.
 pub fn game_center() -> Option<(i32, i32)> {
     let clients: serde_json::Value = serde_json::from_str(&hyprland_request("j/clients")?).ok()?;
