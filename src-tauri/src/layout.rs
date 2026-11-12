@@ -38,9 +38,10 @@ const LOST_LIMIT: u32 = 9;
 const SAVE_EVERY: Duration = Duration::from_secs(15);
 /// A gap in placed frames longer than this (seconds) is a tracking loss for the navigator.
 const NAV_GAP: f64 = 2.0;
-/// A checklist step the log completes within this many seconds of a live NPC
-/// line puts the player at the step's target.
-const LOG_ANCHOR: Duration = Duration::from_secs(5);
+/// A checklist step completed this soon after a live NPC line was completed by
+/// the log (the tracker hands both over in the same batch; a hand tick comes
+/// later) and puts the player at the step's target.
+const LOG_ANCHOR: Duration = Duration::from_secs(1);
 /// Minimap cells per game unit measured per area (poe2way terrain; the older
 /// `scales.json` held Qutm diagram scales and is no longer read).
 const SCALES_FILE: &str = "terrain-scales.json";

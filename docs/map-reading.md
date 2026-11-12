@@ -474,7 +474,7 @@ in every area that has graphs or terrain.
   there (10% stay). A layout without such a node loses 7 nats. An anchor no layout
   knows changes nothing. Fed by the recorder: leaving through an exit (the log's
   zone change, not a re-entry of the same zone), and a checklist step with a target
-  completed by the log within 5 s of a live NPC line.
+  completed by the log (within 1 s of a live NPC line; a hand tick comes later).
 - **Needle:** the target is the first open checklist target some layout has (exit
   nodes, or nodes whose tag or keys match), then the onward exit by area order
   (zones without a checklist). For every layout and particle: the route along the
