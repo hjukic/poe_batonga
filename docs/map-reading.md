@@ -570,8 +570,10 @@ in every area that has graphs or terrain.
   it), its screen bearing as a unit vector. The needle points where most of the
   belief points (the densest 90° sector of the weighted directions: with layouts
   pointing different ways the mean of all falls between them); `confidence = |V|`,
-  `V = Σ p_k Σ w_i u_i`. "estimated" (gold) at `|V| ≥ 0.8` with 100 units walked
-  this visit or an anchor seen, "rough" at 0.5, else "unconfirmed" (gray); gold only
+  `V = Σ p_k Σ w_i u_i`. "estimated" (gold) needs absolute evidence this visit (a
+  log anchor or an exit icon the belief predicted), one layout at 90% and `|V| ≥
+  0.9`: the walked line alone is never gold. "rough" at 0.5, else "unconfirmed"
+  (gray); gold only
   in areas replayed against a known truth (The Riverbank, Clearfell), elsewhere at
   most rough, and unconfirmed wherever a dungeon layout carries belief; gray again
   after 2 s without a placed frame. `variant` names the top layout once its
@@ -633,6 +635,70 @@ icon): see the exit icons below.
   their gold needles wrong); `FLAT` 120 fails the coverage pin (18%); `GOLD_WALK` 0
   and `MISSING` 0 change nothing in the simulation (the path alone gives no gold, the
   walker sees no anchors).
+
+### Exit icons (N6)
+
+The map reader finds the exit icons in every frame (orange, in minimap cells from
+the player; every third big-map frame scans the whole window, and the exits there
+may carry their label, the zone they lead to). `Recorder::on_icons` hands them over
+before `on_frame`; exits outside the wall frame from the last whole scan are kept in
+the part's coordinates for the 3 frames between scans.
+
+- **Evidence:** an icon at offset `d` says the player stands at (an exit) − `d`. Per
+  layout, each particle is weighed by how well every icon lands on an exit node
+  (Gaussian of 100 world units over a floor of 0.05: Clearfell's two exits sit 130
+  units off the graph's vector). A labelled icon can only be the exit to that area
+  (matched through the area's names); an unlabelled one is any exit. Two icons
+  also test the vector between two exits, with no position belief needed. The
+  layout's evidence adds the log of the better of the two (at least 0.005, the same
+  for all), in full for a new set of icons, at half weight for the same set again
+  after 60 units walked (frames three a second are one sighting). When the belief
+  does not explain the icons, 30% of the particles are redrawn where they put the
+  player. An icon update counts as absolute evidence only when the belief predicted
+  it (50%). Exits seen are remembered per layout in the memory.
+- **Needle:** when 90% of the belief (or the label) says an icon is the target's exit
+  and the route there is at most 1.3 times the straight line, the needle points at
+  the icon, gold within 200 cells if the label says so or one layout carries 90%. A
+  labelled icon of the target is direct evidence: gold in every area, also where
+  the belief is capped (unmeasured areas, dungeons); the needle at an unlabelled
+  icon keeps the cap.
+  Across a river or a wall the route bends: pointing straight at the icon was wrong
+  in the simulation (8.6% of such gold needles over 60° off), so the route's needle
+  stays, from the position the icon pinned.
+- **One unlabelled icon is not enough:** it can be any exit of any layout. Two
+  unlabelled icons are not enough either in Clearfell: with three exits a layout has
+  six pairings, and other layouts fit the owner's pair as well as the true one. A
+  label, a known arrival, or the walk decide it.
+
+**The live case (N7, test `the_live_clearfell_case`):** Clearfell 2693856399, app
+restarted (arrival unknown, no memory), big map open, the Grelwood exit at
+(−136, 83) cells (bearing 149°). One unlabelled icon: gray needle at 144°. With
+Mud Burrow's icon too (823, 110), unlabelled: still gray, `W_E_N` 4th (0.08).
+Both labelled: `W_E_N` 0.80, the needle along the route at 156° (7° from the icon),
+rough, 224 cells. One labelled icon: rough at 148°.
+
+Simulation with icons (the walker sees exits displaced up to 100 units from their
+nodes, 20% missed, 2-cell noise, a false icon in 1% of frames; 3 seeds, 30% of the
+runs told a wrong arrival):
+
+| Case | Gold steps | Gold > 60° off | Worst layout | Within 45° at 60% | Top true for good |
+| --- | ---: | ---: | --- | ---: | ---: |
+| No icons | 0 of 57,321 | — | — | 30% | 22% |
+| Unlabelled, minimap view | 4 | 0 | — | 34% | 32% |
+| Unlabelled, wide view | 375 (0.7%) | 6.1% | Riverbed_6 50% of 16 | 48% | 44% |
+| Labelled, minimap view | 1,119 (1.9%) | 4.2% | W_N_S 41% of 42 | 38% | 39% |
+| Unlabelled, arrival unknown | 0 | — | — | 25% | 28% |
+| Unlabelled, 30 s loss at 40% | 0 | — | — | 46% | 19% |
+
+At one seed, labelled icons in the wide view: gold on 5.0% of the steps, 2.5% of
+them wrong, 57% within 45° at 60%. **Gate A does not hold with icons at three
+seeds** (4-6% of gold wrong, and single layouts far over 10%): the exits sit up to
+100 units from their nodes, so a position pinned by an icon is that far off, and
+near junctions or a wall the route from it (and the straight line to the icon)
+differs from the walker's. What would help: remember each exit where its icon put
+it (kept already, not yet used in the route), so the second sighting of an exit
+pins the position to the real exit, not to its node; a tighter gold rule near
+junctions.
 
 ### Real recordings
 
