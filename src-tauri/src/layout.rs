@@ -1053,3 +1053,105 @@ fn join_real_recording() {
         session.live.part.pois.iter().map(|p| (&p.kind, &p.label, p.x, p.y)).collect::<Vec<_>>()
     );
 }
+
+/// The navigator on real recordings, parts in order (a new part is a loss of
+/// unknown length; "arrived" and "left" points are exit anchors):
+/// `RECORDINGS=<dir> cargo test --release navigator_on_recordings -- --ignored --nocapture`.
+#[cfg(test)]
+#[test]
+#[ignore]
+fn navigator_on_recordings() {
+    let dir = PathBuf::from(std::env::var("RECORDINGS").expect("set RECORDINGS"));
+    let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .flat_map(|area| std::fs::read_dir(area.path()).into_iter().flatten().flatten())
+        .map(|f| f.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "json") && !p.to_string_lossy().ends_with(".nav.json"))
+        .collect();
+    files.sort();
+    let graphs = graph::Graphs::default();
+    for path in files {
+        let recording: Recording = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        let own = recording.area.as_str();
+        println!("\n== {} seed {:?}: {} parts", own, recording.seed, recording.parts.len());
+        let Some(area) = graphs.get(own) else {
+            println!("   no layout graphs (terrain arrow)");
+            continue;
+        };
+        let mut nav = nav::Navigator::new(&area, nav::Arrival::Unknown, None, graph::SCALE, recording.seed.unwrap_or(0));
+        let top = |nav: &nav::Navigator| {
+            nav.ranking().iter().take(3).map(|(id, p)| format!("{id} {:.2}", p)).collect::<Vec<_>>().join(", ")
+        };
+        for (i, part) in recording.parts.iter().enumerate() {
+            if i > 0 {
+                nav.lost(f64::INFINITY);
+            }
+            // Each point of interest at the trail point nearest to it, in time order.
+            let mut pois: Vec<&Poi> = part.pois.iter().collect();
+            pois.sort_by_key(|p| p.at);
+            let mut at: Vec<(usize, &Poi)> = Vec::new();
+            let mut from = 0;
+            for poi in pois {
+                let d = |t: &[i32; 2]| (t[0] - poi.x).abs() + (t[1] - poi.y).abs();
+                let index = (from..part.trail.len())
+                    .find(|&j| d(&part.trail[j]) <= 3)
+                    .or_else(|| (from..part.trail.len()).min_by_key(|&j| d(&part.trail[j])))
+                    .unwrap_or(from);
+                at.push((index, poi));
+                from = index;
+            }
+            let mut anchors = String::new();
+            for j in 0..part.trail.len() {
+                if j > 0 {
+                    let (dx, dy) = (part.trail[j][0] - part.trail[j - 1][0], part.trail[j][1] - part.trail[j - 1][1]);
+                    // Joined pieces share coordinates: a jump between them is a move
+                    // whose way is unknown.
+                    if dx.abs().max(dy.abs()) > WIDE {
+                        nav.lost(30.0);
+                    }
+                    nav.moved(dx as f64, dy as f64);
+                }
+                for (_, poi) in at.iter().filter(|(index, _)| *index == j) {
+                    match poi.kind.as_str() {
+                        "arrived" | "left" if poi.label != own && !poi.label.is_empty() => {
+                            nav.seen(nav::Seen::Exit(&poi.label));
+                            anchors += &format!(" {} {}", poi.kind, poi.label);
+                        }
+                        // Into the same zone again (a checkpoint after dying, a new instance): somewhere else.
+                        "arrived" | "left" => nav.lost(f64::INFINITY),
+                        _ => {}
+                    }
+                }
+            }
+            let (walked, _) = nav.progress();
+            println!("   part {i:2}: {:4} trail points, walked {:5.0} |{anchors} | {}", part.trail.len(), walked, top(&nav));
+        }
+        let mut exits: Vec<(&String, &String)> = area.names.iter().collect();
+        exits.sort();
+        for (id, name) in exits {
+            let target = guide::NavTarget { label: name.clone(), exit: Some(id.clone()), ..Default::default() };
+            match nav.guide(&[target]) {
+                Some(v) => println!(
+                    "   needle to {name}: {:?}° {} confidence {:.2} distance {:.0} cells, variant {:?}",
+                    v.degrees.map(|d| d.round()), v.source, v.confidence, v.distance, v.variant
+                ),
+                None => println!("   needle to {name}: none"),
+            }
+        }
+        // Which layouts put The Grelwood to the left of Mud Burrow on screen (the big map shows it so).
+        if own == "G1_2" {
+            let mut fits = Vec::new();
+            for layout in &area.layouts {
+                let node = |exit: &str| layout.nodes.iter().find(|n| n.exit.as_deref() == Some(exit)).map(|n| (n.x, n.y));
+                let (Some(mud), Some(wood)) = (node("G1_3"), node("G1_4")) else { continue };
+                let (sx, sy) = guide::to_screen((wood.0 - mud.0, wood.1 - mud.1));
+                let bearing = guide::screen_bearing(sx, sy).unwrap_or(0.0);
+                if guide::angle_between(bearing, 180.0) <= 25.0 {
+                    fits.push(format!("{} ({:.0}°, {:.0} units)", layout.id, bearing, sx.hypot(sy)));
+                }
+            }
+            println!("   layouts with The Grelwood left of Mud Burrow (±25°): {}", fits.join(", "));
+        }
+    }
+}

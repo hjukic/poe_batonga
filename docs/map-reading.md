@@ -504,23 +504,47 @@ every layout of G1_1 and G1_2, from each exit to each other exit (Riverbank: sta
 Miller exit), walks that the graph connects. `cargo test` runs one seed (196 runs);
 `cargo test --release nav_sim::tests::report -- --ignored --nocapture` three.
 
-| Case (1 seed, 196 runs) | Gold steps | Gold > 60° off | Worst layout | Within 45° at 60% | Top layout true for good |
+| Case (3 seeds, 588 runs) | Gold steps | Gold > 60° off | Worst layout | Within 45° at 60% | Top layout true for good |
 | --- | ---: | ---: | --- | ---: | --- |
-| Arrival known | 5.0% | 0.25% | 4.9% | 58% | 66% of runs, median 1,420 units |
-| No tracking losses | 9.2% | 0% | 0% | 72% | 77%, median 1,060 |
-| Arrival unknown | 0.3% | 0% | — | 13% | 31% |
-| 30 s loss from 40% | 0.2% | 0% | — | 3% | 34% |
-| Movement turned 90° (planted) | 4.0% | **64%** | 98% | 20% | 2% |
+| Arrival known | 5.5% | 0.16% (4 of 2,578) | 3.3% | 55% | 63% of runs, median after 1,480 units |
+| No tracking losses | 10.0% | 0.09% | 2.2% | 68% | 76%, median 1,080 |
+| Arrival unknown | 0.4% | 0% | — | 12% | 31% |
+| 30 s loss from 40% of the walk | 0.3% | 0% | — | 2% | 30% |
+| Movement turned 90° (planted) | 4.2% | **58%** | 97% | 22% | 2% |
+
+The 30 s loss covers most of a walk (1,800 units at 60 u/s); the step at 60% is
+right after it, with the position unknown.
 
 - **Gate A (class check)** holds: at most 3% of gold needles more than 60° off and no
   layout over 10%; the planted 90° turn fails it (`the_class_check_bites_on_turned_movement`).
 - **Gate B (85% within 45° at 60%) is not reachable on these graphs:** with the
   arrival known, another layout still has corridors under the walk (entered at its
   own exit of the same name, 80 units) until a median 59% of the walk (75th
-  percentile 75%, 90th 89%), and in 186 walks 109 rival layouts fit the whole walk
-  (league variants of the same layout, mostly). The test pins 50%.
+  percentile 75%, 90th 89%), and in 186 walks 112 rival layouts fit the whole walk
+  (league variants of the same layout, mostly). The test pins 50% (one seed: 58%).
 - A narrower likelihood (flat 40, Gaussian 30, floor 0.05) does better in the
-  simulation (67% / 83%) but picks a wrong Clearfell layout on the real recording:
+  simulation (67% / 83% at one seed) but picks a wrong Clearfell layout on the real recording:
   real walks stray much further from the corridor lines than the simulated walker
   (best layout, distance percentiles 25/50/75/90/95: Clearfell 14/38/63/91/115
   units, Riverbank 9/26/67/120/150). The wide one follows the real data.
+
+### Real recordings
+
+`RECORDINGS=<dir> cargo test --release navigator_on_recordings -- --ignored
+--nocapture` feeds every part's trail (parts in order; a new part is a loss of
+unknown length, a jump inside a joined part a 30 s loss) with "arrived"/"left"
+points as exit anchors, and prints the posterior after each part and the final
+needles.
+
+- **Clearfell** seed 2693856399 (17 parts): `ClearFell_W_S_N` at 1.00 from the first
+  part on (the old batch fit's choice too). The big-map screenshot puts The Grelwood
+  exit left of Mud Burrow at the same height; the layouts with that (±25°) are
+  `W_E_N`, `W_S_N`, `S_E_N` and `S_E_N_League`, so the answer fits. The final needles
+  are gray or rough and ~1,000 cells long: the walk Mud Burrow → The Grelwood was not
+  tracked, so where the player stands at the end is unknown.
+- **The Riverbank** 1580033459: undecided (`Riverbed_1` 0.49, `Riverbed_3` 0.40).
+  2090944099: `Riverbed_4` 0.93, but a batch fit of its long part prefers
+  `Riverbed_6` (mean 42 vs 76 units, anchored at the Miller exit). Its "arrived"
+  points are labelled `G1_1` (re-entries of the same zone), so neither has a known
+  arrival point; neither answer is confirmed.
+
