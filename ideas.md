@@ -2,6 +2,10 @@
 
 ## Datamine zone layouts from the game files
 
+**Done for the first three zones (2026-11-12):** see
+[data sources](docs/data-sources.md#game-layout-graphs-datamined). Notes below are the
+original plan.
+
 Campaign zones are not stored as finished maps: the game builds each instance
 from parts, picked with a random seed. The parts are in the game's bundles
 (local install: `~/.local/share/Steam/steamapps/common/Path of Exile 2`):

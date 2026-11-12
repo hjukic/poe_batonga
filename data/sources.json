@@ -73,6 +73,21 @@
         "One collected instance per area; campaign zones are generated per instance, so walls are an example, not the played instance",
         "Outline and objects share game-space coordinates; the in-game map shows them turned 45 degrees"
       ]
+    },
+    {
+      "id": "ggg-topologies",
+      "kind": "zone-layout-graphs",
+      "selection": "selected",
+      "method": "Datamined from the local PoE 2 install with poe_data_tools (WorldAreas, Topologies, .tgr graphs)",
+      "artifact": "data/layouts/ggg/",
+      "script": "scripts/import-topologies.mjs",
+      "contentImported": true,
+      "importedOn": "2026-11-12",
+      "constraints": [
+        "Graphs give fixed points and corridors, not walls; walls are generated per instance",
+        "Which layout is being played must be recognised from the recorded path",
+        "Re-extract after each patch"
+      ]
     }
   ]
 }

@@ -84,6 +84,34 @@ order of exits/POIs are likely to be similar, but the exact walls are not; live
 pathing needs the player's explored minimap or our recordings to confirm which
 parts match. Towns are fixed and should match exactly.
 
+## Game layout graphs (datamined)
+
+`data/layouts/ggg/<areaId>.json` comes from the game files (2026-11-12, local Steam
+install, read-only) via [poe_data_tools](https://github.com/adamthedash/poe_data_tools)
+and [`scripts/import-topologies.mjs`](../scripts/import-topologies.mjs) (commands in
+the script). `WorldAreas.Topologies` lists each zone's possible layouts; each is a
+`.tgr` graph:
+
+- `size`: the layout in tiles (23 world units each), e.g. 60 x 66.
+- `nodes`: fixed points in world units (x east, y north) with a `tag`
+  (`town_E`, `mud_entrance`, `exit_woods`, `boss`, `campsite`, `arena_*`, …).
+  `exit` is the area an `entranceN` node leads to (the N-th of
+  `WorldAreas.Connections`); `start` marks where the zone begins.
+- `edges`: corridors between nodes (optional bends in `via`), with their terrain
+  kind (`slash`, `woods`, `wideriver_slashriver_virtual`, …).
+
+Walls are generated around the corridors for each instance, but exits, arenas and
+the campsite sit where the graph puts them. Coverage: The Riverbank 5 layouts,
+Clearfell 33 (18 named after the sides of the encampment, Mud Burrow and Grelwood
+exits, e.g. `ClearFell_W_S_N`, plus league versions), Clearfell Encampment 1 (a
+single node: its exits are inside one fixed room, so poe2way's town map is used).
+
+First check: the recorded Clearfell visit (seed 2693856399) fits `ClearFell_W_S_N`
+best with no extra turn at 0.78 minimap cells per unit, the scale measured on the
+encampment: its walked path lies on average 44 units from that graph's corridors,
+57 for the runner-up `W_N_E`, 75+ for the rest. The screen-to-world turn is the
+one fitted on the encampment (`to_screen` in `guide.rs`).
+
 ## Other candidates
 
 - [Exile-UI](https://github.com/Lailloken/Exile-UI) Act-Decoder layouts: its
