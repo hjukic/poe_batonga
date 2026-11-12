@@ -811,6 +811,20 @@ trail, 52 KB). 44 pairs of trail points 40 points apart along stretches without 
 - Going back (the trail recorded): a way for 43 of 44, 86% of it within 20 cells of the
   trail (median), half the walked length (the walk wanders; the way cuts across open
   ground); 20 of the 43 go through a line the walk crossed.
+- **Where the player went** (fix pass 1, review B-8;
+  `on_real_walls_the_needle_points_where_the_player_went`): the same pairs with the map
+  cut to what the recorder had then (the walls within the minimap's view of the walk so
+  far, the walk so far), the needle's bearing against the walk's next 5 trail points
+  (40-60 cells). A way for 37 of 44; 2 are about straight across fog (no map needle); of
+  the 35 map needles 16 are within 45° of where the player went, against 21 for the
+  straight line to the target on the same pairs. Gold-eligible ones (half by recorded
+  ground, at most 1.5 times the straight line): 14 of 29, straight 18. Where the walk's
+  next stretch crosses a recorded line (drift; 15 pairs) 5 against 8, elsewhere 11 of 20
+  against 13. So on this recording the map does not beat the straight line: the drift
+  puts lines where the player walked, and the way goes round them. The test pins 40%
+  for both. The proxy is rough (the walk wanders: the straight line itself agrees only
+  60%); a recording made after the cross fix (Clearfell parts 12 and 16 have no walk on
+  a line) or the owner's play should decide whether the map's gold stays.
 - Gaps: of 30 lines (groups of 20 or more cells seen twice), 8 have a gap of 1-8 cells
   to another line (widths 1, 1, 1, 3, 3, 5, 5, 6), which the raw grid would leak
   through; all 8 are closed. Two more have a narrowest gap of 9-11 cells, left open.

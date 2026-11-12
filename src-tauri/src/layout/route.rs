@@ -1016,6 +1016,92 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn on_real_walls_the_needle_points_where_the_player_went() {
+        // For trail points 40 apart along stretches without a jump: the needle's
+        // bearing from the first (to the way's look-ahead) against where the walk went
+        // next (5 trail points on, 40-60 cells), with the map cut to what the recorder
+        // had then: the walls within the minimap's view (±150 x ±130 cells) of the
+        // walk so far, and the walk so far. The straight line to the target, on the
+        // same pairs, is the yardstick.
+        let (map, trail) = clearfell();
+        let pt = |k: usize| (trail[k][0] as f64, trail[k][1] as f64);
+        let step = |a: [i32; 2], b: [i32; 2]| (b[0] - a[0]).abs().max((b[1] - a[1]).abs());
+        let mut pairs = Vec::new();
+        let mut start = 0;
+        for k in 1..=trail.len() {
+            if k == trail.len() || step(trail[k - 1], trail[k]) > JUMP {
+                pairs.extend((start..k).step_by(10).filter(|&i| i + 40 < k).map(|i| (i, i + 40)));
+                start = k;
+            }
+        }
+        // What was seen, in blocks of 10 cells, grown along the walk.
+        const BLOCK: i32 = 10;
+        let block = |x: i32, y: i32| (x.div_euclid(BLOCK), y.div_euclid(BLOCK));
+        let mut seen = std::collections::HashSet::new();
+        let mut marked = 0;
+        let (mut found, mut deferred) = (0, 0);
+        // Per used pair: (map needle right, straight right, gold-eligible, the walk's next
+        // stretch crosses a recorded line).
+        let mut used: Vec<(bool, bool, bool, bool)> = Vec::new();
+        for &(i, j) in &pairs {
+            while marked <= i {
+                let [x, y] = trail[marked];
+                let (b0, b1) = (block(x - 150, y - 130), block(x + 150, y + 130));
+                for bx in b0.0..=b1.0 {
+                    for by in b0.1..=b1.1 {
+                        seen.insert((bx, by));
+                    }
+                }
+                marked += 1;
+            }
+            let walls: HashMap<(i32, i32), u32> =
+                map.iter().filter(|(&(x, y), _)| seen.contains(&block(x, y))).map(|(&c, &n)| (c, n)).collect();
+            let towards = |p: (f64, f64)| screen_bearing(p.0 - pt(i).0, p.1 - pt(i).1);
+            // (A stretch where the player stood still says nothing.)
+            let Some(went) = towards(pt(i + 5)) else { continue };
+            let ok = |b: Option<f32>| b.is_some_and(|b| angle_between(b, went) <= 45.0);
+            let lent = Map { walls: &walls, trail: &trail[..=i] };
+            let Some(way) = way(&lent, pt(i), pt(j), &[]) else { continue };
+            found += 1;
+            // As the navigator takes it: about straight across fog is no map needle.
+            if way.straight() && way.recorded < 0.5 {
+                deferred += 1;
+                continue;
+            }
+            let straight = (pt(j).0 - pt(i).0).hypot(pt(j).1 - pt(i).1);
+            let gold = way.recorded >= 0.5 && way.length <= 1.5 * straight;
+            let grid = build(&lent, pt(i), pt(j), &[]).unwrap();
+            let drift = (i..i + 5).any(|k| {
+                let mut hit = false;
+                traverse(grid.at(pt(k)), grid.at(pt(k + 1)), |c| {
+                    hit |= grid.index(c).is_some_and(|q| grid.flags[q] & WALL != 0);
+                    true
+                });
+                hit
+            });
+            used.push((ok(towards(way.ahead)), ok(towards(pt(j))), gold, drift));
+        }
+        let count = |f: &dyn Fn(&(bool, bool, bool, bool)) -> bool| used.iter().filter(|u| f(u)).count();
+        let (n, map_ok, line_ok) = (used.len(), count(&|u| u.0), count(&|u| u.1));
+        let (gold, gold_ok, gold_line) = (count(&|u| u.2), count(&|u| u.2 && u.0), count(&|u| u.2 && u.1));
+        let (drift, drift_ok, drift_line) = (count(&|u| u.3), count(&|u| u.3 && u.0), count(&|u| u.3 && u.1));
+        println!(
+            "{} pairs, the map as recorded then: way found {found}, {deferred} straight across fog (no map needle), {n} map needles. \
+             Within 45° of where the player went: map needle {map_ok} of {n}, straight line {line_ok}; gold-eligible {gold_ok} of {gold} \
+             (straight {gold_line}); where the walk next crosses a recorded line (drift) {drift_ok} of {drift} (straight {drift_line}), \
+             elsewhere {} of {} (straight {})",
+            pairs.len(),
+            map_ok - drift_ok,
+            n - drift,
+            line_ok - drift_line,
+        );
+        // Floors at what this recording gives (see the docs: the straight line does better here).
+        assert!(n >= 30, "{n}");
+        assert!(map_ok * 100 >= n * 40, "{map_ok} of {n}");
+        assert!(gold_ok * 100 >= gold * 40, "{gold_ok} of {gold}");
+    }
+
+    #[test]
     fn on_real_walls_gaps_in_lines_are_closed() {
         let (map, _) = clearfell();
         let cells: Vec<(i32, i32)> = map.iter().filter(|(_, &n)| n >= TRUSTED).map(|(&c, _)| c).collect();
