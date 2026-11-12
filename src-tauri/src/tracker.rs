@@ -39,17 +39,94 @@ pub struct Part {
     pub style: Option<String>,
 }
 
+/// One NPC line a trigger waits for. `text` is kept in its shown form (`shown_text`).
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+pub struct NpcLine {
+    pub speaker: String,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(try_from = "RawTrigger")]
 pub enum Trigger {
-    NpcLine { area: String, speaker: String, text: String },
+    /// Any of `lines`, said while the player is in `area`. With `after`, the line
+    /// only counts once that step is done (before this line, not by it).
+    NpcLine { area: String, lines: Vec<NpcLine>, after: Option<String> },
     /// Entering `area`. With `after`, the entry only counts once that step is done
     /// (done before this entry, not by it): for moves back to a zone entered before.
+    ZoneEntered { area: String, after: Option<String> },
+}
+
+/// A trigger as written in `data/routes/`. An `npcLine` names its line either as
+/// `speaker` + `text` (one line) or as `lines` (several: random or class variants,
+/// several speakers), not both.
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
+enum RawTrigger {
+    NpcLine {
+        area: String,
+        #[serde(default)]
+        speaker: Option<String>,
+        #[serde(default)]
+        text: Option<String>,
+        #[serde(default)]
+        lines: Vec<NpcLine>,
+        #[serde(default)]
+        after: Option<String>,
+    },
     ZoneEntered {
         area: String,
         #[serde(default)]
         after: Option<String>,
     },
+}
+
+impl TryFrom<RawTrigger> for Trigger {
+    type Error = String;
+
+    fn try_from(raw: RawTrigger) -> Result<Self, String> {
+        match raw {
+            RawTrigger::ZoneEntered { area, after } => Ok(Trigger::ZoneEntered { area, after }),
+            RawTrigger::NpcLine { area, speaker, text, lines, after } => {
+                let lines = match (speaker, text, lines.is_empty()) {
+                    (Some(speaker), Some(text), true) => vec![NpcLine { speaker, text }],
+                    (None, None, false) => lines,
+                    _ => return Err("npcLine needs either speaker and text, or lines".into()),
+                };
+                let lines = lines
+                    .into_iter()
+                    .map(|l| NpcLine { speaker: shown_text(&l.speaker), text: shown_text(&l.text) })
+                    .collect();
+                Ok(Trigger::NpcLine { area, lines, after })
+            }
+        }
+    }
+}
+
+/// A line's text as the log shows it, so table text and log text compare equal:
+/// `<i>{word}` (and `<b>`, `<italic>`) becomes `word`, other tags (`<continue>`,
+/// `<br/>`) and every run of whitespace (line breaks too) become one space.
+/// The table texts carry this markup; no `[Tag|shown]` links occur in them (game
+/// data, 2026-11-12). Whether the log keeps markup is not known: both sides are
+/// normalised, so it matches either way.
+pub fn shown_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(open) = rest.find('<') {
+        out.push_str(&rest[..open]);
+        rest = &rest[open..];
+        let Some(close) = rest.find('>') else { break };
+        rest = &rest[close + 1..];
+        match rest.strip_prefix('{').and_then(|r| r.split_once('}')) {
+            Some((inner, after)) => {
+                out.push_str(inner);
+                rest = after;
+            }
+            None => out.push(' '),
+        }
+    }
+    out.push_str(rest);
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -188,6 +265,11 @@ pub fn apply(routes: &[Route], progress: &mut Progress, timestamp: &str, event: 
     }
     // What was done before this event: an `after` step ticked by this very event doesn't count.
     let done_before: BTreeSet<String> = progress.completed.keys().cloned().collect();
+    // A line in the form the triggers keep (`shown_text`), worked out once per event.
+    let heard = match event {
+        LogEvent::Dialogue { speaker, text } => Some((shown_text(speaker), shown_text(text))),
+        LogEvent::ZoneEntered { .. } => None,
+    };
     for step in routes.iter().flat_map(|r| &r.steps) {
         let Some(trigger) = &step.trigger else { continue };
         if progress.completed.contains_key(&step.id) || progress.dismissed.contains(&step.id) {
@@ -199,10 +281,10 @@ pub fn apply(routes: &[Route], progress: &mut Progress, timestamp: &str, event: 
             {
                 format!("Entered {got} (level {level})")
             }
-            (Trigger::NpcLine { area, speaker, text }, LogEvent::Dialogue { speaker: who, text: said })
+            (Trigger::NpcLine { area, lines, after }, LogEvent::Dialogue { speaker: who, text: said })
                 if progress.current_area.as_deref() == Some(area.as_str())
-                    && speaker == who
-                    && text == said =>
+                    && after.as_ref().is_none_or(|step| done_before.contains(step))
+                    && heard.as_ref().is_some_and(|(s, t)| lines.iter().any(|l| &l.speaker == s && &l.text == t)) =>
             {
                 format!("{who}: {said}")
             }
@@ -805,6 +887,107 @@ mod tests {
         enter(&mut progress, "A");
         enter(&mut progress, "B");
         assert!(progress.completed.contains_key("move"));
+    }
+
+    fn one_route(steps: &str) -> [Route; 1] {
+        [serde_json::from_str(&format!(r#"{{"zone":{{"id":"A","name":"A","level":1}},"steps":[{steps}]}}"#)).unwrap()]
+    }
+
+    fn say(routes: &[Route], progress: &mut Progress, speaker: &str, text: &str) {
+        apply(routes, progress, "now", &LogEvent::Dialogue { speaker: speaker.into(), text: text.into() });
+    }
+
+    fn enter_zone(routes: &[Route], progress: &mut Progress, area: &str) {
+        apply(routes, progress, "now", &LogEvent::ZoneEntered { area: area.into(), level: 1, seed: None });
+    }
+
+    #[test]
+    fn an_npc_line_trigger_takes_any_of_several_lines() {
+        let routes = one_route(
+            r#"{"id":"kill","kind":"objective","parts":[],"trigger":{"type":"npcLine","area":"A","lines":[
+                {"speaker":"Boss","text":"I fall..."},
+                {"speaker":"Boss","text":"It ends..."},
+                {"speaker":"Guard","text":"The beast is dead!"}]}}"#,
+        );
+        for (speaker, text) in [("Boss", "It ends..."), ("Guard", "The beast is dead!")] {
+            let mut progress = Progress::default();
+            enter_zone(&routes, &mut progress, "A");
+            say(&routes, &mut progress, "Guard", "It ends...");
+            assert!(!progress.completed.contains_key("kill"), "the text of one line with the speaker of another");
+            say(&routes, &mut progress, speaker, text);
+            assert_eq!(progress.completed["kill"].evidence, format!("{speaker}: {text}"));
+        }
+        // Bound to its zone like the one-line form.
+        let mut progress = Progress::default();
+        enter_zone(&routes, &mut progress, "B");
+        say(&routes, &mut progress, "Boss", "It ends...");
+        assert!(!progress.completed.contains_key("kill"));
+    }
+
+    #[test]
+    fn an_npc_line_with_after_waits_for_that_step() {
+        let routes = one_route(
+            r#"{"id":"first","kind":"objective","parts":[],"trigger":{"type":"npcLine","area":"A","speaker":"Una","text":"Thank you."}},
+               {"id":"second","kind":"objective","parts":[],"trigger":{"type":"npcLine","area":"A","speaker":"Una","text":"Thank you.","after":"first"}}"#,
+        );
+        let mut progress = Progress::default();
+        enter_zone(&routes, &mut progress, "A");
+        // The line that ticks `first` doesn't also tick `second`.
+        say(&routes, &mut progress, "Una", "Thank you.");
+        assert!(progress.completed.contains_key("first"));
+        assert!(!progress.completed.contains_key("second"));
+        say(&routes, &mut progress, "Una", "Thank you.");
+        assert!(progress.completed.contains_key("second"));
+    }
+
+    #[test]
+    fn npc_lines_compare_in_their_shown_form() {
+        assert_eq!(shown_text("My home died with my <i>{akhara}. Already"), "My home died with my akhara. Already");
+        assert_eq!(shown_text("Something's wrong. <continue>Something's off.\r\n\r\nGo."), "Something's wrong. Something's off. Go.");
+        assert_eq!(shown_text("  All we wanted...\t"), "All we wanted...");
+        assert_eq!(shown_text("\u{a0}Yep.<br/>All good."), "Yep. All good.");
+        assert_eq!(shown_text("a < b"), "a < b");
+        let routes = one_route(
+            r#"{"id":"talk","kind":"objective","parts":[],"trigger":{"type":"npcLine","area":"A","speaker":"Jun","text":"My home died with my <i>{akhara}.\r\n<continue>Go."}}"#,
+        );
+        for logged in ["My home died with my akhara. Go.", "My home died with my <i>{akhara}.  Go."] {
+            let mut progress = Progress::default();
+            enter_zone(&routes, &mut progress, "A");
+            say(&routes, &mut progress, "Jun", logged);
+            assert!(progress.completed.contains_key("talk"), "{logged}");
+        }
+    }
+
+    #[test]
+    fn a_malformed_npc_line_trigger_does_not_load() {
+        let parse = |trigger: &str| serde_json::from_str::<Trigger>(trigger).map(|_| ());
+        assert!(parse(r#"{"type":"npcLine","area":"A","speaker":"S","text":"T"}"#).is_ok());
+        assert!(parse(r#"{"type":"npcLine","area":"A","lines":[{"speaker":"S","text":"T"}],"after":"x"}"#).is_ok());
+        assert!(parse(r#"{"type":"npcLine","area":"A"}"#).is_err(), "no line");
+        assert!(parse(r#"{"type":"npcLine","area":"A","speaker":"S"}"#).is_err(), "no text");
+        assert!(parse(r#"{"type":"npcLine","area":"A","lines":[]}"#).is_err(), "empty lines");
+        assert!(
+            parse(r#"{"type":"npcLine","area":"A","speaker":"S","text":"T","lines":[{"speaker":"S","text":"U"}]}"#).is_err(),
+            "both forms"
+        );
+        assert!(parse(r#"{"type":"npcLine","area":"A","speaker":"S","texts":["T"]}"#).is_err(), "unknown field");
+        assert!(parse(r#"{"type":"zoneEntered","area":"A","after":"x"}"#).is_ok());
+    }
+
+    #[test]
+    fn every_after_names_another_step() {
+        let routes = load_routes();
+        let ids: BTreeSet<&str> = routes.iter().flat_map(|r| &r.steps).map(|s| s.id.as_str()).collect();
+        for step in routes.iter().flat_map(|r| &r.steps) {
+            let after = match &step.trigger {
+                Some(Trigger::NpcLine { after, .. }) | Some(Trigger::ZoneEntered { after, .. }) => after,
+                None => continue,
+            };
+            if let Some(after) = after {
+                assert!(ids.contains(after.as_str()), "{}: after {after}", step.id);
+                assert_ne!(after, &step.id, "{}: after itself", step.id);
+            }
+        }
     }
 
     #[test]
