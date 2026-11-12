@@ -83,6 +83,12 @@ impl MinimapView {
     fn status(enabled: bool, message: &str) -> Self {
         MinimapView { enabled, visible: false, message: message.into(), cols: 0, rows: 0, walls: vec![], player: None }
     }
+
+    /// What the pages get is the same (`walls` is not sent): no news for them.
+    fn same_for_pages(&self, other: &MinimapView) -> bool {
+        let shown = |v: &MinimapView| (v.enabled, v.visible, v.message.clone(), v.cols, v.rows, v.player);
+        shown(self) == shown(other)
+    }
 }
 
 #[derive(Clone)]
@@ -720,7 +726,8 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
                 }
             };
             let changed = last.lock().map(|mut l| {
-                let changed = *l != view;
+                // The walls change every frame but are not sent.
+                let changed = !l.same_for_pages(&view);
                 *l = view.clone();
                 changed
             });
@@ -736,6 +743,14 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_frame_with_only_new_walls_is_no_news_for_the_pages() {
+        let view = MinimapView { walls: vec![[1, 2]], player: Some([3.0, 4.0]), ..MinimapView::status(true, "Reading big map") };
+        assert!(view.same_for_pages(&MinimapView { walls: vec![[5, 6], [7, 8]], ..view.clone() }));
+        assert!(!view.same_for_pages(&MinimapView { player: Some([3.5, 4.0]), ..view.clone() }));
+        assert!(!view.same_for_pages(&MinimapView { message: "Reading minimap".into(), ..view.clone() }));
+    }
 
     fn image(width: usize, height: usize, paint: impl Fn(usize, usize) -> [u8; 3]) -> Image {
         let mut pixels = Vec::with_capacity(width * height * 3);
