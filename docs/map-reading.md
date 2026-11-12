@@ -529,98 +529,128 @@ it; Clearfell Encampment keeps poe2way's terrain arrow. The compass shows a need
 in every area that has graphs or terrain.
 
 - **Belief:** per layout ~200 weighted particles (x, y in the file's units, a scale
-  error around 1) and a log evidence `E_k`. Layout posterior `p_k ∝ prior_k · exp(E_k)`.
+  error around 1), the walked line's log evidence and the anchors' log evidence.
+  Layout posterior `p_k ∝ prior_k · exp(path_k + anchors_k)`.
 - **Start:** at the nodes of the exit the player came through (spread 40 units), else
   the layout's start nodes, else along all corridors; 10% always along all corridors
-  (a waypoint or portal puts the player elsewhere than the exit the log names).
+  (30% when coming from a town: portals and waypoints are the usual way back).
 - **Movement:** each frame's move (minimap cells, turned to world units, divided by
   scale and the particle's scale error) moves the particles, with noise of 20% of
-  the distance. Every 15 units walked they are weighted by their distance `d` to the
-  nearest corridor: full weight within 60 units (the walkable width), a Gaussian of
-  60 beyond, over a floor of 0.1. `E_k` adds the log of the weighted mean weight;
-  particles are resampled when the effective sample size drops below half; when
-  nothing fits, 5% are redrawn along the corridors.
+  the distance; moves under 2 cells (registration jitter) do not count as walked.
+  Every 15 units walked they are weighted by their distance `d` to the nearest
+  corridor: full weight within 60 units (the walkable width), a Gaussian of 60
+  beyond, over a floor of 0.1 (the distance is not capped: far off costs the
+  floor). Resampled when the effective sample size drops below half; when nothing
+  fits, 10% are redrawn along the corridors.
+- **What the walked line may claim:** each weighing adds half its log mean weight
+  (successive weighings see the same stretch), and the path's lead of any layout
+  over another is capped so the path alone gives the top layout at most 60% of the
+  belief. Why: on Clearfell 2693856399 the walk prefers `W_S_N` while the big map
+  shows `W_E_N`; the graph's straight corridors differ from the real ones in ways
+  that do not average out, so more walking only made the wrong answer surer (1.00
+  before). Anchors and exit icons can go beyond the cap.
 - **Tracking lost:** `lost(seconds)` spreads the particles by what a player walks in
   that time (60 units/s, at most 2,400): 80% walk on along their corridor (mostly the
   way the player was heading, 25-100% of the reach, random branches), 20% anywhere
   within reach near a corridor. After 20 s or more 30% are redrawn along all
-  corridors (waypoint, checkpoint, portal). The evidence stays.
+  corridors (waypoint, checkpoint, portal). The evidence stays. The recorder calls it
+  only for a new part: within a part a pause is no loss (the move is measured).
 - **Log anchors:** `seen(Exit | Tag)` adds how well the particles agree with being
-  at a matching node (Gaussian of 80 units over a floor) to `E_k`, then places them
-  there (10% stay). A layout without such a node loses 7 nats. An anchor no layout
-  knows changes nothing. Fed by the recorder: leaving through an exit (the log's
-  zone change, not a re-entry of the same zone), and a checklist step with a target
-  completed by the log (within 1 s of a live NPC line; a hand tick comes later).
+  at a matching node (Gaussian of 80 units, 150 for a tag: a boss arena's centre)
+  to the anchor evidence, then places them there (10% stay). A layout without such a
+  node loses 7 nats. Fed by the recorder for a checklist step with a target that the
+  tracker marks as completed by the log. Leaving the zone is `seen(Left)`: soft
+  (floor 0.3, nothing moved, no penalty for a missing exit, not an anchor), since a
+  portal, waypoint or death leaves from anywhere.
 - **Needle:** the target is the first open checklist target some layout has (exit
   nodes, or nodes whose tag or keys match), then the onward exit by area order
   (zones without a checklist). For every layout and particle: the route along the
   corridors to the target (precomputed per corridor point: the point 120 units ahead
   and the distance to go; a few graphs leave an exit unconnected, then straight to
-  it), its screen bearing as a unit vector. `V = Σ p_k Σ w_i u_i`; needle = direction
-  of `V`, `confidence = |V|`. "estimated" (gold) at `|V| ≥ 0.8` with 100 units walked
-  or an anchor seen, "rough" at 0.5, else "unconfirmed" (gray). `variant` names the
-  top layout once its probability is 0.5. A target no layout has gives no needle.
-- **Memory:** `layouts/<area>/<seed>.nav.json` beside the recording: the layout
-  posterior, the units walked and, for layouts above 1%, 32 particles with the time.
-  A re-entry of the instance starts from the posterior (mixed with 10% uniform); an
-  app restart inside the instance (no zone change, saved under 10 minutes ago)
-  resumes the particles as well.
+  it), its screen bearing as a unit vector. The needle points where most of the
+  belief points (the densest 90° sector of the weighted directions: with layouts
+  pointing different ways the mean of all falls between them); `confidence = |V|`,
+  `V = Σ p_k Σ w_i u_i`. "estimated" (gold) at `|V| ≥ 0.8` with 100 units walked
+  this visit or an anchor seen, "rough" at 0.5, else "unconfirmed" (gray); gold only
+  in areas replayed against a known truth (The Riverbank, Clearfell), elsewhere at
+  most rough, and unconfirmed wherever a dungeon layout carries belief; gray again
+  after 2 s without a placed frame. `variant` names the top layout once its
+  probability is 0.5. A target no layout has gives no needle.
+- **Memory:** `layouts/<area>/<seed>.nav.json` beside the recording: the posterior,
+  the path and anchor evidence per layout, the units walked and, for layouts above
+  1%, 32 particles with the time of the last data. Written only when the navigator
+  got data (a log catch-up leaves it untouched). A re-entry starts from the kept
+  evidence; an app restart inside the instance (no zone change, data under 10
+  minutes old) resumes the particles, spread by what the player could have walked
+  since. Gold waits for this visit's own 100 units or an anchor.
 - **Dungeons (`.dgr`):** one file unit is `roomUnitSize − 1` world units (from the
   room files, not checked in play; no dungeon has been recorded yet); their particles
-  get a scale prior from 1/2.5 to 2.5 so the direction still works. Not measured.
+  get a scale prior from 1/2.5 to 2.5 so the direction still works. Never gold.
 
 ### Simulation (`src-tauri/src/layout/nav_sim.rs`)
 
-A walker follows one layout's corridors from an arrival exit to a target: sideways
-wander (σ 35 units, changing over 120), a wrong turn at one junction in three
-(150-300 units out and back), start offset up to 40, fixed scale error up to ±6%,
-2-unit step noise, whole minimap cells, and tracking losses of 5-30 steps (one per
-~100 steps of 20 units; the Clearfell recording lost track every few minutes). Runs:
-every layout of G1_1 and G1_2, from each exit to each other exit (Riverbank: start ↔
-Miller exit), walks that the graph connects. `cargo test` runs one seed (196 runs);
-`cargo test --release nav_sim::tests::report -- --ignored --nocapture` three.
+The walker is meant to be harder than the owner and independent of the navigator:
+sideways wander with heavy tails (σ 35, stretches of σ 120 a third of the time: its
+distance to the corridors, percentiles 25/50/75/90/95, is 13/29/55/90/121 against
+the recorded 14/38/63/91/115 and 9/26/67/120/150), speed 0.6-1.4 times 60 u/s,
+standing still 2-10 s, backing up 50-150 units, a wrong turn at one junction in
+three (150-300 units out and back), start offset up to 40, scale error up to ±6%,
+whole minimap cells, tracking losses of 5-30 frames (one per ~33 s), and in 30% of
+the runs a wrong arrival (told an exit, starting elsewhere). Its route is its own
+shortest path; the truth is the point 120 units ahead on its own plan, not the
+navigator's route code. Runs: every layout of G1_1 and G1_2, from each exit to each
+other exit (Riverbank: start ↔ Miller exit); unwalkable runs and steps without a
+needle are counted. `cargo test` runs one seed; `cargo test --release
+nav_sim::tests::report -- --ignored --nocapture` three; `mutations` runs broken
+navigators.
 
-| Case (3 seeds, 588 runs) | Gold steps | Gold > 60° off | Worst layout | Within 45° at 60% | Top layout true for good |
-| --- | ---: | ---: | --- | ---: | --- |
-| Arrival known | 5.5% | 0.16% (4 of 2,578) | 3.3% | 55% | 63% of runs, median after 1,480 units |
-| No tracking losses | 10.0% | 0.09% | 2.2% | 68% | 76%, median 1,080 |
-| Arrival unknown | 0.4% | 0% | — | 12% | 31% |
-| 30 s loss from 40% of the walk | 0.3% | 0% | — | 2% | 30% |
-| Movement turned 90° (planted) | 4.2% | **58%** | 97% | 22% | 2% |
+The first pass's walker (σ 35 only, constant speed, always told right, truth from
+the navigator's own guidance) and its numbers (gold on 5.5% of the steps, 0.16% of
+them wrong, 55% within 45° at 60%) are superseded: they came from a posterior the
+walked line had made overconfident.
 
-The 30 s loss covers most of a walk (1,800 units at 60 u/s); the step at 60% is
-right after it, with the position unknown.
+Without exit icons (3 seeds; 30% of the runs told a wrong arrival unless noted):
 
-- **Gate A (class check)** holds: at most 3% of gold needles more than 60° off and no
-  layout over 10%; the planted 90° turn fails it (`the_class_check_bites_on_turned_movement`).
+| Case | Runs (not walkable) | Gold steps | Gold > 60° off | Within 45° at 60% | Top layout true for good |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Arrival known | 579 (45) | 4 of 58,025 | 4 of 4 | 28% | 25% of runs |
+| Arrival told right | 588 (36) | 4 | 4 of 4 | 33% | 32% |
+| Arrival unknown | 588 (36) | 5 | 2 of 5 | 12% | 12% |
+| 30 s loss from 40% | 579 (45) | 4 | 4 of 4 | 23% | 13% |
+| Movement turned 90° (planted) | 579 (45) | 206 | 116 (56%) | 21% | 4% |
+
+The walked line alone almost never gives gold now, and the 4 gold steps it gave (one
+Riverbank walk) were all wrong: Gate A fails on them at three seeds, though it
+holds at one. So gold needs absolute evidence this visit (an anchor or an exit
+icon): see the exit icons below.
+
 - **Gate B (85% within 45° at 60%) is not reachable on these graphs:** with the
   arrival known, another layout still has corridors under the walk (entered at its
   own exit of the same name, 80 units) until a median 59% of the walk (75th
   percentile 75%, 90th 89%), and in 186 walks 112 rival layouts fit the whole walk
-  (league variants of the same layout, mostly). The test pins 50% (one seed: 58%).
-- A narrower likelihood (flat 40, Gaussian 30, floor 0.05) does better in the
-  simulation (67% / 83% at one seed) but picks a wrong Clearfell layout on the real recording:
-  real walks stray much further from the corridor lines than the simulated walker
-  (best layout, distance percentiles 25/50/75/90/95: Clearfell 14/38/63/91/115
-  units, Riverbank 9/26/67/120/150). The wide one follows the real data.
+  (league variants of the same layout, mostly).
+- **Mutations:** `GOLD` 0.5 and `GOLD` 0.3 with `GOLD_WALK` 0 fail Gate A (63-65% of
+  their gold needles wrong); `FLAT` 120 fails the coverage pin (18%); `GOLD_WALK` 0
+  and `MISSING` 0 change nothing in the simulation (the path alone gives no gold, the
+  walker sees no anchors).
 
 ### Real recordings
 
 `RECORDINGS=<dir> cargo test --release navigator_on_recordings -- --ignored
---nocapture` feeds every part's trail (parts in order; a new part is a loss of
-unknown length, a jump inside a joined part a 30 s loss) with "arrived"/"left"
-points as exit anchors, and prints the posterior after each part and the final
-needles.
+--nocapture` feeds every part's trail as the app would: parts in order (a new part
+is a loss of unknown length, a jump inside a joined part a 30 s loss), "left" points
+as `seen(Left)`, "arrived" points as a new visit from the instance's memory. It
+prints the posterior after each part and the final needles, and asserts Clearfell's
+truth.
 
-- **Clearfell** seed 2693856399 (17 parts): `ClearFell_W_S_N` at 1.00 from the first
-  part on (the old batch fit's choice too). The big-map screenshot puts The Grelwood
-  exit left of Mud Burrow at the same height; the layouts with that (±25°) are
-  `W_E_N`, `W_S_N`, `S_E_N` and `S_E_N_League`, so the answer fits. The final needles
-  are gray or rough and ~1,000 cells long: the walk Mud Burrow → The Grelwood was not
-  tracked, so where the player stands at the end is unknown.
-- **The Riverbank** 1580033459: undecided (`Riverbed_1` 0.49, `Riverbed_3` 0.40).
-  2090944099: `Riverbed_4` 0.93, but a batch fit of its long part prefers
-  `Riverbed_6` (mean 42 vs 76 units, anchored at the Miller exit). Its "arrived"
-  points are labelled `G1_1` (re-entries of the same zone), so neither has a known
-  arrival point; neither answer is confirmed.
+- **Clearfell** seed 2693856399 (17 parts). Truth (chair, from the big-map
+  screenshot with both exits in view): The Grelwood − Mud Burrow = (−959, −28)
+  cells; `ClearFell_W_E_N` predicts (−875, −89), 103 cells off, every other layout
+  417 or more. The first pass put `ClearFell_W_S_N` at 1.00 from the walk: wrong and
+  sure. Now no layout passes 0.21 and `W_E_N` keeps 0.049 (uniform 0.030; the walk
+  ranks it 5th, so the walk alone cannot single it out). The test asserts the truth
+  at least uniform after part 0, never under 2%, and no layout above 60%.
+- **The Riverbank** 1580033459: at most 0.31 for any layout. 2090944099:
+  `Riverbed_4` at most 0.54 (0.93 before), where a batch fit of its long part
+  prefers `Riverbed_6`; there is no truth for these instances.
 
