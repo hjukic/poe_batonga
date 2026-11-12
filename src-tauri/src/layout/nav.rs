@@ -382,7 +382,12 @@ impl Navigator {
                     None => start(layout, arrival, &mut rng),
                 };
                 let path = evidence.map_or(0.0, |m| m.path.get(&layout.id).copied().unwrap_or(-path_cap(n)).clamp(-path_cap(n), 0.0));
-                let anchors = evidence.map_or(0.0, |m| m.anchors.get(&layout.id).copied().unwrap_or(0.0));
+                // Kept anchor evidence is capped like the path's: a restart must not
+                // count a whole visit's sightings in full again.
+                let best = evidence.map_or(0.0, |m| m.anchors.values().copied().fold(f64::MIN, f64::max));
+                let anchors = evidence.map_or(0.0, |m| {
+                    (m.anchors.get(&layout.id).copied().unwrap_or(best - path_cap(n)) - best).clamp(-path_cap(n), 0.0)
+                });
                 let mut bank = Bank { prior, path, evidence: anchors, particles };
                 normalise(&mut bank.particles);
                 bank
@@ -589,8 +594,14 @@ impl Navigator {
             if ess < PARTICLES as f64 / 2.0 {
                 resample(&mut bank.particles, rng);
             }
-            // Remember where each icon put its exit when the belief agrees on which it is.
+            // Remember where each icon put its exit when the belief agrees on which it
+            // is, only for a layout carrying half the belief, from a labelled icon or
+            // a new sighting the belief predicted.
+            let trusted_icon = |icon: &ExitIcon| icon.to.is_some() || (new && agree >= ICON_CONFIRM);
             for (icon, nodes) in icons.iter().zip(cands) {
+                if before[k] < ICON_FIRM || !trusted_icon(icon) {
+                    continue;
+                }
                 let mut votes: HashMap<usize, (f64, f64, f64)> = HashMap::new();
                 for p in &bank.particles {
                     let (ox, oy) = offset(icon, p.s);
@@ -614,7 +625,11 @@ impl Navigator {
                 }
             }
         }
-        exits_seen.extend(learnt);
+        // Blended with what was seen before.
+        for (key, (x, y)) in learnt {
+            let blended = exits_seen.get(&key).map_or((x, y), |&(ox, oy)| ((ox + x) / 2.0, (oy + y) / 2.0));
+            exits_seen.insert(key, blended);
+        }
         // Absolute evidence (gold allowed) only when the belief held before a new
         // sighting predicted it: an icon that reshuffles a diffuse belief, or the
         // same sighting again, confirms nothing.
@@ -1468,9 +1483,13 @@ mod tests {
         assert_ne!(view.source, "unconfirmed", "{view:?}");
         // The same frame again is the same sighting.
         let before = nav.ranking()[0].1;
-        nav.icons(&[wood, mud]);
+        nav.icons(&[wood.clone(), mud.clone()]);
         assert_eq!(nav.ranking()[0].1, before);
-        // The exits seen are kept.
+        // Exits are remembered only for a layout that carried the belief before: not
+        // from the first sighting, but from the next update once it does.
+        assert!(!nav.memory().exits.contains_key("ClearFell_W_E_N"));
+        nav.icon_walked -= ICON_EVERY;
+        nav.icons(&[wood.clone(), mud.clone()]);
         assert!(nav.memory().exits.contains_key("ClearFell_W_E_N"));
     }
 
