@@ -268,3 +268,11 @@ poe2way's map.
   Burrow. In Riverbank instance 2090944099 the arrow at the spot where the Miller's
   fight began says the arena is 149 minimap cells away.
 
+### Needle always visible (2026-11-12, owner request)
+
+While there is a target the compass always shows its needle: gold when the layout
+is confirmed ("estimated"), fainter gold when it is likely ("rough") and gray when
+it is not recognised ("unconfirmed": the best guess, before a walk the direction
+most layouts agree on), when there is no direction at all (the needle keeps its last
+direction) or when the minimap is not tracking the player.
+

@@ -433,10 +433,14 @@ pub fn guide(area: &Area, ev: &Evidence) -> Option<GuideView> {
                 (sx + r.cos(), sy + r.sin())
             });
             let mean = sy.atan2(sx).to_degrees() as f32;
+            view.distance = distance as f32;
             if headings.len() == all.len() && headings.iter().all(|(d, _)| super::guide::angle_between(*d, mean) <= SAME_WAY) {
                 view.degrees = Some(mean);
-                view.distance = distance as f32;
                 view.source = "rough".into();
+            } else {
+                // A gray best guess: the direction most layouts agree on.
+                let support = |d: f32| headings.iter().filter(|(e, _)| super::guide::angle_between(*e, d) <= SAME_WAY).count();
+                view.degrees = headings.iter().map(|(d, _)| *d).max_by_key(|&d| support(d));
             }
         }
         return Some(view);
@@ -459,6 +463,9 @@ pub fn guide(area: &Area, ev: &Evidence) -> Option<GuideView> {
         // Fits fairly well but without a clear lead: a fainter needle along it.
         view.degrees = Some(degrees);
         view.source = "rough".into();
+    } else {
+        // Layout not recognised: the best guess, shown gray ("unconfirmed").
+        view.degrees = Some(degrees);
     }
     Some(view)
 }
@@ -555,12 +562,13 @@ mod tests {
     }
 
     #[test]
-    fn no_walk_yet_names_the_target_without_a_direction() {
+    fn no_walk_yet_gives_only_a_gray_best_guess() {
         let areas = load();
-        // Clearfell's layouts put Mud Burrow on every side: no needle yet.
+        // Clearfell's layouts put Mud Burrow on every side: only a gray best guess yet.
         let view = guide(&areas["G1_2"], &ev("G1_2", "G1_town", &[(0, 0), (5, 3)], (5, 3))).unwrap();
         assert_eq!(view.target, "Mud Burrow");
-        assert_eq!(view.degrees, None);
+        assert_eq!(view.source, "unconfirmed");
+        assert!(view.degrees.is_some());
     }
 
     #[test]

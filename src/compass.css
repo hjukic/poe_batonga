@@ -5,6 +5,10 @@ body.compass { position: relative; font-family: "Segoe UI", system-ui, sans-seri
 #compass .ring { fill: none; stroke: rgb(255 210 122 / .18); stroke-width: 1.5; stroke-dasharray: 3 9; }
 #compass .head { fill: #ffd27a; stroke: rgb(40 25 0 / .8); stroke-width: 1.5; stroke-linejoin: round; filter: drop-shadow(0 0 4px rgb(0 0 0 / .9)); }
 #label { position: absolute; left: 50%; top: 50%; font-size: 13px; font-weight: 600; color: #ffe2a6; white-space: nowrap; text-shadow: 0 1px 3px #000, 0 0 8px #000; transition: opacity .3s; }
-/* Rough direction (layout not matched yet): the needle shows, a little fainter. */
+/* Rough direction (likely layout): the needle shows, a little fainter. */
 #compass.rough .head { opacity: .7; }
+/* Layout not recognised, no direction yet or player not tracked: a gray best guess. */
+#compass.unsure .head { fill: #9a9a9a; stroke: rgb(20 20 20 / .8); opacity: .75; }
+#compass.unsure .ring { stroke: rgb(200 200 200 / .14); }
+#label.unsure { color: #c4c4c4; }
 .off { opacity: 0; }

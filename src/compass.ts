@@ -7,9 +7,9 @@ import './compass.css';
 interface GuideView {
   targetKind: string;
   target: string;
-  /** Screen direction: 0 = right, 90 = down; null while not confirmed. */
+  /** Screen direction: 0 = right, 90 = down; null when there is not even a guess. */
   degrees: number | null;
-  /** "rough" until the recorded walls confirm the layout. */
+  /** "estimated" (layout confirmed), "rough" (likely) or "unconfirmed" (best guess). */
   source: string;
 }
 interface LayoutView { guide: GuideView | null }
@@ -35,19 +35,27 @@ let guide: GuideView | null = null;
 let tracking = false;
 let shown: number | null = null;
 
+/** The needle is always shown while there is a target: gold when the layout is
+ *  confirmed, fainter gold when it is likely, gray while it is not recognised, there is
+ *  no direction yet, or the minimap is not tracking the player (it then keeps its last
+ *  direction). */
 function update() {
-  const target = tracking && guide && guide.degrees !== null && Number.isFinite(guide.degrees) ? guide.degrees : null;
-  svg.classList.toggle('off', target === null);
-  label.classList.toggle('off', target === null);
-  if (target === null || !guide) return;
-  svg.classList.toggle('rough', guide.source === 'rough');
+  svg.classList.toggle('off', !guide);
+  label.classList.toggle('off', !guide);
+  if (!guide) return;
+  const known = guide.degrees !== null && Number.isFinite(guide.degrees);
+  svg.classList.toggle('rough', tracking && known && guide.source === 'rough');
+  svg.classList.toggle('unsure', !tracking || !known || guide.source === 'unconfirmed');
+  label.classList.toggle('unsure', !tracking || !known || guide.source === 'unconfirmed');
   label.textContent = guide.target || (guide.targetKind === 'entrance' ? 'Exit' : guide.targetKind);
 }
 
 /** Turns the needle smoothly, always the short way round. */
 function frame() {
-  const target = guide?.degrees;
-  if (tracking && target !== null && target !== undefined && Number.isFinite(target)) {
+  const known = guide?.degrees;
+  // Without a direction the needle stays where it was (up at first).
+  const target = known !== null && known !== undefined && Number.isFinite(known) ? known : (shown ?? -90);
+  if (guide) {
     if (shown === null) shown = target;
     const delta = ((target - shown + 540) % 360) - 180;
     shown += Math.abs(delta) < 0.5 ? delta : delta * 0.18;

@@ -450,8 +450,8 @@ pub struct GuideView {
     pub target: String,
     /// Screen direction in degrees: 0 = right, 90 = down.
     pub degrees: Option<f32>,
-    /// "estimated" (walls match the terrain), "rough" (poe2way's layout assumed
-    /// as is, or an ambiguous match) or "unconfirmed" (no direction).
+    /// "estimated" (layout confirmed), "rough" (likely layout) or "unconfirmed"
+    /// (layout not recognised; `degrees` is then a best guess, if any, shown gray).
     pub source: String,
     /// Walking distance in minimap cells.
     pub distance: f32,

@@ -782,12 +782,12 @@ mod tests {
     #[test]
     fn completion_untick_and_tracking_loss_update_guidance() {
         let recorder = Recorder::new(None);
-        // The Riverbank's arrow heads for the Miller first (no direction before a walk).
+        // The Riverbank's arrow heads for the Miller first (unconfirmed before a walk).
         enter(&recorder, "G1_1");
         recorder.on_frame(&frame((0, 0)), [300, 260]);
         let guide = recorder.view().unwrap().guide.unwrap();
         assert_eq!(guide.target, "The Bloated Miller");
-        assert_eq!(guide.degrees, None);
+        assert_ne!(guide.source, "estimated");
 
         enter(&recorder, "G1_town");
         recorder.on_frame(&frame((0, 0)), [300, 260]);
