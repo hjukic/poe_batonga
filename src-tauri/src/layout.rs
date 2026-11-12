@@ -64,9 +64,6 @@ fn not_stale(view: guide::GuideView, fed_at: Option<Instant>) -> guide::GuideVie
     view
 }
 
-/// Minimap cells per game unit measured per area (poe2way terrain; the older
-/// `scales.json` held Qutm diagram scales and is no longer read).
-const SCALES_FILE: &str = "terrain-scales.json";
 /// Joining pieces of a visit: how often to try, the least shape to try with, the
 /// coarse grid for the first search and the share of walls that must line up.
 const MERGE_EVERY: Duration = Duration::from_secs(3);
@@ -78,8 +75,6 @@ const MERGE_MATCH: f64 = 0.6;
 /// A frame that cannot be placed near the player's last place (after a gap: frames not
 /// read, a fast move) is looked for this far from it, in cells, the way pieces are joined.
 const REFIND: i32 = 150;
-/// At most this many wall cells are used to score the terrain arrow's hypotheses.
-const GUIDE_WALLS: usize = 3000;
 /// Size of the overview grid sent to the overlay.
 pub const VIEW_COLS: usize = 300;
 pub const VIEW_ROWS: usize = 260;
@@ -558,8 +553,6 @@ fn icon_guide(target: &guide::NavTarget, at: Option<(f32, f32)>, pos: (i32, i32)
         source: "estimated".into(),
         distance: dx.hypot(dy),
         confidence: 1.0,
-        measured: true,
-        turned: false,
     })
 }
 
@@ -590,8 +583,6 @@ fn only_exit_guide(target: &guide::NavTarget, places: &[(f32, f32)], pos: (i32, 
         source: "rough".into(),
         distance: dx.hypot(dy),
         confidence: 0.5,
-        measured: true,
-        turned: false,
     })
 }
 
@@ -609,8 +600,6 @@ fn named_exit_guide(target: &guide::NavTarget, named: &[(f32, f32, String)], pos
         source: "estimated".into(),
         distance: dx.hypot(dy),
         confidence: 1.0,
-        measured: true,
-        turned: false,
     })
 }
 
@@ -792,7 +781,8 @@ struct State {
     icons: Vec<crate::minimap::bigmap::Icon>,
     /// (area, label) of targets whose step the log completed.
     log_completed: std::collections::HashSet<(String, String)>,
-    catalog: guide::Catalog,
+    /// The game's layout graphs, built per area on first use.
+    graphs: graph::Graphs,
     completed: HashMap<String, Vec<String>>,
     /// Open checklist targets per area, in checklist order.
     targets: HashMap<String, Vec<guide::NavTarget>>,
@@ -800,8 +790,6 @@ struct State {
     known_targets: HashMap<String, Vec<guide::NavTarget>>,
     /// Per area: its bosses from the checklists, with where each stands.
     bosses: HashMap<String, Vec<Boss>>,
-    /// Measured minimap cells per game unit, per area.
-    scales: HashMap<String, Vec<f64>>,
     dir: Option<PathBuf>,
     session: Option<Session>,
     /// Area left most recently, for the next zone's "arrived" point.
@@ -1027,17 +1015,12 @@ fn merge_pieces(session: &mut Session) -> bool {
 
 impl Recorder {
     pub fn new(dir: Option<PathBuf>) -> Self {
-        let scales = dir
-            .as_ref()
-            .and_then(|d| std::fs::read(d.join(SCALES_FILE)).ok())
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-            .unwrap_or_default();
         // Flight recordings are kept for a month.
         if let Some(dir) = &dir {
             obs::prune(dir);
         }
         Recorder(Mutex::new(State {
-            catalog: guide::Catalog::load(),
+            graphs: Default::default(),
             completed: HashMap::new(),
             targets: HashMap::new(),
             known_targets: HashMap::new(),
@@ -1045,7 +1028,6 @@ impl Recorder {
             icons: Vec::new(),
             icons_whole: false,
             log_completed: Default::default(),
-            scales,
             dir,
             session: None,
             previous_area: None,
@@ -1103,7 +1085,7 @@ impl Recorder {
                 // 2026-11-12); the navigator already started at the start node, the recording,
                 // the flight recorder and the scale measure took the exit's name.
                 let arrived_from = state.previous_area.clone().map(|from| {
-                    let neighbour = from.is_empty() || state.catalog.graph(area).is_none_or(|g| g.names.contains_key(&from));
+                    let neighbour = from.is_empty() || state.graphs.get(area).is_none_or(|g| g.names.contains_key(&from));
                     if neighbour { from } else { String::new() }
                 });
                 // A return to the instance goes on with its map: the largest part, the player
@@ -1464,7 +1446,7 @@ impl State {
     /// graph, so no two instances share a `.nav.json` while that holds.
     /// With it, how it was made (the flight recorder's start).
     fn navigator(&self, session: &Session) -> Option<(nav::Navigator, obs::Start)> {
-        let area = self.catalog.graph(&session.recording.area)?;
+        let area = self.graphs.get(&session.recording.area)?;
         let memory: Option<nav::Memory> = session
             .nav_file()
             .and_then(|path| std::fs::read(path).ok())
@@ -1473,7 +1455,7 @@ impl State {
             Some(from) => nav::Arrival::From(from),
             None => nav::Arrival::Unknown,
         };
-        let scale = self.scale(&session.recording.area).unwrap_or(graph::SCALE);
+        let scale = graph::SCALE;
         // As `Navigator::new` decides (a position at most `RESUME`, 600 s, old).
         let kept = memory.as_ref().filter(|m| m.version == nav::MEMORY_VERSION);
         let resumed = kept.is_some_and(|m| {
@@ -1490,19 +1472,6 @@ impl State {
             bosses: self.bosses.get(&session.recording.area).cloned().unwrap_or_default(),
         };
         Some((nav::Navigator::new(&area, arrival, memory.as_ref(), scale, session.recording.seed.unwrap_or(0)), start))
-    }
-
-    /// Measured minimap cells per game unit: this area's median, else all areas'.
-    /// The minimap's zoom is probably the same everywhere.
-    fn scale(&self, area: &str) -> Option<f64> {
-        let median = |mut all: Vec<f64>| {
-            all.sort_by(f64::total_cmp);
-            all.get(all.len() / 2).copied()
-        };
-        self.scales
-            .get(area)
-            .and_then(|all| median(all.clone()))
-            .or_else(|| median(self.scales.values().flatten().copied().collect()))
     }
 
     /// A checklist step of this area that the log just completed (the tracker
@@ -1528,39 +1497,18 @@ impl State {
         }
     }
 
-    /// Saves and closes the current recording, and learns the zone's scale from it.
+    /// Saves and closes the current recording.
     fn finish(&mut self) {
         self.save();
-        let Some(session) = self.session.take() else { return };
-        if let Some(log) = session.obs.borrow_mut().as_mut() {
+        let Some(mut session) = self.session.take() else { return };
+        if let Some(log) = session.obs.get_mut() {
             log.end(obs::now_ms());
-        }
-        let pois = &session.live.part.pois;
-        let Some(arrival) = pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at) else { return };
-        let area = &session.recording.area;
-        let walls: Vec<(i32, i32)> = session
-            .live
-            .kept()
-            .filter(|(_, &n)| n >= 2)
-            .map(|(&(x, y), _)| (x - arrival.x, y - arrival.y))
-            .collect();
-        if let Some(scale) = guide::measure_scale(&self.catalog, area, &arrival.label, &walls) {
-            self.scales.entry(area.clone()).or_default().push(scale);
-            if let Some(dir) = &self.dir {
-                let _ = std::fs::create_dir_all(dir);
-                if let Ok(json) = serde_json::to_vec_pretty(&self.scales) {
-                    let _ = std::fs::write(dir.join(SCALES_FILE), json);
-                }
-            }
         }
     }
 
     /// The arrow, kept on screen: when it cannot be worked out for a moment (tracking
     /// lost, a piece without enough to go on), the last one stays, marked unconfirmed.
     fn guide(&self, session: &Session) -> Option<guide::GuideView> {
-        if !self.catalog.guided(&session.recording.area) {
-            return None;
-        }
         let fresh = self.fresh_guide(session);
         let kept = fresh.is_none();
         let view = match fresh {
@@ -1607,7 +1555,7 @@ impl State {
         let completed = self.completed.get(area).map(Vec::as_slice).unwrap_or_default();
         let mut targets = self.targets.get(area).cloned().unwrap_or_default();
         targets.retain(|t| !is_icon_target(t));
-        if let Some(graph) = self.catalog.graph(area) {
+        if let Some(graph) = self.graphs.get(area) {
             targets.extend(graph::target(&graph, &session.came_from, completed));
         }
         targets
@@ -1620,7 +1568,6 @@ impl State {
             return None;
         }
         let completed = self.completed.get(area).map(Vec::as_slice).unwrap_or_default();
-        let scale = self.scale(area);
         // A step that leads to the waypoint: straight to its icon once the map showed it.
         let first = self.targets.get(area).and_then(|targets| targets.first());
         if let Some(target) = first.filter(|t| t.tag.as_deref() == Some(WAYPOINT_TARGET)) {
@@ -1631,7 +1578,7 @@ impl State {
             // checklist, or targets no layout has).
             let mut targets = self.targets.get(area).cloned().unwrap_or_default();
             targets.retain(|t| !is_icon_target(t));
-            if let Some(graph) = self.catalog.graph(area) {
+            if let Some(graph) = self.graphs.get(area) {
                 targets.extend(graph::target(&graph, &session.came_from, completed));
             }
             // The part's recorded map, lent: the way to a target whose place on it is known.
@@ -1648,7 +1595,7 @@ impl State {
             };
             return nav
                 .guide_on(&targets, Some(&place))
-                .map(|view| not_stale(guide::GuideView { measured: scale.is_some(), ..view }, session.fed_at));
+                .map(|view| not_stale(view, session.fed_at));
         }
         // No layout graphs here (a town): the exit the map shows by name is where to go.
         let first = self.targets.get(area).and_then(|targets| targets.first());
@@ -1657,39 +1604,7 @@ impl State {
         }
         // Its name not read yet (the label cut off at the minimap's edge): the only exit
         // icon seen is likely the one, shown as a likely direction.
-        if let Some(view) = first.and_then(|target| only_exit_guide(target, &session.exit_places, live.pos)) {
-            return Some(view);
-        }
-        // What is left is the terrain match, a guess from the outline walked so far. It
-        // pointed the wrong way on the owner's town visits (2026-11-12), so it is shown
-        // gray, and only toward the exit the checklist asks for on this visit: a visit
-        // without an exit to head for (a talk, the waypoint) has no needle.
-        let wanted = first.filter(|target| target.exit.is_some())?;
-        // Everything relative to the (first) arrival point, where the terrain match starts;
-        // a piece without one (tracking lost, overlay restarted) is placed anywhere.
-        let arrival = live.part.pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at);
-        let (ax, ay) = arrival.map_or((0, 0), |a| (a.x, a.y));
-        let arrived_from = arrival.map_or("", |a| a.label.as_str());
-        let mut walls: Vec<(i32, i32)> = live.kept().filter(|(_, &n)| n >= 2).map(|(&(x, y), _)| (x - ax, y - ay)).collect();
-        if walls.len() > GUIDE_WALLS {
-            walls.sort_unstable();
-            let step = walls.len().div_ceil(GUIDE_WALLS);
-            walls = walls.into_iter().step_by(step).collect();
-        }
-        guide::terrain(
-            &self.catalog,
-            &guide::Evidence {
-                area,
-                arrived_from,
-                walls: &walls,
-                anchored: arrival.is_some(),
-                player: (live.pos.0 - ax, live.pos.1 - ay),
-                completed,
-                scale,
-            },
-        )
-        .filter(|view| view.target.eq_ignore_ascii_case(&wanted.label))
-        .map(|view| guide::GuideView { source: "unconfirmed".into(), ..view })
+        first.and_then(|target| only_exit_guide(target, &session.exit_places, live.pos))
     }
 
     /// The view with only the needle (`LayoutView::light`).
@@ -2106,7 +2021,7 @@ mod tests {
     fn a_needle_without_frames_for_two_seconds_is_not_gold() {
         let gold = guide::GuideView {
             variant: String::new(), target_kind: "entrance".into(), target: "X".into(), degrees: Some(10.0),
-            source: "estimated".into(), distance: 5.0, confidence: 0.9, measured: false, turned: false,
+            source: "estimated".into(), distance: 5.0, confidence: 0.9,
         };
         assert_eq!(not_stale(gold.clone(), Some(Instant::now())).source, "estimated");
         assert_eq!(not_stale(gold.clone(), Instant::now().checked_sub(Duration::from_secs(3))).source, "unconfirmed");
@@ -2790,7 +2705,7 @@ fn navigator_on_recordings() {
         let own = recording.area.as_str();
         println!("\n== {} seed {:?}: {} parts", own, recording.seed, recording.parts.len());
         let Some(area) = graphs.get(own) else {
-            println!("   no layout graphs (terrain arrow)");
+            println!("   no layout graphs");
             continue;
         };
         let seed = recording.seed.unwrap_or(0);

@@ -1493,8 +1493,6 @@ impl Navigator {
                 source: if named && near { "estimated".into() } else { self.cap_source(sure, &posterior).into() },
                 distance: icon.dx.hypot(icon.dy) as f32,
                 confidence: share.min(1.0) as f32,
-                measured: false,
-                turned: false,
             });
         }
         Some(GuideView {
@@ -1505,8 +1503,6 @@ impl Navigator {
             source: source.into(),
             distance: if weight > 0.0 { (togo / weight * self.scale) as f32 } else { 0.0 },
             confidence: confidence.min(1.0) as f32,
-            measured: false,
-            turned: false,
         })
     }
 
@@ -1631,8 +1627,6 @@ impl Navigator {
             source: source.into(),
             distance: way.length as f32,
             confidence: share.min(1.0) as f32,
-            measured: false,
-            turned: false,
         };
         Some((view, note, arrival))
     }

@@ -64,20 +64,18 @@ interface LayoutView {
   layout?: LayoutPicture;
 }
 
-/** The compass arrow (its own window): direction along the walkable path to the next exit, from poe2way's terrain. */
+/** The compass needle (drawn in its own window): the way to the step's target. */
 interface GuideView {
   variant: string;
   targetKind: string;
   target: string;
   /** Screen direction: 0 = right, 90 = down. */
   degrees: number | null;
-  source: 'estimated' | 'rough' | 'unconfirmed' | 'encounter';
+  source: 'estimated' | 'rough' | 'unconfirmed';
   /** Minimap cells. */
   distance: number;
-  /** 0-1, lead over the best hypothesis pointing elsewhere. */
+  /** 0-1: how sure the needle is. */
   confidence: number;
-  measured: boolean;
-  turned: boolean;
 }
 
 const icon = (paths: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${paths}</svg>`;

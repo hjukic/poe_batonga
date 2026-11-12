@@ -5,7 +5,7 @@ Requirements: [scope](scope.md). Decisions: [decision log](decisions.md).
 
 Reference implementation review: [Qutm](qutm-review.md) supplies concrete candidate
 zone, level-up and dialogue/reward patterns. Prioritize validating those log inputs
-for the checklist before adding OCR. Its layout diagrams were tried for the arrow and replaced by poe2way's terrain. An [initial local inspection](log-findings.md)
+for the checklist before adding OCR. Its layout diagrams were tried for the arrow and replaced by the game's layout graphs. An [initial local inspection](log-findings.md)
 confirms area ID/level/seed, level-up and passive-point rewards in a September 2026
 sample. A full-file follow-up also finds instance IDs, tile/doodad hashes and
 height-map texture dimensions, but no usable player-position or map-geometry

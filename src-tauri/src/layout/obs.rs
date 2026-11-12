@@ -1629,7 +1629,7 @@ mod tests {
         let targets = [NavTarget { label: "Mud Burrow".into(), exit: Some("G1_3".into()), ..Default::default() }];
         let view = GuideView {
             variant: String::new(), target_kind: "entrance".into(), target: "Mud Burrow".into(), degrees: Some(10.0),
-            source: "rough".into(), distance: 300.0, confidence: 0.7, measured: false, turned: false,
+            source: "rough".into(), distance: 300.0, confidence: 0.7,
         };
         log.needle(T0 + 1, &targets, &view, false, false, Some(Way { ahead: Some([3.5, -1.0]), fog: Some(0.4) }), None);
         log.frame();
@@ -1683,7 +1683,7 @@ mod tests {
         let targets = [NavTarget { label: "Mud Burrow".into(), exit: Some("G1_3".into()), ..Default::default() }];
         let view = GuideView {
             variant: String::new(), target_kind: "entrance".into(), target: "Mud Burrow".into(), degrees: Some(10.0),
-            source: "rough".into(), distance: 300.0, confidence: 0.7, measured: false, turned: false,
+            source: "rough".into(), distance: 300.0, confidence: 0.7,
         };
         let shadow = Shadow { degrees: Some(40.04), length: 120.4, ahead: [3.46, -1.0], fog: 0.333, gold: true };
         log.needle(T0 + 1, &targets, &view, false, false, None, Some(shadow));
@@ -1870,7 +1870,7 @@ mod tests {
         let targets = [NavTarget { label: "Mud Burrow".into(), exit: Some("G1_3".into()), ..Default::default() }];
         let view = |deg: f32, source: &str| GuideView {
             variant: String::new(), target_kind: "entrance".into(), target: "Mud Burrow".into(), degrees: Some(deg),
-            source: source.into(), distance: 300.0, confidence: 0.7, measured: false, turned: false,
+            source: source.into(), distance: 300.0, confidence: 0.7,
         };
         let mut t = T0;
         for (deg, source) in [(10.0, "rough"), (20.0, "rough"), (30.0, "rough"), (31.0, "estimated"), (31.0, "estimated")] {
@@ -2008,7 +2008,7 @@ mod tests {
                     let view = GuideView {
                         variant: String::new(), target_kind: "entrance".into(), target: "Mud Burrow".into(), degrees: Some(deg),
                         source: if frames % 30 < 15 { "rough".into() } else { "estimated".into() },
-                        distance: 312.4, confidence: 0.734, measured: false, turned: false,
+                        distance: 312.4, confidence: 0.734,
                     };
                     log.needle(t, &[NavTarget { label: "Mud Burrow".into(), ..target.clone() }], &view, false, false, None, None);
                 }

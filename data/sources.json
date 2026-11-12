@@ -59,22 +59,6 @@
       ]
     },
     {
-      "id": "poe2way-terrain",
-      "kind": "zone-terrain",
-      "selection": "selected",
-      "site": "https://www.poe2way.com/atlas",
-      "api": "https://www.poe2way.com/api/map-layouts/<areaId>",
-      "artifact": "data/layouts/poe2way/",
-      "script": "scripts/fetch-poe2way-terrain.mjs",
-      "contentImported": true,
-      "importedOn": "2026-11-12",
-      "constraints": [
-        "Only the first three zones for now: G1_1 (no terrain on poe2way), G1_town, G1_2",
-        "One collected instance per area; campaign zones are generated per instance, so walls are an example, not the played instance",
-        "Outline and objects share game-space coordinates; the in-game map shows them turned 45 degrees"
-      ]
-    },
-    {
       "id": "ggg-topologies",
       "kind": "zone-layout-graphs",
       "selection": "selected",

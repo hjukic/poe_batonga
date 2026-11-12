@@ -84,9 +84,7 @@ not sufficient for game navigation; it is not connected to the overlay.
 - [Architecture](docs/architecture.md) and [decisions](docs/decisions.md): proposed
   design and experiments needed before implementation.
 - [Documentation](docs/README.md): documentation status and repository setup checks.
-- [Data sources](docs/data-sources.md): route, zone and layout data, including
-  poe2way's zone terrain (walls and points of interest) for the first zones in
-  `data/layouts/poe2way/`; `node scripts/render-terrain.mjs` draws it.
+- [Data sources](docs/data-sources.md): route, zone, layout, icon, font and dialogue data.
 
 ## Contributing
 

@@ -166,92 +166,15 @@ rejects this simple extraction baseline for gameplay; it does not prove all loca
 computer-vision approaches are infeasible. Do not advance step 7 to complete or
 claim Linux capture support based on these results.
 
-## Live arrow correction (2026-11-12, Qutm diagrams; replaced below)
+## Earlier arrows (2026-11-12, all replaced by the navigator below)
 
-The live Qutm guide previously favoured the diagram's original orientation over
-rotations/mirrors by a fixed prior. With no observation it could report a 65%
-lead as if it were useful confidence. It also treated a boss speaking, or walking
-near a guessed icon, as completion; this sent the player toward Clearfell while
-Miller's fight was starting. The screenshot supplied during testing demonstrates
-the premature target change, not a measured angular error.
-
-Bearings now use `atan2(target.y - player.y, target.x - player.x)` in the same
-screen axes as the minimap: right 0°, down 90°, left 180°, up -90°. No character
-facing or extra isometric rotation is applied. Both the SVG and the map ray use
-that bearing. Rotation animation is removed so crossing ±180° cannot spin the
-arrow the long way around.
-
-All diagram orientations start with equal weight. Observed encounter landmarks
-calibrate continuous rotation and scale, retaining both possible handednesses.
-Competing directions suppress the arrow and show “Direction not confirmed”;
-the score lead is no longer displayed as a probability. Wall-box fitting is still
-only a schematic heuristic, not a validated match to real map geometry.
-
-Boss dialogue pins the **player's location at that moment**, not the boss. It
-keeps the boss objective active. Within 32 minimap cells of that encounter point,
-the UI shows “Encounter area · defeat boss” with no invented enemy bearing. Farther
-away it can point back to the recorded encounter area in screen coordinates.
-Neither dialogue nor proximity completes an objective. The existing manual
-completion/untick/reset controls now also update navigation through an explicit
-route `navigationTarget` mapping. Unlock the overlay to click an objective;
-locked mode retains click-through behavior. A verified kill event/visual boss detector is
-not implemented; until then Miller cannot automatically switch to the exit just
-because combat started. Leaving the zone changes the recording normally.
-
-Regression checks cover the supplied fight-start scenario, cardinal/diagonal
-bearings, walking past an encounter, arbitrary rotations, unresolved mirrors,
-completion/untick/reset snapshots and suppression during tracking loss. A live
-gameplay run remains necessary to measure tracking and navigation accuracy.
-
-## poe2way terrain arrow (2026-11-12)
-
-The arrow no longer uses Qutm's diagrams. It uses poe2way's collected terrain
-(`data/layouts/poe2way/`) for Clearfell Encampment and Clearfell; The Riverbank has
-no terrain there and shows no arrow.
-
-- **Target:** the onward exit: the lowest-numbered destination that is not the zone
-  just left, a town or ticked as done (Clearfell from the encampment: Mud Burrow,
-  then The Grelwood). Several exits to the same zone are all goals.
-- **Placement:** the visit starts at the exit to the zone it came from (else an
-  exit with unknown destination, or a waypoint). Every placement (arrival exit x
-  8 turns in 45° steps x mirror x scale 0.55-1.3 minimap cells per game unit) is scored by how many recorded walls lie within two
-  6-unit cells of the outline, above the share chance would give for the area they
-  cover. Squeezing walls into a narrow corridor therefore scores nothing.
-- **Arrow:** "estimated" with at least 150 recorded walls, a best score of 0.5 and a
-  30% lead over the best placement pointing more than 45° elsewhere. Before that
-  (v0.1.11) a **rough** arrow shows right away: poe2way's layout as is (no turn,
-  measured scale or 0.8), entered at the arrival exit; with an ambiguous but good
-  match (score 0.5, no lead) the best placement instead. It points 12 cells
-  (72 units) along the shortest walkable path, so it bends around walls; the
-  distance is the path length. The arrow is only the compass around the character;
-  the panel shows the target and how sure the direction is, without an arrow.
-- **Scale:** a finished visit that clearly matches stores minimap cells per game
-  unit in `terrain-scales.json`; later visits use it (or the median of all areas).
-
-Tests use walls generated from the outline itself (unturned and mirrored), a grid
-that matches nothing, and a U-shaped corridor. Real minimap walls are noisier;
-the thresholds need checking on recorded Clearfell visits.
-
-### First real checks (2026-11-12)
-
-- **Clearfell Encampment** (fixed layout), 2,744 recorded walls arriving from The
-  Riverbank: 90% on the outline at 0.78 cells per unit with no extra turn, once the
-  base turn was corrected to `((x - y), -(x + y)) / √2` (world y points up; the
-  first guess lacked the flip). This fixes the scale range.
-- **Clearfell** instance seed 2693856399, ~2,800 walls near the encampment exit:
-  best 40%, no clear lead, so no arrow. With the wide scale range (0.2-5) it had
-  "matched" at 3.2 by squeezing all walls into the narrow tail by the exit; the
-  narrower range rules that out. Either this instance is another layout than
-  poe2way's or too little was explored; more Clearfell visits will tell.
-
-## Arrow on the game's layout graphs (2026-11-12, replaced the same night)
-
-The first graph arrow laid the path walked since arrival on every layout as one
-piece, from the arrival exit, and took the layout with the smallest mean distance
-to its corridors. It needed one unbroken path from the arrival point (the Clearfell
-visit is 17 unrelated parts), kept nothing across parts, re-entries or log events,
-and its evidence was weak (Clearfell: `ClearFell_W_S_N` mean 42 units, runner-up
-`W_N_E` 50). The navigator below replaces it.
+- Qutm's layout diagrams (icon positions, no walls), then poe2way's collected terrain (one
+  walkable outline per zone, matched against the recorded walls), then the walked path laid
+  on each layout graph. The code is gone; see `docs/build-log.md` and git history.
+- Measured then and still used: on a recorded Clearfell Encampment visit, 2,744 minimap
+  walls, 90% lay on poe2way's outline at **0.78 minimap cells per game unit** with the map
+  turned `((x - y), -(x + y)) / √2` (world y up). That turn is `guide::to_screen`; the
+  scale is `graph::SCALE`.
 
 ### Needle always visible (2026-11-12, owner request)
 
@@ -260,7 +183,7 @@ is confirmed ("estimated"), fainter gold when it is likely ("rough") and gray wh
 it is not recognised ("unconfirmed": the best guess, before a walk the direction
 most layouts agree on), when there is no direction at all (the needle keeps its last
 direction) or when the minimap is not tracking the player.
-The needle no longer disappears within a guided zone: when no arrow can be worked out
+The needle does not disappear within a zone: when no arrow can be worked out
 for a moment (minimap tracking lost, a recorded piece with too little to go on) the
 last one of the visit stays, gray. With nothing onward (back in the encampment from
 Clearfell, back in The Riverbank from the encampment) the target is the zone just
@@ -648,8 +571,9 @@ for all of them; not measured). The boss captures (`samples/boss-*.ppm`) are whe
 `src-tauri/src/layout/nav.rs`: one belief over (layout, position) per zone visit,
 updated with every measured step and log anchor, never reset by a tracking loss.
 Areas with layout graphs (`data/layouts/ggg/`, built per area on first entry) use
-it; Clearfell Encampment keeps poe2way's terrain arrow. The compass shows a needle
-in every area that has graphs or terrain.
+it. Elsewhere (a town) the compass points straight at the target's exit once the map
+has shown it by name (sure), or at the only exit icon seen (likely), or at the waypoint
+icon for a waypoint step.
 
 - **Belief:** per layout ~200 weighted particles (x, y in the file's units, a scale
   error around 1) and three kinds of log evidence: the walked line's (`path`), the

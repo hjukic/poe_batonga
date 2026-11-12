@@ -15,7 +15,6 @@ candidate rules and the remaining 1.0 validation work.
 | Campaign route | [domistae/poe2-leveling](https://github.com/domistae/poe2-leveling/tree/f682e2b99c4a5a4f31882f3674bba4dcefc6ab46), starting with `poe2_act1_guide.html` | Not yet; our own Riverbank route is in `data/routes/` |
 | Zone IDs/names | Our own observations from the owner's local PoE 2 log | `data/observations/campaign-zones.json` |
 | Zone layout graphs (every campaign zone) | The game files, `scripts/update-layouts.sh` | `data/layouts/ggg/` |
-| Zone terrain (walls, POIs) | [poe2way](https://www.poe2way.com/atlas) collected terrain, first three zones | `data/layouts/poe2way/` |
 
 ## Route reference
 
@@ -41,49 +40,12 @@ node scripts/collect-zone-observations.mjs "/path/to/logs/Client.txt" data/obser
 Do not hard-code observed area levels: patches/variants may change them. Unknown
 IDs should display the ID. See [log findings](log-findings.md).
 
-## poe2way zone terrain
+## poe2way zone terrain (dropped)
 
-poe2way's atlas and act guide load each area from
-`https://www.poe2way.com/api/map-layouts/<areaId>` (same area IDs as `Client.txt`).
-[`scripts/fetch-poe2way-terrain.mjs`](../scripts/fetch-poe2way-terrain.mjs) stores
-it compactly in `data/layouts/poe2way/` (fetched 2026-11-12, game release IDs in
-each file):
-
-```sh
-node scripts/fetch-poe2way-terrain.mjs            # G1_1 G1_town G1_2 by default
-node scripts/render-terrain.mjs                   # pictures in experiments/layouts/output
-```
-
-We start with the first three zones (The Riverbank, Clearfell Encampment,
-Clearfell) and add more once navigation works there; other area IDs can be
-passed to the script. `render-terrain.mjs` draws each zone north-up and turned
-45° with y up (`.game.svg`), as the in-game map shows it. That turn was fitted on
-a recorded Clearfell Encampment visit: 90% of its minimap walls lie on poe2way's
-outline at 0.78 minimap cells per game unit. The arrow (`src-tauri/src/layout/guide.rs`)
-bundles these files; see [map reading](map-reading.md#poe2way-terrain-arrow-2026-11-12).
-
-Per area there is `<areaId>.json` and `<areaId>.svg` (extra variants as
-`<areaId>.v1.*`), plus `index.json`:
-
-- `<areaId>.svg`: the walkable floor's outline (outer edge and holes) as one path in
-  game-space units, traced on a 3-unit grid. Inside = walkable, outside = wall.
-- `terrain.bounds`: `[minX, minY, maxX, maxY]` of the walkable area in the same
-  units; `terrain.cells`: its size in grid cells.
-- `objects[]`: `{ kind, x, y, label, destination }` in the same coordinates. Kinds:
-  `checkpoint`, `transition` (zone exit; `destination.areaId` when known),
-  `waypoint`, `boss`, `npc`, `object`, `portal`, `stash`.
-
-Coverage: Clearfell Encampment and Clearfell. poe2way has no terrain for The
-Riverbank (`G1_1`); for it we have only our own recordings. Exits without a known
-destination are labelled `exit` (the encampment's bottom exit leads to The
-Riverbank). NPCs appear several times where they stand at different quest stages.
-
-**Limits.** Each area is one *collected instance* ("collected terrain example");
-Campaign zones are generated per instance, so the
-walls are an example, not the instance being played. The overall shape and the
-order of exits/POIs are likely to be similar, but the exact walls are not; live
-pathing needs the player's explored minimap or our recordings to confirm which
-parts match. Towns are fixed and should match exactly.
+poe2way's collected terrain (one walkable outline per zone, Clearfell Encampment and
+Clearfell) drove the first arrow on 2026-11-12. It was dropped the same day with the arrow:
+an outline is one collected instance, not the one being played, and in the owner's town
+visits the terrain needle pointed the wrong way. The layout graphs below replaced it.
 
 ## Game layout graphs (datamined)
 
@@ -324,8 +286,7 @@ that is the table's word, not seen on a real screen yet.
 - Mobalytics campaign-layout guides (Act 1-3) and the PoE 2 wiki have layout
   pictures; not imported yet.
 - [Qutm](https://github.com/Vyary/qutm) layout diagrams (0-1 icon positions, no walls):
-  used for the first arrow, dropped 2026-11-12 in favour of poe2way's terrain.
-- Datamining the game files: see [ideas](../ideas.md).
+  used for the first arrow, dropped 2026-11-12.
 
 Offline tests may use synthetic maps, clearly labelled synthetic; they cannot
 establish performance on real gameplay.
