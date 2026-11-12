@@ -42,6 +42,9 @@ const LEARN_RATE: f64 = 0.2;
 /// Every this many big-map frames (about once a second) the whole game window is read,
 /// for map icons far from the player (they move on screen only as fast as the player).
 pub const SCAN_EVERY: u32 = 8;
+/// Room left around this app's panel, in logical pixels (its shadow, rounding).
+#[cfg(not(target_os = "windows"))]
+const PANEL_MARGIN: f64 = 8.0;
 /// Panels over the big map, left out of the whole-window icon search, as fractions of
 /// the game window (x0, y0, x1, y1; measured at 3840x2160): this app's checklist panel
 /// at its default place (first: replaced by where the panel really is, when known), the
@@ -49,8 +52,6 @@ pub const SCAN_EVERY: u32 = 8;
 /// the experience bar. Between the orbs the map shows to the bottom: an exit there
 /// ("Clearfell Encampment", the owner's Clearfell, 2026-11-12) was left out by a skipped
 /// bottom band before.
-/// Room left around this app's panel, in logical pixels (its shadow, rounding).
-const PANEL_MARGIN: f64 = 8.0;
 const PANELS: [[f64; 4]; 5] = [
     [0.0, 0.0, 0.19, 0.40],
     [0.79, 0.0, 1.0, 0.46],
