@@ -41,7 +41,7 @@ interface MinimapView {
 
 /** The layout the app recognised: its paths and exits in the map's screen axes. */
 interface LayoutPicture {
-  known: boolean; id: string; share: number; sure: boolean; candidates: number;
+  known: boolean; id: string; share: number; sure: boolean; candidates: number; noFit: boolean;
   paths: [number, number][][]; exits: [string, [number, number]][]; player: [number, number] | null;
 }
 /** The stitched map of the current zone visit, scaled to a cols x rows grid. */
@@ -322,7 +322,9 @@ function renderPicture(picture: LayoutPicture | undefined) {
   context?.clearRect(0, 0, layoutCanvas.width, layoutCanvas.height);
   layoutCanvas.hidden = !picture.known;
   if (!picture.known) {
-    name.textContent = `Layout not known yet · ${picture.candidates} possible`;
+    name.textContent = picture.noFit
+      ? 'Layout not known: the exits seen fit none of the zone\'s layouts'
+      : `Layout not known yet · ${picture.candidates} possible`;
     return;
   }
   name.textContent = `Layout ${picture.id} · ${picture.sure ? 'sure' : `likely, ${Math.round(picture.share * 100)}%`}`;

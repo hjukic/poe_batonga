@@ -241,6 +241,8 @@ pub struct Picture {
     pub sure: bool,
     /// Layouts still possible.
     pub candidates: usize,
+    /// The exits read by name fit none of the zone's layouts.
+    pub no_fit: bool,
     /// Each path as points (world units, screen axes).
     pub paths: Vec<Vec<[f32; 2]>>,
     /// Exits: the zone they lead to, and where.
@@ -1072,8 +1074,10 @@ impl Navigator {
         let posterior = self.posterior();
         let (top, share) = posterior.iter().copied().enumerate().max_by(|a, b| a.1.total_cmp(&b.1))?;
         let candidates = posterior.iter().filter(|&&p| p >= NEGLIGIBLE).count();
-        if share < PICTURE_FROM {
-            return Some(Picture { known: false, candidates, ..Picture::default() });
+        // Named exits that no layout fits (`named_loose`): none is drawn, however the belief
+        // leans (the owner's Clearfell of 2026-11-12 showed ClearFell_W_N_E, its exits misplaced).
+        if share < PICTURE_FROM || self.named_loose {
+            return Some(Picture { known: false, candidates, no_fit: self.named_loose, ..Picture::default() });
         }
         let layout = &self.area.layouts[top];
         let screen = |(x, y): (f64, f64)| {
@@ -1096,8 +1100,9 @@ impl Navigator {
             known: true,
             id: layout.id.clone(),
             share: share as f32,
-            sure: share >= GOLD && !self.named_loose,
+            sure: share >= GOLD,
             candidates,
+            no_fit: false,
             paths,
             exits,
             player,
@@ -2101,9 +2106,12 @@ mod tests {
         assert!(share("ClearFell_N_S_W") < 0.02, "{:?}", &ranking[..4]);
         let view = nav.guide(&target).unwrap();
         eprintln!("needle {view:?}");
-        // No layout fits that pair within 180 units (the best miss 240): the needle is gray.
+        // No layout fits that pair within 180 units (the best miss 240): the needle is gray,
+        // and no layout is drawn under the checklist.
         assert!(nav.named_loose);
         assert_eq!(view.source, "unconfirmed");
+        let picture = nav.picture().unwrap();
+        assert!(!picture.known && picture.no_fit, "{picture:?}");
         // A pair a layout fits well keeps it at most rough (Clearfell is measured: gold
         // needs more), not gray: W_N_E's own exits, 20 units off.
         let w_n_e = area.layouts.iter().find(|l| l.id == "ClearFell_W_N_E").unwrap();
