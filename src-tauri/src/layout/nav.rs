@@ -1355,6 +1355,42 @@ mod tests {
         assert_ne!(nav.guide(&target).unwrap().degrees, view.degrees);
     }
 
+    /// The owner's live case (N7): Clearfell 2693856399, app restarted (arrival
+    /// unknown, no memory), big map open, the Grelwood exit icon at (−136, +83)
+    /// cells; the wider capture also sees Mud Burrow at (823, 110).
+    #[test]
+    fn the_live_clearfell_case() {
+        let area = graph::load("G1_2");
+        let target = [exit("G1_4", "The Grelwood")];
+        let grelwood = ExitIcon { dx: -136.0, dy: 83.0, to: None };
+        let mud = ExitIcon { dx: 823.0, dy: 110.0, to: None };
+        let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 2693856399);
+        nav.icons(&[grelwood.clone()]);
+        let one = nav.guide(&target).unwrap();
+        eprintln!("one icon: {one:?}; top {:?}", &nav.ranking()[..3]);
+        assert_ne!(one.source, "estimated", "one unlabelled icon cannot say which exit it is");
+        nav.icons(&[grelwood.clone(), mud.clone()]);
+        let two = nav.guide(&target).unwrap();
+        let truth = nav.ranking().iter().position(|(id, _)| *id == "ClearFell_W_E_N").unwrap();
+        eprintln!("two unlabelled icons: {two:?}; top {:?}; ClearFell_W_E_N {:?} at rank {truth}", &nav.ranking()[..4], nav.ranking()[truth]);
+        // Unlabelled, the pair fits more than one layout (any two exits may be them).
+        assert_ne!(two.source, "estimated", "{two:?}");
+        // Both labelled: the layout and the needle.
+        let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 2693856399);
+        nav.icons(&[ExitIcon { to: Some("The Grelwood".into()), ..grelwood.clone() }, ExitIcon { to: Some("Mud Burrow".into()), ..mud }]);
+        let named = nav.guide(&target).unwrap();
+        eprintln!("two labelled icons: {named:?}; top {:?}", &nav.ranking()[..3]);
+        assert_eq!(nav.ranking()[0].0, "ClearFell_W_E_N");
+        assert!(super::super::guide::angle_between(named.degrees.unwrap(), screen_bearing(-136.0, 83.0).unwrap()) < 15.0, "{named:?}");
+        assert_ne!(named.source, "unconfirmed", "{named:?}");
+        // Labelled, one icon is enough to point at it.
+        let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 2693856399);
+        nav.icons(&[ExitIcon { to: Some("The Grelwood".into()), ..grelwood }]);
+        let one_named = nav.guide(&target).unwrap();
+        eprintln!("one labelled icon: {one_named:?}");
+        assert!(super::super::guide::angle_between(one_named.degrees.unwrap(), screen_bearing(-136.0, 83.0).unwrap()) < 15.0, "{one_named:?}");
+    }
+
     #[test]
     fn leaving_is_soft_evidence() {
         let json = r#"{"connections": ["A", "B"], "topologies": [
