@@ -6,7 +6,7 @@
     {
       "id": "talk-renly",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Renly", "style": "npc" }, { "text": " · Skill Gem", "style": "reward" }],
+      "parts": [{ "text": "Talk to " }, { "text": "Renly", "style": "npc" }, { "text": "Skill Gem", "style": "reward" }],
       "trigger": null,
       "evidence": "No quest line captured yet; \"Renly: What would you like?\" is his shop greeting and also appears later. Tick by hand."
     },
@@ -21,7 +21,8 @@
     {
       "id": "renly-support-gem",
       "kind": "objective",
-      "parts": [{ "text": "(Optional) After The Devourer, talk to ", "style": "optional" }, { "text": "Renly", "style": "npc" }, { "text": " · Support Gem", "style": "reward" }],
+      "optional": true,
+      "parts": [{ "text": "After The Devourer: " }, { "text": "Renly", "style": "npc" }, { "text": "Support Gem", "style": "reward" }],
       "trigger": null,
       "evidence": "No log line known yet. Tick by hand."
     }

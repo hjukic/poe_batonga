@@ -15,7 +15,12 @@ interface Status {
 }
 
 interface StepPart { text: string; style?: string }
-interface StepView { id: string; kind: string; parts: StepPart[]; state: 'done' | 'open' | 'manual' | 'note'; source: string | null }
+interface StepView {
+  id: string; kind: string; parts: StepPart[]; optional: boolean;
+  /** The compass target this step stands for, if any. */
+  target: string | null;
+  state: 'done' | 'open' | 'manual' | 'note'; source: string | null;
+}
 interface TrackerView {
   zone: { id: string; name: string; level: number };
   currentArea: string | null;
@@ -67,6 +72,10 @@ const LOCKED = icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="
 const UNLOCKED = icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.75-1.4"/>');
 const GEAR = icon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>');
 const RESTART = icon('<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>');
+/** Step markers: an arrow in front of every open step, a tick when done. */
+const mark = (path: string) => `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="${path}"/></svg>`;
+const STEP_ARROW = mark('M1.5 6h8M6.2 2.6 9.6 6 6.2 9.4');
+const STEP_DONE = mark('M2 6.5 4.8 9.2 10 3.2');
 const CLOSE = icon('<path d="M18 6 6 18M6 6l12 12"/>');
 
 document.body.className = 'overlay';
@@ -83,9 +92,6 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     </header>
     <p class="restart-status" id="restart-status" role="status" hidden></p>
     <div class="route" id="route"></div>
-    <div class="guide" id="guide" hidden>
-      <span id="guide-text"></span>
-    </div>
     <div class="minimap" id="minimap" hidden>
       <canvas id="minimap-canvas" width="300" height="260"></canvas>
     </div>
@@ -135,11 +141,12 @@ function render(next: Status) {
 
 function renderTracker(view: TrackerView) {
   showMessage('#log-warning', view.log.connected ? null : view.log.message);
-  $('.zone').textContent = `${view.zone.name} - Zone Level: ${view.zone.level}`;
+  $('.zone').textContent = `${view.zone.name} · Lv ${view.zone.level}`;
   $('#route').replaceChildren(...view.steps.map((step) => {
     const row = document.createElement(step.kind === 'objective' ? 'button' : 'div');
-    row.className = `step ${step.kind} ${step.state}`;
+    row.className = `step ${step.kind} ${step.state}${step.optional ? ' optional' : ''}`;
     row.dataset.id = step.id;
+    if (step.target) row.dataset.target = step.target;
     if (row instanceof HTMLButtonElement) {
       row.type = 'button';
       row.setAttribute('aria-pressed', String(step.state === 'done'));
@@ -151,15 +158,46 @@ function renderTracker(view: TrackerView) {
         });
       });
     }
+    // One row: marker, text (wraps under itself), reward or "optional" on the right.
+    const marker = document.createElement('span');
+    marker.className = 'mark';
+    if (step.kind === 'objective') marker.innerHTML = step.state === 'done' ? STEP_DONE : STEP_ARROW;
+    const text = document.createElement('span');
+    text.className = 'text';
+    const side = document.createElement('span');
+    side.className = 'side';
     for (const part of step.parts) {
       const span = document.createElement('span');
       span.textContent = part.text;
       if (part.style) span.className = part.style;
-      row.append(span);
+      (part.style === 'reward' ? side : text).append(span);
     }
+    if (step.optional && !side.childElementCount) side.textContent = 'optional';
+    row.append(marker, text);
+    if (side.textContent) row.append(side);
     return row;
   }));
+  markHeading();
   syncStepControls();
+}
+
+/** Where the compass points, as a step's target label; null when it has no target. */
+let guideTarget: string | null = null;
+/**
+ * The bright arrow marks the step to do now: the one the compass points to, else
+ * the first open step that is not optional.
+ */
+function markHeading() {
+  const open = Array.from(document.querySelectorAll<HTMLElement>('#route .step.objective:not(.done)'));
+  const heading = open.find((row) => guideTarget !== null && row.dataset.target === guideTarget)
+    ?? open.find((row) => !row.classList.contains('optional'))
+    ?? open[0];
+  for (const row of open) row.classList.toggle('heading', row === heading);
+}
+function setGuideTarget(target: string | null) {
+  if (target === guideTarget) return;
+  guideTarget = target;
+  markHeading();
 }
 
 function syncStepControls() {
@@ -177,30 +215,8 @@ function renderMinimap(view: MinimapView) {
   minimapTracking = view.enabled && view.visible && view.player !== null;
   minimapBox.hidden = !view.enabled;
   if (!minimapTracking) {
-    renderGuide(null);
     minimapCanvas.getContext('2d')?.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
   }
-}
-const screenDirection = (degrees: number) =>
-  ['right', 'down-right', 'down', 'down-left', 'left', 'up-left', 'up', 'up-right'][
-    Math.round(((degrees % 360) + 360) / 45) % 8
-  ];
-function renderGuide(guide: GuideView | null) {
-  if (!minimapTracking) guide = null;
-  const box = $('#guide');
-  box.hidden = !guide;
-  if (!guide) return;
-  const name = guide.target || (guide.targetKind === 'entrance' ? 'Exit' : guide.targetKind);
-  const bearing = guide.degrees !== null && Number.isFinite(guide.degrees);
-  box.classList.toggle('unsure', guide.source !== 'estimated' && guide.source !== 'encounter');
-  const how = guide.source === 'encounter'
-    ? (bearing ? 'Back to encounter area' : 'Encounter area · defeat boss')
-    : guide.source === 'unconfirmed' ? 'Direction not confirmed'
-    : guide.source === 'rough' ? 'Rough, layout not matched yet' : 'Estimated';
-  $('#guide-text').textContent = `${name} · ${how}${bearing ? ` · ${screenDirection(guide.degrees!)}` : ''}`;
-  box.title = guide.source === 'encounter'
-    ? 'The player location when the boss spoke, not the moving boss position. Dialogue does not confirm a kill.'
-    : `Screen/minimap direction, independent of character facing. Terrain: ${guide.variant}${guide.turned ? ' (rotated/mirrored)' : ''}; distance follows the walkable path.`;
 }
 
 const POI_COLORS: Record<string, string> = { arrived: '#7fd18b', start: '#7fd18b', left: '#8edce8', npc: '#f2d36b' };
@@ -208,7 +224,7 @@ function renderLayout(view: LayoutView | null) {
   const context = minimapCanvas.getContext('2d');
   if (!context) return;
   context.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
-  renderGuide(view?.guide ?? null);
+  setGuideTarget(view?.guide?.target || null);
   if (!view) return;
   const scale = Math.min(minimapCanvas.width / view.cols, minimapCanvas.height / view.rows);
   context.fillStyle = '#b9b4e6';
@@ -413,16 +429,24 @@ $('#reset-progress').addEventListener('click', () => {
 
 // Shown only in a plain browser (npm run dev without Tauri), where no log can be read.
 const browserPreview: TrackerView = {
-  zone: { id: 'G1_1', name: 'The Riverbank', level: 1 },
+  zone: { id: 'G1_2', name: 'Clearfell', level: 2 },
   currentArea: null,
   log: { connected: true, path: null, message: '' },
   steps: [
-    { id: 'talk-wounded-man', kind: 'objective', parts: [{ text: 'Talk to the Wounded Man' }], state: 'done', source: 'log' },
-    { id: 'directions-river', kind: 'note', parts: [{ text: 'Directions: Follow the river upstream', style: 'direction' }], state: 'note', source: null },
-    { id: 'kill-bloated-miller', kind: 'objective', parts: [{ text: 'Kill ' }, { text: 'The Bloated Miller', style: 'boss' }], state: 'manual', source: null },
-    { id: 'enter-clearfell-encampment', kind: 'objective', parts: [{ text: 'Enter Clearfell Encampment' }], state: 'open', source: null },
+    { id: 'kill-beira', kind: 'objective', parts: [{ text: 'Kill ' }, { text: 'Beira', style: 'boss' }, { text: '+10% Cold Res', style: 'reward' }], optional: false, target: null, state: 'manual', source: null },
+    { id: 'directions', kind: 'note', parts: [{ text: 'Burrow by the waypoint, Grelwood past the bridge', style: 'direction' }], optional: false, target: null, state: 'note', source: null },
+    { id: 'enter-mud-burrow', kind: 'objective', parts: [{ text: 'Enter Mud Burrow' }], optional: true, target: 'Mud Burrow', state: 'done', source: 'log' },
+    { id: 'kill-devourer', kind: 'objective', parts: [{ text: 'Kill ' }, { text: 'The Devourer', style: 'boss' }, { text: 'Skill Gem', style: 'reward' }], optional: true, target: null, state: 'manual', source: null },
+    { id: 'enter-grelwood', kind: 'objective', parts: [{ text: 'Enter The Grelwood' }], optional: false, target: 'The Grelwood', state: 'open', source: null },
   ],
 };
+
+// The webview has no visible console: page errors go to the app's terminal.
+function report(message: string) {
+  if (isTauri()) void invoke('client_log', { message }).catch(() => {});
+}
+window.addEventListener('error', (event) => report(`error: ${event.message} (${event.filename}:${event.lineno})`));
+window.addEventListener('unhandledrejection', (event) => report(`unhandled rejection: ${String(event.reason)}`));
 
 async function start() {
   if (!isTauri()) {
@@ -440,5 +464,7 @@ async function start() {
   render(await invoke<Status>('overlay_status'));
   renderTracker(await invoke<TrackerView>('tracker_state'));
   fitWindow();
+  // The window is first shown now that the page has something to draw.
+  await invoke('page_ready');
 }
 void start().catch((error) => showMessage('#error', String(error)));

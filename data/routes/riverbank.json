@@ -17,7 +17,7 @@
     {
       "id": "directions-river",
       "kind": "note",
-      "parts": [{ "text": "Directions: Follow the river upstream", "style": "direction" }]
+      "parts": [{ "text": "Follow the river upstream", "style": "direction" }]
     },
     {
       "id": "kill-bloated-miller",

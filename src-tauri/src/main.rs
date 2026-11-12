@@ -476,6 +476,39 @@ fn layout_state(recorder: State<'_, layout::Recorder>) -> Option<layout::LayoutV
     recorder.view()
 }
 
+/// Page errors and notes, printed in the app's terminal (the webview has no visible console).
+#[tauri::command]
+fn client_log(window: tauri::Window, message: String) {
+    eprintln!("Page [{}]: {message}", window.label());
+}
+
+/// The first time the layer surfaces are mapped they stay blank (Hyprland, seen
+/// 2026-11-12: listed by the compositor, nothing drawn); hidden and shown again they
+/// draw. So the first show is followed by one hide-and-show, off the main thread so
+/// the compositor handles each step.
+fn first_show(app: &AppHandle) {
+    let _ = report(app, apply_visibility(app, true));
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        let pause = std::time::Duration::from_millis(250);
+        std::thread::sleep(pause);
+        let _ = report(&handle, apply_visibility(&handle, false));
+        std::thread::sleep(pause);
+        let _ = report(&handle, apply_visibility(&handle, true));
+    });
+}
+
+/// The overlay page has loaded: show the windows for the first time.
+#[tauri::command]
+fn page_ready(app: AppHandle, window: tauri::Window) -> Result<(), String> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static SHOWN: AtomicBool = AtomicBool::new(false);
+    if window.label() == "overlay" && !SHOWN.swap(true, Ordering::SeqCst) && !snapshot(&app)?.visible {
+        first_show(&app);
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn quit(app: AppHandle) {
     app.exit(0);
@@ -524,6 +557,8 @@ fn main() {
             minimap_state,
             layout_state,
             restart::restart_latest,
+            client_log,
+            page_ready,
             quit
         ])
         .setup(|app| {
@@ -582,7 +617,7 @@ fn main() {
             if let Err(error) = registered {
                 app.state::<OverlayState>().0.lock().unwrap().shortcut_error = Some(error);
             }
-            let _ = report(app.handle(), apply_visibility(app.handle(), true));
+            // The overlay is shown once its page has loaded (`page_ready`).
             Ok(())
         })
         .run(tauri::generate_context!())

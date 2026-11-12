@@ -57,6 +57,9 @@ pub struct Step {
     pub id: String,
     pub kind: String,
     pub parts: Vec<Part>,
+    /// Not needed to progress; shown dimmer.
+    #[serde(default)]
+    pub optional: bool,
     #[serde(default)]
     pub trigger: Option<Trigger>,
     #[serde(default, rename = "navigationTarget")]
@@ -225,6 +228,9 @@ pub struct StepView {
     id: String,
     kind: String,
     parts: Vec<Part>,
+    optional: bool,
+    /// The compass target this step stands for (its navigation target's label), if any.
+    target: Option<String>,
     /// "done", "open" (watched in the log) or "manual" (no log trigger known).
     state: String,
     source: Option<String>,
@@ -291,6 +297,8 @@ impl Inner {
                     id: step.id.clone(),
                     kind: step.kind.clone(),
                     parts: step.parts.clone(),
+                    optional: step.optional,
+                    target: step.navigation_target.as_ref().map(|t| t.label.clone()),
                     state: state.into(),
                     source: done.map(|c| c.source.clone()),
                 }

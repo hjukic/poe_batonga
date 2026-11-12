@@ -6,34 +6,37 @@
     {
       "id": "kill-beira",
       "kind": "objective",
-      "parts": [{ "text": "Kill " }, { "text": "Beira of the Rotten Pack", "style": "boss" }, { "text": " (north) · +10% Cold Res", "style": "reward" }],
+      "parts": [{ "text": "Kill " }, { "text": "Beira", "style": "boss" }, { "text": "+10% Cold Res", "style": "reward" }],
       "trigger": null,
       "evidence": "No kill line captured yet. Tick by hand."
     },
     {
       "id": "directions-mud-burrow",
       "kind": "note",
-      "parts": [{ "text": "Directions: Mud Burrow is next to the waypoint; the bridge beyond leads to The Grelwood", "style": "direction" }]
+      "parts": [{ "text": "Burrow by the waypoint, Grelwood past the bridge", "style": "direction" }]
     },
     {
       "id": "enter-mud-burrow",
       "kind": "objective",
       "navigationTarget": { "area": "G1_2", "label": "Mud Burrow" },
-      "parts": [{ "text": "(Optional) Enter Mud Burrow", "style": "optional" }],
+      "optional": true,
+      "parts": [{ "text": "Enter Mud Burrow" }],
       "trigger": { "type": "zoneEntered", "area": "G1_3" },
       "evidence": "Zone-generation line for G1_3 (data/observations/campaign-zones.json)."
     },
     {
       "id": "kill-devourer",
       "kind": "objective",
-      "parts": [{ "text": "(Optional) Kill ", "style": "optional" }, { "text": "The Devourer", "style": "boss" }, { "text": " · Skill Gem", "style": "reward" }],
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "The Devourer", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
       "trigger": null,
       "evidence": "No kill line captured yet. Tick by hand."
     },
     {
       "id": "abandoned-stash",
       "kind": "objective",
-      "parts": [{ "text": "(Optional) Abandoned Stash in the Mysterious Campsite · Skill Gem", "style": "optional" }],
+      "optional": true,
+      "parts": [{ "text": "Abandoned Stash (campsite)" }, { "text": "Skill Gem", "style": "reward" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."
     },
