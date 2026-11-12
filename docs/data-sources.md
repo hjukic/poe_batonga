@@ -113,14 +113,14 @@ with at least one topology; not `…_WorldMap`, map areas, hideouts, or areas na
 
 **Coverage** (import of 2026-11-12, Steam build 26579160):
 
-| Act | Areas | Layouts | .tgr | .dgr | JSON | Areas whose layouts have no exit |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| 1 | 17 | 213 | 59 | 154 | 522 KiB | G1_12 Freythorn, G1_15 Ogham Manor (sub-graphs) |
-| 2 | 20 | 123 | 8 | 115 | 364 KiB | G2_12 Dreadnought (sub-graph) |
-| 3 | 20 | 134 | 0 | 134 | 459 KiB | G3_town, G3_1 (sub-graphs), G3_15 |
-| 4 | 22 | 82 | 0 | 82 | 229 KiB | G4_7, G4_13, G4_14 |
-| 6 (interludes) | 22 | 29 | 2 | 27 | 65 KiB | P1_6, P3_2, P3_5 (sub-graphs) |
-| **All** | **101** | **581** | **69** | **512** | **1.6 MiB** | |
+| Act | Areas | Layouts | .tgr | .dgr | Expanded | JSON | Areas whose layouts have no exit |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | 17 | 213 | 59 | 154 | 40 | 627 KiB | G1_15 Ogham Manor (its one connection is the way back, marked as start) |
+| 2 | 20 | 126 | 8 | 118 | 32 | 394 KiB | |
+| 3 | 20 | 134 | 0 | 134 | 22 | 497 KiB | G3_town, G3_15 |
+| 4 | 22 | 82 | 0 | 82 | 0 | 229 KiB | G4_7, G4_13, G4_14 |
+| 6 (interludes) | 22 | 29 | 2 | 27 | 3 | 76 KiB | |
+| **All** | **101** | **584** | **69** | **515** | **97** | **1.8 MiB** | |
 
 The app bundles every file (`build.rs`) but so far only uses `G1_1` and `G1_2`
 (`AREAS` in `src-tauri/src/layout/graph.rs`).
@@ -128,7 +128,9 @@ The app bundles every file (`build.rs`) but so far only uses `G1_1` and `G1_2`
 ### The JSON
 
 `{areaId, name, act, level, connections[], connectionNames[], topologies[]}`, one line.
-Each topology: `{id, file, format, size, roomUnitSize (dgr only), nodes[], edges[]}`.
+Each topology: `{id, file, format, size, roomUnitSize (dgr only), nodes[], edges[]}`, and
+on layouts with sub-graphs `expanded: true`, `parts`, `guessedTurns`, maybe `alternatives`
+(see Sub-graphs below).
 
 - `format`: `"tgr"` (outdoor zones) or `"dgr"` (dungeons, towns, most indoor zones).
 - `size`: the layout's grid: tiles for `.tgr`, room cells for `.dgr`.
@@ -137,7 +139,8 @@ Each topology: `{id, file, format, size, roomUnitSize (dgr only), nodes[], edges
   every quoted string after the tag (`"entrance1"`, `"default"`, `"killzone=5"`,
   `"teleport1disabled-MudBurrowArena"`, `"zone=2"`, `"unique1"`, …), kept so
   objectives can be found later. `exit` is the area the first `entranceN` word (tag or
-  key) leads to: the N-th of `WorldAreas.Connections`. `start` is true when the word
+  key) that names a connection leads to: the N-th of `WorldAreas.Connections` (Red Vale
+  has rooms tagged `entrance2` with the key `entrance1` and only one connection). `start` is true when the word
   `entrance` (tag or key) is on the node: where the zone starts. A node can be both.
 - `edges[]`: `{a, b, via, kind}`: a corridor between nodes `a` and `b`, bends in `via`,
   `kind` the first `.et` (edge type) file's name (`slash`, `woods`, `cavern_rooms`, …).
@@ -161,6 +164,11 @@ Each topology: `{id, file, format, size, roomUnitSize (dgr only), nodes[], edges
     dungeon**: no `.dgr` zone has been recorded yet (`shared/recordings/` has only
     G1_1, G1_2, G1_town). The master's `OuterBufferSize` (5 tiles in Mud Burrow) is
     probably a margin around the grid, so the origin may be offset.
+  - Many masters also set `RoomOverlap` (0 or 1, or not at all; Mud Burrow has none
+    although its rooms overlap). Sandswept Marsh's start part (unit 10, overlap 1,
+    buffer 1: 7×6 cells) fills its 22×19 box of 3-tile cells exactly as
+    `cells·(unit − 1) + 1 + 2·buffer` tiles, which supports the shared border tile;
+    whether overlap 0 means no shared tile is not checked.
 - **Edge numbers after the `.et` file** (`.tgr`: `40 50`, `15 90`; `.dgr`: `30 40`,
   `0 100`, `100 100`): pairs with the first ≤ the second, all 0–100: probably a
   min–max percentage (width or chance), **not** a length. Unknown.
@@ -175,19 +183,39 @@ Each topology: `{id, file, format, size, roomUnitSize (dgr only), nodes[], edges
   with three numbers and refuses a node or edge line of the wrong shape.
 - Node line: `x y degree neighbour… "tag" rotation keyCount "key"… numbers…`; the
   rotation is `I`, `FI`, `R90`, `R270`, `(any)`, `(best)`, ….
-- **Sub-graphs**: 168 nodes in 15 areas are tagged `graph`; their keys name another
-  graph (`"Metadata/…/_CanopyE_N.dgr" "3" "3"`: file and size in cells) or a bare
-  name that picks one of several files (`"midlevel_S"` → `_midlevel_s_1.dgr` or
-  `_2.dgr`), placed with its top-left cell at the node. The top-level graphs of
-  Freythorn, Ogham Manor, Dreadnought, the Ziggurat Encampment, Sandswept Marsh,
-  Holten Estate, Kriar Village and Kriar Peaks are only such placeholders, so their
-  layouts have no exits yet. Not expanded: next step (extract the named files, place
-  them by the node's cell and rotation).
+- **Sub-graphs**: 168 nodes in 15 areas are tagged `graph`: placeholders for another graph.
+  Their keys are a file (`"Metadata/…/_CanopyE_N.dgr"`) or a group name (`"midlevel_S"`),
+  then the box's width and height in the parent's cells. Group names are looked up in the
+  `.fgp` files that the graph's `master.tsi` names (`FileGroups "filegroups.fgp"`): a quoted
+  name, then its files, relative to the master's folder or absolute. All placeholders have no
+  corridors of their own (degree 0): the parts are joined by stairs and teleports (keys such as
+  `uniqueA0` on `StairsDown1` and `StairsUp1`), not by edges. The importer expands them:
+  - The placeholder's cell is the box's corner with the lowest x and y; the sub-graph's nodes
+    and edges are moved there and the placeholder is dropped (edges renumbered). Nested
+    placeholders are expanded too.
+  - Size: most sub-graphs have the box's size and the parent's `RoomUnitSize` (scale 1). In
+    Freythorn (3×3 box, 10×10 sub-grid), the Halani Gates canyons and Sandswept Marsh the
+    sub-graph is on another grid; it is scaled to fit the box, keeping its shape (`scale` in
+    `parts`). For Sandswept Marsh this matches the tiles exactly (its end part is a `.tgr` of
+    36×57 tiles in a 12×19 box of 3-tile cells); for the others it is an estimate.
+  - Turns: `I` is exact. `R90`/`R270` (two canyons in the Halani Gates) are turned with a
+    guessed direction; `(any)` and `(best)` (the game picks) are placed unturned. Each such
+    placement counts in `guessedTurns`.
+  - A group with several files: every choice is a layout of its own (`id#1`, `id#1-2`, … the
+    choices in order) while the area stays at 60 layouts or fewer (Dreadnought: 1 → 4).
+    Above that each placeholder keeps its first file and lists the group in
+    `alternatives` (`{name, files, at}`): Ogham Manor (16 layouts × 2 basements × 2 middle
+    floors would be 64).
+  - `parts`: `{file, at, turn, scale}` per placed sub-graph.
+  - Result: Freythorn, Dreadnought, Sandswept Marsh, Holten Estate, Kriar Village and Kriar
+    Peaks now have exits. Ogham Manor's floors are placed but its only connection (the
+    Ramparts) is the start. The Ziggurat Encampment is two one-node town rooms whose exits are
+    inside the fixed rooms (like Clearfell Encampment).
 - A node often carries several `entranceN` keys (144 nodes; Ardura Caravan's single
   town node has 26): `exit` holds only the first; `keys` has them all.
 - Three exits lead out of the campaign data (Grelwood and Infested Barrens to
   expedition areas, Mastodon Badlands to `Abyss_Intro`); one `entranceN` points past the
-  connection list (`G1_5` `entrance2`, `G3_15` `entrance1`) and stays `null`.
+  connection list (`G3_15` `entrance1`) and stays `null`.
 
 First check: the recorded Clearfell visit (seed 2693856399) fits `ClearFell_W_S_N`
 best with no extra turn at 0.78 minimap cells per unit, the scale measured on the
