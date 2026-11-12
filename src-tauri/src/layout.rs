@@ -139,6 +139,8 @@ struct Session {
 struct State {
     catalog: guide::Catalog,
     completed: HashMap<String, Vec<String>>,
+    /// Open checklist targets per area, in checklist order.
+    targets: HashMap<String, Vec<guide::NavTarget>>,
     /// Measured minimap cells per game unit, per area.
     scales: HashMap<String, Vec<f64>>,
     dir: Option<PathBuf>,
@@ -344,6 +346,7 @@ impl Recorder {
         Recorder(Mutex::new(State {
             catalog: guide::Catalog::load(),
             completed: HashMap::new(),
+            targets: HashMap::new(),
             scales,
             dir,
             session: None,
@@ -496,6 +499,15 @@ impl Recorder {
         }
     }
 
+    /// The open checklist steps that have a target, as (area, target) in checklist order.
+    pub fn set_targets(&self, targets: Vec<(String, guide::NavTarget)>) {
+        let Ok(mut state) = self.0.lock() else { return };
+        state.targets.clear();
+        for (area, target) in targets {
+            state.targets.entry(area).or_default().push(target);
+        }
+    }
+
     /// Replacing the snapshot also handles unticking/resetting a checklist.
     pub fn set_completed(&self, objectives: Vec<(String, String)>) -> Option<LayoutView> {
         let mut state = self.0.lock().ok()?;
@@ -638,6 +650,7 @@ impl State {
                 anchored: arrival.is_some(),
                 layout_hint,
                 player: (live.pos.0 - ax, live.pos.1 - ay),
+                targets: self.targets.get(area).map(Vec::as_slice).unwrap_or_default(),
                 completed: self.completed.get(area).map(Vec::as_slice).unwrap_or_default(),
                 scale,
             },
@@ -652,7 +665,7 @@ impl State {
             let trail: Vec<(i32, i32)> = part.trail.iter().map(|&[x, y]| (x - arrival.x, y - arrival.y)).collect();
             let player = *trail.last()?;
             let view = guide::guide(&self.catalog, &guide::Evidence {
-                area, arrived_from: &arrival.label, walls: &[], trail: &trail, anchored: true, layout_hint: None,
+                area, targets: &[], arrived_from: &arrival.label, walls: &[], trail: &trail, anchored: true, layout_hint: None,
                 player, completed: &[], scale,
             })?;
             (view.source != "unconfirmed" && !view.variant.is_empty()).then_some(view.variant)

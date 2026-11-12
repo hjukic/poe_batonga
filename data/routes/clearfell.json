@@ -1,5 +1,6 @@
 {
   "formatVersion": 1,
+  "order": 30,
   "zone": { "id": "G1_2", "name": "Clearfell", "level": 2 },
   "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); zone level from the live log",
   "steps": [
@@ -18,7 +19,7 @@
     {
       "id": "enter-mud-burrow",
       "kind": "objective",
-      "navigationTarget": { "area": "G1_2", "label": "Mud Burrow" },
+      "navigationTarget": { "area": "G1_2", "label": "Mud Burrow", "exit": "G1_3" },
       "optional": true,
       "parts": [{ "text": "Enter Mud Burrow" }],
       "trigger": { "type": "zoneEntered", "area": "G1_3" },
@@ -43,7 +44,7 @@
     {
       "id": "enter-grelwood",
       "kind": "objective",
-      "navigationTarget": { "area": "G1_2", "label": "The Grelwood" },
+      "navigationTarget": { "area": "G1_2", "label": "The Grelwood", "exit": "G1_4" },
       "parts": [{ "text": "Enter The Grelwood" }],
       "trigger": { "type": "zoneEntered", "area": "G1_4" },
       "evidence": "Zone-generation line for G1_4 (data/observations/campaign-zones.json)."

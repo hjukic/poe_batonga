@@ -14,12 +14,6 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 use tauri::{AppHandle, Emitter, Manager};
 
-/// Checklists in campaign order, one per zone.
-const ROUTES: [&str; 3] = [
-    include_str!("../../data/routes/riverbank.json"),
-    include_str!("../../data/routes/encampment.json"),
-    include_str!("../../data/routes/clearfell.json"),
-];
 const PROGRESS_FILE: &str = "progress.json";
 /// Progress saved before there was more than one checklist.
 const OLD_PROGRESS_FILE: &str = "riverbank-progress.json";
@@ -66,20 +60,36 @@ pub struct Step {
     pub navigation_target: Option<NavigationTarget>,
 }
 
+/// Where the compass heads for this step: a zone exit (`exit`: the area it leads
+/// to) or a tagged point of the layout graph (`tag`, e.g. "boss", "campsite").
 #[derive(Debug, Clone, Deserialize)]
 pub struct NavigationTarget {
     pub area: String,
     pub label: String,
+    #[serde(default)]
+    pub exit: Option<String>,
+    #[serde(default)]
+    pub tag: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Route {
+    /// Position in the campaign: checklists are kept in this order.
+    #[serde(default)]
+    pub order: u32,
     pub zone: Zone,
     pub steps: Vec<Step>,
 }
 
+/// Every checklist in `data/routes/`, one per zone, in campaign order: by the
+/// route's `order`, so the first is where a new character starts.
 pub fn load_routes() -> Vec<Route> {
-    ROUTES.iter().map(|json| serde_json::from_str(json).expect("bundled route data is valid")).collect()
+    let mut routes: Vec<Route> = crate::bundle::ROUTES
+        .iter()
+        .map(|(name, json)| serde_json::from_str(json).unwrap_or_else(|e| panic!("data/routes/{name}.json: {e}")))
+        .collect();
+    routes.sort_by_key(|route: &Route| route.order);
+    routes
 }
 
 // ---------- Log parsing ----------
@@ -266,7 +276,19 @@ impl Inner {
             .filter(|s| self.progress.completed.contains_key(&s.id))
             .filter_map(|s| s.navigation_target.as_ref())
             .map(|t| (t.area.clone(), t.label.clone())).collect();
-        if let Some(view) = app.state::<crate::layout::Recorder>().set_completed(completed) {
+        // Open steps with a target, in checklist order: what the compass may head for.
+        let targets = self.routes.iter().flat_map(|r| &r.steps)
+            .filter(|s| !self.progress.completed.contains_key(&s.id))
+            .filter_map(|s| s.navigation_target.as_ref().map(|t| (t.area.clone(), crate::layout::guide::NavTarget {
+                label: t.label.clone(),
+                exit: t.exit.clone(),
+                tag: t.tag.clone(),
+                optional: s.optional,
+            })))
+            .collect();
+        let recorder = app.state::<crate::layout::Recorder>();
+        recorder.set_targets(targets);
+        if let Some(view) = recorder.set_completed(completed) {
             let _ = app.emit("layout-state", view);
         }
     }

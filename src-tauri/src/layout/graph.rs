@@ -13,10 +13,8 @@ use super::guide::{area_order, from_screen, screen_bearing, to_screen, Evidence,
 use serde::Deserialize;
 use std::collections::HashMap;
 
-const AREAS: [(&str, &str); 2] = [
-    ("G1_1", include_str!("../../../data/layouts/ggg/G1_1.json")),
-    ("G1_2", include_str!("../../../data/layouts/ggg/G1_2.json")),
-];
+/// Areas whose arrow uses the layout graphs (the encampment keeps poe2way's map).
+const AREAS: [&str; 2] = ["G1_1", "G1_2"];
 
 /// World units per layout tile.
 const TILE: f64 = 23.0;
@@ -160,8 +158,9 @@ impl Field {
 }
 
 pub fn load() -> HashMap<String, Area> {
-    AREAS
+    crate::bundle::LAYOUTS
         .iter()
+        .filter(|(id, _)| AREAS.contains(id))
         .map(|&(id, json)| {
             let file: AreaFile = serde_json::from_str(json).expect("bundled layout graphs are valid");
             let names = file.connections.iter().cloned().zip(file.connection_names.iter().cloned()).collect();
@@ -482,7 +481,7 @@ mod tests {
     use super::*;
 
     fn ev<'a>(area: &'a str, from: &'a str, trail: &'a [(i32, i32)], player: (i32, i32)) -> Evidence<'a> {
-        Evidence { area, arrived_from: from, walls: &[], trail, anchored: true, layout_hint: None, player, completed: &[], scale: None }
+        Evidence { area, targets: &[], arrived_from: from, walls: &[], trail, anchored: true, layout_hint: None, player, completed: &[], scale: None }
     }
 
     /// The minimap path of a walk along `layout`'s corridors from `start` through `via` nodes.

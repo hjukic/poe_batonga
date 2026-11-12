@@ -424,6 +424,8 @@ pub(super) fn area_order(id: &str) -> Vec<(u32, String)> {
 /// What we know about the current visit, in minimap cells relative to the arrival point.
 pub struct Evidence<'a> {
     pub area: &'a str,
+    /// Open checklist steps of this area that have a target, in checklist order.
+    pub targets: &'a [NavTarget],
     /// Area id the player came from; the arrival point is that zone's exit (or a waypoint).
     pub arrived_from: &'a str,
     pub walls: &'a [(i32, i32)],
@@ -439,6 +441,17 @@ pub struct Evidence<'a> {
     pub completed: &'a [String],
     /// Minimap cells per game unit, measured on earlier visits, if any.
     pub scale: Option<f64>,
+}
+
+/// Something the compass may head for, from an open checklist step: a zone exit
+/// (`exit`: the area id it leads to) or a tagged point of the layout graph (`tag`).
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct NavTarget {
+    pub label: String,
+    pub exit: Option<String>,
+    pub tag: Option<String>,
+    /// The step is optional.
+    pub optional: bool,
 }
 
 #[derive(Clone, Serialize, Debug, PartialEq)]
@@ -647,7 +660,7 @@ pub fn measure_scale(catalog: &Catalog, area: &str, arrived_from: &str, walls: &
     if walls.len() < MIN_WALLS {
         return None;
     }
-    let ev = Evidence { area, arrived_from, walls, trail: &[], anchored: true, layout_hint: None, player: (0, 0), completed: &[], scale: None };
+    let ev = Evidence { area, targets: &[], arrived_from, walls, trail: &[], anchored: true, layout_hint: None, player: (0, 0), completed: &[], scale: None };
     let all = fits(zone, &ev);
     let best = all.first()?;
     // Another placement nearly as good at a different scale makes the scale unclear.
@@ -660,7 +673,7 @@ mod tests {
     use super::*;
 
     fn ev<'a>(area: &'a str, from: &'a str, walls: &'a [(i32, i32)]) -> Evidence<'a> {
-        Evidence { area, arrived_from: from, walls, trail: &[], anchored: true, layout_hint: None, player: (0, 0), completed: &[], scale: None }
+        Evidence { area, targets: &[], arrived_from: from, walls, trail: &[], anchored: true, layout_hint: None, player: (0, 0), completed: &[], scale: None }
     }
 
     /// Minimap walls a visit would record: the outline near the arrival point, as
@@ -825,7 +838,7 @@ fn guide_on_recording() {
         let trail: Vec<(i32, i32)> = part.trail.iter().map(|t| (t[0] - ax, t[1] - ay)).collect();
         let hint = std::env::var("LAYOUT_HINT").ok();
         let ev = Evidence {
-            area: &recording.area, arrived_from: arrival.map_or("", |_| from.as_str()), walls: &walls, trail: &trail,
+            area: &recording.area, targets: &[], arrived_from: arrival.map_or("", |_| from.as_str()), walls: &walls, trail: &trail,
             anchored: arrival.is_some(), layout_hint: hint.as_deref(), player, completed: &[], scale: None,
         };
         eprintln!("{} walls, {} path points, player {:?}, arrival {}", walls.len(), trail.len(), player, arrival.is_some());

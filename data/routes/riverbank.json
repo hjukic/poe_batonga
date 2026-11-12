@@ -1,5 +1,6 @@
 {
   "formatVersion": 1,
+  "order": 10,
   "zone": { "id": "G1_1", "name": "The Riverbank", "level": 1 },
   "steps": [
     {
@@ -21,7 +22,7 @@
     },
     {
       "id": "kill-bloated-miller",
-      "navigationTarget": { "area": "G1_1", "label": "The Bloated Miller" },
+      "navigationTarget": { "area": "G1_1", "label": "The Bloated Miller", "exit": "G1_town" },
       "kind": "objective",
       "parts": [{ "text": "Kill " }, { "text": "The Bloated Miller", "style": "boss" }],
       "trigger": {
@@ -35,6 +36,7 @@
     {
       "id": "enter-clearfell-encampment",
       "kind": "objective",
+      "navigationTarget": { "area": "G1_1", "label": "Clearfell Encampment", "exit": "G1_town" },
       "parts": [{ "text": "Enter Clearfell Encampment" }],
       "trigger": { "type": "zoneEntered", "area": "G1_town" },
       "evidence": "Zone-generation line for G1_town (data/observations/campaign-zones.json)."

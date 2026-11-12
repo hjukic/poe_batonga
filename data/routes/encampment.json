@@ -1,5 +1,6 @@
 {
   "formatVersion": 1,
+  "order": 20,
   "zone": { "id": "G1_town", "name": "Clearfell Encampment", "level": 15 },
   "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); zone level from the live log",
   "steps": [
@@ -13,7 +14,7 @@
     {
       "id": "enter-clearfell",
       "kind": "objective",
-      "navigationTarget": { "area": "G1_town", "label": "Clearfell" },
+      "navigationTarget": { "area": "G1_town", "label": "Clearfell", "exit": "G1_2" },
       "parts": [{ "text": "Enter Clearfell" }],
       "trigger": { "type": "zoneEntered", "area": "G1_2" },
       "evidence": "Zone-generation line for G1_2 (live log 2026-11-12)."
