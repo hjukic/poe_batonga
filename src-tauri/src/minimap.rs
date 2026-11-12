@@ -1369,12 +1369,10 @@ mod tests {
                 whole.pixels[(y * 3840 + x) * 3..][..3].copy_from_slice(&[16, 15, 18]);
             }
         }
+        // (Drawn as the exit sprite: a plain orange block no longer reads as an exit.)
+        let entrance = bigmap::sprites().iter().position(|s| s.id == "Entrance").unwrap();
         for blob in 0..3 {
-            for y in 1500..1526 {
-                for x in 2400 + blob * 60..2418 + blob * 60 {
-                    whole.pixels[(y * 3840 + x) * 3..][..3].copy_from_slice(&[206, 120, 50]);
-                }
-            }
+            bigmap::draw_for_tests(&mut whole, entrance, [2409.0 + blob as f64 * 60.0, 1513.0], 0.48);
         }
         let read_with_skip = |skip0: [usize; 4]| {
             let mut scan = scan.clone();

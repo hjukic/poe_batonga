@@ -942,11 +942,14 @@ const LEAD: f64 = 0.15;
 const TWIN_LEAD: f64 = 0.04;
 /// A colour-found checkpoint or waypoint must look like its own sprite this much to be
 /// kept (and is named by it). Real checkpoints 0.55-0.67 (Clearfell, the Riverbank, the
-/// owner's 19 captures); scene ones up to 0.48 (the glow of the waypoint stone in Clearfell
-/// Encampment, `samples/bigmap-1794483509.ppm`). The real waypoint 0.65-0.68 (14 captures),
+/// owner's 24 captures); scene ones up to 0.48 (the glow of the waypoint stone in Clearfell
+/// Encampment, `samples/bigmap-1794483509.ppm`). The real waypoint 0.65-0.68 (15 captures),
 /// scene ones up to 0.496 (a hen on a blue rune circle, `samples/bigmap-1794486221.ppm`).
-/// An exit keeps its kind whatever it scores (none false seen) and is named from `OWN`.
-const OWN: f64 = 0.47;
+/// An exit must score its `Entrance` sprite `EXIT_OWN`: real exits 0.930-0.948 on the
+/// owner's 24 captures, 0.95 on the Clearfell screenshot, 0.94-0.96 drawn with the player's
+/// cross on them; scene ones up to 0.73 (lit rock, `samples/bigmap-1794483486.ppm`; a
+/// brazier behind a label 0.05).
+const EXIT_OWN: f64 = 0.83;
 const OWN_CHECKPOINT: f64 = 0.55;
 const OWN_WAYPOINT: f64 = 0.55;
 /// An exit whose own sprite scores this much is one: no other sprite is tried (it could
@@ -1034,7 +1037,7 @@ fn identify(image: &Image, icons: &mut Vec<(Icon, [f64; 2])>, found: &[(u8, Blob
         let least = match icon.kind {
             "checkpoint" => OWN_CHECKPOINT,
             "waypoint" => OWN_WAYPOINT,
-            _ => OWN,
+            _ => EXIT_OWN,
         };
         let name = own.filter(|&(_, v)| v >= least).map(|(i, _)| sprites()[i].id.as_str());
         if icon.kind == "exit" && own.is_some_and(|(_, v)| v >= SURE_EXIT) {
@@ -1050,6 +1053,8 @@ fn identify(image: &Image, icons: &mut Vec<(Icon, [f64; 2])>, found: &[(u8, Blob
             Some((i, _, c)) if sprites()[i].kind != icon.kind && !matches!(sprites()[i].kind, "exit" | "checkpoint" | "waypoint") => {
                 (icon.kind, icon.sprite, *at) = (sprites()[i].kind, Some(sprites()[i].id.as_str()), c);
             }
+            // An orange blob that does not look like an exit (lit rock, a brazier): none.
+            _ if name.is_none() => drop[n] = true,
             _ => icon.sprite = name,
         }
     }
@@ -1755,6 +1760,31 @@ mod tests {
     }
 
     #[test]
+    fn lit_rock_and_a_brazier_are_no_exits() {
+        // Clearfell (`samples/bigmap-1794483486.ppm`, crop at 900, 1000): lit rock scored 0.73
+        // (every second pixel) and 0.62 (every pixel) against the exit sprite; the corner
+        // minimap (`minimap-exit-1794483815.ppm`, crop at 160, 340): a brazier behind a label,
+        // 0.05. Real exits 0.93-0.95.
+        for (name, strides) in [("bigmap-lit-rock.ppm", [1, 2]), ("minimap-brazier.ppm", [1, 2])] {
+            let image = fixture(name);
+            let old: usize = strides.iter().map(|&s| without_matching(|| icons_in(&image, [0.0, 0.0], SCALE, 1.0, s, &[], false)).iter().filter(|i| i.kind == "exit").count()).sum();
+            assert!(old >= 1, "{name}: the old reader saw no exit");
+            for stride in strides {
+                let new = icons_in(&image, [0.0, 0.0], SCALE, 1.0, stride, &[], false);
+                assert!(new.iter().all(|i| i.kind != "exit"), "{name}, every {stride} px: {new:?}");
+            }
+        }
+        // A real exit with the player's cross over it, drawn: still one.
+        for (dx, dy) in [(0.0, 0.0), (0.0, -9.0), (8.0, 2.0), (0.0, 12.0)] {
+            let mut image = fixture("bigmap-scene.ppm");
+            draw(&mut image, "Entrance", [128.0, 80.0], 0.48);
+            paint(&mut image, [230, 110, 30], |x, y| (x as f64 - 128.0 - dx).abs() + (y as f64 - 80.0 - dy).abs() <= 5.0);
+            let exits = icons_in(&image, [128.0 + dx, 80.0 + dy], SCALE, 1.0, 2, &[], false);
+            assert_eq!(exits.iter().filter(|i| i.kind == "exit").count(), 1, "cross at {dx}, {dy}: {exits:?}");
+        }
+    }
+
+    #[test]
     fn a_hen_on_a_rune_circle_is_no_waypoint() {
         // Clearfell Encampment (`samples/bigmap-1794486221.ppm`, crop at 0, 960): a hen on a
         // blue rune circle at (73, 85) scored 0.496 against the waypoint sprite; real
@@ -2209,7 +2239,7 @@ mod tests {
         }
         // A real exit stays one with the cross on it.
         let mut image = fixture("bigmap-scene.ppm");
-        paint(&mut image, [205, 96, 38], |x, y| (120..138).contains(&x) && (70..96).contains(&y) && (x + y) % 4 != 0);
+        draw(&mut image, "Entrance", [129.0, 83.0], 0.48);
         paint(&mut image, orange, |x, y| (132..143).contains(&x) && (80..90).contains(&y));
         for stride in [1, 2] {
             let exits: Vec<_> = icons_in(&image, [137.5, 85.0], SCALE, 1.0, stride, &[], false);
