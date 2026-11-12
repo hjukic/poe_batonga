@@ -36,8 +36,8 @@ let guide: GuideView | null = null;
 let tracking = false;
 let shown: number | null = null;
 
-/** The needle is always shown while there is a target: gold when the layout is
- *  confirmed, fainter gold when it is likely, gray while it is not recognised, there is
+/** The needle is always shown while there is a target: solid gold when the layout is
+ *  confirmed, hollow gold when it is likely, gray while it is not recognised, there is
  *  no direction yet, or the minimap is not tracking the player (it then keeps its last
  *  direction). */
 function update() {

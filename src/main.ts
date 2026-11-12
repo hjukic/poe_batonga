@@ -104,7 +104,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <label class="row"><span>Opacity</span><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></label>
     <div class="row"><span>Show / hide</span><button id="shortcut" class="keycap" type="button" title="Click, then press a new shortcut"></button></div>
     <div class="row"><span>Tick current step</span><span id="tick-shortcut" class="keycap static"></span></div>
-    <label class="row" title="Off: the compass passes over optional steps"><span>Compass: optional steps</span><input id="compass-optional" type="checkbox" checked /></label>
+    <label class="row" title="Off (speedrun): only the steps needed to progress are listed and the arrow leads to them. On: side steps marked optional are listed too, and the arrow leads to them in order."><span>Optional content</span><input id="optional-content" type="checkbox" /></label>
     <label class="row" title="The overlay hides while the game is closed or on a workspace that is not shown"><span>Hide when game is off screen</span><input id="auto-hide" type="checkbox" checked /></label>
     <label class="row" title="The map recorded so far, for checking the tracking"><span>Map preview</span><input id="map-preview" type="checkbox" /></label>
     <p id="shortcut-error" class="warning" hidden></p>
@@ -119,6 +119,7 @@ const settings = $('#settings');
 const settingsToggle = $('#settings-toggle');
 const lockButton = $<HTMLButtonElement>('#lock');
 const shortcutButton = $<HTMLButtonElement>('#shortcut');
+const optionalContent = $<HTMLInputElement>('#optional-content');
 let status: Status | undefined;
 let recording = false;
 
@@ -217,18 +218,20 @@ function renderTracker(view: TrackerView) {
   showMessage('#log-warning', view.log.connected ? null : view.log.message);
   $('.zone').textContent = `${view.zone.name} · Lv ${view.zone.level}`;
   const rows: HTMLElement[] = [];
-  if (view.steps.length <= MAX_ROWS || unfolded) {
-    rows.push(...view.steps.map(stepRow));
+  // Speedrun (the default): optional steps are left out of the list.
+  const steps = optionalContent.checked ? view.steps : view.steps.filter((step) => !step.optional);
+  if (steps.length <= MAX_ROWS || unfolded) {
+    rows.push(...steps.map(stepRow));
     if (unfolded) rows.push(summaryRow('Show less', false));
   } else {
     // Folded: the next open steps, each with the note in front of it; the rest as counts.
-    const objectives = view.steps.filter((step) => step.kind === 'objective');
+    const objectives = steps.filter((step) => step.kind === 'objective');
     const open = objectives.filter((step) => step.state !== 'done');
     const shown = new Set(open.slice(0, MAX_OPEN));
     const done = objectives.length - open.length;
     if (done) rows.push(summaryRow(`${done} done`, true));
-    view.steps.forEach((step, index) => {
-      const next = step.kind === 'objective' ? step : view.steps.slice(index).find((later) => later.kind === 'objective');
+    steps.forEach((step, index) => {
+      const next = step.kind === 'objective' ? step : steps.slice(index).find((later) => later.kind === 'objective');
       if (next && shown.has(next)) rows.push(stepRow(step));
     });
     if (open.length > shown.size) rows.push(summaryRow(`+${open.length - shown.size} more`, false));
@@ -362,11 +365,16 @@ function stored(key: string, fallback: boolean) {
 function keep(key: string, value: boolean) {
   try { localStorage.setItem(key, String(value)); } catch { /* Optional preference. */ }
 }
-const compassOptional = $<HTMLInputElement>('#compass-optional');
-compassOptional.checked = stored('compass-optional', true);
+// Optional content: off is the speedrun default (optional steps not listed, the arrow
+// passes over them); on lists them and lets the arrow lead to them.
+optionalContent.checked = stored('optional-content', false);
 const sendCompassOptional = () =>
-  isTauri() && void invoke('set_compass_optional', { follow: compassOptional.checked }).catch(console.error);
-compassOptional.addEventListener('change', () => { keep('compass-optional', compassOptional.checked); sendCompassOptional(); });
+  isTauri() && void invoke('set_compass_optional', { follow: optionalContent.checked }).catch(console.error);
+optionalContent.addEventListener('change', () => {
+  keep('optional-content', optionalContent.checked);
+  sendCompassOptional();
+  if (lastTracker) renderTracker(lastTracker);
+});
 const autoHide = $<HTMLInputElement>('#auto-hide');
 autoHide.checked = stored('auto-hide', true);
 const sendAutoHide = () => isTauri() && void invoke('set_auto_hide', { enabled: autoHide.checked }).catch(console.error);
