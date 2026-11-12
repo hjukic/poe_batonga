@@ -241,7 +241,7 @@ pub fn parse_line(line: &str) -> Option<(String, LogEvent)> {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Completion {
     pub at: String,
-    /// "log" or "manual".
+    /// "log", "implied" (a later step was logged), "map" (a boss's grey icon) or "manual".
     pub source: String,
     pub evidence: String,
 }
