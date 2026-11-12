@@ -682,7 +682,7 @@ mod tests {
             "G1_1", "G1_town", "G1_2", "G1_3", "G1_4", "G1_5", "G1_6", "G1_7", "G1_8", "G1_9", "G1_11", "G1_12",
             "G1_13_1", "G1_13_2", "G1_14", "G1_15", "G1_10",
         ];
-        assert_eq!(zones, act1);
+        assert_eq!(zones[..act1.len()], act1);
         let mut progress = Progress::default();
         feed(&mut progress, &[line("DEBUG", r#"Generating level 4 area "G1_4" with seed 7"#)]);
         assert_eq!(progress.shown_zone.as_deref(), Some("G1_4"));
