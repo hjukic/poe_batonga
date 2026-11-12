@@ -43,7 +43,13 @@ pub struct Part {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Trigger {
     NpcLine { area: String, speaker: String, text: String },
-    ZoneEntered { area: String },
+    /// Entering `area`. With `after`, the entry only counts once that step is done
+    /// (done before this entry, not by it): for moves back to a zone entered before.
+    ZoneEntered {
+        area: String,
+        #[serde(default)]
+        after: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -180,13 +186,17 @@ pub fn apply(routes: &[Route], progress: &mut Progress, timestamp: &str, event: 
             changed = true;
         }
     }
+    // What was done before this event: an `after` step ticked by this very event doesn't count.
+    let done_before: BTreeSet<String> = progress.completed.keys().cloned().collect();
     for step in routes.iter().flat_map(|r| &r.steps) {
         let Some(trigger) = &step.trigger else { continue };
         if progress.completed.contains_key(&step.id) || progress.dismissed.contains(&step.id) {
             continue;
         }
         let evidence = match (trigger, event) {
-            (Trigger::ZoneEntered { area }, LogEvent::ZoneEntered { area: got, level, .. }) if area == got => {
+            (Trigger::ZoneEntered { area, after }, LogEvent::ZoneEntered { area: got, level, .. })
+                if area == got && after.as_ref().is_none_or(|step| done_before.contains(step)) =>
+            {
                 format!("Entered {got} (level {level})")
             }
             (Trigger::NpcLine { area, speaker, text }, LogEvent::Dialogue { speaker: who, text: said })
@@ -691,6 +701,30 @@ mod tests {
         assert!(progress.completed.contains_key("grelwood-red-vale-wp"));
         assert!(progress.completed.contains_key("enter-red-vale"));
         assert!(!progress.completed.contains_key("runic-seals"));
+    }
+
+    #[test]
+    fn a_zone_entry_with_after_waits_for_that_step() {
+        let route: Route = serde_json::from_str(
+            r#"{"zone":{"id":"A","name":"A","level":1},"steps":[
+                {"id":"detour","kind":"objective","parts":[],"trigger":{"type":"zoneEntered","area":"B"}},
+                {"id":"move","kind":"objective","parts":[],"trigger":{"type":"zoneEntered","area":"B","after":"detour"}}
+            ]}"#,
+        )
+        .unwrap();
+        let routes = [route];
+        let mut progress = Progress::default();
+        let enter = |progress: &mut Progress, area: &str| {
+            let (ts, event) = parse_line(&line("DEBUG", &format!(r#"Generating level 1 area "{area}" with seed 1"#))).unwrap();
+            apply(&routes, progress, &ts, &event);
+        };
+        // The first entry ticks the detour only: `after` must be done before the entry.
+        enter(&mut progress, "B");
+        assert!(progress.completed.contains_key("detour"));
+        assert!(!progress.completed.contains_key("move"));
+        enter(&mut progress, "A");
+        enter(&mut progress, "B");
+        assert!(progress.completed.contains_key("move"));
     }
 
     #[test]
