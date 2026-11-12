@@ -30,10 +30,14 @@ const OTHERS: [&str; 2] = ["Checkpoint", "Waypoint"];
 
 struct State {
     names: Vec<String>,
+    /// Counts the candidate lists set: a read begun under one list is not kept under the next.
+    generation: u64,
     /// Rendered names: (name, size in hundredths of a px) -> mask.
     rendered: HashMap<(String, u32), Mask>,
-    /// Labels read per icon place (image pixels / 4): reading again only when it moved.
-    read: HashMap<(i64, i64), Option<String>>,
+    /// Names read, by what was drawn: the icon's place (image pixels / 4) and a signature
+    /// of the label's pixels. Unread labels are not kept: a label hidden once (an effect,
+    /// loot) is read again, and another exit landing on the same place has other pixels.
+    read: HashMap<((i64, i64), u64), String>,
 }
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -44,8 +48,8 @@ static STATE: Mutex<Option<State>> = Mutex::new(None);
 #[allow(dead_code)]
 pub fn set_label_candidates(names: Vec<String>) {
     if let Ok(mut state) = STATE.lock() {
-        let rendered = state.take().map(|s| s.rendered).unwrap_or_default();
-        *state = Some(State { names, rendered, read: HashMap::new() });
+        let (rendered, generation) = state.take().map(|s| (s.rendered, s.generation + 1)).unwrap_or_default();
+        *state = Some(State { names, generation, rendered, read: HashMap::new() });
     }
 }
 
@@ -213,28 +217,60 @@ fn grow(mask: &[bool], w: usize, h: usize) -> Vec<bool> {
 /// The zone name on the label of the exit icon at `icon` (image pixels), when one of the
 /// current candidates is clearly ahead; None otherwise or before candidates are set.
 pub fn read(image: &Image, icon: [f64; 2], size: f64) -> Option<String> {
-    let key = ((icon[0] / 4.0).round() as i64, (icon[1] / 4.0).round() as i64);
-    let names = {
+    let key = (((icon[0] / 4.0).round() as i64, (icon[1] / 4.0).round() as i64), signature(image, icon, size));
+    let (names, generation) = {
         let state = STATE.lock().ok()?;
         let state = state.as_ref()?;
         if let Some(known) = state.read.get(&key) {
-            return known.clone();
+            return Some(known.clone());
         }
-        state.names.clone()
+        (state.names.clone(), state.generation)
     };
     if names.is_empty() {
         return None;
     }
     let found = decide(&names, scores(image, icon, size, &with_others(&names)));
-    if let Ok(mut state) = STATE.lock() {
-        if let Some(state) = state.as_mut() {
-            if state.read.len() > 64 {
-                state.read.clear();
-            }
-            state.read.insert(key, found.clone());
-        }
+    if let Some(name) = &found {
+        keep(key, name, generation);
     }
     found
+}
+
+/// Keeps a name read under the candidate list `generation`, unless the list changed since.
+fn keep(key: ((i64, i64), u64), name: &str, generation: u64) {
+    if let Ok(mut state) = STATE.lock() {
+        if let Some(state) = state.as_mut().filter(|s| s.generation == generation) {
+            if state.read.len() >= 64 {
+                state.read.clear();
+            }
+            state.read.insert(key, name.to_string());
+        }
+    }
+}
+
+/// A signature of the label pixels above the exit icon at `icon`: the text mask over the
+/// box any label there covers (names up to 320 px wide at 2160 px height; the text's top
+/// within the search of its place, 17 px high).
+fn signature(image: &Image, icon: [f64; 2], size: f64) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let clamp = |v: f64, n: usize| (v.max(0.0) as usize).min(n);
+    let (x0, x1) = (clamp(icon[0] - 160.0 * size, image.width), clamp(icon[0] + 160.0 * size, image.width));
+    let (y0, y1) = (clamp(icon[1] - (ABOVE + SEARCH[1] + 2.0) * size, image.height), clamp(icon[1], image.height));
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    (x0, x1, y0, y1).hash(&mut hasher);
+    for y in y0..y1 {
+        let mut bits = 0u64;
+        for x in x0..x1 {
+            let i = (y * image.width + x) * 3;
+            bits = bits.rotate_left(1) ^ is_text(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]) as u64;
+            if (x - x0) % 64 == 63 {
+                bits.hash(&mut hasher);
+                bits = 0;
+            }
+        }
+        bits.hash(&mut hasher);
+    }
+    hasher.finish()
 }
 
 /// The candidates with the other labels an exit must not be.
@@ -350,21 +386,67 @@ mod tests {
         }
     }
 
+    /// `crop` pasted on a dark 600x200 canvas with the pixel `icon` at (300, 100).
+    fn at_centre(crop: &Image, icon: [f64; 2]) -> Image {
+        let (w, h) = (600, 200);
+        let mut out = Image { width: w, height: h, pixels: [24, 22, 26].repeat(w * h) };
+        let (ox, oy) = (300 - icon[0].round() as usize, 100 - icon[1].round() as usize);
+        for y in 0..crop.height {
+            for x in 0..crop.width {
+                out.pixels[((y + oy) * w + x + ox) * 3..][..3].copy_from_slice(&crop.pixels[(y * crop.width + x) * 3..][..3]);
+            }
+        }
+        out
+    }
+
+    /// The only test that sets the shared list (the store is shared by every test).
     #[test]
-    fn nothing_is_read_before_candidates_are_set_and_reads_are_kept() {
+    fn the_store_keeps_what_was_drawn_and_only_names() {
         let mud = fixture("labels-mudburrow.ppm");
         let icon = icons(&mud, "exit")[0];
-        // The only test that sets the shared list.
+        let stored = || STATE.lock().unwrap().as_ref().map_or(0, |s| s.read.len());
+        // Nothing is read before candidates are set, or with none.
         set_label_candidates(vec![]);
         assert_eq!(read(&mud, icon, 1.0), None);
         set_label_candidates(clearfell());
         let started = std::time::Instant::now();
         assert_eq!(read(&mud, icon, 1.0).as_deref(), Some("Mud Burrow"));
         println!("first read (names drawn, 5 names x 3 sizes x 117 places): {:?}", started.elapsed());
-        // Kept for that place: read again from the store.
-        let key = ((icon[0] / 4.0).round() as i64, (icon[1] / 4.0).round() as i64);
-        let kept = STATE.lock().unwrap().as_ref().unwrap().read.get(&key).cloned();
-        assert_eq!(kept, Some(Some("Mud Burrow".to_string())));
+        // Kept for those pixels: read again from the store.
+        assert_eq!(stored(), 1);
+        let started = std::time::Instant::now();
         assert_eq!(read(&mud, icon, 1.0).as_deref(), Some("Mud Burrow"));
+        println!("from the store, signature included: {:?}", started.elapsed());
+
+        // A label hidden once (here covered by a dark effect) is not kept as unread: read
+        // again once it shows.
+        let grelwood = fixture("labels-grelwood.ppm");
+        let g_icon = icons(&grelwood, "exit")[0];
+        let mut hidden = grelwood.clone();
+        for y in g_icon[1] as usize - 32..g_icon[1] as usize - 10 {
+            for x in g_icon[0] as usize - 60..g_icon[0] as usize + 60 {
+                hidden.pixels[(y * hidden.width + x) * 3..][..3].copy_from_slice(&[30, 30, 34]);
+            }
+        }
+        assert_eq!(read(&hidden, g_icon, 1.0), None);
+        assert_eq!(stored(), 1);
+        assert_eq!(read(&grelwood, g_icon, 1.0).as_deref(), Some("The Grelwood"));
+
+        // Another exit landing on the same screen place gets its own name, not the old one.
+        let (first, second) = (at_centre(&grelwood, g_icon), at_centre(&mud, icon));
+        assert_eq!(read(&first, [300.0, 100.0], 1.0).as_deref(), Some("The Grelwood"));
+        let started = std::time::Instant::now();
+        assert_eq!(read(&second, [300.0, 100.0], 1.0).as_deref(), Some("Mud Burrow"));
+        println!("a read with the names drawn already: {:?}", started.elapsed());
+        assert_eq!(read(&first, [300.0, 100.0], 1.0).as_deref(), Some("The Grelwood"));
+
+        // A read begun before a zone change is not kept after it.
+        let generation = STATE.lock().unwrap().as_ref().unwrap().generation;
+        set_label_candidates(names(&["Clearfell", "The Red Vale", "The Grim Tangle", "Lost Catacombs"]));
+        keep(((75, 25), 1), "The Grelwood", generation);
+        assert_eq!(stored(), 0);
+        // With the new zone's names that label reads nothing.
+        assert_eq!(read(&first, [300.0, 100.0], 1.0), None);
+        set_label_candidates(vec![]);
     }
 }
