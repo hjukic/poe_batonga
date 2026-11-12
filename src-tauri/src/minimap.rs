@@ -33,6 +33,8 @@ pub const CELL: usize = 2;
 const CELL_MIN: u32 = 2;
 /// How fast the learnt spot of the minimap's cross follows new frames.
 const LEARN_RATE: f64 = 0.2;
+#[cfg(target_os = "linux")]
+const GRIM_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Serialize, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -279,14 +281,43 @@ fn locate_minimap() -> Result<CaptureRegion, String> {
 
 #[cfg(target_os = "linux")]
 fn grim(geometry: &str) -> Result<Image, String> {
-    let output = std::process::Command::new("grim")
-        .args(["-t", "ppm", "-g", geometry, "-"])
-        .output()
-        .map_err(|e| format!("grim unavailable: {e}"))?;
-    if !output.status.success() {
-        return Err(format!("grim failed: {}", String::from_utf8_lossy(&output.stderr).trim()));
+    let mut command = std::process::Command::new("grim");
+    command.args(["-t", "ppm", "-g", geometry, "-"]);
+    parse_ppm(&run(command, GRIM_TIMEOUT).map_err(|e| format!("grim {e}"))?)
+}
+
+/// Runs `command` and returns what it wrote, or an error when it fails or takes longer
+/// than `timeout` (then it is killed): a hung screenshot tool must not stall the reader.
+#[cfg(target_os = "linux")]
+fn run(mut command: std::process::Command, timeout: Duration) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    use std::process::Stdio;
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("unavailable: {e}"))?;
+    let mut stdout = child.stdout.take().ok_or("has no output")?;
+    let (send, receive) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = send.send(stdout.read_to_end(&mut bytes).map(|_| bytes));
+    });
+    let Ok(read) = receive.recv_timeout(timeout) else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(format!("did not answer within {timeout:?}"));
+    };
+    let status = child.wait().map_err(|e| e.to_string())?;
+    let bytes = read.map_err(|e| e.to_string())?;
+    if !status.success() {
+        let mut error = String::new();
+        if let Some(mut stderr) = child.stderr.take() {
+            let _ = stderr.read_to_string(&mut error);
+        }
+        return Err(format!("failed: {}", error.trim()));
     }
-    parse_ppm(&output.stdout)
+    Ok(bytes)
 }
 
 #[cfg(target_os = "linux")]
@@ -314,8 +345,8 @@ fn capture_bigmap(_region: &CaptureRegion) -> Result<Image, String> {
     Err("Minimap reading supports Windows and Linux/Hyprland".into())
 }
 
-/// One reading: the frame for the recorder, the capture size it stores (minimap pixels)
-/// and the map icons around the player.
+/// One reading: the frame for the recorder, the capture size it stores (minimap pixels,
+/// the same in both views) and the map icons around the player.
 struct Reading {
     view: MinimapView,
     capture_px: [usize; 2],
@@ -390,7 +421,7 @@ fn choose(
         Ok(image) => {
             let (view, icons) = bigmap::read(&image, &bigmap::Plan { frame, ..*plan });
             if view.visible {
-                return Ok(Reading { view, capture_px: frame.capture_px(), icons });
+                return Ok(Reading { view, capture_px: frame.capture_px, icons });
             }
             view.message
         }
@@ -629,7 +660,7 @@ mod tests {
 
     /// The big map on Clearfell (bigmap-player.ppm) and how to read it.
     fn big_map() -> (Image, bigmap::Plan) {
-        let frame = bigmap::Frame { cols: 190, rows: 150, player: [150.0, 30.0], follows_minimap: false };
+        let frame = bigmap::Frame { cols: 190, rows: 150, player: [150.0, 30.0], capture_px: [380, 300], follows_minimap: false };
         (fixture("bigmap-player.ppm"), bigmap::Plan { marker: [300.0, 60.0], radius: 16.0, frame })
     }
 
@@ -720,6 +751,30 @@ mod tests {
     }
 
     #[test]
+    fn big_map_frames_report_the_minimap_capture_size() {
+        // An odd minimap width: both views store the same capture size.
+        let frame = bigmap::Frame::like_minimap([601, 518], [3842.0, 2160.0], [3241.0, 0.0]);
+        assert_eq!((frame.cols, frame.capture_px), (301, [601, 518]));
+        let (big, plan) = big_map();
+        let plan = bigmap::Plan { frame: bigmap::Frame { capture_px: [601, 518], ..plan.frame }, ..plan };
+        let reading = choose(&mut Memory::default(), Ok(corner_lines([120, 100])), [60.5, 50.5], &plan, || Ok(big)).unwrap();
+        assert_eq!(reading.capture_px, [601, 518]);
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn a_hung_command_is_stopped() {
+        let mut sleep = std::process::Command::new("sleep");
+        sleep.arg("5");
+        let started = Instant::now();
+        let error = run(sleep, Duration::from_millis(200)).err().unwrap();
+        assert!(error.starts_with("did not answer") && started.elapsed() < Duration::from_secs(2), "{error}");
+        let mut echo = std::process::Command::new("printf");
+        echo.arg("P6");
+        assert_eq!(run(echo, Duration::from_secs(2)).unwrap(), b"P6");
+    }
+
+    #[test]
     #[cfg(not(target_os = "windows"))]
     fn regions_follow_the_game_window() {
         // The owner's setup: DP-1 at 1920,0 (3840x2160 px, scale 2), the game window
@@ -729,7 +784,7 @@ mod tests {
         // 10 px show a lavender window border).
         assert_eq!(r.minimap, "3530,1 300x259");
         assert_eq!(r.bigmap, "2690,367 343x302");
-        assert_eq!((r.plan.frame.cols, r.plan.frame.rows), (300, 259));
+        assert_eq!((r.plan.frame.cols, r.plan.frame.rows, r.plan.frame.capture_px), (300, 259, [600, 518]));
         let [px, py] = r.plan.frame.player;
         assert!((px - 158.0).abs() < 0.1 && (py - 142.0).abs() < 0.1, "{px},{py}");
         // The big-map marker (1919, 1059 window px) inside the big-map capture.

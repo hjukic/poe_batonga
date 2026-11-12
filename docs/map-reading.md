@@ -334,7 +334,10 @@ recording and one movement track continue across both views.
 - **Time per frame** with the big map open (two grim captures, reading, recorder;
   20 live frames): debug build 107 ms (captures 40 + 41, reading 19, recorder 8),
   release 85 ms (captures 39 + 44, reading 0.9, recorder 0.8). With the minimap
-  showing it is one capture, as before. Both fit the 330 ms frame interval.
+  showing it is one capture, as before. Both fit the 330 ms frame interval. After the
+  checks of the first fix pass (cross blobs, fills, line width, icons; a 685x603 px
+  capture): debug 127 ms (captures 34 + 39, reading 45, recorder 8), release 85 ms
+  (captures 40 + 41, reading 2.5, recorder 0.7).
 
 ### Reader
 
@@ -360,8 +363,13 @@ A big-map frame is built the way a minimap frame is: lavender pixels by the
 minimap's test, 2 px cells at the minimap's scale (`SCALE` 1.0; another value
 resamples), cells with at least two such pixels, then groups under 12 cells
 dropped. It has the minimap frame's size (300x259) with the player on the minimap's
-player cell, and reports the minimap's capture size, so the recorder sees no
-difference.
+player cell, and reports the minimap capture's own size (also when that is odd), so
+the recorder stores one capture size whatever the view.
+
+The 12-cell rule is not applied to minimap frames: in recorded minimap walls only
+0.19–0.36% of cells (Clearfell parts 0, 13–15) lie in groups under 12 cells, so it
+would not change how well frames of the two views match. Screenshots are taken with
+`grim`, which is stopped after 2 s, so a hung screenshot does not stall the reader.
 
 **The player cross** is found the same way in both views: of the orange blobs whose
 centre is within 16 px (at 2160 px height) of where the view draws the player, the
@@ -423,7 +431,8 @@ passes; then set `BIG_FRAME` to `BigFrame::Wide(600, 518)`.
 
 Each frame also lists the map icons around the player, in either view: zone exits
 (orange), checkpoints and waypoints, as minimap cells from the player
-(`bigmap::Icon`, kept in `Minimap.icons`; nothing reads them yet). Colours and
+(`bigmap::Icon`, kept in `Minimap.icons`; nothing reads them yet). The search takes
+one byte per pixel (about 0.4 MB for a big-map capture, not 5.6 MB). Colours and
 least sizes, measured on the big map: exits are orange blobs in the player cross's
 colour, 359–373 px (the cross is 58, so it never counts); a checkpoint is a cyan
 crystal over a cyan base (about 100,170,220; 145–185 px, joined within 20 px); a
