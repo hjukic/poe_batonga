@@ -457,6 +457,18 @@ pub struct Inner {
     /// The player is in a zone: false from a game start (login, character selection)
     /// until the first zone is entered. The compass shows only in a zone.
     pub in_zone: bool,
+    /// When `progress.json` was last written (`save`).
+    pub saved_at: std::cell::Cell<Option<std::time::Instant>>,
+}
+
+/// With nothing else new, the log offset is written at most this often: the log grows
+/// every few seconds with chat and system lines.
+const SAVE_OFFSET_EVERY: Duration = Duration::from_secs(30);
+
+/// Whether a log batch writes `progress.json`: when the progress changed, else when the
+/// file's offset is `SAVE_OFFSET_EVERY` old (or was never written).
+fn save_due(changed: bool, saved_at: Option<std::time::Instant>, now: std::time::Instant) -> bool {
+    changed || saved_at.is_none_or(|at| now.duration_since(at) >= SAVE_OFFSET_EVERY)
 }
 
 /// The log line of a game start.
@@ -671,12 +683,11 @@ impl Inner {
             if let Some(dir) = path.parent() {
                 std::fs::create_dir_all(dir)?;
             }
-            let tmp = path.with_extension("json.tmp");
-            std::fs::write(&tmp, serde_json::to_vec_pretty(&self.progress)?)?;
-            std::fs::rename(tmp, path)
+            crate::write_through_temp(path, &serde_json::to_vec_pretty(&self.progress)?)
         })();
-        if let Err(error) = result {
-            eprintln!("Tracker: could not save progress: {error}");
+        match result {
+            Ok(()) => self.saved_at.set(Some(std::time::Instant::now())),
+            Err(error) => eprintln!("Tracker: could not save progress: {error}"),
         }
     }
 }
@@ -686,9 +697,11 @@ pub struct Tracker(pub Mutex<Inner>);
 pub fn init(app: &AppHandle) -> Tracker {
     let dir = app.path().app_data_dir().ok();
     let save_path = dir.as_ref().map(|dir| dir.join(PROGRESS_FILE));
+    // A file that does not parse is kept as `.bad` (said in the terminal), not dropped.
     let read = |name: &str| {
-        let bytes = std::fs::read(dir.as_ref()?.join(name)).ok()?;
-        serde_json::from_slice::<Progress>(&bytes).ok()
+        let path = dir.as_ref()?.join(name);
+        let bytes = std::fs::read(&path).ok()?;
+        serde_json::from_slice::<Progress>(&bytes).map_err(|error| crate::keep_broken(&path, &error.to_string())).ok()
     };
     let routes = load_routes();
     let mut progress = read(PROGRESS_FILE).or_else(|| read(OLD_PROGRESS_FILE)).unwrap_or_default();
@@ -712,6 +725,7 @@ pub fn init(app: &AppHandle) -> Tracker {
         recent: Default::default(),
         fight: None,
         in_zone: true,
+        saved_at: Default::default(),
     }))
 }
 
@@ -892,7 +906,7 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
     let fighting = inner.fight.is_some();
     let was_in_zone = inner.in_zone;
     let Inner { routes, progress, recent, fight, in_zone, .. } = &mut *inner;
-    let mut changed = false;
+    let mut changed = progress.log_path.as_deref() != Some(path);
     // Every line is handled in order; one event never hides the rest of a batch.
     for line in String::from_utf8_lossy(bytes).lines() {
         if live && is_death(line) {
@@ -932,7 +946,9 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
     }
     progress.log_path = Some(path.to_string());
     progress.log_offset = Some(read_through);
-    inner.save();
+    if save_due(changed, inner.saved_at.get(), std::time::Instant::now()) {
+        inner.save();
+    }
     if changed {
         inner.sync_navigation(app);
         let _ = app.emit("tracker-state", inner.view());
@@ -1399,6 +1415,7 @@ mod tests {
             recent: Default::default(),
             fight: None,
             in_zone: true,
+            saved_at: Default::default(),
         };
         let miller = ["The Bloated Miller".to_string()];
         assert!(!inner.tick_dead_bosses(&miller), "no zone yet");
@@ -1477,6 +1494,15 @@ mod tests {
     }
 
     #[test]
+    fn the_log_offset_alone_is_saved_every_half_minute() {
+        let now = std::time::Instant::now();
+        assert!(save_due(false, None, now), "never written");
+        assert!(!save_due(false, Some(now - Duration::from_secs(5)), now), "only chat since");
+        assert!(save_due(true, Some(now - Duration::from_secs(5)), now), "a step ticked");
+        assert!(save_due(false, Some(now - SAVE_OFFSET_EVERY), now));
+    }
+
+    #[test]
     fn a_fight_ends_with_the_kill_or_a_quiet_boss() {
         let mut inner = Inner {
             routes: load_routes(),
@@ -1487,6 +1513,7 @@ mod tests {
             recent: Default::default(),
             fight: None,
             in_zone: true,
+            saved_at: Default::default(),
         };
         let fight = |ago: Duration| Some(Fight { step: "kill-bloated-miller".into(), last_line: std::time::Instant::now() - ago });
         assert!(!inner.settle_fight(), "no fight");

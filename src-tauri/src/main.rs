@@ -79,19 +79,48 @@ fn settings_path(app: &AppHandle) -> Option<std::path::PathBuf> {
 }
 
 fn load_settings(app: &AppHandle) -> Settings {
-    settings_path(app)
-        .and_then(|path| std::fs::read(path).ok())
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default()
+    settings_path(app).map(|path| read_settings(&path)).unwrap_or_default()
+}
+
+/// The settings in `path`; the defaults when there are none, or when the file does not
+/// parse: it is then kept as `.bad` and said in the terminal.
+fn read_settings(path: &std::path::Path) -> Settings {
+    let Ok(bytes) = std::fs::read(path) else { return Settings::default() };
+    serde_json::from_slice(&bytes).unwrap_or_else(|error| {
+        keep_broken(path, &error.to_string());
+        Settings::default()
+    })
 }
 
 fn save_settings(app: &AppHandle, settings: &Settings) -> Result<(), String> {
     let path = settings_path(app).ok_or("No settings folder")?;
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
     let json = serde_json::to_vec_pretty(settings).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| e.to_string())
+    write_through_temp(&path, &json).map_err(|e| e.to_string())
+}
+
+/// Writes `bytes` to `path` through a temporary file and a rename, so a crash or a full
+/// disk leaves the old file or the new one, never half of one.
+pub fn write_through_temp(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".tmp");
+    let tmp = path.with_file_name(name);
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(tmp, path)
+}
+
+/// A file of ours that does not parse: renamed to `<name>.bad` (the last broken one is
+/// kept) and said in the terminal, so the defaults that replace it are not a silent loss.
+pub fn keep_broken(path: &std::path::Path, error: &str) {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".bad");
+    let bad = path.with_file_name(name);
+    match std::fs::rename(path, &bad) {
+        Ok(()) => eprintln!("{} could not be read ({error}); kept as {}, defaults used", path.display(), bad.display()),
+        Err(rename) => eprintln!("{} could not be read ({error}) nor kept ({rename}); defaults used", path.display()),
+    }
 }
 
 fn overlay(app: &AppHandle) -> Result<WebviewWindow, String> {
@@ -797,6 +826,55 @@ fn quit(app: AppHandle) {
     app.exit(0);
 }
 
+/// Writes what quitting would lose: the tracker's progress with its log offset, and the
+/// recorder's map and the end of its flight recording (both are otherwise written only
+/// every few seconds). Once, at the first exit event.
+fn save_on_exit(app: &AppHandle) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static SAVED: AtomicBool = AtomicBool::new(false);
+    if SAVED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    if let Some(recorder) = app.try_state::<layout::Recorder>() {
+        recorder.save_now();
+    }
+    if let Some(tracker) = app.try_state::<tracker::Tracker>() {
+        relock(&tracker.0).save();
+    }
+}
+
+/// Ctrl+C in the app's terminal (SIGINT) and SIGTERM quit the app as its own Quit does,
+/// so `save_on_exit` runs. A second signal ends it at once. (A kill -9 cannot be caught.)
+#[cfg(unix)]
+fn quit_on_signals(app: AppHandle) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static ASKED: AtomicBool = AtomicBool::new(false);
+    extern "C" fn on_signal(_: i32) {
+        // Only async-signal-safe work here: an atomic store, or `_exit`.
+        if ASKED.swap(true, Ordering::SeqCst) {
+            unsafe { _exit(130) }
+        }
+    }
+    extern "C" {
+        fn signal(signum: i32, handler: extern "C" fn(i32)) -> usize;
+        fn _exit(status: i32) -> !;
+    }
+    const SIGINT: i32 = 2;
+    const SIGTERM: i32 = 15;
+    unsafe {
+        signal(SIGINT, on_signal);
+        signal(SIGTERM, on_signal);
+    }
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        if ASKED.load(Ordering::SeqCst) {
+            eprintln!("Overlay: stopping (signal); saving first");
+            app.exit(0);
+            return;
+        }
+    });
+}
+
 /// Linux: with nvidia-utils installed but no NVIDIA driver loaded (e.g. an AMD-only
 /// machine), glvnd tries NVIDIA's EGL first and WebKit's page process crashes inside
 /// libnvidia-gpucomp or draws nothing. Use Mesa then. Runs before any thread or GL use;
@@ -912,10 +990,17 @@ fn main() {
             // The overlay is shown once its page has loaded (`page_ready`), and hidden
             // while the game is off screen.
             watch_game(app.handle().clone());
+            #[cfg(unix)]
+            quit_on_signals(app.handle().clone());
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("Unable to start Batonga overlay");
+        .build(tauri::generate_context!())
+        .expect("Unable to start Batonga overlay")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit) {
+                save_on_exit(app);
+            }
+        });
 }
 
 #[cfg(test)]
@@ -971,6 +1056,26 @@ mod tests {
         presence.hidden_by_watcher.store(true, std::sync::atomic::Ordering::SeqCst);
         presence.owner_chose();
         assert!(!presence.hidden_by_watcher.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test]
+    fn a_torn_settings_file_is_kept_and_the_defaults_used() {
+        let dir = std::env::temp_dir().join(format!("poe-batonga-test-settings-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join(SETTINGS_FILE);
+        let settings = Settings { toggle_shortcut: "F9".into(), overlay_x: 80, overlay_y: 90 };
+        write_through_temp(&path, &serde_json::to_vec_pretty(&settings).unwrap()).unwrap();
+        assert_eq!(read_settings(&path).overlay_x, 80);
+        assert!(!dir.join("settings.json.tmp").exists());
+        // Cut short (a crash while writing, before v0.1.83): kept as .bad, defaults used.
+        std::fs::write(&path, br#"{"toggleShortcut":"F9","over"#).unwrap();
+        let read = read_settings(&path);
+        assert_eq!((read.toggle_shortcut.as_str(), read.overlay_x), (DEFAULT_TOGGLE_SHORTCUT, 20));
+        assert!(!path.exists());
+        assert_eq!(std::fs::read(dir.join("settings.json.bad")).unwrap(), br#"{"toggleShortcut":"F9","over"#);
+        // No file at all: the defaults, nothing kept.
+        assert_eq!(read_settings(&path).overlay_y, 170);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
