@@ -36,6 +36,18 @@ const WIDE: i32 = 32;
 /// Consecutive unmatched frames before a new part is started.
 const LOST_LIMIT: u32 = 9;
 const SAVE_EVERY: Duration = Duration::from_secs(15);
+/// A needle without a placed frame for this long is not "estimated": the player
+/// may have walked on with the map hidden, and the bearing is a screen direction.
+const STALE: Duration = Duration::from_secs(2);
+
+/// Gold only while frames come in.
+fn not_stale(view: guide::GuideView, fed_at: Option<Instant>) -> guide::GuideView {
+    if view.source == "estimated" && fed_at.is_none_or(|t| t.elapsed() > STALE) {
+        return guide::GuideView { source: "unconfirmed".into(), ..view };
+    }
+    view
+}
+
 /// A checklist step completed this soon after a live NPC line was completed by
 /// the log (the tracker hands both over in the same batch; a hand tick comes
 /// later) and puts the player at the step's target.
@@ -798,7 +810,9 @@ impl State {
             if let Some(graph) = self.catalog.graph(area) {
                 targets.extend(graph::target(&graph, &session.came_from, completed));
             }
-            return nav.guide(&targets).map(|view| guide::GuideView { measured: scale.is_some(), ..view });
+            return nav
+                .guide(&targets)
+                .map(|view| not_stale(guide::GuideView { measured: scale.is_some(), ..view }, session.fed_at));
         }
         // Everything relative to the (first) arrival point, where the terrain match starts;
         // a piece without one (tracking lost, overlay restarted) is placed anywhere.
@@ -996,6 +1010,19 @@ mod tests {
         assert!(nav.ranking().iter().take(3).any(|(id, _)| id == top), "{:?}", &nav.ranking()[..3]);
         drop(state);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_needle_without_frames_for_two_seconds_is_not_gold() {
+        let gold = guide::GuideView {
+            variant: String::new(), target_kind: "entrance".into(), target: "X".into(), degrees: Some(10.0),
+            source: "estimated".into(), distance: 5.0, confidence: 0.9, measured: false, turned: false,
+        };
+        assert_eq!(not_stale(gold.clone(), Some(Instant::now())).source, "estimated");
+        assert_eq!(not_stale(gold.clone(), Instant::now().checked_sub(Duration::from_secs(3))).source, "unconfirmed");
+        assert_eq!(not_stale(gold.clone(), None).source, "unconfirmed");
+        let rough = guide::GuideView { source: "rough".into(), ..gold };
+        assert_eq!(not_stale(rough, None).source, "rough");
     }
 
     #[test]
