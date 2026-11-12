@@ -434,10 +434,10 @@ impl Navigator {
     /// The exits a map icon can be in one layout: those leading to its label's area,
     /// or every exit when it has none.
     fn icon_nodes(&self, layout: &Layout, icon: &ExitIcon) -> Vec<usize> {
-        let to = icon.to.as_deref().map(|t| self.exit_id(t));
+        let to = icon.to.as_deref().map(|t| self.exit_ids(t));
         (0..layout.nodes.len())
-            .filter(|&i| match (&layout.nodes[i].exit, to) {
-                (Some(exit), Some(to)) => exit == to,
+            .filter(|&i| match (&layout.nodes[i].exit, &to) {
+                (Some(exit), Some(ids)) => ids.contains(&exit.as_str()),
                 (Some(_), None) => true,
                 (None, _) => false,
             })
@@ -623,15 +623,26 @@ impl Navigator {
         }
     }
 
-    /// The area id an exit label names: the area whose name it is, else the label itself.
-    fn exit_id<'s>(&'s self, label: &'s str) -> &'s str {
-        self.area.names.iter().find(|(id, name)| id.as_str() == label || name.eq_ignore_ascii_case(label)).map_or(label, |(id, _)| id.as_str())
+    /// The area ids an exit label names: every area whose name it is (two areas may
+    /// share a name), else the label itself.
+    fn exit_ids<'s>(&'s self, label: &'s str) -> Vec<&'s str> {
+        let mut ids: Vec<&str> = self
+            .area
+            .names
+            .iter()
+            .filter(|(id, name)| id.as_str() == label || name.eq_ignore_ascii_case(label))
+            .map(|(id, _)| id.as_str())
+            .collect();
+        if ids.is_empty() {
+            ids.push(label);
+        }
+        ids
     }
 
     /// The share of the belief that puts icon `icon` on one of the target's exits.
     fn icon_is_target(&self, icon: &ExitIcon, target: &NavTarget, posterior: &[f64]) -> f64 {
         if let (Some(to), Some(exit)) = (&icon.to, &target.exit) {
-            return if self.exit_id(to) == exit.as_str() { 1.0 } else { 0.0 };
+            return if self.exit_ids(to).contains(&exit.as_str()) { 1.0 } else { 0.0 };
         }
         let mut share = 0.0;
         for (k, (layout, bank)) in self.area.layouts.iter().zip(&self.banks).enumerate() {
@@ -908,7 +919,13 @@ impl Navigator {
             .icons_now
             .iter()
             .map(|(icon, read_twice)| (icon, *read_twice, self.icon_is_target(icon, target, &posterior)))
-            .max_by(|a, b| a.2.total_cmp(&b.2));
+            // Of equally good icons the nearest, then by place: the icons' order
+            // changes from frame to frame.
+            .min_by(|a, b| {
+                let key = |i: &ExitIcon| (i.dx.hypot(i.dy), i.dx, i.dy);
+                let (ka, kb) = (key(a.0), key(b.0));
+                (b.2 > a.2 + 1e-9).cmp(&(a.2 > b.2 + 1e-9)).then(ka.0.total_cmp(&kb.0)).then(ka.1.total_cmp(&kb.1)).then(ka.2.total_cmp(&kb.2))
+            });
         if let Some((icon, read_twice, share)) = in_view.filter(|(_, _, share)| *share >= ICON_SURE) {
             let (ox, oy) = super::guide::from_screen((icon.dx / self.scale, icon.dy / self.scale));
             let straight = ox.hypot(oy).max(1.0);
@@ -1537,6 +1554,26 @@ mod tests {
             state = next;
         }
         assert!(switches <= 2, "{switches} switches");
+    }
+
+    #[test]
+    fn of_two_exits_with_the_same_name_the_nearest_wins_in_any_order() {
+        let json = r#"{"connections": ["A", "B"], "connectionNames": ["Aville", "Bee"], "topologies": [
+            {"id": "two", "nodes": [{"x": 0, "y": 0, "exit": "A"}, {"x": 300, "y": 0, "exit": "B"}, {"x": 300, "y": 300, "exit": "A"}],
+             "edges": [{"a": 0, "b": 1}, {"a": 1, "b": 2}]}]}"#;
+        let area = Area::parse("T", json).unwrap();
+        let at = (300.0, 0.0);
+        let icon = |n: (f64, f64)| {
+            let (sx, sy) = super::super::guide::to_screen((n.0 - at.0, n.1 - at.1));
+            ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: Some("Aville".into()) }
+        };
+        let (near, far) = (icon((300.0, 300.0)), icon((0.0, 0.0)));
+        let bearing = |icons: &[ExitIcon]| {
+            let mut nav = Navigator::new(&area, Arrival::From("B"), None, SCALE, 1);
+            nav.icons(icons);
+            nav.guide(&[exit("A", "Aville")]).unwrap().degrees
+        };
+        assert_eq!(bearing(&[near.clone(), far.clone()]), bearing(&[far, near]));
     }
 
     #[test]
