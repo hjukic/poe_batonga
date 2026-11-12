@@ -26,8 +26,9 @@ const MARGIN: f64 = 200.0;
 pub(super) const FAR: f64 = 150.0;
 /// Spacing of the points sampled along the corridors, in world units.
 const SPACING: f64 = 4.0;
-/// Minimap cells per world unit, measured on a Clearfell Encampment visit.
-pub const SCALE: f64 = 0.78;
+/// Minimap cells per world unit across the map (up-down it is `guide::FLAT` times this):
+/// measured on the owner's two Clearfell instances against the layout graphs (2026-11-12).
+pub const SCALE: f64 = 0.85;
 /// How far along the corridors the needle looks (world units).
 pub(super) const LOOK: f64 = 120.0;
 /// Bosses that wait at a zone exit: (area, exit area, boss) until the boss is ticked.

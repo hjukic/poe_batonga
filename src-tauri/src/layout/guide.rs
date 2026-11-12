@@ -3,18 +3,34 @@
 
 use serde::Serialize;
 
-/// The in-game map shows the world grid turned 45° with its y axis pointing up:
-/// screen = ((x - y), -(x + y)) / √2. Fitted on a recorded Clearfell Encampment
-/// visit (2026-11-12, 2,744 walls, 87% on the outline at 0.80 cells per unit).
+/// The in-game map shows the world grid turned 45° with its y axis pointing up, seen at a
+/// slant: the up-down axis is drawn `FLAT` times as long as the left-right one.
+/// screen = ((x - y), -(x + y) * FLAT) / √2, times `graph::SCALE` cells per world unit.
+/// Measured 2026-11-12 on the owner's two Clearfell instances against the game's own layout
+/// graphs: three exits read by name fit ClearFell_W_E_N within 25-37 cells at 0.85 across and
+/// 0.46 up-down (the next layout 300-400 cells off); a square map (0.78 both ways, fitted
+/// once on poe2way's outlines) fitted no layout. Review by a second agent found it first.
+pub(super) const FLAT: f64 = 0.54;
+
 pub(super) fn to_screen((x, y): (f64, f64)) -> (f64, f64) {
     let c = std::f64::consts::FRAC_1_SQRT_2;
-    (c * (x - y), -c * (x + y))
+    (c * (x - y), -c * (x + y) * FLAT)
 }
 
 /// The inverse of `to_screen`: screen-oriented units back to world (x east, y north).
-pub(super) fn from_screen((x, y): (f64, f64)) -> (f64, f64) {
+pub(super) fn from_screen((u, v): (f64, f64)) -> (f64, f64) {
     let c = std::f64::consts::FRAC_1_SQRT_2;
-    (c * (x - y), -c * (x + y))
+    let v = v / FLAT;
+    (c * (u - v), -c * (u + v))
+}
+
+#[cfg(test)]
+#[test]
+fn from_screen_undoes_to_screen() {
+    for p in [(0.0, 0.0), (100.0, 0.0), (0.0, 100.0), (-37.0, 412.5)] {
+        let (x, y) = from_screen(to_screen(p));
+        assert!((x - p.0).abs() < 1e-9 && (y - p.1).abs() < 1e-9, "{p:?} -> {:?}", (x, y));
+    }
 }
 
 pub(super) fn angle_between(a: f32, b: f32) -> f64 {

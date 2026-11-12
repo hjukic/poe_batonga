@@ -183,7 +183,7 @@ const ICON_CONFIRM: f64 = 0.5;
 const ICON_SURE: f64 = 0.95;
 
 /// The memory format; older files are ignored.
-pub(super) const MEMORY_VERSION: u32 = 1;
+pub(super) const MEMORY_VERSION: u32 = 2;
 
 /// Icons this close (world units) on the dead-reckoned track are one exit.
 const SIGHT_MATCH: f64 = 40.0;
@@ -616,14 +616,24 @@ impl Navigator {
         // exact); else, until a frame has shown two, remembered ones too (their places went
         // through the recorded map: the owner's Clearfell of 2026-11-12 had the town's exit
         // 400 cells off after a long walk and a death, and no layout fitted).
-        let live_named: Vec<usize> = (0..icons.len()).filter(|&j| icons[j].to.is_some() && !icons[j].remembered).collect();
+        // One icon per exit: the arrival point named after the town is the town's exit icon
+        // seen a few cells off; as a pair with itself it fitted no layout (review, 2026-11-12).
+        let mut by_exit: Vec<(&str, usize)> = Vec::new();
+        for j in (0..icons.len()).filter(|&j| !icons[j].remembered).chain((0..icons.len()).filter(|&j| icons[j].remembered)) {
+            let Some(label) = icons[j].to.as_deref() else { continue };
+            let id = self.exit_ids(label).first().copied().unwrap_or(label);
+            if !by_exit.iter().any(|(known, _)| *known == id) {
+                by_exit.push((id, j));
+            }
+        }
+        let live_named: Vec<usize> = by_exit.iter().map(|&(_, j)| j).filter(|&j| !icons[j].remembered).collect();
         let fit_named: Vec<usize> = if live_named.len() >= 2 {
             self.named_live = true;
             live_named
         } else if self.named_live {
             Vec::new()
         } else {
-            (0..icons.len()).filter(|&j| icons[j].to.is_some()).collect()
+            by_exit.iter().map(|&(_, j)| j).collect()
         };
         let Navigator { area, banks, rng, exits_seen, .. } = self;
         let mut learnt = Vec::new();
@@ -1656,9 +1666,10 @@ mod tests {
         let ranking = nav.ranking();
         assert_eq!(ranking[0].0, "both");
         assert!(ranking[0].1 > 0.99, "{ranking:?}");
-        // Standing at B, A lies west: screen down-left (135°).
+        // Standing at B, A lies west: screen down-left (the slanted map: about 152°).
         let view = nav.guide(&[exit("A", "A")]).unwrap();
-        let off = super::super::guide::angle_between(view.degrees.unwrap(), 135.0);
+        let (wx, wy) = super::super::guide::to_screen((-600.0, 0.0));
+        let off = super::super::guide::angle_between(view.degrees.unwrap(), screen_bearing(wx, wy).unwrap());
         assert!(off < 10.0, "{view:?}");
         assert_eq!(view.source, "estimated", "an anchor confirms: {view:?}");
         // Something no layout knows changes nothing.
@@ -2082,9 +2093,9 @@ mod tests {
         let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 2192959438);
         let town = ExitIcon { dx: -37.0 - 462.0, dy: 17.0 + 628.0, to: Some("G1_town".into()), remembered: true };
         let mud = ExitIcon { dx: 0.0, dy: 0.0, to: Some("Mud Burrow".into()), remembered: false };
-        // The remembered pair first: no layout fits it.
+        // The remembered pair first (the town's exit drifted 400 cells): no frame pair yet.
+        let town = ExitIcon { dx: town.dx - 400.0, ..town };
         nav.icons(&[mud.clone(), town.clone()]);
-        assert!(!nav.picture().unwrap().known);
         // Then the Grelwood's exit in the same frame as the Mud Burrow's.
         let grelwood = ExitIcon { dx: -965.0, dy: 0.0, to: Some("The Grelwood".into()), remembered: false };
         for _ in 0..3 {
@@ -2096,6 +2107,20 @@ mod tests {
         // A later frame with only remembered exits does not undo it.
         nav.icons(&[ExitIcon { remembered: true, ..mud.clone() }, ExitIcon { remembered: true, ..grelwood.clone() }, town]);
         assert_eq!(nav.picture().unwrap().id, "ClearFell_W_E_N");
+    }
+
+    #[test]
+    fn the_arrival_beside_the_same_exit_does_not_spoil_the_fit() {
+        let area = graph::load("G1_2");
+        let mud = ExitIcon { dx: 54.0, dy: -88.0, to: Some("Mud Burrow".into()), remembered: false };
+        let town = ExitIcon { dx: 54.0 - 403.0, dy: -88.0 + 614.0, to: Some("Clearfell Encampment".into()), remembered: false };
+        let arrival = ExitIcon { dx: town.dx + 30.0, dy: town.dy - 12.0, to: Some("G1_town".into()), remembered: true };
+        for order in [[town.clone(), arrival.clone(), mud.clone()], [arrival.clone(), town.clone(), mud.clone()]] {
+            let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 2192959438);
+            nav.icons(&order);
+            assert!(!nav.named_loose);
+            assert_eq!(nav.picture().unwrap().id, "ClearFell_W_E_N");
+        }
     }
 
     #[test]
@@ -2163,14 +2188,13 @@ mod tests {
     #[test]
     fn the_exit_come_in_by_and_one_named_exit_fix_the_layout() {
         let area = graph::load("G1_2");
-        let target = [exit("G1_4", "The Grelwood")];
         // What the recorder hands over: the Mud Burrow's icon read by name, and the exit
-        // the player came in by at its place on the recorded map.
+        // the player came in by at its place on the recorded map (measured before the death:
+        // 403 cells left of and 614 below the Mud Burrow's).
         let frame = [
             ExitIcon { dx: 54.0, dy: -88.0, to: Some("Mud Burrow".into()), remembered: false },
-            ExitIcon { dx: 54.0 - 402.0, dy: -88.0 + 612.0, to: Some("G1_town".into()), remembered: false },
+            ExitIcon { dx: 54.0 - 403.0, dy: -88.0 + 614.0, to: Some("G1_town".into()), remembered: true },
         ];
-        // Belief as the app had it: arrived from the town, walked, memory of earlier visits.
         let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 2192959438);
         for _ in 0..40 {
             nav.moved(8.0, 14.0);
@@ -2180,31 +2204,13 @@ mod tests {
         }
         let ranking = nav.ranking();
         eprintln!("top {:?}", &ranking[..4]);
-        let share = |id: &str| ranking.iter().find(|(l, _)| *l == id).map_or(0.0, |r| r.1);
-        // The two layouts whose exits lie that way (187 and 203 cells off; the next 257).
-        assert!(share("ClearFell_W_N_E") + share("ClearFell_W_N_S") >= 0.8, "{:?}", &ranking[..4]);
-        assert!(share("ClearFell_N_S_W") < 0.02, "{:?}", &ranking[..4]);
-        let view = nav.guide(&target).unwrap();
-        eprintln!("needle {view:?}");
-        // No layout fits that pair within 180 units (the best miss 240): the needle is gray,
-        // and no layout is drawn under the checklist.
-        assert!(nav.named_loose);
-        assert_eq!(view.source, "unconfirmed");
-        let picture = nav.picture().unwrap();
-        assert!(!picture.known && picture.no_fit, "{picture:?}");
-        // A pair a layout fits well keeps it at most rough (Clearfell is measured: gold
-        // needs more), not gray: W_N_E's own exits, 20 units off.
-        let w_n_e = area.layouts.iter().find(|l| l.id == "ClearFell_W_N_E").unwrap();
-        let node = |exit: &str| w_n_e.nodes.iter().find(|n| n.exit.as_deref() == Some(exit)).unwrap();
-        let (town, mud) = (node("G1_town"), node("G1_3"));
-        let (wx, wy) = ((mud.x - town.x) * w_n_e.unit + 20.0, (mud.y - town.y) * w_n_e.unit);
-        let (sx, sy) = super::super::guide::to_screen((wx * SCALE, wy * SCALE));
-        let fits = [
-            ExitIcon { dx: 50.0, dy: -80.0, to: Some("Mud Burrow".into()), remembered: false },
-            ExitIcon { dx: 50.0 - sx, dy: -80.0 - sy, to: Some("G1_town".into()), remembered: false },
-        ];
-        nav.icons(&fits);
+        // With the slanted map the pair fits ClearFell_W_E_N, the layout the Grelwood's
+        // exit confirmed later in the visit (and the night's instance had).
+        assert_eq!(ranking[0].0, "ClearFell_W_E_N", "{:?}", &ranking[..4]);
+        assert!(ranking[0].1 > 0.9, "{:?}", &ranking[..4]);
         assert!(!nav.named_loose);
+        let picture = nav.picture().unwrap();
+        assert!(picture.known && picture.id == "ClearFell_W_E_N", "{picture:?}");
     }
 
     #[test]
