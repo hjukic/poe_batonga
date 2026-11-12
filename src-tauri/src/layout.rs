@@ -151,6 +151,25 @@ impl Live {
     }
 }
 
+/// A boss named in a zone's checklist, and where the layout graphs put it: at the
+/// exit to an area, at a tagged node, or (neither given) at a node tagged "boss".
+#[derive(Clone, Debug, PartialEq)]
+pub struct Boss {
+    /// As the checklist writes it ("Beira", "The Bloated Miller").
+    pub name: String,
+    pub exit: Option<String>,
+    pub tag: Option<String>,
+}
+
+impl Boss {
+    /// The log names the speaker in full ("Beira of the Rotten Pack"); the checklist
+    /// may shorten it.
+    fn speaks_as(&self, speaker: &str) -> bool {
+        let (name, speaker) = (self.name.to_lowercase(), speaker.to_lowercase());
+        name.len() >= 4 && speaker.contains(&name)
+    }
+}
+
 struct Session {
     recording: Recording,
     /// Parts already finished in this instance (kept in `recording.parts`); `live` is extra.
@@ -176,6 +195,8 @@ struct Session {
     last_guide: std::cell::RefCell<Option<guide::GuideView>>,
     /// The flight recorder: what the navigator is fed (with a folder only).
     obs: std::cell::RefCell<Option<obs::Log>>,
+    /// Bosses whose first line in this visit was already taken as "near its place".
+    bosses_heard: Vec<String>,
     /// When the zone was entered, and what the first placed frame showed at the
     /// arrival point (in the live part's coordinates; gone with the part).
     entered: Instant,
@@ -316,6 +337,8 @@ struct State {
     targets: HashMap<String, Vec<guide::NavTarget>>,
     /// Every checklist target seen, per area (to find a step the log just completed).
     known_targets: HashMap<String, Vec<guide::NavTarget>>,
+    /// Per area: its bosses from the checklists, with where each stands.
+    bosses: HashMap<String, Vec<Boss>>,
     /// Measured minimap cells per game unit, per area.
     scales: HashMap<String, Vec<f64>>,
     dir: Option<PathBuf>,
@@ -548,6 +571,7 @@ impl Recorder {
             completed: HashMap::new(),
             targets: HashMap::new(),
             known_targets: HashMap::new(),
+            bosses: HashMap::new(),
             icons: Vec::new(),
             icons_whole: false,
             log_completed: Default::default(),
@@ -612,6 +636,7 @@ impl Recorder {
                     far_age: FAR_FRAMES,
                     last_guide: Default::default(),
                     obs: Default::default(),
+                    bosses_heard: Vec::new(),
                     entered: Instant::now(),
                     came_in: None,
                 };
@@ -623,10 +648,31 @@ impl Recorder {
                 state.session = Some(session);
             }
             LogEvent::Dialogue { speaker, .. } if live => {
-                if let Some(session) = state.session.as_mut().filter(|s| s.started) {
+                let State { session, bosses, .. } = &mut *state;
+                if let Some(session) = session.as_mut().filter(|s| s.started) {
                     let known = session.live.part.pois.iter().any(|p| p.kind == "npc" && &p.label == speaker);
                     if !known {
                         session.live.add_poi("npc", speaker);
+                    }
+                    // A boss of this zone speaks when the player gets to it: the first
+                    // line of a visit says the player is near that boss's place.
+                    let boss = bosses
+                        .get(&session.recording.area)
+                        .and_then(|all| all.iter().find(|boss| boss.speaks_as(speaker)))
+                        .filter(|boss| !session.bosses_heard.contains(&boss.name));
+                    if let (Some(boss), Some(nav)) = (boss, session.navigator.as_mut()) {
+                        session.bosses_heard.push(boss.name.clone());
+                        let seen = match (&boss.exit, &boss.tag) {
+                            (Some(exit), _) => nav::Seen::NearExit(exit),
+                            (None, Some(tag)) => nav::Seen::NearTag(tag),
+                            (None, None) => nav::Seen::NearTag("boss"),
+                        };
+                        if let Some(log) = session.obs.get_mut() {
+                            log.seen(obs::now_ms(), seen);
+                        }
+                        nav.seen(seen);
+                        // A picture of the map at that moment: is there a boss icon to read?
+                        crate::minimap::request_sample();
                     }
                 }
             }
@@ -787,6 +833,16 @@ impl Recorder {
         if let Ok(mut state) = self.0.lock() {
             state.icons = icons.to_vec();
             state.icons_whole = whole;
+        }
+    }
+
+    /// The zones' bosses, from the checklists: (area, boss). Set once at start.
+    pub fn set_bosses(&self, bosses: Vec<(String, Boss)>) {
+        if let Ok(mut state) = self.0.lock() {
+            state.bosses.clear();
+            for (area, boss) in bosses {
+                state.bosses.entry(area).or_default().push(boss);
+            }
         }
     }
 
@@ -1396,6 +1452,35 @@ mod tests {
     }
 
     #[test]
+    fn a_boss_of_the_zone_speaking_is_logged_once_as_near_its_place() {
+        let dir = scratch("boss");
+        let recorder = Recorder::new(Some(dir.clone()));
+        recorder.set_bosses(vec![
+            ("G1_2".into(), Boss { name: "Beira".into(), exit: None, tag: None }),
+            ("G1_1".into(), Boss { name: "The Bloated Miller".into(), exit: Some("G1_town".into()), tag: None }),
+        ]);
+        obs_visit(&recorder, 10);
+        let line = |speaker: &str| LogEvent::Dialogue { speaker: speaker.into(), text: "…".into() };
+        // The log names her in full; twice in a row counts once; another zone's boss
+        // and an ordinary speaker count for nothing.
+        recorder.on_log(&line("Beira of the Rotten Pack"), true);
+        recorder.on_log(&line("Beira of the Rotten Pack"), true);
+        recorder.on_log(&line("The Bloated Miller"), true);
+        recorder.on_log(&line("Renly"), true);
+        // History replayed at start is no boss met now.
+        recorder.on_log(&line("Beira of the Rotten Pack"), false);
+        recorder.save_now();
+        let text = std::fs::read_to_string(dir.join("G1_2").join("7.obs.jsonl")).unwrap();
+        let near: Vec<&str> = text.lines().filter(|l| l.contains("\"near\":true")).collect();
+        assert_eq!(near.len(), 1, "{text}");
+        assert!(near[0].contains("\"tag\":\"boss\""), "{}", near[0]);
+        // The replay hands it to the navigator the same way: its needles still agree.
+        let visits = obs::replay::replay(&text, &graph::Graphs::default());
+        assert!(visits[0].agree == visits[0].logged, "{:?}", visits[0].differ);
+        assert!(Boss { name: "Zed".into(), exit: None, tag: None }.speaks_as("Zeda") == false, "short names never match");
+    }
+
+    #[test]
     fn the_flight_recorder_logs_what_the_navigator_is_fed() {
         let dir = scratch("obs");
         let recorder = Recorder::new(Some(dir.clone()));
@@ -1583,6 +1668,7 @@ fn join_real_recording() {
         recording, live, arrived_from: None, came_from: String::new(), started: true, file: None, navigator: None,
         fed: None, fed_at: None, far_icons: Vec::new(), far_age: FAR_FRAMES, last_guide: Default::default(),
         obs: Default::default(), entered: Instant::now(), came_in: None,
+        bosses_heard: Vec::new(),
     };
     let started = Instant::now();
     while merge_pieces(&mut session) {}

@@ -558,6 +558,15 @@ pub fn init() -> Minimap {
     }
 }
 
+/// Set when something worth a picture happened (a boss spoke); the reader takes it.
+static SAMPLE_WANTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Asks the reader to keep a capture of the minimap corner and of the big map's area
+/// at its next frame (see `Samples`).
+pub fn request_sample() {
+    SAMPLE_WANTED.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 /// Keeps a few real captures for later work on the reader (exit labels on the corner
 /// minimap, wall colours in zones not seen yet), under `samples/` in the app's data
 /// folder: a minimap that shows an exit at most once a minute (8 in all), the big map
@@ -583,6 +592,11 @@ impl Samples {
 
     /// Called after a frame was read; captures again and saves when a sample is due.
     fn maybe(&mut self, view: &MinimapView, icons: &[bigmap::Icon], region: &CaptureRegion) {
+        // A boss spoke: both views as they are now, whatever is being read.
+        if self.dir.is_some() && SAMPLE_WANTED.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            self.save("boss-minimap", capture(region));
+            self.save("boss-bigmap", capture_bigmap(region));
+        }
         if self.dir.is_none() || !view.visible {
             return;
         }

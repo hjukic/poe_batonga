@@ -253,6 +253,9 @@ pub enum Entry {
         tag: Option<String>,
         #[serde(default, skip_serializing_if = "is_false")]
         left: bool,
+        /// A boss spoke: near that node, not at it (`Seen::NearTag` / `NearExit`).
+        #[serde(default, skip_serializing_if = "is_false")]
+        near: bool,
     },
     /// The targets the needle was asked for, when they changed.
     Targets {
@@ -542,9 +545,11 @@ impl Log {
     pub fn seen(&mut self, t: u64, seen: nav::Seen) {
         let f = self.frame;
         let entry = match seen {
-            nav::Seen::Exit(exit) => Entry::Seen { f, exit: Some(exit.into()), tag: None, left: false },
-            nav::Seen::Tag(tag) => Entry::Seen { f, exit: None, tag: Some(tag.into()), left: false },
-            nav::Seen::Left(exit) => Entry::Seen { f, exit: Some(exit.into()), tag: None, left: true },
+            nav::Seen::Exit(exit) => Entry::Seen { f, exit: Some(exit.into()), tag: None, left: false, near: false },
+            nav::Seen::Tag(tag) => Entry::Seen { f, exit: None, tag: Some(tag.into()), left: false, near: false },
+            nav::Seen::Left(exit) => Entry::Seen { f, exit: Some(exit.into()), tag: None, left: true, near: false },
+            nav::Seen::NearTag(tag) => Entry::Seen { f, exit: None, tag: Some(tag.into()), left: false, near: true },
+            nav::Seen::NearExit(exit) => Entry::Seen { f, exit: Some(exit.into()), tag: None, left: false, near: true },
         };
         self.write(t, entry);
     }
@@ -1097,6 +1102,11 @@ pub(super) mod replay {
                         self.size = (*c, *r);
                     }
                 }
+                Entry::Seen { exit, tag, near: true, .. } => match (exit, tag) {
+                    (Some(exit), _) => self.nav.seen(Seen::NearExit(exit)),
+                    (None, Some(tag)) => self.nav.seen(Seen::NearTag(tag)),
+                    _ => {}
+                },
                 Entry::Seen { exit, tag, left, .. } => match (exit, tag, left) {
                     (Some(exit), _, true) => {
                         self.nav.seen(Seen::Left(exit));

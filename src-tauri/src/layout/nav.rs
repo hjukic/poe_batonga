@@ -85,6 +85,10 @@ const ANCHOR_FLOOR: f64 = 0.02;
 /// Leaving the zone: probably through the exit the log names, but a portal,
 /// waypoint or death leaves from anywhere; the evidence never drops below this.
 const LEFT_FLOOR: f64 = 0.3;
+/// A boss spoke: how near its node the player is taken to be (world units), and what
+/// a layout whose belief is elsewhere keeps.
+const NEAR_SIGMA: f64 = 250.0;
+const NEAR_FLOOR: f64 = 0.3;
 /// … the log evidence a layout without such a node loses …
 const MISSING: f64 = -7.0;
 /// … and how far around the node the particles are placed.
@@ -271,6 +275,11 @@ pub enum Seen<'a> {
     /// Left the zone to this area id: probably through its exit (soft: no particle
     /// is moved, a layout without the exit loses nothing).
     Left(&'a str),
+    /// A boss of the zone spoke: the player is somewhere near a node with this tag
+    /// (soft, and wide: a boss may speak before the player reaches the arena).
+    NearTag(&'a str),
+    /// The same for a boss that stands at the exit to this area id.
+    NearExit(&'a str),
 }
 
 /// What is worth keeping of a zone instance between visits.
@@ -927,14 +936,21 @@ impl Navigator {
         if goals.iter().all(Vec::is_empty) {
             return;
         }
-        if let Seen::Left(_) = seen {
+        // Soft evidence: no particle is moved, it is not an anchor, a layout without
+        // the node loses nothing.
+        let soft = match seen {
+            Seen::Left(_) => Some((ANCHOR_SIGMA, LEFT_FLOOR)),
+            Seen::NearTag(_) | Seen::NearExit(_) => Some((NEAR_SIGMA, NEAR_FLOOR)),
+            Seen::Exit(_) | Seen::Tag(_) => None,
+        };
+        if let Some((sigma, floor)) = soft {
             self.touched();
             for ((layout, bank), goals) in self.area.layouts.iter().zip(self.banks.iter_mut()).zip(&goals) {
                 if goals.is_empty() {
                     continue;
                 }
-                let agree = agreement(layout, &bank.particles, goals, ANCHOR_SIGMA / layout.unit);
-                bank.evidence += (LEFT_FLOOR + (1.0 - LEFT_FLOOR) * agree).ln();
+                let agree = agreement(layout, &bank.particles, goals, sigma / layout.unit);
+                bank.evidence += (floor + (1.0 - floor) * agree).ln();
             }
             return;
         }
@@ -1507,8 +1523,8 @@ fn on_corridor(layout: &Layout, rng: &mut Rng) -> Particle {
 fn anchor_nodes(layout: &Layout, seen: Seen) -> Vec<usize> {
     (0..layout.nodes.len())
         .filter(|&i| match seen {
-            Seen::Exit(area) | Seen::Left(area) => layout.nodes[i].exit.as_deref() == Some(area),
-            Seen::Tag(tag) => !tag.is_empty() && layout.nodes[i].has_tag(tag),
+            Seen::Exit(area) | Seen::Left(area) | Seen::NearExit(area) => layout.nodes[i].exit.as_deref() == Some(area),
+            Seen::Tag(tag) | Seen::NearTag(tag) => !tag.is_empty() && layout.nodes[i].has_tag(tag),
         })
         .collect()
 }
@@ -2055,6 +2071,36 @@ mod tests {
         assert_eq!(nav.banks[1].evidence, 0.0);
         assert!(nav.banks[0].evidence >= LEFT_FLOOR.ln() - 1e-9);
         assert!(!nav.progress().1, "leaving is not an anchor");
+    }
+
+    #[test]
+    fn a_boss_speaking_is_soft_evidence_for_layouts_that_put_it_nearby() {
+        // The player arrives at exit A. One layout has its boss right there, the other
+        // 2,000 units off, a third has no boss node.
+        let json = r#"{"connections": ["A", "B"], "topologies": [
+            {"id": "near", "nodes": [{"x": 0, "y": 0, "exit": "A"}, {"x": 100, "y": 0, "tag": "boss"}, {"x": 2000, "y": 0, "exit": "B"}], "edges": [{"a": 0, "b": 1}, {"a": 1, "b": 2}]},
+            {"id": "far", "nodes": [{"x": 0, "y": 0, "exit": "A"}, {"x": 2000, "y": 0, "tag": "boss"}, {"x": 2000, "y": 300, "exit": "B"}], "edges": [{"a": 0, "b": 1}, {"a": 1, "b": 2}]},
+            {"id": "none", "nodes": [{"x": 0, "y": 0, "exit": "A"}, {"x": 2000, "y": 0, "exit": "B"}], "edges": [{"a": 0, "b": 1}]}]}"#;
+        let area = Area::parse("T", json).unwrap();
+        let mut nav = Navigator::new(&area, Arrival::From("A"), None, SCALE, 3);
+        let before: Vec<(f64, f64)> = nav.banks[0].particles.iter().map(|p| (p.x, p.y)).collect();
+        nav.seen(Seen::NearTag("boss"));
+        // Nothing moved and it is no anchor; the layout with the boss nearby keeps almost
+        // all, the one with it far away drops to the floor, the one without it loses nothing.
+        assert_eq!(nav.banks[0].particles.iter().map(|p| (p.x, p.y)).collect::<Vec<_>>(), before);
+        assert!(!nav.progress().1, "a boss line is not an anchor");
+        assert!(nav.banks[0].evidence > -0.25, "{}", nav.banks[0].evidence);
+        assert!(nav.banks[1].evidence < NEAR_FLOOR.ln() + 0.15 && nav.banks[1].evidence >= NEAR_FLOOR.ln() - 1e-9);
+        assert_eq!(nav.banks[2].evidence, 0.0);
+        let p = nav.posterior();
+        assert!(p[0] > p[1] * 2.0, "{p:?}");
+        // A boss at an exit works the same way; a tag no layout has says nothing.
+        let mut nav = Navigator::new(&area, Arrival::From("A"), None, SCALE, 3);
+        nav.seen(Seen::NearExit("B"));
+        assert!(nav.banks.iter().all(|b| b.evidence < 0.0), "exit B is far in every layout");
+        let mut nav = Navigator::new(&area, Arrival::From("A"), None, SCALE, 3);
+        nav.seen(Seen::NearTag("dragon"));
+        assert!(nav.banks.iter().all(|b| b.evidence == 0.0));
     }
 
     #[test]

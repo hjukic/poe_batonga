@@ -1067,3 +1067,23 @@ line goes to `layouts/layout-history.jsonl`, once per visit and layout: `t`, `ar
 (`named`: the names alone give 0.9; `named+belief`: they favour it, and with the
 rest it reaches 0.9), `version`. It is for testing later whether the layout is a
 function of the seed.
+
+## Boss lines as "near" evidence (v0.1.50)
+
+A boss of the zone speaks in the log when the player gets to it. The checklists name the bosses (steps with
+a `boss` part); the step's target says where the layout graphs put it (an exit, a tag), else a node tagged
+`boss`. The first line of a boss in a visit is handed to the navigator as `Seen::NearTag` / `NearExit`:
+
+- **Soft and wide**: each layout is weighed by how much of its belief lies within about 250 units of that
+  node, with a floor of 0.3. No particle is moved and it is not an anchor (it cannot make the needle gold): a
+  boss may speak before the player reaches the arena, and some zones have two nodes with the tag.
+- A layout without such a node loses nothing; a tag no layout has says nothing.
+- The speaker must contain the checklist's name ("Beira of the Rotten Pack" contains "Beira"); names under
+  four letters never match. Lines replayed from the log's history at start do not count.
+- 58 of the 74 boss steps in the checklists have a node to match (Act 1: Beira, The Devourer, Gerung,
+  Areagne, Ervig, Lachlann, Draven, Asinia, Candlemass, Count Geonor, the Miller at his exit).
+- The flight recorder writes it as a `seen` line with `"near":true`, and the replay feeds it the same way.
+
+When a boss speaks, the reader also keeps one capture of the minimap corner and one of the big map's area
+(`samples/boss-minimap-*.ppm`, `boss-bigmap-*.ppm`): nobody has yet looked at whether the map draws a boss
+icon that could be read like the exits.

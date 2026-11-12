@@ -309,7 +309,20 @@ impl Inner {
             .filter(|s| self.progress.completed.get(&s.id).is_some_and(|c| c.source == "log"))
             .filter_map(|s| s.navigation_target.as_ref())
             .map(|t| (t.area.clone(), t.label.clone())).collect();
+        // The zones' bosses (steps with a boss part), with the step's target as their place.
+        let bosses = self.routes.iter().flat_map(|r| r.steps.iter().map(move |s| (r, s)))
+            .filter_map(|(route, step)| {
+                let name = step.parts.iter().find(|p| p.style.as_deref() == Some("boss"))?.text.trim().to_string();
+                let target = step.navigation_target.as_ref();
+                Some((route.zone.id.clone(), crate::layout::Boss {
+                    name,
+                    exit: target.and_then(|t| t.exit.clone()),
+                    tag: target.and_then(|t| t.tag.clone()),
+                }))
+            })
+            .collect();
         let recorder = app.state::<crate::layout::Recorder>();
+        recorder.set_bosses(bosses);
         recorder.set_targets(targets);
         recorder.set_log_completed(by_log);
         if let Some(view) = recorder.set_completed(completed) {
