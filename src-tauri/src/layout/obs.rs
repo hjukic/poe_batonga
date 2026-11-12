@@ -655,6 +655,9 @@ pub(super) mod replay {
         pub truth: Option<(Vec<String>, f64, usize)>,
         /// The exit left through, where (cells, in the last part), how it is confirmed.
         pub left: Option<(String, (i32, i32), &'static str)>,
+        /// Left with no exit icon at the place (a portal, a waypoint, a death): the
+        /// area left to is no exit taken, and the needle is not scored.
+        pub unscored: bool,
         /// Needle samples to the exit taken, per source: (within 45°, all).
         pub scored: [(usize, usize); 4],
         /// Samples of the last part pointing at another target.
@@ -957,9 +960,13 @@ pub(super) mod replay {
             } else if !mine.is_empty() {
                 "an exit icon was there"
             } else {
-                "no exit icon seen there (a portal or waypoint is possible)"
+                "no exit icon seen there: a portal, waypoint or death"
             };
             self.visit.left = Some((exit.clone(), at, how));
+            if mine.is_empty() {
+                self.visit.unscored = true;
+                return;
+            }
             let mut right: Vec<(bool, u64, f64)> = Vec::new();
             for s in self.samples.iter().filter(|s| s.part == self.part) {
                 if s.target_exit.as_deref() != Some(exit.as_str()) {
@@ -1056,6 +1063,7 @@ pub(super) mod replay {
             None => out += "   truth layout: none (fewer than two exits read by name in one part)\n",
         }
         match &v.left {
+            Some((exit, at, how)) if v.unscored => out += &format!("   left to {exit} at ({}, {}); {how}: not scored\n", at.0, at.1),
             Some((exit, at, how)) => {
                 out += &format!("   left through {exit} at ({}, {}); {how}\n", at.0, at.1);
                 let parts: Vec<String> =
@@ -1086,7 +1094,8 @@ pub(super) mod replay {
     pub fn summary(files: usize, visits: &[Visit]) -> String {
         let played: Vec<&Visit> = visits.iter().filter(|v| v.skipped.is_none()).collect();
         let truths = played.iter().filter(|v| v.truth.as_ref().is_some_and(|t| t.1 >= FIXED)).count();
-        let exits = played.iter().filter(|v| v.left.is_some()).count();
+        let exits = played.iter().filter(|v| v.left.is_some() && !v.unscored).count();
+        let unscored = played.iter().filter(|v| v.unscored).count();
         let mut scored = [(0, 0); 4];
         for v in &played {
             for (s, add) in scored.iter_mut().zip(&v.scored) {
@@ -1096,7 +1105,8 @@ pub(super) mod replay {
         let (logged, agree): (usize, usize) = played.iter().fold((0, 0), |a, v| (a.0 + v.logged, a.1 + v.agree));
         let parts: Vec<String> = SOURCES.iter().zip(&scored).map(|(n, s)| format!("{n} {} of {}", pct(s.0, s.1), s.1)).collect();
         format!(
-            "replay: {files} file(s), {} visit(s) replayed ({} skipped), {truths} with a layout truth, {exits} with the exit taken; \
+            "replay: {files} file(s), {} visit(s) replayed ({} skipped), {truths} with a layout truth, {exits} with the exit taken, \
+             {unscored} unscored exit(s) (no exit icon where they left); \
              needle within 45°: {}; app's needles agree {} ({agree} of {logged})",
             played.len(),
             visits.len() - played.len(),
@@ -1139,6 +1149,8 @@ mod tests {
         let mut needles = Vec::new();
         let size = (100_000, 100_000);
         let mut t = T0;
+        // Where the player is in this part, and where the target's icon was seen.
+        let (mut pos, mut exit_at) = ((0.0f64, 0.0f64), None);
         for (i, event) in events.iter().enumerate() {
             t += 333;
             log.frame();
@@ -1147,10 +1159,15 @@ mod tests {
                 Event::Lost(seconds) => {
                     log.lost(t, *seconds);
                     nav.lost(*seconds);
+                    (pos, exit_at) = ((0.0, 0.0), None);
                 }
                 Event::Moved { dx, dy, icons: seen, .. } => {
                     log.moved(t, *dx as i32, *dy as i32);
                     nav.moved(*dx as i32 as f64, *dy as i32 as f64);
+                    pos = (pos.0 + *dx as i32 as f64, pos.1 + *dy as i32 as f64);
+                    if let Some(e) = seen.iter().find(|e| e.to.as_deref() == Some("G1_3")) {
+                        exit_at = Some((pos.0 + e.dx as f32 as f64, pos.1 + e.dy as f32 as f64));
+                    }
                     let whole = i % frames_whole == 0;
                     icons = seen
                         .iter()
@@ -1163,6 +1180,22 @@ mod tests {
             let list: Vec<ExitIcon> =
                 icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: i.label.clone() }).collect();
             nav.icons(&list);
+            if let Some(view) = nav.guide(&targets) {
+                log.needle(t, &targets, &view, false, false, false);
+                needles.push(view);
+            }
+        }
+        // The walk ends at the exit's graph node, its icon lies up to 100 units off:
+        // on to the icon (the player leaves standing on it), seeing it there.
+        if let Some(at) = exit_at {
+            let (dx, dy) = ((at.0 - pos.0).round() as i32, (at.1 - pos.1).round() as i32);
+            t += 333;
+            log.frame();
+            log.moved(t, dx, dy);
+            nav.moved(dx as f64, dy as f64);
+            let icon = Icon { kind: "exit", x: (at.0 - pos.0 - dx as f64) as f32, y: (at.1 - pos.1 - dy as f64) as f32, label: Some("G1_3".into()) };
+            log.icons(t, &[icon.clone()], true, size, false);
+            nav.icons(&[ExitIcon { dx: icon.x as f64, dy: icon.y as f64, to: icon.label.clone() }]);
             if let Some(view) = nav.guide(&targets) {
                 log.needle(t, &targets, &view, false, false, false);
                 needles.push(view);
@@ -1195,12 +1228,43 @@ mod tests {
         let (ids, share, read) = v.truth.clone().expect("two exits read by name");
         assert!(ids.contains(&layout) && share >= 0.9 && read >= 2, "{ids:?} {share}");
         assert_eq!(v.left.as_ref().unwrap().0, "G1_3");
+        assert!(!v.unscored);
         let scored: usize = v.scored.iter().map(|s| s.1).sum();
         assert!(scored > 50, "{:?}", v.scored);
-        // Most of them right (the walker's exit lies up to 100 units off the node it
-        // ends at, so the last steps, pointing at the icon, count as wrong).
         let right: usize = v.scored.iter().map(|s| s.0).sum();
         assert!(right * 10 >= scored * 8, "{:?}", v.scored);
+    }
+
+    /// A visit that ends with leaving to the town where no exit icon was (a portal
+    /// in the middle of the map): the town is no exit taken, nothing is scored.
+    #[test]
+    fn a_portal_out_is_not_scored() {
+        let mut log = Log::memory(&start("G1_2", "G1_town"), T0);
+        let town = [NavTarget { label: "Clearfell Encampment".into(), exit: Some("G1_town".into()), ..Default::default() }];
+        let area = graph::load("G1_2");
+        let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 11);
+        let mut t = T0;
+        for step in 0..30 {
+            t += 333;
+            log.frame();
+            log.moved(t, 6, -3);
+            nav.moved(6.0, -3.0);
+            // An exit far away, then nothing.
+            let icons = if step < 3 { vec![Icon { kind: "exit", x: 200.0 - 6.0 * step as f32, y: 90.0, label: None }] } else { vec![] };
+            log.icons(t, &icons, step % 3 == 0, (300, 260), false);
+            nav.icons(&icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: None }).collect::<Vec<_>>());
+            if let Some(view) = nav.guide(&town) {
+                log.needle(t, &town, &view, false, false, false);
+            }
+        }
+        log.seen(t, Seen::Left("G1_town"));
+        log.end(t + 100);
+        let visits = replay(&log.text(), &Graphs::default());
+        let v = &visits[0];
+        eprint!("{}", report(v));
+        assert!(v.unscored && v.scored.iter().all(|s| s.1 == 0) && v.right_for_good.is_none(), "{:?}", v.scored);
+        let line = summary(1, &visits);
+        assert!(line.contains("0 with the exit taken, 1 unscored exit(s)"), "{line}");
     }
 
     #[test]

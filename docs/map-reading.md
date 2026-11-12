@@ -917,7 +917,9 @@ visit it prints:
   same exit places tie (`A = B`).
 - **left through**: the `seen` … `left` line, where the player stood (cells in the
   last part), and whether an exit icon (with that name) was seen within 30 cells of
-  it; leaving by portal or waypoint shows as "no exit icon".
+  it. With no exit icon there the player left by portal, waypoint or death: the area
+  left to is no exit taken, the visit is "left to … not scored" and counts under
+  "unscored exits" in the last line (`a_portal_out_is_not_scored`).
 - **needle within 45°**: in the part the player left from, every frame's needle to
   the exit taken against the straight line from the dead-reckoned place to the
   leaving spot (frames within 10 cells of it left out), by source: gold
