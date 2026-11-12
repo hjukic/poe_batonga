@@ -12,7 +12,7 @@
 use super::graph::{Area, Guidance, Layout, FAR};
 use super::guide::{screen_bearing, GuideView, NavTarget};
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap};
 
 /// Particles per layout.
@@ -140,12 +140,29 @@ const ICON_TEMPER: f64 = 0.5;
 /// Share of particles redrawn where the icons put the player, when the belief
 /// does not explain them.
 const ICON_INJECT: f64 = 0.3;
-/// The needle points straight at the target's icon only when the route there is
-/// at most this many times the straight distance.
-const ICON_STRAIGHT: f64 = 1.3;
+/// The needle points straight at the target's icon once the route there (from
+/// where the icon puts the player) is under `ICON_TO` times the straight distance,
+/// and back along the route above `ICON_BACK`: a river or a wall between makes the
+/// route bend, and pointing across it was wrong in the simulation.
+const ICON_TO: f64 = 1.2;
+const ICON_BACK: f64 = 1.5;
+
+/// The hysteresis between the needle at the icon and along the route.
+fn at_icon(before: bool, ratio: f64) -> bool {
+    if ratio < ICON_TO {
+        true
+    } else if ratio > ICON_BACK {
+        false
+    } else {
+        before
+    }
+}
 /// The needle at an icon is gold only this close (minimap cells): farther, walls
 /// and dead ends between make the straight line a poor guide (simulation).
 const ICON_GOLD_WITHIN: f64 = 200.0;
+/// A layout carrying at least this share of the belief is moved less by icons: no
+/// particles redrawn, and its weights only half-follow the icons.
+const ICON_FIRM: f64 = 0.5;
 /// An icon update confirms the belief (makes gold possible) when the belief put
 /// at least this share on the icons landing on exits.
 const ICON_CONFIRM: f64 = 0.5;
@@ -319,6 +336,9 @@ pub struct Navigator {
     track: (f64, f64),
     /// Units walked at the last icon update.
     icon_walked: f64,
+    /// The needle points at the target's icon (else along the route from where
+    /// the icon puts the player): switched with hysteresis.
+    at_icon: Cell<bool>,
     /// Exits seen per (layout, node): where the icons put them (file units).
     exits_seen: HashMap<(usize, usize), (f64, f64)>,
     tuning: Tuning,
@@ -388,6 +408,7 @@ impl Navigator {
             sightings: Vec::new(),
             track: (0.0, 0.0),
             icon_walked: 0.0,
+            at_icon: Cell::new(false),
             exits_seen: memory
                 .map(|m| {
                     area.layouts
@@ -535,8 +556,11 @@ impl Navigator {
                 }
             }
             bank.evidence += weight * agree.max(geometry).max(ICON_BASE).ln();
-            // The belief does not explain the icons: also try where they put the player.
-            if agree < 0.3 {
+            // The belief does not explain the icons: also try where they put the player,
+            // unless this layout already carries the belief (a false or misread icon
+            // must not move a confident bank much).
+            let confident = before[k] >= ICON_FIRM;
+            if agree < 0.3 && !confident {
                 let labelled: Vec<usize> = (0..icons.len()).filter(|&j| icons[j].to.is_some() && !cands[j].is_empty()).collect();
                 let any: Vec<usize> = (0..icons.len()).filter(|&j| !cands[j].is_empty()).collect();
                 let pool = if labelled.is_empty() { any } else { labelled };
@@ -557,7 +581,8 @@ impl Navigator {
                 }
             }
             for p in bank.particles.iter_mut() {
-                p.w *= like(p);
+                let l = like(p);
+                p.w *= if confident { 0.5 + 0.5 * l } else { l };
             }
             normalise(&mut bank.particles);
             let ess = 1.0 / bank.particles.iter().map(|p| p.w * p.w).sum::<f64>();
@@ -876,34 +901,59 @@ impl Navigator {
             "unconfirmed"
         };
         let source = self.cap_source(source, &posterior);
-        let route_cells = if weight > 0.0 { togo / weight * self.scale } else { 0.0 };
-        // The target's own exit in view: point at it.
+        let route_degrees = mode(&bins).or_else(|| screen_bearing(vx, vy));
+        // The target's own exit in view: the way there from where the icon puts the
+        // player, not through the belief's mix of positions.
         let in_view = self
             .icons_now
             .iter()
             .map(|(icon, read_twice)| (icon, *read_twice, self.icon_is_target(icon, target, &posterior)))
             .max_by(|a, b| a.2.total_cmp(&b.2));
-        // … but only where the way there is about straight: a river or a wall between
-        // makes the route bend, and pointing across it was wrong in the simulation,
-        // labelled or not (8.6% of such gold needles over 60° off). Then the route's
-        // needle stays; the icon has pinned the position, so it is good too.
-        let route_degrees = mode(&bins).or_else(|| screen_bearing(vx, vy));
-        let straight = |icon: &ExitIcon| route_cells <= ICON_STRAIGHT * icon.dx.hypot(icon.dy) || route_cells <= 0.0;
-        if let Some((icon, read_twice, share)) = in_view.filter(|(icon, _, share)| *share >= ICON_SURE && straight(icon)) {
+        if let Some((icon, read_twice, share)) = in_view.filter(|(_, _, share)| *share >= ICON_SURE) {
+            let (ox, oy) = super::guide::from_screen((icon.dx / self.scale, icon.dy / self.scale));
+            let straight = ox.hypot(oy).max(1.0);
+            let (mut rx, mut ry, mut ratio, mut sum) = (0.0, 0.0, 0.0, 0.0);
+            for (k, layout) in self.area.layouts.iter().enumerate() {
+                let pk = posterior[k];
+                let goals = layout.goals(target);
+                if pk < NEGLIGIBLE || goals.is_empty() {
+                    continue;
+                }
+                let nodes: Vec<usize> = self.icon_nodes(layout, icon).into_iter().filter(|n| goals.contains(n)).collect();
+                let Some(&n) = nodes.first().or(goals.first()) else { continue };
+                // Where the exit was seen, else its node; the player is the icon's offset from it.
+                let exit = self.exits_seen.get(&(k, n)).copied().unwrap_or((layout.nodes[n].x, layout.nodes[n].y));
+                let implied = (exit.0 - ox / layout.unit, exit.1 - oy / layout.unit);
+                let (off, near) = layout.corridor(implied);
+                let Some(j) = near else { continue };
+                let guidance = cache.entry((k, goals.clone())).or_insert_with(|| layout.guidance(&goals));
+                let (ax, ay) = guidance.ahead[j];
+                let (sx, sy) = super::guide::to_screen((ax as f64 - implied.0, ay as f64 - implied.1));
+                let len = sx.hypot(sy).max(1e-9);
+                (rx, ry) = (rx + pk * sx / len, ry + pk * sy / len);
+                ratio += pk * (guidance.togo[j] as f64 + off.min(FAR)) / straight;
+                sum += pk;
+            }
+            let ratio = if sum > 0.0 { ratio / sum } else { 1.0 };
+            let pointing = at_icon(self.at_icon.get(), ratio);
+            self.at_icon.set(pointing);
             // Gold when the label says it is the target's exit (read the same in two
             // scans, and not against a sure belief), or when one layout carries the
             // belief (an unlabelled icon could be another exit of a layout not ruled
-            // out); and only within ICON_GOLD_WITHIN.
+            // out); within ICON_GOLD_WITHIN.
             let unlabelled = ExitIcon { to: None, ..icon.clone() };
             let against = icon.to.is_some() && p_top >= GOLD_LAYOUT && self.icon_is_target(&unlabelled, target, &posterior) < 0.5;
             let named = icon.to.is_some() && read_twice && !against;
-            let near = icon.dx.hypot(icon.dy) <= ICON_GOLD_WITHIN;
+            // Gold only while pointing at the icon: along the route from a position the
+            // icon implies from the exit's node (up to 100 units off) it was wrong
+            // more often (4.4% of gold, one seed).
+            let near = icon.dx.hypot(icon.dy) <= ICON_GOLD_WITHIN && pointing;
             let sure = if near && !against && (named || p_top >= GOLD_LAYOUT) { "estimated" } else { "rough" };
             return Some(GuideView {
                 variant: if p_top >= SURE { self.area.layouts[top].id.clone() } else { String::new() },
                 target_kind: if target.exit.is_some() { "entrance".into() } else { target.tag.clone().unwrap_or_default() },
                 target: target.label.clone(),
-                degrees: screen_bearing(icon.dx, icon.dy),
+                degrees: if pointing { screen_bearing(icon.dx, icon.dy) } else { screen_bearing(rx, ry) },
                 // A labelled icon of the target in view is direct evidence, not layout
                 // inference: gold in every area. An unlabelled one leans on the belief
                 // and keeps its cap (rough in unmeasured areas, unconfirmed in dungeons).
@@ -1473,6 +1523,23 @@ mod tests {
     }
 
     #[test]
+    fn the_needle_switches_between_icon_and_route_with_hysteresis() {
+        // A walk that sweeps the route-to-straight ratio from 1.1 to 1.6 and back.
+        let mut ratios: Vec<f64> = (0..=50).map(|i| 1.1 + 0.01 * i as f64).collect();
+        ratios.extend(ratios.clone().into_iter().rev());
+        // With noise on top, as particles move.
+        let noisy: Vec<f64> = ratios.iter().enumerate().map(|(i, r)| r + if i % 2 == 0 { 0.04 } else { -0.04 }).collect();
+        // At 1.1 the needle is at the icon.
+        let (mut state, mut switches) = (true, 0);
+        for r in noisy {
+            let next = at_icon(state, r);
+            switches += usize::from(next != state);
+            state = next;
+        }
+        assert!(switches <= 2, "{switches} switches");
+    }
+
+    #[test]
     fn one_unlabelled_icon_and_a_known_arrival_pin_the_layout() {
         let area = graph::load("G1_2");
         let l = area.layouts.iter().find(|l| l.id == "ClearFell_W_E_N").unwrap();
@@ -1544,6 +1611,8 @@ mod tests {
         nav.icons(&[ExitIcon { to: Some("The Grelwood".into()), ..grelwood }]);
         let one_named = nav.guide(&target).unwrap();
         eprintln!("one labelled icon: {one_named:?}");
+        // The distance shown is the icon's (159 cells), not the belief's route.
+        assert!((one_named.distance - 136f32.hypot(83.0)).abs() < 1.0, "{one_named:?}");
         assert!(super::super::guide::angle_between(one_named.degrees.unwrap(), screen_bearing(-136.0, 83.0).unwrap()) < 15.0, "{one_named:?}");
     }
 

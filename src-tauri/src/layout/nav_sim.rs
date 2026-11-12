@@ -565,6 +565,8 @@ pub(super) struct Check {
     /// Steps without a needle, and runs that could not be walked.
     pub no_needle: usize,
     pub skipped: usize,
+    /// Per layout: (gold needles, of them more than 60° off).
+    pub layouts: std::collections::BTreeMap<String, (usize, usize)>,
 }
 
 impl Check {
@@ -627,6 +629,7 @@ pub(super) fn check(outcomes: &[Outcome], skipped: usize) -> Check {
         layout_fails,
         no_needle: outcomes.iter().map(|o| o.no_needle).sum(),
         skipped,
+        layouts: per_layout.iter().map(|(id, &v)| (id.to_string(), v)).collect(),
     }
 }
 
@@ -718,13 +721,17 @@ mod tests {
         assert!(c.class_ok(), "gate A: {c:?}");
         assert!(c.coverage >= COVERAGE, "gate B: {c:?}");
         // Labelled icons in the wide big-map view (the whole-window scans): the share
-        // holds (2.5% at one seed), one layout does not (ClearFell_S_N_E, 5 of 37:
+        // holds (2.5% at one seed), one layout does not (ClearFell_S_N_E, 7 of 46:
         // the exits sit up to 100 units from their nodes, so a pinned position is
         // that far off and near junctions the route from it differs).
         let (c, _) = all(1, true, &Options { view: Some(2.0), labels: true, ..Default::default() });
         print("exit icons, wide view, labelled", &c);
         assert!(c.off_share() <= 0.03, "gate A share: {c:?}");
         assert!(c.gold > 100, "named icons make gold possible: {c:?}");
+        // The layout over the bar, pinned so it cannot get worse unnoticed: 7 of 46.
+        let (gold, off) = c.layouts.get("ClearFell_S_N_E").copied().unwrap_or_default();
+        eprintln!("ClearFell_S_N_E: {off} of {gold} gold wrong");
+        assert!(off <= 8, "ClearFell_S_N_E: {off} of {gold}");
     }
 
     #[test]
