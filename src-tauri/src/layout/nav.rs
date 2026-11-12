@@ -636,32 +636,6 @@ impl Navigator {
             // needs no position belief at all.
             let mut geometry = 0.0;
             let labelled: Vec<usize> = (0..icons.len()).filter(|&j| icons[j].to.is_some()).collect();
-            // Two or more exits read by name: how well this layout's named exits lie
-            // as the icons do decides on its own, whatever was believed before; it
-            // replaces the last such fit (one scan, however often seen, counts once).
-            if labelled.len() >= 2 {
-                let world = |i: &ExitIcon| super::guide::from_screen((i.dx / scale, i.dy / scale));
-                let mut fit = 1.0;
-                for &j in &labelled[1..] {
-                    let (a, b) = (world(&icons[labelled[0]]), world(&icons[j]));
-                    let want = (b.0 - a.0, b.1 - a.1);
-                    let mut best = 0.0f64;
-                    for &n1 in &cands[labelled[0]] {
-                        for &n2 in &cands[j] {
-                            if n1 == n2 {
-                                continue;
-                            }
-                            let (p, q) = (at(n1), at(n2));
-                            let got = ((q.0 - p.0) * layout.unit, (q.1 - p.1) * layout.unit);
-                            let d2 = (got.0 - want.0).powi(2) + (got.1 - want.1).powi(2);
-                            best = best.max((-d2 / (4.0 * ICON_TOL * ICON_TOL)).exp());
-                        }
-                    }
-                    fit *= best;
-                }
-                bank.named = fit.max(NAMED_BASE).ln();
-                named_best = Some(named_best.unwrap_or(0.0).max(fit));
-            }
             // How well the first of `ids` and each other lie as two of this layout's nodes do.
             let pairs = |ids: &[usize]| -> f64 {
                 let world = |i: &ExitIcon| super::guide::from_screen((i.dx / scale, i.dy / scale));
@@ -685,7 +659,14 @@ impl Navigator {
                 }
                 fit
             };
-            if labelled.len() < 2 && icons.len() >= 2 {
+            // Two or more exits read by name: how well this layout's named exits lie
+            // as the icons do decides on its own, whatever was believed before; it
+            // replaces the last such fit (one scan, however often seen, counts once).
+            if labelled.len() >= 2 {
+                let fit = pairs(&labelled);
+                bank.named = fit.max(NAMED_BASE).ln();
+                named_best = Some(named_best.unwrap_or(0.0).max(fit));
+            } else if icons.len() >= 2 {
                 geometry = pairs(&(0..icons.len()).collect::<Vec<_>>());
             }
             bank.evidence += weight * agree.max(geometry).max(ICON_BASE).ln();
