@@ -139,6 +139,12 @@ const ICON_FLOOR: f64 = 0.05;
 const ICON_BASE: f64 = 0.005;
 /// Named exits that do not fit a layout at all cost it this much (the fit's floor).
 const NAMED_BASE: f64 = 1e-4;
+/// Named exits that the best layout fits only this loosely (the pair's miss, world
+/// units) say the graphs do not describe this instance well enough to steer by: the
+/// needle is then "unconfirmed". The one instance whose layout is known fit within 132
+/// units (Clearfell, seed 2693856399); the owner's Clearfell of 2026-11-12 (seed
+/// 2192959438) fit no layout better than 240, and the needle pointed into a wall.
+const NAMED_LOOSE: f64 = 180.0;
 /// Frames three a second see the same icons: a new set of icons counts in full;
 /// the same set again only after the player walked this far (world units) since
 /// the last update, and then for this much.
@@ -492,6 +498,8 @@ pub struct Navigator {
     icons_now: Vec<(ExitIcon, bool)>,
     /// Exits seen since the last loss, by their place (world units on `track`).
     sightings: Vec<Sighting>,
+    /// The last named-exit fit: no layout fits the named exits within `NAMED_LOOSE`.
+    named_loose: bool,
     /// Checkpoints counted this visit: where the belief put each, per layout (file units).
     checkpoints_counted: Vec<Vec<(f64, f64)>>,
     /// Where the player is by dead reckoning since the last loss (world units,
@@ -623,6 +631,7 @@ impl Navigator {
             trusted: MEASURED.contains(&area.id.as_str()),
             icons_now: Vec::new(),
             sightings: Vec::new(),
+            named_loose: false,
             checkpoints_counted: Vec::new(),
             track: (0.0, 0.0),
             icon_walked: 0.0,
@@ -739,6 +748,8 @@ impl Navigator {
         let candidates: Vec<Vec<Vec<usize>>> =
             self.area.layouts.iter().map(|l| icons.iter().map(|i| self.icon_nodes(l, i)).collect()).collect();
         let boss_still = !self.tuning.boss_particles;
+        // The best named-exit fit of any layout, when two or more exits are named.
+        let mut named_best: Option<f64> = None;
         let Navigator { area, banks, rng, exits_seen, .. } = self;
         let mut learnt = Vec::new();
         for (k, (layout, bank)) in area.layouts.iter().zip(banks.iter_mut()).enumerate() {
@@ -803,6 +814,7 @@ impl Navigator {
                     fit *= best;
                 }
                 bank.named = fit.max(NAMED_BASE).ln();
+                named_best = Some(named_best.unwrap_or(0.0).max(fit));
             }
             // How well the first of `ids` and each other lie as two of this layout's nodes do.
             let pairs = |ids: &[usize]| -> f64 {
@@ -917,6 +929,13 @@ impl Navigator {
         for (key, (x, y)) in learnt {
             let blended = exits_seen.get(&key).map_or((x, y), |&(ox, oy)| ((ox + x) / 2.0, (oy + y) / 2.0));
             exits_seen.insert(key, blended);
+        }
+        // How well the best layout fits the named exits, against what one pair missing by
+        // `NAMED_LOOSE` would score (per pair: the fit is a product over the pairs).
+        if let Some(best) = named_best {
+            let pairs = icons.iter().filter(|i| i.to.is_some()).count().saturating_sub(1) as i32;
+            let per_pair = (-(NAMED_LOOSE * NAMED_LOOSE) / (4.0 * ICON_TOL * ICON_TOL)).exp();
+            self.named_loose = best < per_pair.powi(pairs.max(1));
         }
         // Absolute evidence (gold allowed) only when the belief held before a new
         // sighting predicted it: an icon that reshuffles a diffuse belief, or the
@@ -1558,10 +1577,11 @@ impl Navigator {
     }
 
     /// Gold only where it was measured: at most rough in other areas, unconfirmed
-    /// wherever a dungeon layout carries belief.
+    /// wherever a dungeon layout carries belief, and while no layout fits the named exits
+    /// (`NAMED_LOOSE`).
     fn cap_source(&self, source: &'static str, posterior: &[f64]) -> &'static str {
         let dungeon = self.area.layouts.iter().zip(posterior).any(|(l, &p)| l.dungeon && p >= NEGLIGIBLE);
-        if dungeon {
+        if dungeon || self.named_loose {
             "unconfirmed"
         } else if source == "estimated" && !self.trusted {
             "rough"
@@ -2458,6 +2478,22 @@ mod tests {
         assert!(share("ClearFell_N_S_W") < 0.02, "{:?}", &ranking[..4]);
         let view = nav.guide(&target).unwrap();
         eprintln!("needle {view:?}");
+        // No layout fits that pair within 180 units (the best miss 240): the needle is gray.
+        assert!(nav.named_loose);
+        assert_eq!(view.source, "unconfirmed");
+        // A pair a layout fits well keeps it at most rough (Clearfell is measured: gold
+        // needs more), not gray: W_N_E's own exits, 20 units off.
+        let w_n_e = area.layouts.iter().find(|l| l.id == "ClearFell_W_N_E").unwrap();
+        let node = |exit: &str| w_n_e.nodes.iter().find(|n| n.exit.as_deref() == Some(exit)).unwrap();
+        let (town, mud) = (node("G1_town"), node("G1_3"));
+        let (wx, wy) = ((mud.x - town.x) * w_n_e.unit + 20.0, (mud.y - town.y) * w_n_e.unit);
+        let (sx, sy) = super::super::guide::to_screen((wx * SCALE, wy * SCALE));
+        let fits = [
+            ExitIcon { dx: 50.0, dy: -80.0, to: Some("Mud Burrow".into()), boss: vec![] },
+            ExitIcon { dx: 50.0 - sx, dy: -80.0 - sy, to: Some("G1_town".into()), boss: vec![] },
+        ];
+        nav.icons(&fits);
+        assert!(!nav.named_loose);
     }
 
     #[test]

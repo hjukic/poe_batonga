@@ -416,6 +416,8 @@ fn hint_kind(r: u8, g: u8, b: u8) -> u8 {
 
 /// Map icons in `image`, relative to the player at pixel `centre`, with `scale` image
 /// pixels per minimap pixel. `size` is the image's pixel size relative to 2160 px height.
+/// Without the exits' names (the tests' short form of `icons_in`).
+#[cfg(test)]
 pub fn icons(image: &Image, centre: [f64; 2], scale: f64, size: f64) -> Vec<Icon> {
     icons_in(image, centre, scale, size, 1, &[], false)
 }
