@@ -1,7 +1,7 @@
 {
   "name": "poe-batonga",
   "private": true,
-  "version": "0.1.52",
+  "version": "0.1.53",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
@@ -10,6 +10,8 @@
     "tauri": "tauri",
     "desktop": "tauri dev --additional-watch-folders ../data",
     "desktop:build": "tauri build --no-bundle",
+    "layouts:update": "scripts/update-layouts.sh",
+    "triggers:check": "scripts/check-triggers.sh",
     "vision:experiment": "node experiments/map-reading/run.mjs",
     "vision:test": "node --test experiments/map-reading/baseline.test.mjs"
   },
