@@ -36,6 +36,10 @@ const WIDE: i32 = 32;
 /// Consecutive unmatched frames before a new part is started.
 const LOST_LIMIT: u32 = 9;
 const SAVE_EVERY: Duration = Duration::from_secs(15);
+/// Far icons from a whole-screen scan stand in for this many frames after it
+/// (the scan comes every third big-map frame).
+const FAR_FRAMES: u32 = 3;
+
 /// A needle without a placed frame for this long is not "estimated": the player
 /// may have walked on with the map hidden, and the bearing is a screen direction.
 const STALE: Duration = Duration::from_secs(2);
@@ -161,11 +165,50 @@ struct Session {
     /// coordinates (None at the start of a part), and when it was placed.
     fed: Option<(i32, i32)>,
     fed_at: Option<Instant>,
+    /// Exit icons outside the wall frame from the last whole-screen icon scan, in
+    /// this part's coordinates, and how many frames ago that scan was.
+    far_icons: Vec<(f32, f32, Option<String>)>,
+    far_age: u32,
     /// The last arrow of this visit, kept while a new one cannot be worked out.
     last_guide: std::cell::RefCell<Option<guide::GuideView>>,
 }
 
+/// The zone an exit icon's label names (as in the area's connectionNames), when the
+/// reader could read it: a named anchor. None is "some exit".
+fn icon_label(icon: &crate::minimap::bigmap::Icon) -> Option<String> {
+    icon.label.clone().filter(|l| !l.is_empty())
+}
+
 impl Session {
+    /// Hands the navigator the frame's exit icons. Every third big-map frame lists
+    /// every icon on screen, the frames between only those inside the wall frame:
+    /// icons outside it are kept from the last whole scan for a few frames.
+    fn feed_icons(&mut self, icons: &[crate::minimap::bigmap::Icon], pos: (i32, i32), size: (usize, usize)) {
+        let Some(nav) = self.navigator.as_mut() else { return };
+        let (hw, hh) = (size.0 as f32 / 2.0, size.1 as f32 / 2.0);
+        let outside = |x: f32, y: f32| x.abs() > hw || y.abs() > hh;
+        let exits: Vec<&crate::minimap::bigmap::Icon> = icons.iter().filter(|i| i.kind == "exit").collect();
+        let mut list: Vec<nav::ExitIcon> =
+            exits.iter().map(|i| nav::ExitIcon { dx: i.x as f64, dy: i.y as f64, to: icon_label(i) }).collect();
+        if exits.iter().any(|i| outside(i.x, i.y)) {
+            self.far_icons = exits
+                .iter()
+                .filter(|i| outside(i.x, i.y))
+                .map(|i| (pos.0 as f32 + i.x, pos.1 as f32 + i.y, icon_label(i)))
+                .collect();
+            self.far_age = 0;
+        } else if self.far_age < FAR_FRAMES {
+            self.far_age += 1;
+            for (x, y, to) in &self.far_icons {
+                let (dx, dy) = (x - pos.0 as f32, y - pos.1 as f32);
+                if outside(dx, dy) {
+                    list.push(nav::ExitIcon { dx: dx as f64, dy: dy as f64, to: to.clone() });
+                }
+            }
+        }
+        nav.icons(&list);
+    }
+
     fn nav_file(&self) -> Option<PathBuf> {
         Some(self.file.as_ref()?.with_extension("nav.json"))
     }
@@ -191,8 +234,7 @@ impl Session {
 }
 
 struct State {
-    /// Map icons of the latest frame, in minimap cells from the player.
-    #[allow(dead_code)]
+    /// Map icons for the next frame, in minimap cells from the player.
     icons: Vec<crate::minimap::bigmap::Icon>,
     /// (area, label) of targets whose step the log completed.
     log_completed: std::collections::HashSet<(String, String)>,
@@ -486,6 +528,8 @@ impl Recorder {
                     navigator: None,
                     fed: None,
                     fed_at: None,
+                    far_icons: Vec::new(),
+                    far_age: FAR_FRAMES,
                     last_guide: Default::default(),
                 };
                 session.navigator = state.navigator(&session);
@@ -506,6 +550,7 @@ impl Recorder {
     /// One analysed minimap frame. Returns an overview for the overlay about once a second.
     pub fn on_frame(&self, frame: &MinimapView, capture_px: [usize; 2]) -> Option<LayoutView> {
         let mut state = self.0.lock().ok()?;
+        let icons = std::mem::take(&mut state.icons);
         let session = state.session.as_mut()?;
         if !frame.visible {
             return None;
@@ -546,6 +591,7 @@ impl Recorder {
         match placed {
             Some(pos) => {
                 session.feed(pos);
+                session.feed_icons(&icons, pos, (frame.cols, frame.rows));
                 let live = &mut session.live;
                 live.velocity = ((pos.0 - live.pos.0).clamp(-NEAR, NEAR), (pos.1 - live.pos.1).clamp(-NEAR, NEAR));
                 live.pos = pos;
@@ -577,6 +623,7 @@ impl Recorder {
                     session.live.centre = finished.centre;
                     session.live.frame_size = finished.frame_size;
                     session.fed = None;
+                    session.far_icons.clear();
                     if finished.part.matched > 0 {
                         session.recording.parts.push(finished.snapshot());
                     }
@@ -628,7 +675,8 @@ impl Recorder {
     }
 
     /// The map icons of the frame about to be handed to `on_frame` (zone exits,
-    /// checkpoints, the waypoint), in minimap cells from the player. Not used yet.
+    /// checkpoints, the waypoint), in minimap cells from the player; its exits go to
+    /// the navigator with the frame.
     pub fn on_icons(&self, icons: &[crate::minimap::bigmap::Icon]) {
         if let Ok(mut state) = self.0.lock() {
             state.icons = icons.to_vec();
@@ -1028,6 +1076,32 @@ mod tests {
     }
 
     #[test]
+    fn exit_icons_reach_the_navigator_and_far_ones_last_between_scans() {
+        use crate::minimap::bigmap::Icon;
+        let recorder = Recorder::new(None);
+        enter(&recorder, "G1_town");
+        enter(&recorder, "G1_2");
+        recorder.set_targets(vec![("G1_2".into(), guide::NavTarget { label: "The Grelwood".into(), exit: Some("G1_4".into()), ..Default::default() })]);
+        recorder.on_frame(&frame((0, 0)), [300, 260]);
+        // A whole-window scan: The Grelwood's exit, labelled, outside the wall frame.
+        let grelwood = Icon { kind: "exit", x: -136.0, y: 83.0, label: Some("The Grelwood".into()) };
+        recorder.on_icons(&[grelwood]);
+        recorder.on_frame(&frame((4, 0)), [300, 260]);
+        let needle = |r: &Recorder| r.0.lock().unwrap().view().unwrap().guide.unwrap();
+        let view = needle(&recorder);
+        assert!(guide::angle_between(view.degrees.unwrap(), guide::screen_bearing(-136.0, 83.0).unwrap()) < 15.0, "{view:?}");
+        // The next frame lists only icons inside the frame: the far one is kept, moved with the player.
+        recorder.on_icons(&[]);
+        recorder.on_frame(&frame((8, 0)), [300, 260]);
+        let later = needle(&recorder);
+        assert!(guide::angle_between(later.degrees.unwrap(), guide::screen_bearing(-140.0, 83.0).unwrap()) < 15.0, "{later:?}");
+        // The far icon was still handed over: the navigator still sees it.
+        let state = recorder.0.lock().unwrap();
+        assert_eq!(state.session.as_ref().unwrap().far_icons.len(), 1);
+        assert_eq!(state.session.as_ref().unwrap().far_age, 1);
+    }
+
+    #[test]
     fn a_needle_without_frames_for_two_seconds_is_not_gold() {
         let gold = guide::GuideView {
             variant: String::new(), target_kind: "entrance".into(), target: "X".into(), degrees: Some(10.0),
@@ -1136,7 +1210,7 @@ fn join_real_recording() {
     let parts = recording.parts.len();
     let mut session = Session {
         recording, live, arrived_from: None, came_from: String::new(), started: true, file: None, navigator: None,
-        fed: None, fed_at: None, last_guide: Default::default(),
+        fed: None, fed_at: None, far_icons: Vec::new(), far_age: FAR_FRAMES, last_guide: Default::default(),
     };
     let started = Instant::now();
     while merge_pieces(&mut session) {}

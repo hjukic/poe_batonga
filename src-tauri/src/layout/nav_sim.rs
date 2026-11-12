@@ -23,7 +23,7 @@
 
 use super::graph::{self, Area, Layout, SCALE};
 use super::guide::{angle_between, screen_bearing, to_screen, NavTarget};
-use super::nav::{Arrival, Navigator, Tuning};
+use super::nav::{Arrival, ExitIcon, Navigator, Tuning};
 
 /// World units per frame at the base speed (60 units/s, 3 frames a second).
 const STEP: f64 = 20.0;
@@ -62,6 +62,15 @@ const LOSS_MAX: usize = 30;
 const LOOK: f64 = 120.0;
 /// Centre-line points are this far apart (world units).
 const DENSE: f64 = 2.0;
+/// Exit icons: the minimap frame shows ±150 x ±130 cells around the player (wide
+/// big-map frames about twice that); a real exit lies up to this far (world
+/// units) from its graph node; an icon is missed this often, read this many
+/// cells off, and a false one shows up this often per frame.
+const VIEW: (f64, f64) = (150.0, 130.0);
+const EXIT_OFFSET: f64 = 100.0;
+const ICON_MISS: f64 = 0.2;
+const ICON_NOISE: f64 = 2.0;
+const FALSE_ICON: f64 = 0.01;
 
 pub(super) struct Rng(u64);
 
@@ -96,12 +105,13 @@ impl Rng {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(super) enum Event {
     /// Movement in minimap cells; the true bearing (screen degrees) of the route
     /// ahead after it; the share of the walk done; world units walked so far; how
-    /// far (world units) the walker stands from the nearest corridor.
-    Moved { dx: f64, dy: f64, truth: Option<f32>, done: f64, walked: f64, off: f64 },
+    /// far (world units) the walker stands from the nearest corridor; the exit
+    /// icons in view (cells from the player).
+    Moved { dx: f64, dy: f64, truth: Option<f32>, done: f64, walked: f64, off: f64, icons: Vec<ExitIcon> },
     /// Tracking lost for this many seconds.
     Lost(f64),
 }
@@ -304,11 +314,15 @@ pub(super) struct Options {
     pub wrong: f64,
     /// The navigator's constants (mutation tests).
     pub tuning: Tuning,
+    /// Exit icons seen within this many times the minimap frame (None: none).
+    pub view: Option<f64>,
+    /// Icons carry the name of the area they lead to.
+    pub labels: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { turn: 0.0, losses: true, long_loss: None, wrong: 0.3, tuning: Tuning::default() }
+        Options { turn: 0.0, losses: true, long_loss: None, wrong: 0.3, tuning: Tuning::default(), view: None, labels: false }
     }
 }
 
@@ -332,6 +346,16 @@ pub(super) fn walk(layout: &Layout, from: usize, goals: &[usize], seed: u64, opt
     let (mut lost_for, mut lost_frames, mut standing) = (0usize, 0usize, 0usize);
     let mut cursor = 0.0f64;
     let mut walked = 0.0f64;
+    // Where the exits really are: near, not on, their graph nodes.
+    let exits: Vec<((f64, f64), String)> = layout
+        .nodes
+        .iter()
+        .filter_map(|n| {
+            let exit = n.exit.clone()?;
+            let (r, a) = (EXIT_OFFSET * rng.uniform().sqrt(), std::f64::consts::TAU * rng.uniform());
+            Some(((n.x + r * a.cos(), n.y + r * a.sin()), exit))
+        })
+        .collect();
     let mut frame = 0usize;
     while (cursor as usize) < line.len() {
         let i = cursor as usize;
@@ -387,7 +411,23 @@ pub(super) fn walk(layout: &Layout, from: usize, goals: &[usize], seed: u64, opt
             screen_bearing(sx, sy)
         });
         let off = layout.corridor(at).0;
-        events.push(Event::Moved { dx, dy, truth, done: i as f64 / line.len() as f64, walked, off });
+        let mut icons = Vec::new();
+        if let Some(view) = options.view {
+            let (vx, vy) = (VIEW.0 * view, VIEW.1 * view);
+            for ((x, y), exit) in &exits {
+                let (sx, sy) = to_screen((x - at.0, y - at.1));
+                let (cx, cy) = (sx * scale + rng.gauss() * ICON_NOISE, sy * scale + rng.gauss() * ICON_NOISE);
+                if cx.abs() <= vx && cy.abs() <= vy && rng.uniform() >= ICON_MISS {
+                    let to = options.labels.then(|| exit.clone());
+                    let (cx, cy) = (cx * cos - cy * sin, cx * sin + cy * cos);
+                    icons.push(ExitIcon { dx: cx, dy: cy, to });
+                }
+            }
+            if rng.uniform() < FALSE_ICON {
+                icons.push(ExitIcon { dx: rng.range(-vx, vx), dy: rng.range(-vy, vy), to: None });
+            }
+        }
+        events.push(Event::Moved { dx, dy, truth, done: i as f64 / line.len() as f64, walked, off, icons });
     }
     Some(events)
 }
@@ -436,8 +476,11 @@ pub(super) fn run(area: &Area, k: usize, from: &str, told: bool, wrong: bool, ta
     for event in events {
         match event {
             Event::Lost(seconds) => nav.lost(seconds),
-            Event::Moved { dx, dy, truth, done, walked, off } => {
+            Event::Moved { dx, dy, truth, done, walked, off, icons } => {
                 nav.moved(dx, dy);
+                if options.view.is_some() {
+                    nav.icons(&icons);
+                }
                 out.offsets.push(off);
                 let view = nav.guide(&targets);
                 let error = match (view.as_ref().and_then(|v| v.degrees), truth) {
@@ -668,8 +711,26 @@ mod tests {
     }
 
     #[test]
+    fn gates_hold_with_exit_icons() {
+        // Unlabelled icons in the minimap's view, 20% missed, 1% false per frame.
+        let (c, _) = all(1, true, &Options { view: Some(1.0), ..Default::default() });
+        print("exit icons, minimap view, unlabelled", &c);
+        assert!(c.class_ok(), "gate A: {c:?}");
+        assert!(c.coverage >= COVERAGE, "gate B: {c:?}");
+        // Labelled icons in the wide big-map view (the whole-window scans): the share
+        // holds (2.5% at one seed), one layout does not (ClearFell_S_N_E, 5 of 37:
+        // the exits sit up to 100 units from their nodes, so a pinned position is
+        // that far off and near junctions the route from it differs).
+        let (c, _) = all(1, true, &Options { view: Some(2.0), labels: true, ..Default::default() });
+        print("exit icons, wide view, labelled", &c);
+        assert!(c.off_share() <= 0.03, "gate A share: {c:?}");
+        assert!(c.gold > 100, "named icons make gold possible: {c:?}");
+    }
+
+    #[test]
     fn the_class_check_bites_on_turned_movement() {
-        let (c, _) = all(1, true, &Options { turn: 90.0, ..Default::default() });
+        // With named icons there is gold to check; movement and icons turned by 90°.
+        let (c, _) = all(1, true, &Options { turn: 90.0, view: Some(2.0), labels: true, ..Default::default() });
         print("movement turned 90°", &c);
         assert!(!c.class_ok(), "{c:?}");
     }
@@ -682,7 +743,7 @@ mod tests {
         for (name, tuning) in [
             ("GOLD 0.5", Tuning { gold: 0.5, ..base }),
             ("GOLD 0.3, GOLD_WALK 0", Tuning { gold: 0.3, gold_walk: 0.0, ..base }),
-            ("GOLD_WALK 0", Tuning { gold_walk: 0.0, ..base }),
+            ("GOLD_WALK 100 (pass 1: gold from the walk)", Tuning { gold_walk: 100.0, ..base }),
             ("MISSING 0", Tuning { missing: 0.0, ..base }),
             ("FLAT 120", Tuning { flat: 120.0, ..base }),
         ] {
@@ -704,6 +765,15 @@ mod tests {
         print("30 s loss at 40%", &all(seeds, true, &Options { long_loss: Some(30.0), ..Default::default() }).0);
         print("movement turned 90°", &all(seeds, true, &Options { turn: 90.0, ..Default::default() }).0);
         print("no tracking losses", &all(seeds, true, &Options { losses: false, ..Default::default() }).0);
+        let icons = Options { view: Some(1.0), ..Default::default() };
+        let (with_icons, _) = all(seeds, true, &icons);
+        print("exit icons, minimap view", &with_icons);
+        print("exit icons, wide view", &all(seeds, true, &Options { view: Some(2.0), ..Default::default() }).0);
+        print("exit icons, labelled", &all(seeds, true, &Options { view: Some(1.0), labels: true, ..Default::default() }).0);
+        print("exit icons, arrival unknown", &all(seeds, false, &Options { view: Some(1.0), ..Default::default() }).0);
+        print("exit icons, 30 s loss at 40%", &all(seeds, true, &Options { long_loss: Some(30.0), ..Options { view: Some(1.0), ..Default::default() } }).0);
+        print("exit icons, movement turned 90°", &all(seeds, true, &Options { turn: 90.0, ..Options { view: Some(1.0), ..Default::default() } }).0);
+        assert!(with_icons.class_ok());
         assert!(c.class_ok() && c.coverage >= COVERAGE);
     }
 
