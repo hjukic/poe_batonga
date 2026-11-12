@@ -10,8 +10,11 @@ log="${POE2_CLIENT_LOG:-$HOME/.local/share/Steam/steamapps/common/Path of Exile 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 in_town_or_closed() {
-  hyprctl clients -j 2>/dev/null | grep -q '"steam_app_2694490"' || return 0
-  local last
+  # No pipe into `grep -q`: with pipefail its early exit fails the pipe and read as
+  # "the game is closed" (it landed v0.1.83 inside Clearfell).
+  local clients last
+  clients=$(hyprctl clients -j 2>/dev/null) || return 1
+  [[ $clients == *'"steam_app_2694490"'* ]] || return 0
   last=$(grep -a -o 'Generating level [0-9]* area "[^"]*"' "$log" | tail -n 1)
   [[ ${last,,} == *town\"* ]]
 }
