@@ -742,6 +742,10 @@ no recorded wall, on a grid of 3x3 minimap cells:
   recording, not the ground: the big-map screenshot shows these outlines as obstacles
   the player walks round. Likely cause: the minimap's player cell was estimated badly
   before the cross was found by its blob (see "Big map").
+- A player in a closed cell (next to a line) starts from the open cells within 3
+  search cells reached without crossing a wall cell; a target in one (an exit drawn
+  on a cliff line, a point on a line drawn twice) is reached from either side (that
+  found a way for one more of the 44 real pairs below).
 - Fog, where nothing is recorded, costs what open ground costs: an unrecorded area may
   be open ground nobody has seen, and on the minimap open ground and fog look the
   same. The alternative, a higher cost away from where the player has been, was not
@@ -768,8 +772,26 @@ no recorded wall, on a grid of 3x3 minimap cells:
 
 **Time** (release; the app's crate builds at opt-level 2): a map of 40,000 wall cells
 (room outlines over 1,600x1,600 cells): a target 330 cells off 0.4 ms (815 search cells),
-2,150 cells across 3.9 ms (41,000), a walled-in target 5.5 ms (gives up). It runs on the recorder's
+2,150 cells across 3.9 ms (41,000), a walled-in target 5.5 ms (gives up). On Clearfell's
+part 0 (21,500 walls seen twice) a `guide_on` call with a named icon 300 cells off:
+median 0.31 ms, slowest 1.8 ms (25 places along the trail). It runs on the recorder's
 lock about once a second.
+
+**Real walls** (`clearfell-part0-map.txt`, Clearfell 2693856399 part 0: walls and
+trail, 52 KB). 44 pairs of trail points 40 points apart along stretches without a jump
+(300-500 cells walked):
+
+- To a target ahead (the walls and the trail up to the player only): a way for 41 of
+  44 (for the 3 others the walk crossed recorded lines); the straight lines cross 404
+  unwalked wall cells, the ways none; median way 1.06 times the straight line. Where
+  the player walked across a recorded line (above) the way goes round it, so on this
+  recording it can be longer than the walk.
+- Going back (the trail recorded): a way for all 44, 90% of it within 20 cells of the
+  trail (median), half the walked length (the walk wanders; the way cuts across open
+  ground).
+- Gaps: of 30 lines (groups of 20 or more cells seen twice), 8 have a gap of 1-8 cells
+  to another line (widths 1, 1, 1, 3, 3, 5, 5, 6), which the raw grid would leak
+  through; all 8 are closed. Two more have a narrowest gap of 9-11 cells, left open.
 
 **The needle** (`guide_on`). The target's place in the part's coordinates is known
 when (in this order):

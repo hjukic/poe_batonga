@@ -1970,7 +1970,7 @@ mod tests {
     }
 
     use super::super::guide::angle_between;
-    use super::super::route::tests::{line, outline, walls};
+    use super::super::route::tests::{clearfell, line, outline, walls};
 
     fn lent<'a>(walls: &'a HashMap<(i32, i32), u32>, trail: &'a [[i32; 2]], player: (i32, i32), arrivals: Vec<(&'a str, (i32, i32))>) -> Place<'a> {
         Place { map: route::Map { walls, trail }, player, arrivals }
@@ -2066,5 +2066,29 @@ mod tests {
         let target = [exit("G1_town", "Clearfell Encampment")];
         let place = lent(&map, &[], (60, 0), vec![("G1_town", (0, 0))]);
         assert_eq!(nav.guide_on(&target, Some(&place)), nav.guide(&target));
+    }
+
+    #[test]
+    fn a_needle_on_the_real_map_takes_a_few_milliseconds() {
+        // The owner's Clearfell walls (21,500 cells seen twice) and trail; a named
+        // exit icon 300 cells off. Time per `guide_on` call.
+        let (map, trail) = clearfell();
+        let area = graph::load("G1_2");
+        let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 3);
+        let target = [exit("G1_4", "The Grelwood")];
+        let mut times = Vec::new();
+        for (k, &[x, y]) in trail.iter().enumerate().step_by(25) {
+            let icon = ExitIcon { dx: 240.0, dy: -180.0, to: Some("The Grelwood".into()) };
+            nav.icons(std::slice::from_ref(&icon));
+            nav.icons(std::slice::from_ref(&icon));
+            let started = std::time::Instant::now();
+            let view = nav.guide_on(&target, Some(&lent(&map, &trail[..=k], (x, y), vec![]))).unwrap();
+            times.push(started.elapsed());
+            assert!(view.degrees.is_some());
+            nav.lost(1.0);
+        }
+        times.sort();
+        println!("guide_on on the real map: {} calls, median {:?}, slowest {:?}", times.len(), times[times.len() / 2], times[times.len() - 1]);
+        assert!(times[times.len() - 1].as_millis() < 100);
     }
 }

@@ -269,8 +269,9 @@ fn build(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> Gr
 
 /// The open cells to start or end at for a point in `cell`: the cell itself when
 /// open, else the open cells within `ESCAPE`, reached without crossing a wall
-/// cell; with what getting there costs.
-fn region(grid: &Grid, cell: (i32, i32)) -> Vec<(usize, u32)> {
+/// cell (`across`: also across one, for a target drawn on a line: an exit on a
+/// cliff, or a point on a line drawn twice); with what getting there costs.
+fn region(grid: &Grid, cell: (i32, i32), across: bool) -> Vec<(usize, u32)> {
     let Some(k) = grid.index(cell) else { return Vec::new() };
     if !closed(grid.flags[k]) {
         return vec![(k, 0)];
@@ -285,7 +286,7 @@ fn region(grid: &Grid, cell: (i32, i32)) -> Vec<(usize, u32)> {
                 continue;
             }
             let Some(n) = grid.index(next) else { continue };
-            if seen.contains(&n) || (grid.flags[n] & WALL != 0 && grid.flags[n] & WALKED == 0) {
+            if seen.contains(&n) || (!across && grid.flags[n] & WALL != 0 && grid.flags[n] & WALKED == 0) {
                 continue;
             }
             seen.push(n);
@@ -306,8 +307,9 @@ fn region(grid: &Grid, cell: (i32, i32)) -> Vec<(usize, u32)> {
 pub fn way(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> Option<Way> {
     let mut grid = build(map, from, to, keep);
     let (start, goal) = (grid.cell(from), grid.cell(to));
-    let sources = region(&grid, start);
-    let goals = region(&grid, goal);
+    // The player is on one side of a line; a target on one is reached from either.
+    let sources = region(&grid, start, false);
+    let goals = region(&grid, goal, true);
     if sources.is_empty() || goals.is_empty() {
         return None;
     }
@@ -656,5 +658,215 @@ pub(super) mod tests {
         for t in [near, across, none] {
             assert!(t.as_millis() < 400, "{t:?}");
         }
+    }
+
+    /// The owner's Clearfell (seed 2693856399), part 0: wall cells (seen twice or
+    /// more, and once) and the walked trail.
+    pub fn clearfell() -> (HashMap<(i32, i32), u32>, Vec<[i32; 2]>) {
+        let text = include_str!("../../tests/fixtures/clearfell-part0-map.txt");
+        let (mut walls, mut trail) = (HashMap::new(), Vec::new());
+        let mut section = "";
+        for row in text.lines().filter(|l| !l.starts_with('#')) {
+            match row {
+                "walls" | "trail" => section = if row == "walls" { "walls" } else { "trail" },
+                _ if section == "walls" => {
+                    let (x, runs) = row.split_once(':').unwrap();
+                    let x: i32 = x.parse().unwrap();
+                    let mut n = 2;
+                    for run in runs.split_whitespace() {
+                        if run == "~" {
+                            n = 1;
+                            continue;
+                        }
+                        let (y, len) = run.split_once('+').unwrap();
+                        let (y, len): (i32, i32) = (y.parse().unwrap(), len.parse().unwrap());
+                        for k in 0..len {
+                            walls.insert((x, y + k), n);
+                        }
+                    }
+                }
+                _ => {
+                    for point in row.split_whitespace() {
+                        let (x, y) = point.split_once(',').unwrap();
+                        trail.push([x.parse().unwrap(), y.parse().unwrap()]);
+                    }
+                }
+            }
+        }
+        (walls, trail)
+    }
+
+    /// Points every 2 cells along a polyline.
+    fn samples(points: &[(f64, f64)]) -> Vec<(f64, f64)> {
+        let mut out = vec![points[0]];
+        for p in points.windows(2) {
+            let d = (p[1].0 - p[0].0).hypot(p[1].1 - p[0].1);
+            let n = (d / 2.0).ceil().max(1.0) as usize;
+            out.extend((1..=n).map(|k| {
+                let t = k as f64 / n as f64;
+                (p[0].0 + t * (p[1].0 - p[0].0), p[0].1 + t * (p[1].1 - p[0].1))
+            }));
+        }
+        out
+    }
+
+    fn to_segment(p: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
+        let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+        let len2 = dx * dx + dy * dy;
+        let t = if len2 > 0.0 { (((p.0 - a.0) * dx + (p.1 - a.1) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
+        (p.0 - a.0 - t * dx).hypot(p.1 - a.1 - t * dy)
+    }
+
+    fn median(mut v: Vec<f64>) -> f64 {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    }
+
+    #[test]
+    fn on_real_walls_the_way_keeps_to_the_walked_ground() {
+        let (map, trail) = clearfell();
+        let pt = |k: usize| (trail[k][0] as f64, trail[k][1] as f64);
+        // Search cells with a wall the player has not walked across, that a polyline passes.
+        let crossed = |grid: &Grid, points: &[(f64, f64)]| {
+            let mut cells = std::collections::HashSet::new();
+            for p in points.windows(2) {
+                traverse(grid.at(p[0]), grid.at(p[1]), |c| {
+                    if grid.index(c).is_some_and(|k| grid.flags[k] & WALL != 0 && grid.flags[k] & WALKED == 0) {
+                        cells.insert(c);
+                    }
+                    true
+                });
+            }
+            cells.len()
+        };
+        // Pairs 40 trail points apart (300-500 cells walked) along stretches without a jump.
+        let mut pairs = Vec::new();
+        let mut start = 0;
+        for k in 1..=trail.len() {
+            let jump = k == trail.len() || (trail[k][0] - trail[k - 1][0]).abs().max((trail[k][1] - trail[k - 1][1]).abs()) > JUMP;
+            if jump {
+                pairs.extend((start..k).step_by(10).filter(|&i| i + 40 < k).map(|i| (i, i + 40)));
+                start = k;
+            }
+        }
+        let (mut found, mut cross_way, mut cross_line, mut ratio) = (0, 0, 0, Vec::new());
+        let (mut back_near, mut back_ratio, mut slowest) = (Vec::new(), Vec::new(), std::time::Duration::ZERO);
+        for &(i, j) in &pairs {
+            let walked: Vec<(f64, f64)> = (i..=j).map(pt).collect();
+            let length: f64 = walked.windows(2).map(|p| (p[1].0 - p[0].0).hypot(p[1].1 - p[0].1)).sum();
+            let near = |points: &[(f64, f64)]| {
+                let s = samples(points);
+                s.iter().filter(|&&p| walked.windows(2).any(|w| to_segment(p, w[0], w[1]) <= 20.0)).count() as f64 / s.len() as f64
+            };
+            // To a target ahead (an icon in view): the walls, and what was walked up to the player.
+            let ahead = Map { walls: &map, trail: &trail[..=i] };
+            let started = Instant::now();
+            let found_way = way(&ahead, pt(i), pt(j), &[]);
+            slowest = slowest.max(started.elapsed());
+            let grid = build(&ahead, pt(i), pt(j), &[]);
+            cross_line += crossed(&grid, &[pt(i), pt(j)]);
+            if let Some(way) = found_way {
+                found += 1;
+                // Only where it starts in a wall (the trail lies on one), and on the
+                // last step to a target on one (at most `ESCAPE` search cells).
+                let last = way.points.len() - 1;
+                cross_way += crossed(&grid, &way.points[..last]).saturating_sub(2);
+                let (a, b) = (way.points[last - 1], way.points[last]);
+                assert!((b.0 - a.0).hypot(b.1 - a.1) <= ((ESCAPE + 1) * COARSE) as f64 * 1.5 || crossed(&grid, &[a, b]) == 0);
+                ratio.push(way.length / (pt(j).0 - pt(i).0).hypot(pt(j).1 - pt(i).1).max(1.0));
+            }
+            // Going back: the trail up to here is recorded.
+            let started = Instant::now();
+            let back = super::way(&Map { walls: &map, trail: &trail[..=j] }, pt(j), pt(i), &[]);
+            slowest = slowest.max(started.elapsed());
+            let back = back.expect("the walked way back");
+            back_near.push(near(&back.points));
+            back_ratio.push(back.length / length);
+        }
+        println!(
+            "{} pairs. Ahead: way found {found}, way/straight {:.2} (median); unwalked wall cells crossed: straight {cross_line}, way {cross_way}. \
+             Back: within 20 cells of the trail {:.2}, way/walked {:.2} (medians). Slowest {slowest:?}",
+            pairs.len(),
+            median(ratio.clone()),
+            median(back_near.clone()),
+            median(back_ratio.clone()),
+        );
+        assert!(pairs.len() >= 30);
+        assert!(found * 10 >= pairs.len() * 9, "{found} of {}", pairs.len());
+        assert!(cross_line >= 100 && cross_way == 0, "{cross_line} {cross_way}");
+        assert!(median(back_near) >= 0.85);
+        assert!(back_ratio.iter().all(|&r| r <= 1.05), "{back_ratio:?}");
+    }
+
+    #[test]
+    fn on_real_walls_gaps_in_lines_are_closed() {
+        let (map, _) = clearfell();
+        let cells: Vec<(i32, i32)> = map.iter().filter(|(_, &n)| n >= TRUSTED).map(|(&c, _)| c).collect();
+        let (x0, y0) = cells.iter().fold((i32::MAX, i32::MAX), |a, c| (a.0.min(c.0), a.1.min(c.1)));
+        let (x1, y1) = cells.iter().fold((i32::MIN, i32::MIN), |a, c| (a.0.max(c.0), a.1.max(c.1)));
+        let (w, h) = (x1 - x0 + 1, y1 - y0 + 1);
+        let at = |x: i32, y: i32| (x >= x0 && y >= y0 && x <= x1 && y <= y1).then(|| ((y - y0) * w + x - x0) as usize);
+        let mut id = vec![u32::MAX; (w * h) as usize];
+        for &c in &cells {
+            id[at(c.0, c.1).unwrap()] = u32::MAX - 1;
+        }
+        // Lines: 8-connected groups.
+        let mut sizes = Vec::new();
+        for &c in &cells {
+            if id[at(c.0, c.1).unwrap()] != u32::MAX - 1 {
+                continue;
+            }
+            let k = sizes.len() as u32;
+            let (mut stack, mut n) = (vec![c], 0);
+            id[at(c.0, c.1).unwrap()] = k;
+            while let Some((x, y)) = stack.pop() {
+                n += 1;
+                for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)] {
+                    if let Some(m) = at(x + dx, y + dy).filter(|&m| id[m] == u32::MAX - 1) {
+                        id[m] = k;
+                        stack.push((x + dx, y + dy));
+                    }
+                }
+            }
+            sizes.push(n);
+        }
+        // Each line's narrowest gap to another line (of 3 cells or more), and its ends.
+        let mut gap: Vec<Option<(i32, (i32, i32), (i32, i32))>> = vec![None; sizes.len()];
+        for &(x, y) in &cells {
+            let k = id[at(x, y).unwrap()] as usize;
+            for dy in -12..=12 {
+                for dx in -12..=12 {
+                    let Some(m) = at(x + dx, y + dy) else { continue };
+                    let other = id[m];
+                    if other >= u32::MAX - 1 || other as usize == k || sizes[other as usize] < 3 {
+                        continue;
+                    }
+                    let d = dx.abs().max(dy.abs()) - 1;
+                    if gap[k].is_none_or(|g| d < g.0) {
+                        gap[k] = Some((d, (x, y), (x + dx, y + dy)));
+                    }
+                }
+            }
+        }
+        let grid = build(&Map { walls: &map, trail: &[] }, (x0 as f64, y0 as f64), (x1 as f64, y1 as f64), &[]);
+        let shut = |a: (i32, i32), b: (i32, i32)| {
+            let (pa, pb) = (grid.at((a.0 as f64, a.1 as f64)), grid.at((b.0 as f64, b.1 as f64)));
+            traverse(pa, pb, |cell| !grid.open(cell))
+        };
+        let lines: Vec<usize> = (0..sizes.len()).filter(|&k| sizes[k] >= 20).collect();
+        let narrow: Vec<usize> = lines.iter().copied().filter(|&k| gap[k].is_some_and(|g| g.0 <= 8)).collect();
+        let closed = narrow.iter().filter(|&&k| gap[k].is_some_and(|g| shut(g.1, g.2))).count();
+        let wider: Vec<usize> = lines.iter().copied().filter(|&k| gap[k].is_some_and(|g| (9..=11).contains(&g.0))).collect();
+        let wider_closed = wider.iter().filter(|&&k| gap[k].is_some_and(|g| shut(g.1, g.2))).count();
+        let mut widths: Vec<i32> = narrow.iter().map(|&k| gap[k].unwrap().0).collect();
+        widths.sort_unstable();
+        println!(
+            "{} lines (20+ cells): {} with a gap of 1-8 cells to another line (widths {widths:?}; leaks without thickening), {closed} closed; \
+             {} with a narrowest gap of 9-11, {wider_closed} closed",
+            lines.len(),
+            narrow.len(),
+            wider.len()
+        );
+        assert_eq!(closed, narrow.len());
     }
 }
