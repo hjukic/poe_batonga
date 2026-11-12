@@ -132,6 +132,8 @@ const ICON_FLOOR: f64 = 0.05;
 /// … and a layout that explains the icons neither by its belief nor by the
 /// geometry of two icons gets this much (the same for every layout).
 const ICON_BASE: f64 = 0.005;
+/// Named exits that do not fit a layout at all cost it this much (the fit's floor).
+const NAMED_BASE: f64 = 1e-4;
 /// Frames three a second see the same icons: a new set of icons counts in full;
 /// the same set again only after the player walked this far (world units) since
 /// the last update, and then for this much.
@@ -169,6 +171,9 @@ const ICON_CONFIRM: f64 = 0.5;
 /// The needle points at an exit icon once this share of the belief says it is the
 /// target's exit (a labelled icon says so itself).
 const ICON_SURE: f64 = 0.95;
+
+/// The memory format; older files are ignored.
+pub(super) const MEMORY_VERSION: u32 = 1;
 
 /// Icons this close (world units) on the dead-reckoned track are one exit.
 const SIGHT_MATCH: f64 = 40.0;
@@ -217,6 +222,10 @@ pub enum Seen<'a> {
 /// What is worth keeping of a zone instance between visits.
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct Memory {
+    /// Files of an older version (none: before v0.1.42) are not read: their
+    /// anchors and exits came from icons counted the old way.
+    #[serde(default)]
+    pub version: u32,
     /// Layout id → probability.
     pub layouts: BTreeMap<String, f64>,
     /// World units walked with tracking, over all visits (gold counts only this visit's).
@@ -230,6 +239,9 @@ pub struct Memory {
     pub path: BTreeMap<String, f64>,
     #[serde(default)]
     pub anchors: BTreeMap<String, f64>,
+    /// The named exits' fit per layout (see `Bank::named`).
+    #[serde(default)]
+    pub named: BTreeMap<String, f64>,
     /// Exits seen on the map: layout id → node → where the icon put it (file units).
     #[serde(default)]
     pub exits: BTreeMap<String, BTreeMap<usize, [f32; 2]>>,
@@ -253,6 +265,9 @@ struct Bank {
     path: f64,
     /// Log evidence of anchors (and later exit icons).
     evidence: f64,
+    /// How well this layout's exits fit the last whole scan's named exits (log),
+    /// replaced at every such scan: position-free and absolute.
+    named: f64,
     particles: Vec<Particle>,
 }
 
@@ -350,6 +365,8 @@ fn unix_now() -> u64 {
 
 impl Navigator {
     pub fn new(area: &Area, arrival: Arrival, memory: Option<&Memory>, scale: f64, seed: u64) -> Self {
+        // A memory of an older version holds anchors and exits counted the old way.
+        let memory = memory.filter(|m| m.version == MEMORY_VERSION);
         let mut rng = Rng(seed ^ 0x5EED_0F_BA70_4A);
         let scale = if scale.is_finite() && (SCALE_RANGE.0..=SCALE_RANGE.1).contains(&scale) { scale } else { super::graph::SCALE };
         let n = area.layouts.len();
@@ -388,7 +405,8 @@ impl Navigator {
                 let anchors = evidence.map_or(0.0, |m| {
                     (m.anchors.get(&layout.id).copied().unwrap_or(best - path_cap(n)) - best).clamp(-path_cap(n), 0.0)
                 });
-                let mut bank = Bank { prior, path, evidence: anchors, particles };
+                let named = evidence.map_or(0.0, |m| m.named.get(&layout.id).copied().unwrap_or(0.0));
+                let mut bank = Bank { prior, path, evidence: anchors, named, particles };
                 normalise(&mut bank.particles);
                 bank
             })
@@ -511,7 +529,10 @@ impl Navigator {
         let mut learnt = Vec::new();
         for (k, (layout, bank)) in area.layouts.iter().zip(banks.iter_mut()).enumerate() {
             let cands = &candidates[k];
-            let at = |n: usize| exits_seen.get(&(k, n)).copied().unwrap_or((layout.nodes[n].x, layout.nodes[n].y));
+            // The evidence uses the graph's nodes only: a remembered place was learnt
+            // under this layout's own belief, so it would make every layout agree with
+            // its own past sightings, and icons could no longer tell layouts apart.
+            let at = |n: usize| (layout.nodes[n].x, layout.nodes[n].y);
             // Where an icon is from a particle, in file units.
             let offset = |icon: &ExitIcon, s: f64| {
                 let (x, y) = super::guide::from_screen((icon.dx / (scale * s), icon.dy / (scale * s)));
@@ -539,7 +560,32 @@ impl Navigator {
             // Two icons: does any pair of this layout's exits lie as far apart? This
             // needs no position belief at all.
             let mut geometry = 0.0;
-            if icons.len() >= 2 {
+            let labelled: Vec<usize> = (0..icons.len()).filter(|&j| icons[j].to.is_some()).collect();
+            // Two or more exits read by name: how well this layout's named exits lie
+            // as the icons do decides on its own, whatever was believed before; it
+            // replaces the last such fit (one scan, however often seen, counts once).
+            if labelled.len() >= 2 {
+                let world = |i: &ExitIcon| super::guide::from_screen((i.dx / scale, i.dy / scale));
+                let mut fit = 1.0;
+                for &j in &labelled[1..] {
+                    let (a, b) = (world(&icons[labelled[0]]), world(&icons[j]));
+                    let want = (b.0 - a.0, b.1 - a.1);
+                    let mut best = 0.0f64;
+                    for &n1 in &cands[labelled[0]] {
+                        for &n2 in &cands[j] {
+                            if n1 == n2 {
+                                continue;
+                            }
+                            let (p, q) = (at(n1), at(n2));
+                            let got = ((q.0 - p.0) * layout.unit, (q.1 - p.1) * layout.unit);
+                            let d2 = (got.0 - want.0).powi(2) + (got.1 - want.1).powi(2);
+                            best = best.max((-d2 / (4.0 * ICON_TOL * ICON_TOL)).exp());
+                        }
+                    }
+                    fit *= best;
+                }
+                bank.named = fit.max(NAMED_BASE).ln();
+            } else if icons.len() >= 2 {
                 geometry = 1.0;
                 let world = |i: &ExitIcon| super::guide::from_screen((i.dx / scale, i.dy / scale));
                 for j in 1..icons.len() {
@@ -616,7 +662,9 @@ impl Navigator {
                     }
                 }
                 if let Some((&n, &(w, x, y))) = votes.iter().max_by(|a, b| a.1 .0.total_cmp(&b.1 .0)) {
-                    if w >= ICON_SURE {
+                    let node = &layout.nodes[n];
+                    let close = ((x / w - node.x).hypot(y / w - node.y)) * layout.unit <= ICON_TOL;
+                    if w >= ICON_SURE && close {
                         learnt.push(((k, n), (x / w, y / w)));
                     }
                 }
@@ -663,7 +711,7 @@ impl Navigator {
             }
             let goals = layout.goals(target);
             let nodes = self.icon_nodes(layout, icon);
-            let at = |n: usize| self.exits_seen.get(&(k, n)).copied().unwrap_or((layout.nodes[n].x, layout.nodes[n].y));
+            let at = |n: usize| (layout.nodes[n].x, layout.nodes[n].y);
             let mut hit = 0.0;
             for p in &bank.particles {
                 let (x, y) = self.position(layout, p);
@@ -856,7 +904,7 @@ impl Navigator {
 
     /// Layout probabilities, in layout order.
     fn posterior(&self) -> Vec<f64> {
-        let logs: Vec<f64> = self.banks.iter().map(|b| b.prior + b.path + b.evidence).collect();
+        let logs: Vec<f64> = self.banks.iter().map(|b| b.prior + b.path + b.evidence + b.named).collect();
         let top = logs.iter().copied().fold(f64::MIN, f64::max);
         let raw: Vec<f64> = logs.iter().map(|l| (l - top).exp()).collect();
         let sum: f64 = raw.iter().sum();
@@ -951,7 +999,13 @@ impl Navigator {
                 let nodes: Vec<usize> = self.icon_nodes(layout, icon).into_iter().filter(|n| goals.contains(n)).collect();
                 let Some(&n) = nodes.first().or(goals.first()) else { continue };
                 // Where the exit was seen, else its node; the player is the icon's offset from it.
-                let exit = self.exits_seen.get(&(k, n)).copied().unwrap_or((layout.nodes[n].x, layout.nodes[n].y));
+                let node = (layout.nodes[n].x, layout.nodes[n].y);
+                let exit = self
+                    .exits_seen
+                    .get(&(k, n))
+                    .copied()
+                    .filter(|e| (e.0 - node.0).hypot(e.1 - node.1) * layout.unit <= ICON_TOL)
+                    .unwrap_or(node);
                 let implied = (exit.0 - ox / layout.unit, exit.1 - oy / layout.unit);
                 let (off, near) = layout.corridor(implied);
                 let Some(j) = near else { continue };
@@ -1048,10 +1102,12 @@ impl Navigator {
             exits.entry(self.area.layouts[k].id.clone()).or_default().insert(n, [x as f32, y as f32]);
         }
         Memory {
+            version: MEMORY_VERSION,
             exits,
             layouts: ids().zip(posterior).collect(),
             path: ids().zip(self.banks.iter().map(|b| b.path)).collect(),
             anchors: ids().zip(self.banks.iter().map(|b| b.evidence)).collect(),
+            named: ids().zip(self.banks.iter().map(|b| b.named)).collect(),
             walked: self.walked_before + self.walked,
             positions,
             at: self.data_at,
@@ -1666,6 +1722,51 @@ mod tests {
         // The distance shown is the icon's (159 cells), not the belief's route.
         assert!((one_named.distance - 136f32.hypot(83.0)).abs() < 1.0, "{one_named:?}");
         assert!(super::super::guide::angle_between(one_named.degrees.unwrap(), screen_bearing(-136.0, 83.0).unwrap()) < 15.0, "{one_named:?}");
+    }
+
+    /// The live regression of v0.1.41 (S7): the app restarted by the player at the
+    /// Grelwood exit, its memory from earlier builds, then the reader's frames: the
+    /// near exit unlabelled, the whole-window scan with both named, unlabelled again.
+    fn live_frames(nav: &mut Navigator) {
+        let near = ExitIcon { dx: -136.0, dy: 83.0, to: None };
+        let scan = [
+            ExitIcon { to: Some("The Grelwood".into()), ..near.clone() },
+            ExitIcon { dx: 823.0, dy: 110.0, to: Some("Mud Burrow".into()) },
+        ];
+        for round in 0..4 {
+            nav.icons(&[near.clone()]);
+            nav.icons(&[near.clone()]);
+            nav.icons(&scan);
+            let _ = round;
+        }
+    }
+
+    #[test]
+    fn two_named_exits_win_whatever_was_believed_before() {
+        let area = graph::load("G1_2");
+        let target = [exit("G1_4", "The Grelwood")];
+        let check = |nav: &Navigator, case: &str| {
+            let r = nav.ranking();
+            let p = r.iter().find(|(id, _)| *id == "ClearFell_W_E_N").unwrap().1;
+            let view = nav.guide(&target).unwrap();
+            eprintln!("{case}: W_E_N {p:.3}, top {:?}, needle {view:?}", &r[..3]);
+            assert!(p >= 0.6, "{case}: W_E_N {p}, top {:?}", &r[..3]);
+            assert!(super::super::guide::angle_between(view.degrees.unwrap(), screen_bearing(-136.0, 83.0).unwrap()) < 15.0, "{case}: {view:?}");
+        };
+        // The file the app wrote with v0.1.41.
+        let old: Memory = serde_json::from_str(include_str!("live-v0.1.41.nav.json")).unwrap();
+        let mut nav = Navigator::new(&area, Arrival::Unknown, Some(&old), SCALE, 2693856399);
+        live_frames(&mut nav);
+        check(&nav, "memory of v0.1.41");
+        // The same beliefs in a memory of the current version: still overturned.
+        let current = Memory { version: MEMORY_VERSION, at: unix_now(), ..old };
+        let mut nav = Navigator::new(&area, Arrival::Unknown, Some(&current), SCALE, 2693856399);
+        live_frames(&mut nav);
+        check(&nav, "the same beliefs, current version");
+        // No memory, the near exit unlabelled first, then the scan.
+        let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 2693856399);
+        live_frames(&mut nav);
+        check(&nav, "no memory");
     }
 
     #[test]
