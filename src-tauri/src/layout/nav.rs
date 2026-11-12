@@ -247,6 +247,8 @@ pub struct Picture {
     pub paths: Vec<Vec<[f32; 2]>>,
     /// Exits: the zone they lead to, and where.
     pub exits: Vec<(String, [f32; 2])>,
+    /// Other places the layout marks: "boss" (an arena), "campsite", "bridge".
+    pub places: Vec<(String, [f32; 2])>,
     pub player: Option<[f32; 2]>,
 }
 
@@ -1095,6 +1097,25 @@ impl Navigator {
             .iter()
             .filter_map(|n| n.exit.as_ref().map(|to| (self.area.names.get(to).cloned().unwrap_or_else(|| to.clone()), screen((n.x, n.y)))))
             .collect();
+        // What the layout's node tags say a place is, for the drawing.
+        let place = |tag: &str| {
+            let tag = tag.to_lowercase();
+            if tag.contains("boss") || tag.contains("arena") {
+                Some("boss")
+            } else if tag.contains("campsite") {
+                Some("campsite")
+            } else if tag.starts_with("bridge") {
+                Some("bridge")
+            } else {
+                None
+            }
+        };
+        let places = layout
+            .nodes
+            .iter()
+            .filter(|n| n.exit.is_none())
+            .filter_map(|n| n.tag.as_deref().and_then(place).map(|kind| (kind.to_string(), screen((n.x, n.y)))))
+            .collect();
         let bank = &self.banks[top];
         let weight: f64 = bank.particles.iter().map(|p| p.w).sum();
         let player = (weight > 0.0).then(|| {
@@ -1110,6 +1131,7 @@ impl Navigator {
             no_fit: false,
             paths,
             exits,
+            places,
             player,
         })
     }
@@ -2054,6 +2076,9 @@ mod tests {
         let names: Vec<&str> = picture.exits.iter().map(|(n, _)| n.as_str()).collect();
         assert!(names.contains(&"The Grelwood") && names.contains(&"Mud Burrow"), "{names:?}");
         assert!(!picture.paths.is_empty() && picture.player.is_some());
+        // Its boss arena and campsite are marked.
+        let kinds: Vec<&str> = picture.places.iter().map(|(k, _)| k.as_str()).collect();
+        assert!(kinds.contains(&"boss") && kinds.contains(&"campsite"), "{kinds:?}");
         // Up on screen is up on the in-game map: the Grelwood lies left of the Mud Burrow.
         let at = |name: &str| picture.exits.iter().find(|(n, _)| n == name).unwrap().1;
         assert!(at("The Grelwood")[0] < at("Mud Burrow")[0]);

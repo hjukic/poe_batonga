@@ -43,6 +43,8 @@ interface MinimapView {
 interface LayoutPicture {
   known: boolean; id: string; share: number; sure: boolean; candidates: number; noFit: boolean;
   paths: [number, number][][]; exits: [string, [number, number]][]; player: [number, number] | null;
+  /** Other places the layout marks: "boss", "campsite", "bridge". */
+  places: [string, [number, number]][];
 }
 /** The stitched map of the current zone visit, scaled to a cols x rows grid. */
 interface LayoutView {
@@ -347,6 +349,21 @@ function renderPicture(picture: LayoutPicture | undefined) {
   }
   context.font = '600 20px "Segoe UI", system-ui, sans-serif';
   context.textAlign = 'center';
+  // The boss's arena, the campsite and the bridges, under the exits.
+  for (const [kind, point] of picture.places ?? []) {
+    const [x, y] = at(point);
+    if (kind === 'bridge') {
+      context.fillStyle = 'rgb(239 233 255 / .7)';
+      context.fillRect(x - 5, y - 5, 10, 10);
+      continue;
+    }
+    context.fillStyle = kind === 'boss' ? '#e5484d' : '#7fd18b';
+    context.beginPath();
+    context.arc(x, y, 9, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = kind === 'boss' ? '#ffb3b5' : '#c8f2cf';
+    context.fillText(kind === 'boss' ? 'Boss' : 'Campsite', x, y + 30);
+  }
   for (const [exit, point] of picture.exits) {
     const [x, y] = at(point);
     context.fillStyle = '#ff9a3c';
@@ -645,7 +662,7 @@ async function start() {
     render({ visible: true, interactive: true, toggleShortcut: 'Ctrl+Space', shortcutError: null, lastError: null, layerShell: false });
     renderTracker(browserPreview);
     // A real layout of Clearfell (ClearFell_W_E_N), to see the drawing in a browser.
-    renderPicture(JSON.parse('{"known":true,"id":"ClearFell_W_E_N","share":0.93,"sure":true,"candidates":1,"paths":[[[-7481,-16101],[-81,-1090]],[[13466,-21338],[-81,-1090]],[[15710,-23582],[13466,-21338]],[[-14588,-17971],[-17581,-23956]],[[-6359,-32185],[-10848,-21712]],[[-3367,-26949],[-10848,-21712]],[[-14588,-33682],[-19825,-26200],[-17581,-23956]],[[-6359,-32185],[-1496,-34056]],[[-1496,-34056],[2992,-38544]],[[17337,-17597],[13466,-21338]],[[-6359,-32185],[-10100,-35926]],[[-5611,-38170],[-1496,-34056]],[[-10100,-35926],[-14588,-33682]],[[-20947,-21338],[-17581,-23956]],[[-10100,-35926],[-5611,-38170]],[[-10848,-21712],[-7481,-16101]],[[5611,-22460],[-81,-1090]],[[-6359,-32185],[-3367,-26949]],[[11222,-31063],[15710,-23582]],[[-10848,-21712],[-14588,-17971]],[[5611,-22460],[-7481,-16101]],[[2992,-38544],[11222,-31063]],[[11222,-31063],[-4489,-21338]]],"exits":[["Clearfell Encampment",[-81,-1090]],["The Grelwood",[-14588,-33682]],["Mud Burrow",[11222,-31063]]],"player":[-14588,-33682]}') as LayoutPicture);
+    renderPicture(JSON.parse('{"known":true,"id":"ClearFell_W_E_N","share":0.93,"sure":true,"candidates":1,"paths":[[[-7481,-16101],[-81,-1090]],[[13466,-21338],[-81,-1090]],[[15710,-23582],[13466,-21338]],[[-14588,-17971],[-17581,-23956]],[[-6359,-32185],[-10848,-21712]],[[-3367,-26949],[-10848,-21712]],[[-14588,-33682],[-19825,-26200],[-17581,-23956]],[[-6359,-32185],[-1496,-34056]],[[-1496,-34056],[2992,-38544]],[[17337,-17597],[13466,-21338]],[[-6359,-32185],[-10100,-35926]],[[-5611,-38170],[-1496,-34056]],[[-10100,-35926],[-14588,-33682]],[[-20947,-21338],[-17581,-23956]],[[-10100,-35926],[-5611,-38170]],[[-10848,-21712],[-7481,-16101]],[[5611,-22460],[-81,-1090]],[[-6359,-32185],[-3367,-26949]],[[11222,-31063],[15710,-23582]],[[-10848,-21712],[-14588,-17971]],[[5611,-22460],[-7481,-16101]],[[2992,-38544],[11222,-31063]],[[11222,-31063],[-4489,-21338]]],"exits":[["Clearfell Encampment",[-81,-1090]],["The Grelwood",[-14588,-33682]],["Mud Burrow",[11222,-31063]]],"player":[-14588,-33682],"places":[["bridge",[-10848,-21712]],["bridge",[-6359,-32185]],["boss",[-17581,-23956]],["campsite",[-3367,-26949]]]}') as LayoutPicture);
     return;
   }
   await listen<{ step: string; error: string | null }>('restart-status', (event) => renderRestart(event.payload.step, event.payload.error));
