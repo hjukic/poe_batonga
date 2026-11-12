@@ -8,6 +8,8 @@ interface Status {
   /** false = locked: click-through except the header buttons. */
   interactive: boolean;
   toggleShortcut: string;
+  /** Global shortcut that ticks the current step. */
+  tickShortcut: string;
   shortcutError: string | null;
   lastError: string | null;
   /** Wayland layer surface: moved with move_overlay_by instead of window dragging. */
@@ -100,6 +102,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
   <div id="settings" class="dropdown" aria-label="Settings" hidden>
     <label class="row"><span>Opacity</span><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></label>
     <div class="row"><span>Show / hide</span><button id="shortcut" class="keycap" type="button" title="Click, then press a new shortcut"></button></div>
+    <div class="row"><span>Tick current step</span><span id="tick-shortcut" class="keycap static"></span></div>
     <label class="row" title="Off: the compass passes over optional steps"><span>Compass: optional steps</span><input id="compass-optional" type="checkbox" checked /></label>
     <label class="row" title="The map recorded so far, for checking the tracking"><span>Map preview</span><input id="map-preview" type="checkbox" /></label>
     <p id="shortcut-error" class="warning" hidden></p>
@@ -136,49 +139,98 @@ function render(next: Status) {
   syncStepControls();
   if (!next.interactive) setSettingsOpen(false);
   if (!recording) shortcutButton.textContent = shortcutLabel(next.toggleShortcut);
+  $('#tick-shortcut').textContent = shortcutLabel(next.tickShortcut);
   showMessage('#shortcut-error', next.shortcutError);
   showMessage('#error', next.lastError);
   syncInput();
 }
 
+/** A checklist longer than this is folded: done steps become one line, later ones "+N more". */
+const MAX_ROWS = 9;
+/** Open steps shown while folded. */
+const MAX_OPEN = 6;
+/** Unfolded by a click on the summary line (to untick a hidden step). */
+let unfolded = false;
+let lastTracker: TrackerView | null = null;
+
+function stepRow(step: StepView) {
+  const row = document.createElement(step.kind === 'objective' ? 'button' : 'div');
+  row.className = `step ${step.kind} ${step.state}${step.optional ? ' optional' : ''}`;
+  row.dataset.id = step.id;
+  if (step.target) row.dataset.target = step.target;
+  if (row instanceof HTMLButtonElement) {
+    row.type = 'button';
+    row.setAttribute('aria-pressed', String(step.state === 'done'));
+    row.addEventListener('click', () => {
+      row.disabled = true;
+      void invoke<TrackerView>('toggle_step', { id: step.id }).then(renderTracker).catch((error) => {
+        showMessage('#error', String(error));
+        syncStepControls();
+      });
+    });
+  }
+  // One row: marker, text (wraps under itself), reward or "optional" on the right.
+  const marker = document.createElement('span');
+  marker.className = 'mark';
+  if (step.kind === 'objective') marker.innerHTML = step.state === 'done' ? STEP_DONE : STEP_ARROW;
+  const text = document.createElement('span');
+  text.className = 'text';
+  const side = document.createElement('span');
+  side.className = 'side';
+  for (const part of step.parts) {
+    const span = document.createElement('span');
+    span.textContent = part.text;
+    if (part.style) span.className = part.style;
+    (part.style === 'reward' ? side : text).append(span);
+  }
+  if (step.optional && !side.childElementCount) side.textContent = 'optional';
+  row.append(marker, text);
+  if (side.textContent) row.append(side);
+  return row;
+}
+
+/** A muted line that stands for folded steps; a click (unlocked) unfolds or folds the list. */
+function summaryRow(text: string, done: boolean) {
+  const row = document.createElement('button');
+  row.type = 'button';
+  row.className = 'step summary';
+  const marker = document.createElement('span');
+  marker.className = 'mark';
+  if (done) marker.innerHTML = STEP_DONE;
+  const label = document.createElement('span');
+  label.className = 'text';
+  label.textContent = text;
+  row.append(marker, label);
+  row.addEventListener('click', () => {
+    unfolded = !unfolded;
+    if (lastTracker) renderTracker(lastTracker);
+  });
+  return row;
+}
+
 function renderTracker(view: TrackerView) {
+  if (lastTracker && lastTracker.zone.id !== view.zone.id) unfolded = false;
+  lastTracker = view;
   showMessage('#log-warning', view.log.connected ? null : view.log.message);
   $('.zone').textContent = `${view.zone.name} · Lv ${view.zone.level}`;
-  $('#route').replaceChildren(...view.steps.map((step) => {
-    const row = document.createElement(step.kind === 'objective' ? 'button' : 'div');
-    row.className = `step ${step.kind} ${step.state}${step.optional ? ' optional' : ''}`;
-    row.dataset.id = step.id;
-    if (step.target) row.dataset.target = step.target;
-    if (row instanceof HTMLButtonElement) {
-      row.type = 'button';
-      row.setAttribute('aria-pressed', String(step.state === 'done'));
-      row.addEventListener('click', () => {
-        row.disabled = true;
-        void invoke<TrackerView>('toggle_step', { id: step.id }).then(renderTracker).catch((error) => {
-          showMessage('#error', String(error));
-          syncStepControls();
-        });
-      });
-    }
-    // One row: marker, text (wraps under itself), reward or "optional" on the right.
-    const marker = document.createElement('span');
-    marker.className = 'mark';
-    if (step.kind === 'objective') marker.innerHTML = step.state === 'done' ? STEP_DONE : STEP_ARROW;
-    const text = document.createElement('span');
-    text.className = 'text';
-    const side = document.createElement('span');
-    side.className = 'side';
-    for (const part of step.parts) {
-      const span = document.createElement('span');
-      span.textContent = part.text;
-      if (part.style) span.className = part.style;
-      (part.style === 'reward' ? side : text).append(span);
-    }
-    if (step.optional && !side.childElementCount) side.textContent = 'optional';
-    row.append(marker, text);
-    if (side.textContent) row.append(side);
-    return row;
-  }));
+  const rows: HTMLElement[] = [];
+  if (view.steps.length <= MAX_ROWS || unfolded) {
+    rows.push(...view.steps.map(stepRow));
+    if (unfolded) rows.push(summaryRow('Show less', false));
+  } else {
+    // Folded: the next open steps, each with the note in front of it; the rest as counts.
+    const objectives = view.steps.filter((step) => step.kind === 'objective');
+    const open = objectives.filter((step) => step.state !== 'done');
+    const shown = new Set(open.slice(0, MAX_OPEN));
+    const done = objectives.length - open.length;
+    if (done) rows.push(summaryRow(`${done} done`, true));
+    view.steps.forEach((step, index) => {
+      const next = step.kind === 'objective' ? step : view.steps.slice(index).find((later) => later.kind === 'objective');
+      if (next && shown.has(next)) rows.push(stepRow(step));
+    });
+    if (open.length > shown.size) rows.push(summaryRow(`+${open.length - shown.size} more`, false));
+  }
+  $('#route').replaceChildren(...rows);
   markHeading();
   syncStepControls();
 }
@@ -205,8 +257,16 @@ function setGuideTarget(target: string | null) {
 function syncStepControls() {
   document.querySelectorAll<HTMLButtonElement>('#route button.step').forEach((row) => {
     row.disabled = !status?.interactive;
+    if (row.classList.contains('summary')) return;
     row.title = status?.interactive ? 'Mark complete / incomplete' : 'Unlock the overlay to correct progress';
   });
+}
+
+/** The global "tick current step" shortcut: ticks the step with the bright arrow. */
+function tickCurrent() {
+  const id = document.querySelector<HTMLElement>('#route .step.heading')?.dataset.id;
+  if (!id) return;
+  void invoke<TrackerView>('toggle_step', { id }).then(renderTracker).catch((error) => showMessage('#error', String(error)));
 }
 
 // ---- Live minimap ----
@@ -449,15 +509,21 @@ $('#reset-progress').addEventListener('click', () => {
 
 // Shown only in a plain browser (npm run dev without Tauri), where no log can be read.
 const browserPreview: TrackerView = {
-  zone: { id: 'G1_2', name: 'Clearfell', level: 2 },
+  zone: { id: 'G1_4', name: 'The Grelwood', level: 4 },
   currentArea: null,
   log: { connected: true, path: null, message: '' },
   steps: [
-    { id: 'kill-beira', kind: 'objective', parts: [{ text: 'Kill ' }, { text: 'Beira', style: 'boss' }, { text: '+10% Cold Res', style: 'reward' }], optional: false, target: null, state: 'manual', source: null },
-    { id: 'directions', kind: 'note', parts: [{ text: 'Burrow by the waypoint, Grelwood past the bridge', style: 'direction' }], optional: false, target: null, state: 'note', source: null },
-    { id: 'enter-mud-burrow', kind: 'objective', parts: [{ text: 'Enter Mud Burrow' }], optional: true, target: 'Mud Burrow', state: 'done', source: 'log' },
-    { id: 'kill-devourer', kind: 'objective', parts: [{ text: 'Kill ' }, { text: 'The Devourer', style: 'boss' }, { text: 'Skill Gem', style: 'reward' }], optional: true, target: null, state: 'manual', source: null },
-    { id: 'enter-grelwood', kind: 'objective', parts: [{ text: 'Enter The Grelwood' }], optional: false, target: 'The Grelwood', state: 'open', source: null },
+    {"id": "grelwood-talk-una", "kind": "objective", "parts": [{"text": "Find and talk to "}, {"text": "Una", "style": "npc"}], "optional": false, "target": null, "state": "done", "source": "log"},
+    {"id": "grelwood-waypoint", "kind": "objective", "parts": [{"text": "Take the waypoint"}], "optional": false, "target": null, "state": "done", "source": "log"},
+    {"id": "grelwood-grim-tangle-wp", "kind": "objective", "parts": [{"text": "Grim Tangle WP, return"}], "optional": false, "target": "The Grim Tangle", "state": "done", "source": "log"},
+    {"id": "grelwood-red-vale-wp", "kind": "objective", "parts": [{"text": "Red Vale WP, return"}], "optional": false, "target": "The Red Vale", "state": "open", "source": null},
+    {"id": "kill-gerung", "kind": "objective", "parts": [{"text": "Kill "}, {"text": "Gerung", "style": "boss"}, {"text": "Skill Gem", "style": "reward"}], "optional": true, "target": "Gerung", "state": "manual", "source": null},
+    {"id": "kill-areagne", "kind": "objective", "parts": [{"text": "Kill "}, {"text": "Areagne", "style": "boss"}, {"text": " at the hut"}, {"text": "Support Gem", "style": "reward"}], "optional": true, "target": "Areagne's hut", "state": "manual", "source": null},
+    {"id": "directions-grelwood", "kind": "note", "parts": [{"text": "Go upstream along the river to The Red Vale", "style": "direction"}], "optional": false, "target": null, "state": "note", "source": null},
+    {"id": "enter-red-vale", "kind": "objective", "parts": [{"text": "Enter The Red Vale"}], "optional": false, "target": "The Red Vale", "state": "open", "source": null},
+    {"id": "runic-seals", "kind": "objective", "parts": [{"text": "Activate 3 Runic Seals"}], "optional": false, "target": null, "state": "manual", "source": null},
+    {"id": "grelwood-una-seals", "kind": "objective", "parts": [{"text": "Talk to "}, {"text": "Una", "style": "npc"}], "optional": false, "target": null, "state": "manual", "source": null},
+    {"id": "grelwood-portal-town", "kind": "objective", "parts": [{"text": "Portal to town"}], "optional": false, "target": null, "state": "manual", "source": null},
   ],
 };
 
@@ -470,13 +536,14 @@ window.addEventListener('unhandledrejection', (event) => report(`unhandled rejec
 
 async function start() {
   if (!isTauri()) {
-    render({ visible: true, interactive: true, toggleShortcut: 'Ctrl+Space', shortcutError: null, lastError: null, layerShell: false });
+    render({ visible: true, interactive: true, toggleShortcut: 'Ctrl+Space', tickShortcut: 'Ctrl+Shift+Space', shortcutError: null, lastError: null, layerShell: false });
     renderTracker(browserPreview);
     return;
   }
   await listen<{ step: string; error: string | null }>('restart-status', (event) => renderRestart(event.payload.step, event.payload.error));
   await listen<Status>('overlay-status', (event) => render(event.payload));
   await listen<TrackerView>('tracker-state', (event) => renderTracker(event.payload));
+  await listen('tick-current', tickCurrent);
   await listen<MinimapView>('minimap-state', (event) => renderMinimap(event.payload));
   renderMinimap(await invoke<MinimapView>('minimap_state'));
   await listen<LayoutView>('layout-state', (event) => renderLayout(event.payload));

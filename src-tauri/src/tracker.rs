@@ -666,12 +666,31 @@ mod tests {
         assert_eq!(progress.shown_zone.as_deref(), Some("G1_2"));
         assert!(progress.completed.contains_key("enter-clearfell"));
         feed(&mut progress, &[line("DEBUG", r#"Generating level 3 area "G1_3" with seed 6"#)]);
-        // Mud Burrow has no checklist yet: Clearfell's stays on show.
-        assert_eq!(progress.shown_zone.as_deref(), Some("G1_2"));
+        // Mud Burrow has its own checklist.
+        assert_eq!(progress.shown_zone.as_deref(), Some("G1_3"));
         assert_eq!(progress.current_area.as_deref(), Some("G1_3"));
         assert!(progress.completed.contains_key("enter-mud-burrow"));
         toggle(&routes, &mut progress, "kill-beira").unwrap();
         assert_eq!(progress.completed["kill-beira"].source, "manual");
+    }
+
+    #[test]
+    fn every_act_one_zone_has_a_checklist_in_campaign_order() {
+        let routes = load_routes();
+        let zones: Vec<&str> = routes.iter().map(|r| r.zone.id.as_str()).collect();
+        let act1 = [
+            "G1_1", "G1_town", "G1_2", "G1_3", "G1_4", "G1_5", "G1_6", "G1_7", "G1_8", "G1_9", "G1_11", "G1_12",
+            "G1_13_1", "G1_13_2", "G1_14", "G1_15", "G1_10",
+        ];
+        assert_eq!(zones, act1);
+        let mut progress = Progress::default();
+        feed(&mut progress, &[line("DEBUG", r#"Generating level 4 area "G1_4" with seed 7"#)]);
+        assert_eq!(progress.shown_zone.as_deref(), Some("G1_4"));
+        feed(&mut progress, &[line("DEBUG", r#"Generating level 5 area "G1_5" with seed 8"#)]);
+        // The waypoint detour and the final entry are the same zone line.
+        assert!(progress.completed.contains_key("grelwood-red-vale-wp"));
+        assert!(progress.completed.contains_key("enter-red-vale"));
+        assert!(!progress.completed.contains_key("runic-seals"));
     }
 
     #[test]

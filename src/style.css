@@ -54,6 +54,9 @@ body:not([data-interactive="true"]) #exit { opacity: .25; background: transparen
 .step.heading .mark { color: #ffd27a; }
 .step.heading .mark svg { stroke-width: 2.2; }
 .step.optional .text { color: #b9b3c8; }
+/* Folded steps: "3 done", "+5 more". */
+.step.summary { font-size: 12px; line-height: 16px; color: var(--muted); }
+.step.summary .mark { height: 16px; }
 .step.note { font-size: 12px; line-height: 16px; }
 .step.note .mark { height: 16px; }
 .step.note .text { grid-column: 2 / -1; }
@@ -85,7 +88,8 @@ button.step:enabled:hover { background: rgb(239 235 255 / .06); }
 .row input[type="range"] { width: 90px; height: 4px; }
 .row output { width: 32px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
 .keycap { padding: 4px 10px; font-size: 12px; font-weight: 500; letter-spacing: .01em; background: rgb(255 255 255 / .06); border: 1px solid rgb(255 255 255 / .14); border-bottom-width: 2px; border-radius: 6px; transition: border-color .15s, color .15s; }
-.keycap:hover { border-color: rgb(255 255 255 / .28); }
+.keycap.static { cursor: default; color: #d9d4e4; }
+.keycap:hover:not(.static) { border-color: rgb(255 255 255 / .28); }
 .keycap.recording { color: var(--accent); border-color: var(--accent); }
 .dropdown hr { height: 1px; margin: 4px 2px; border: 0; background: var(--menu-line); }
 .item { display: block; width: 100%; padding: 9px 8px; text-align: left; background: transparent; border: 0; border-radius: 8px; transition: background .15s; }
