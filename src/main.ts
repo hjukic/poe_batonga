@@ -46,7 +46,7 @@ interface LayoutView {
   guide: GuideView | null;
 }
 
-/** The arrow: estimated direction to the next objective, from the layout diagrams. */
+/** The arrow: direction along the walkable path to the next exit, from poe2way's terrain. */
 interface GuideView {
   variant: string;
   targetKind: string;
@@ -203,7 +203,7 @@ function renderGuide(guide: GuideView | null) {
   $('#guide-text').textContent = `${name} · ${how}${bearing ? ` · ${screenDirection(guide.degrees!)}` : ''}`;
   box.title = guide.source === 'encounter'
     ? 'The player location when the boss spoke, not the moving boss position. Dialogue does not confirm a kill.'
-    : `Screen/minimap direction, independent of character facing. Layout variant ${guide.variant}${guide.turned ? ' (rotated/mirrored)' : ''}; schematic distance is approximate.`;
+    : `Screen/minimap direction, independent of character facing. Terrain: ${guide.variant}${guide.turned ? ' (rotated/mirrored)' : ''}; distance follows the walkable path.`;
 }
 
 const POI_COLORS: Record<string, string> = { arrived: '#7fd18b', start: '#7fd18b', left: '#8edce8', npc: '#f2d36b' };

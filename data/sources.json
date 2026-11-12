@@ -5,7 +5,14 @@
   "releaseTarget": {
     "game": "Path of Exile 2",
     "version": "1.0",
-    "acts": [1, 2, 3, 4, 5, 6],
+    "acts": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
     "includeInterludes": false,
     "ownerClarifiedOn": "2026-11-12",
     "validation": "Early Access sources require 1.0 validation; Act 5–6 rules are not yet established"
@@ -49,22 +56,6 @@
         "Unknown variants remain unsupported",
         "No exact-instance or hidden-map claims",
         "Live automated capture remains subject to step 7"
-      ]
-    },
-    {
-      "id": "qutm-layouts",
-      "kind": "layout-diagrams",
-      "selection": "selected",
-      "repository": "https://github.com/Vyary/qutm",
-      "revision": "d18b4e6abee3f87c90342222918c6b08422967c5",
-      "sourceFile": "src/assets/layouts.json",
-      "artifact": "data/layouts/qutm/layouts.json",
-      "contentImported": true,
-      "importedOn": "2026-11-11",
-      "constraints": [
-        "Authored diagrams with approximate 0-1 positions, not to scale and not exact instances",
-        "No Qutm icon images imported",
-        "Variant and scale must be established from our own recordings before guiding"
       ]
     },
     {

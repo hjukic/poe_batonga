@@ -30,7 +30,9 @@ const LOST_LIMIT: u32 = 9;
 const SAVE_EVERY: Duration = Duration::from_secs(15);
 /// Zones the arrow is enabled for while it is being tuned.
 const GUIDED: [&str; 3] = ["G1_1", "G1_town", "G1_2"];
-const SCALES_FILE: &str = "scales.json";
+/// Minimap cells per game unit measured per area (poe2way terrain; the older
+/// `scales.json` held Qutm diagram scales and is no longer read).
+const SCALES_FILE: &str = "terrain-scales.json";
 /// Joining pieces of a visit: how often to try, the least shape to try with, the
 /// coarse grid for the first search and the share of walls that must line up.
 const MERGE_EVERY: Duration = Duration::from_secs(3);
@@ -132,7 +134,7 @@ struct Session {
 struct State {
     catalog: guide::Catalog,
     completed: HashMap<String, Vec<String>>,
-    /// Measured minimap cells per diagram width, per area.
+    /// Measured minimap cells per game unit, per area.
     scales: HashMap<String, Vec<f64>>,
     dir: Option<PathBuf>,
     session: Option<Session>,
@@ -547,8 +549,14 @@ impl State {
         let pois = &session.live.part.pois;
         let Some(arrival) = pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at) else { return };
         let area = &session.recording.area;
-        let relative: Vec<Poi> = pois.iter().map(|p| Poi { x: p.x - arrival.x, y: p.y - arrival.y, ..p.clone() }).collect();
-        if let Some(scale) = guide::measure_scale(&self.catalog, area, &arrival.label, &relative) {
+        let walls: Vec<(i32, i32)> = session
+            .live
+            .walls
+            .iter()
+            .filter(|(_, &n)| n >= 2)
+            .map(|(&(x, y), _)| (x - arrival.x, y - arrival.y))
+            .collect();
+        if let Some(scale) = guide::measure_scale(&self.catalog, area, &arrival.label, &walls) {
             self.scales.entry(area.clone()).or_default().push(scale);
             if let Some(dir) = &self.dir {
                 let _ = std::fs::create_dir_all(dir);
@@ -568,7 +576,7 @@ impl State {
         if live.lost_streak > 0 {
             return None;
         }
-        // Everything relative to the (first) arrival point, which the diagrams start from.
+        // Everything relative to the (first) arrival point, where the terrain match starts.
         let arrival = live.part.pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at)?;
         let (ax, ay) = (arrival.x, arrival.y);
         let mut walls: Vec<(i32, i32)> =
@@ -578,11 +586,17 @@ impl State {
             let step = walls.len().div_ceil(GUIDE_WALLS);
             walls = walls.into_iter().step_by(step).collect();
         }
-        let scale = self.scales.get(area).and_then(|all| {
-            let mut all = all.clone();
+        // The minimap's zoom is probably the same everywhere: without a measurement
+        // for this area, use the median of all areas.
+        let median = |mut all: Vec<f64>| {
             all.sort_by(f64::total_cmp);
             all.get(all.len() / 2).copied()
-        });
+        };
+        let scale = self
+            .scales
+            .get(area)
+            .and_then(|all| median(all.clone()))
+            .or_else(|| median(self.scales.values().flatten().copied().collect()));
         guide::guide(
             &self.catalog,
             &guide::Evidence {
@@ -590,7 +604,6 @@ impl State {
                 arrived_from: &arrival.label,
                 walls: &walls,
                 player: (live.pos.0 - ax, live.pos.1 - ay),
-                pois: &live.part.pois.iter().map(|p| Poi { x: p.x - ax, y: p.y - ay, ..p.clone() }).collect::<Vec<_>>(),
                 completed: self.completed.get(area).map(Vec::as_slice).unwrap_or_default(),
                 scale,
             },
@@ -732,25 +745,28 @@ mod tests {
     }
 
     #[test]
-    fn fight_start_completion_untick_and_tracking_loss_update_guidance() {
+    fn completion_untick_and_tracking_loss_update_guidance() {
         let recorder = Recorder::new(None);
+        // The Riverbank has no poe2way terrain, so no arrow there.
         enter(&recorder, "G1_1");
+        recorder.on_frame(&frame((0, 0)), [300, 260]);
+        assert!(recorder.view().unwrap().guide.is_none());
+
+        enter(&recorder, "G1_town");
+        recorder.on_frame(&frame((0, 0)), [300, 260]);
+        enter(&recorder, "G1_2");
         for x in [0, 4, 8] {
             recorder.on_frame(&frame((x, 0)), [300, 260]);
         }
-        recorder.on_log(&LogEvent::Dialogue {
-            speaker: "The Bloated Miller".into(), text: "Fight starts".into(),
-        }, true);
         let guide = recorder.view().unwrap().guide.unwrap();
-        assert_eq!(guide.target, "Miller");
-        assert_eq!(guide.source, "encounter");
+        assert_eq!(guide.target, "Mud Burrow");
+        // A corridor that is not Clearfell gives no direction.
         assert_eq!(guide.degrees, None);
 
-        let guide = recorder.set_completed(vec![("G1_1".into(), "The Bloated Miller".into())])
-            .unwrap().guide.unwrap();
-        assert_eq!(guide.target, "Clearfell Encampent");
+        let guide = recorder.set_completed(vec![("G1_2".into(), "Mud Burrow".into())]).unwrap().guide.unwrap();
+        assert_eq!(guide.target, "The Grelwood");
         let guide = recorder.set_completed(vec![]).unwrap().guide.unwrap();
-        assert_eq!(guide.target, "Miller");
+        assert_eq!(guide.target, "Mud Burrow");
 
         recorder.0.lock().unwrap().session.as_mut().unwrap().live.lost_streak = 1;
         assert!(recorder.view().unwrap().guide.is_none());

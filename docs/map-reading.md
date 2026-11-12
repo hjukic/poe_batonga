@@ -166,7 +166,7 @@ rejects this simple extraction baseline for gameplay; it does not prove all loca
 computer-vision approaches are infeasible. Do not advance step 7 to complete or
 claim Linux capture support based on these results.
 
-## Live arrow correction (2026-11-12)
+## Live arrow correction (2026-11-12, Qutm diagrams; replaced below)
 
 The live Qutm guide previously favoured the diagram's original orientation over
 rotations/mirrors by a fixed prior. With no observation it could report a 65%
@@ -202,3 +202,29 @@ Regression checks cover the supplied fight-start scenario, cardinal/diagonal
 bearings, walking past an encounter, arbitrary rotations, unresolved mirrors,
 completion/untick/reset snapshots and suppression during tracking loss. A live
 gameplay run remains necessary to measure tracking and navigation accuracy.
+
+## poe2way terrain arrow (2026-11-12)
+
+The arrow no longer uses Qutm's diagrams. It uses poe2way's collected terrain
+(`data/layouts/poe2way/`) for Clearfell Encampment and Clearfell; The Riverbank has
+no terrain there and shows no arrow.
+
+- **Target:** the onward exit: the lowest-numbered destination that is not the zone
+  just left, a town or ticked as done (Clearfell from the encampment: Mud Burrow,
+  then The Grelwood). Several exits to the same zone are all goals.
+- **Placement:** the visit starts at the exit to the zone it came from (or a
+  waypoint). Every placement (arrival exit x 8 rotations/mirrors x scale 0.2-5
+  minimap cells per game unit) is scored by how many recorded walls lie within two
+  6-unit cells of the outline, above the share chance would give for the area they
+  cover. Squeezing walls into a narrow corridor therefore scores nothing.
+- **Arrow:** shown only with at least 150 recorded walls, a best score of 0.5 and a
+  30% lead over the best placement pointing more than 45° elsewhere; otherwise
+  "Direction not confirmed". It points 12 cells (72 units) along the shortest
+  walkable path, so it bends around walls; the distance is the path length.
+- **Scale:** a finished visit that clearly matches stores minimap cells per game
+  unit in `terrain-scales.json`; later visits use it (or the median of all areas).
+
+Tests use walls generated from the outline itself (unturned and mirrored), a grid
+that matches nothing, and a U-shaped corridor. Real minimap walls are noisier;
+the thresholds need checking on recorded Clearfell visits.
+

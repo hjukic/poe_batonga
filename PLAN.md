@@ -71,7 +71,7 @@ remain pending verified 1.0 sources/gameplay, not inferred from Interlude data.
   Done when: each kind of data has a chosen source.
 
   Status: `docs/data-sources.md` and `data/sources.json` select Domistae's route
-  text, locally observed zone metadata, Qutm's layout diagrams and poe2way's
+  text, locally observed zone metadata and poe2way's
   collected terrain (walkable outlines and points of interest for 51 Act 1-3
   areas). 97 historical campaign zone IDs are collected. Route adaptation, current-patch
   validation and actual layout assets remain later work.

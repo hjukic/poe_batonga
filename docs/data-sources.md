@@ -15,7 +15,6 @@ candidate rules and the remaining 1.0 validation work.
 | Campaign route | [domistae/poe2-leveling](https://github.com/domistae/poe2-leveling/tree/f682e2b99c4a5a4f31882f3674bba4dcefc6ab46), starting with `poe2_act1_guide.html` | Not yet; our own Riverbank route is in `data/routes/` |
 | Zone IDs/names | Our own observations from the owner's local PoE 2 log | `data/observations/campaign-zones.json` |
 | Zone terrain (walls, POIs) | [poe2way](https://www.poe2way.com/atlas) collected terrain, first three zones | `data/layouts/poe2way/` |
-| Layout diagrams | [Vyary/qutm](https://github.com/Vyary/qutm) `layouts.json` | `data/layouts/qutm/` |
 
 ## Route reference
 
@@ -57,9 +56,12 @@ node scripts/render-terrain.mjs                   # pictures in experiments/layo
 We start with the first three zones (The Riverbank, Clearfell Encampment,
 Clearfell) and add more once navigation works there; other area IDs can be
 passed to the script. `render-terrain.mjs` draws each zone north-up and turned
-45° (`.game.svg`) to the in-game map orientation. The turn is checked against
-Qutm's Clearfell diagram (encampment exit at the bottom, waypoint and Mud Burrow
-top-left, The Grelwood right), not yet against live gameplay.
+45° (`.game.svg`) to the in-game map orientation. The turn matched a Clearfell
+layout diagram by eye (encampment exit at the bottom, waypoint and Mud Burrow
+top-left, The Grelwood right); it is not yet checked against live gameplay. The
+arrow also tries rotated and mirrored placements, so a wrong turn shows up as
+`turned` rather than a wrong arrow. The arrow (`src-tauri/src/layout/guide.rs`)
+bundles these files; see [map reading](map-reading.md#poe2way-terrain-arrow-2026-11-12).
 
 Per area there is `<areaId>.json` and `<areaId>.svg` (extra variants as
 `<areaId>.v1.*`), plus `index.json`:
@@ -84,13 +86,6 @@ order of exits/POIs are likely to be similar, but the exact walls are not; live
 pathing needs the player's explored minimap or our recordings to confirm which
 parts match. Towns are fixed and should match exactly.
 
-## Qutm layout diagrams
-
-[Qutm](https://github.com/Vyary/qutm) diagrams cover 94 zones with 106 variants and
-give positions for the start, exits, waypoints, checkpoints and bosses; see the
-[README](../data/layouts/qutm/README.md). Coordinates are authored 0-1 positions,
-not to scale.
-
 ## Other candidates
 
 - [Exile-UI](https://github.com/Lailloken/Exile-UI) Act-Decoder layouts: its
@@ -98,7 +93,9 @@ not to scale.
   warns they are outdated for PoE 2.
 - Mobalytics campaign-layout guides (Act 1-3) and the PoE 2 wiki have layout
   pictures; not imported yet.
-- Direct game-data extraction is not needed for the zone catalog.
+- [Qutm](https://github.com/Vyary/qutm) layout diagrams (0-1 icon positions, no walls):
+  used for the first arrow, dropped 2026-11-12 in favour of poe2way's terrain.
+- Datamining the game files: see [ideas](../ideas.md).
 
 Offline tests may use synthetic maps, clearly labelled synthetic; they cannot
 establish performance on real gameplay.
