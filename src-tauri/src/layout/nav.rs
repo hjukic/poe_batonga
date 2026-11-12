@@ -143,6 +143,15 @@ const NAMED_BASE: f64 = 1e-4;
 /// owner's visit, 2026-11-12). Fitted per pair within this range: wider, a pair of
 /// Clearfell's exits fitted a wrong layout at 1.74 as well as the right one at 1.0.
 const PAIR_SCALE: (f64, f64) = (0.75, 1.5);
+/// The same for a dungeon's room grid, whose unit (`graph::DGR_UNIT`, `roomUnitSize - 1`)
+/// was never measured in play: the Grim Tangle's two exits lie 0.72 times as far apart as
+/// it says (the owner's visit, 2026-11-13).
+const PAIR_SCALE_DUNGEON: (f64, f64) = (0.5, 1.5);
+/// How much coarser a dungeon's named-exit fit is: its nodes are the centres of rooms about
+/// 100 world units wide, and an exit sits anywhere in its room. The Grim Tangle's right
+/// layout (the only one with the Cemetery right of the Grelwood) fitted 370 units off and
+/// was read as fitting none (the owner's visit, 2026-11-13).
+const DUNGEON_TOL: f64 = 2.5;
 /// Named exits that the best layout fits only this loosely (the pair's miss, world
 /// units) say the graphs do not describe this instance well enough to steer by: the
 /// needle is then "unconfirmed". The one instance whose layout is known fit within 132
@@ -188,7 +197,7 @@ const ICON_CONFIRM: f64 = 0.5;
 const ICON_SURE: f64 = 0.95;
 
 /// The memory format; older files are ignored.
-pub(super) const MEMORY_VERSION: u32 = 3;
+pub(super) const MEMORY_VERSION: u32 = 4;
 
 /// Icons this close (world units) on the dead-reckoned track are one exit.
 const SIGHT_MATCH: f64 = 40.0;
@@ -700,9 +709,11 @@ impl Navigator {
                             let got = ((q.0 - p.0) * layout.unit, (q.1 - p.1) * layout.unit);
                             // The zone's own scale: the one that lays the pair best, within range.
                             let gg = got.0 * got.0 + got.1 * got.1;
-                            let k = if gg > 0.0 { ((got.0 * want.0 + got.1 * want.1) / gg).clamp(PAIR_SCALE.0, PAIR_SCALE.1) } else { 1.0 };
+                            let (lo, hi) = if layout.dungeon { PAIR_SCALE_DUNGEON } else { PAIR_SCALE };
+                            let k = if gg > 0.0 { ((got.0 * want.0 + got.1 * want.1) / gg).clamp(lo, hi) } else { 1.0 };
                             let d2 = (k * got.0 - want.0).powi(2) + (k * got.1 - want.1).powi(2);
-                            best = best.max((-d2 / (4.0 * ICON_TOL * ICON_TOL)).exp());
+                            let tol = if layout.dungeon { ICON_TOL * DUNGEON_TOL } else { ICON_TOL };
+                            best = best.max((-d2 / (4.0 * tol * tol)).exp());
                         }
                     }
                     fit *= best;
@@ -1121,7 +1132,21 @@ impl Navigator {
     /// belief. `sure` once one carries `GOLD` and the named exits fit it.
     pub fn picture(&self) -> Option<Picture> {
         let posterior = self.posterior();
-        let (top, share) = posterior.iter().copied().enumerate().max_by(|a, b| a.1.total_cmp(&b.1))?;
+        let (top, _) = posterior.iter().copied().enumerate().max_by(|a, b| a.1.total_cmp(&b.1))?;
+        // Variants with their exits at the same places (a league's: GrimTangle_S and
+        // GrimTangle_S_expedition) are one layout to the player: the belief split between
+        // them is theirs together.
+        let exits_of = |i: usize| {
+            let mut exits: Vec<(&str, i64, i64)> = self.area.layouts[i]
+                .nodes
+                .iter()
+                .filter_map(|n| n.exit.as_deref().map(|to| (to, n.x.round() as i64, n.y.round() as i64)))
+                .collect();
+            exits.sort();
+            exits
+        };
+        let top_exits = exits_of(top);
+        let share: f64 = (0..posterior.len()).filter(|&i| exits_of(i) == top_exits).map(|i| posterior[i]).sum();
         let candidates = posterior.iter().filter(|&&p| p >= NEGLIGIBLE).count();
         // A layout is drawn only once two exits read by name fit it: the walked line and a
         // remembered belief alone showed wrong layouts (the owner's Clearfell of 2026-11-12:
@@ -2140,6 +2165,25 @@ mod tests {
         assert!(ranking[0].1 > 0.9, "{:?}", &ranking[..4]);
         let picture = nav.picture().unwrap();
         assert!(picture.known && picture.id == "OldForest_W_N", "{picture:?}");
+    }
+
+    #[test]
+    fn the_grim_tangle_is_recognised_from_its_two_exits() {
+        let area = graph::load("G1_6");
+        // The owner's Grim Tangle (2026-11-13, seed 3000169180): the Grelwood's exit at
+        // (-85, -23) and the Cemetery's at (763, -128) on the recorded map, the player at 0.
+        let frame = [
+            ExitIcon { dx: -85.0, dy: -23.0, to: Some("The Grelwood".into()), remembered: false },
+            ExitIcon { dx: 763.0, dy: -128.0, to: Some("Cemetery of the Eternals".into()), remembered: true },
+        ];
+        let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 3000169180);
+        nav.icons(&frame);
+        let ranking = nav.ranking();
+        eprintln!("{:?} loose {}", &ranking[..4], nav.named_loose);
+        eprintln!("named {:?}", nav.banks.iter().map(|b| b.named).collect::<Vec<_>>());
+        assert!(ranking[0].0.starts_with("GrimTangle_S"), "{:?}", &ranking[..4]);
+        let picture = nav.picture().unwrap();
+        assert!(picture.known && picture.id.starts_with("GrimTangle_S"), "{picture:?}");
     }
 
     #[test]
