@@ -414,6 +414,8 @@ pub fn init(app: &AppHandle) -> Tracker {
     // Being in a zone proves it was entered, even if its entry line was read before
     // that zone's checklist existed.
     if let Some(area) = progress.current_area.clone() {
+        // Started inside a zone: no zone line will come, so its exit names are set here.
+        crate::minimap::set_label_candidates(exit_names(&area));
         apply(&routes, &mut progress, "on start", &LogEvent::ZoneEntered { area, level: 0, seed: None });
     }
     Tracker(Mutex::new(Inner {
