@@ -21,6 +21,11 @@ A Tauri overlay is available. It has two parts:
   likely. Gray: a best guess. How it works and what was measured:
   [map reading](docs/map-reading.md).
 
+On Hyprland the overlay hides while the game is closed or its workspace is not shown, and comes
+back with it (a setting), so the app can be left running. Each zone visit is also kept as a
+flight recording (what the needle logic was fed), which a replay command scores: see
+[map reading](docs/map-reading.md), "Flight recorder".
+
 After a game patch, `npm run layouts:update` re-imports the layout graphs from the installed
 game (needs [poe_data_tools](https://github.com/adamthedash/poe_data_tools) on `PATH`; about
 half a minute). See [data sources](docs/data-sources.md).

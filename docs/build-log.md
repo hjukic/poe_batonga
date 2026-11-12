@@ -72,3 +72,35 @@ anchors, five to fix, none blocking. All accepted findings were fixed in the sam
 9 agents and 11 follow-up passes in about 4 hours of wall time; 419 task-minutes; parallelism 1.8; at most 4
 agents at once. The navigator set the wall time (216 minutes over five passes). Fix passes went to the builder
 that held the context and took 10–45 minutes each.
+
+## Day build, 2026-11-12 (v0.1.45 → v0.1.49)
+
+The owner asked for further improvements. Two builders (Claude Opus, xhigh), one review (Claude Sonnet), the
+chair's own changes. The game was closed the whole time: nothing was checked on a live screen.
+
+| Package | Passes | Result |
+| --- | --- | --- |
+| Flight recorder | 2 | Each zone visit appends what the navigator is fed to `layouts/<area>/<seed>.obs.jsonl`; a replay scores the needle on real visits; `layout-history.jsonl` lists visits whose layout the named exits fixed |
+| The way through the recorded map | 3 | A way that does not cross recorded walls; live for the way back to the exit the player came in by, in shadow for ways ahead |
+| Chair | — | The overlay hides while the game is off screen; real captures are kept under `samples/`; merges |
+
+The review found one blocking problem (a straight line across unrecorded ground replaced the layout's needle and
+was gold) and nine to fix (arrival points that are not exits, a search grid whose doors moved with the player, a
+trail opening doors in lines it only grazed, gold for long detours, scores that counted portals as exits and
+ignored the needles actually shown, torn writes). All were fixed.
+
+**What the first real comparison said.** On the owner's Clearfell recording the map needle matched where the
+player walked next in 16 of 35 cases, a plain straight line in 21. The recording is old and its walls are drawn
+off the walk, so this does not settle it, but it does not support showing it. Ways ahead therefore run in
+**shadow**: worked out, written to the flight recorder, scored by the replay, not shown. The bar to switch them on
+(`MAP_AHEAD_LIVE` in `nav.rs`) is in [map reading](map-reading.md): over at least five real visits, the shadow
+within 45° at least as often as the shown needle, and would-be gold off in at most 3%.
+
+### Open after this round
+
+- The owner's next sessions decide the map routing: `OBS=<app data>/layouts cargo test --release replay_obs --
+  --ignored --nocapture` prints shown, replayed and shadow scores.
+- `samples/` in the app's data folder will hold corner-minimap captures with an exit in view: the material for
+  reading exit names on the minimap.
+- The auto-hide was checked with the game closed (the overlay stays hidden); its return when the game starts
+  was not.
