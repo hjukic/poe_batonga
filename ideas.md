@@ -2,9 +2,18 @@
 
 ## Datamine zone layouts from the game files
 
-**Done for the first three zones (2026-11-12):** see
-[data sources](docs/data-sources.md#game-layout-graphs-datamined). Notes below are the
-original plan.
+**Done for every campaign zone (2026-11-12):** 101 areas, 581 layout graphs (`.tgr` and
+`.dgr`), refreshed by `scripts/update-layouts.sh` after each patch; see
+[data sources](docs/data-sources.md#game-layout-graphs-datamined). Still open:
+
+- expand sub-graphs (`graph` nodes): eight areas' layouts are only placeholders for them
+  (Freythorn, Ogham Manor, Dreadnought, …), so they have no exits yet;
+- check the `.dgr` scale (one grid unit ≈ `roomUnitSize − 1` world units, derived from
+  the room files) on a recorded dungeon, e.g. Mud Burrow;
+- use the `.dgr` areas in the app (`AREAS` in `graph.rs` lists only G1_1 and G1_2);
+- find objectives through node `keys` (`boss`, `unique1`, `teleport…`, `zone=N`).
+
+Notes below are the original plan.
 
 Campaign zones are not stored as finished maps: the game builds each instance
 from parts, picked with a random seed. The parts are in the game's bundles
