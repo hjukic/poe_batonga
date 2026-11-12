@@ -244,3 +244,27 @@ the thresholds need checking on recorded Clearfell visits.
   narrower range rules that out. Either this instance is another layout than
   poe2way's or too little was explored; more Clearfell visits will tell.
 
+## Arrow on the game's layout graphs (2026-11-12)
+
+The Riverbank and Clearfell now use the datamined layout graphs
+(`data/layouts/ggg/`, `src-tauri/src/layout/graph.rs`); Clearfell Encampment keeps
+poe2way's map.
+
+- **Placement:** the path walked since arrival (minimap cells, turned to world units
+  with `from_screen`) is laid on every layout of the zone, starting at the node of
+  the exit the player came through (else the zone's start node), with offsets up to
+  80 units and the scale 0.78 ±8%. Score: mean distance of the path from the
+  layout's corridors (distance field, 8-unit cells, capped at 150).
+- **Target:** the onward exit (lowest-numbered zone not just come from or ticked;
+  a town only when nothing else is left). In The Riverbank the exit is the Miller's
+  arena, so the target is "The Bloated Miller" until that step is ticked.
+- **Needle:** the route follows the corridors to the target and the needle points
+  120 units along it. "estimated" when the best layout's mean is at most 60 units
+  and it leads the best layout pointing more than 45° elsewhere by 20%; "rough"
+  (fainter) when the best mean is at most 80; before 150 units have been walked,
+  "rough" only if every layout points the same way.
+- **First real checks:** the Clearfell visit (seed 2693856399) fits
+  `ClearFell_W_S_N` (mean 42 units; runner-up `W_N_E` 50): rough needle toward Mud
+  Burrow. In Riverbank instance 2090944099 the arrow at the spot where the Miller's
+  fight began says the arena is 149 minimap cells away.
+
