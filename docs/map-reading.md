@@ -351,6 +351,15 @@ dropped. It has the minimap frame's size (300x259) with the player on the minima
 player cell, and reports the minimap's capture size, so the recorder sees no
 difference.
 
+**Filled areas are not walls.** The line colour also passes for bluish-grey floors,
+ice or snow showing through the translucent map. Lines are at most two cells thick,
+so a group of cells of which more than a quarter are inside cells (all eight
+neighbours occupied) is a filled area and is dropped; a 60x60 px fill gives no wall
+cells, while its outline drawn as a line stays. And when walls cover more than 15% of
+the frame (Clearfell: 1.7%), the frame is "not read: too much of the view looks like
+map lines". Only one real scene (Clearfell) has been measured; the scenes to check are
+listed in [the overlay test](overlay-test.md#big-map-reading).
+
 **Why the minimap's frame size.** The recorder keeps its player cell when a frame
 reports one more than 4 cells away (protection against stray marker detections). A
 frame with the player elsewhere therefore puts every wall off by that much at each

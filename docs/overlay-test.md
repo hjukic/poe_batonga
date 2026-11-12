@@ -115,3 +115,9 @@ app running, in a zone with walls nearby:
 
 If the trail jumps or a new part starts at a switch, note the zone, the direction
 and whether the big map was zoomed.
+
+The big map's line colour also fits some floors seen through the map. Repeat step 2
+in scenes unlike Clearfell and note any "too much of the view looks like map lines"
+or a trail that wanders while standing still: a cold or icy zone, a dungeon with
+blue-grey stone floors, ground lit by water or frost, a fight with frost or lightning
+effects, and a town.

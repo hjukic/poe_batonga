@@ -26,8 +26,14 @@ const MARKER_MIN: u32 = 4;
 /// behind the translucent map leaves specks (Clearfell, 600x518 cells around the player:
 /// 226 groups of which 212 under 15 cells; every line cell kept at 12).
 const MIN_GROUP: usize = 12;
-/// Wall cells a frame needs to count as the big map.
+/// A group with more than this share of inside cells (all eight neighbours walls too) is
+/// a filled area showing through the map (bluish floor, ice), not a line: lines are at
+/// most two cells thick and have none.
+const MAX_INSIDE: f64 = 0.25;
+/// Wall cells a frame needs to count as the big map, and the most of the frame they may
+/// cover (Clearfell: 1.7%).
 const WALLS_MIN: usize = 40;
+const WALLS_MAX: f64 = 0.15;
 
 /// The frame handed to the recorder: its size in cells and the player's cell.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -106,25 +112,47 @@ pub fn marker_near(image: &Image, at: [f64; 2], radius: f64) -> Option<[f64; 2]>
 }
 
 /// Reads a big-map capture into a frame in minimap units: the walls around the player,
-/// resampled by `SCALE`, with the player at `plan.frame.player`. Visible only when both
-/// the player marker and enough wall lines are found.
+/// resampled by `SCALE`, with the player at `plan.frame.player`. Visible only with the
+/// player marker, enough map lines and not too much of the frame covered; else the
+/// message says which failed.
 /// Also returns the map icons around the player while the big map is read.
 pub fn read(image: &Image, plan: &Plan) -> (MinimapView, Vec<Icon>) {
-    let found = marker_near(image, plan.marker, plan.radius);
-    let centre = found.unwrap_or(plan.marker);
+    let Some(centre) = marker_near(image, plan.marker, plan.radius) else {
+        return (not_visible(plan, "player marker not found".into()), vec![]);
+    };
     let walls = walls_in(image, centre, &plan.frame, SCALE);
-    let visible = found.is_some() && walls.len() >= WALLS_MIN;
+    let problem = if walls.len() < WALLS_MIN {
+        Some("too few map lines".to_string())
+    } else if walls.len() as f64 > WALLS_MAX * (plan.frame.cols * plan.frame.rows) as f64 {
+        Some("too much of the view looks like map lines".to_string())
+    } else {
+        None
+    };
+    if let Some(problem) = problem {
+        return (not_visible(plan, problem), vec![]);
+    }
     let view = MinimapView {
         enabled: true,
-        visible,
-        message: if visible { "Reading big map" } else { "Big map not visible" }.into(),
+        visible: true,
+        message: "Reading big map".into(),
         cols: plan.frame.cols,
         rows: plan.frame.rows,
-        walls: if visible { walls } else { vec![] },
-        player: visible.then_some(plan.frame.player),
+        walls,
+        player: Some(plan.frame.player),
     };
-    let icons = if visible { icons(image, centre, SCALE, size(plan)) } else { vec![] };
-    (view, icons)
+    (view, icons(image, centre, SCALE, size(plan)))
+}
+
+fn not_visible(plan: &Plan, why: String) -> MinimapView {
+    MinimapView {
+        enabled: true,
+        visible: false,
+        message: format!("Big map not read: {why}"),
+        cols: plan.frame.cols,
+        rows: plan.frame.rows,
+        walls: vec![],
+        player: None,
+    }
 }
 
 /// The game window's height relative to 2160 px, from a plan.
@@ -252,8 +280,17 @@ pub fn icons(image: &Image, centre: [f64; 2], scale: f64, size: f64) -> Vec<Icon
     found
 }
 
-/// Occupied cells in groups (touching, diagonals too) of at least `MIN_GROUP`.
+/// Occupied cells in groups (touching, diagonals too) of at least `MIN_GROUP` that are
+/// lines, not filled areas (at most `MAX_INSIDE` of their cells inside).
 fn lines(occupied: &[bool], cols: usize, rows: usize) -> Vec<[u16; 2]> {
+    let inside = |i: usize| {
+        let (x, y) = (i % cols, i / cols);
+        x > 0
+            && y > 0
+            && x + 1 < cols
+            && y + 1 < rows
+            && (-1..=1).all(|dy: i64| (-1..=1).all(|dx: i64| occupied[(y as i64 + dy) as usize * cols + (x as i64 + dx) as usize]))
+    };
     let mut seen = vec![false; occupied.len()];
     let mut walls = Vec::new();
     let mut group = Vec::new();
@@ -283,7 +320,8 @@ fn lines(occupied: &[bool], cols: usize, rows: usize) -> Vec<[u16; 2]> {
                 }
             }
         }
-        if group.len() >= MIN_GROUP {
+        let filled = group.iter().filter(|&&i| inside(i)).count() as f64 > MAX_INSIDE * group.len() as f64;
+        if group.len() >= MIN_GROUP && !filled {
             walls.extend(group.iter().map(|&i| [(i % cols) as u16, (i / cols) as u16]));
         }
     }
@@ -296,6 +334,22 @@ mod tests {
     use super::*;
     use crate::minimap::parse_ppm;
     use std::collections::HashSet;
+
+    /// A frame of `cols` x `rows` cells with the player at `player`.
+    fn frame(cols: usize, rows: usize, player: [f32; 2]) -> Frame {
+        Frame { cols, rows, player }
+    }
+
+    /// Paints `rgb` on the pixels of `image` where `inside` holds.
+    fn paint(image: &mut Image, rgb: [u8; 3], inside: impl Fn(usize, usize) -> bool) {
+        for y in 0..image.height {
+            for x in 0..image.width {
+                if inside(x, y) {
+                    image.pixels[(y * image.width + x) * 3..][..3].copy_from_slice(&rgb);
+                }
+            }
+        }
+    }
 
     fn fixture(name: &str) -> Image {
         let path = format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
@@ -457,6 +511,32 @@ mod tests {
         for icon in icons(&image, [0.0, 0.0], SCALE, size) {
             println!("{} at {:.0}, {:.0}", icon.kind, icon.x * 2.0, icon.y * 2.0);
         }
+    }
+
+    #[test]
+    fn filled_areas_are_not_walls() {
+        // A 60x60 px area in the line colour (a bluish floor showing through the map).
+        let mut image = fixture("bigmap-scene.ppm");
+        paint(&mut image, [95, 96, 128], |x, y| (40..100).contains(&x) && (50..110).contains(&y));
+        let walls = walls_in(&image, [128.0, 80.0], &frame(128, 80, [64.0, 40.0]), SCALE);
+        assert!(walls.is_empty(), "{} cells", walls.len());
+        // Its outline drawn as a line is kept.
+        let mut outline = fixture("bigmap-scene.ppm");
+        let ring = |x: usize, y: usize| (40..100).contains(&x) && (50..110).contains(&y) && !((43..97).contains(&x) && (53..107).contains(&y));
+        paint(&mut outline, [95, 96, 128], ring);
+        let walls = walls_in(&outline, [128.0, 80.0], &frame(128, 80, [64.0, 40.0]), SCALE);
+        assert!(walls.len() > 100, "{}", walls.len());
+    }
+
+    #[test]
+    fn a_frame_mostly_of_lines_is_not_the_big_map() {
+        // Stripes 3 px wide every 6 px over the lower two thirds: lines, not filled, but
+        // no map looks like that. (Every 4 px they would fill whole cells and be dropped.)
+        let mut image = fixture("bigmap-player.ppm");
+        paint(&mut image, [95, 96, 128], |x, y| y % 6 < 3 && y > 100 && !(290..312).contains(&x));
+        let (view, _) = read(&image, &player_plan());
+        assert!(!view.visible);
+        assert_eq!(view.message, "Big map not read: too much of the view looks like map lines");
     }
 
     #[test]
