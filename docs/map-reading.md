@@ -459,6 +459,15 @@ they hold and nothing from the panels. Cost at opt-level 0: whole-window frames 
 (read 294, recorder 25), others 179 ms, 226 ms on average, so three frames a second
 hold; release 127 and 88 ms.
 
+**Exit labels (measured, not built).** The big map writes each exit's zone name
+centred above its icon, in light grey. On the live screen (3840x2160) "The Grelwood"
+is 102 px wide and "Mud Burrow" 96 px: 6% apart, for two of Clearfell's three exits.
+Measuring a label is not reliable enough: the gap between its words (about 10 px) is
+as wide as the gap to a neighbouring label ("Checkpoint" nearly touches "Mud Burrow"),
+the checkpoint's crystal overlaps its first letter, and turning a candidate name into
+an expected width would need the game font's letter widths. A glyph table measured from
+seen labels, or matching labels against rendered names, would be the way, not a width.
+
 Quality: on the whole Clearfell screenshot all six map icons are found (2 exits, 3
 checkpoints, 1 waypoint) at their centres within a pixel or two, with no false ones
 in the areas the reader captures. False hits appear only outside them: the life and
