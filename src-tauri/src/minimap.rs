@@ -23,8 +23,9 @@ mod windows_capture;
 #[cfg(target_os = "windows")]
 use windows_capture::{capture, capture_bigmap, capture_window, locate_minimap, Region as CaptureRegion};
 
-/// About three frames a second.
-const FRAME_INTERVAL: Duration = Duration::from_millis(330);
+/// About eight frames a second: the needle follows the player closely. A capture of
+/// the map's area takes about 30 ms, of the whole window 50-60 ms (grim, 3840x2160).
+const FRAME_INTERVAL: Duration = Duration::from_millis(120);
 /// Where the game is checked again (window moved, workspace switched).
 const LOCATE_INTERVAL: Duration = Duration::from_secs(2);
 
@@ -39,9 +40,9 @@ pub const CELL: usize = 2;
 const CELL_MIN: u32 = 2;
 /// How fast the learnt spot of the minimap's cross follows new frames.
 const LEARN_RATE: f64 = 0.2;
-/// Every this many big-map frames the whole game window is read, for map icons far
-/// from the player (they move on screen only as fast as the player).
-const SCAN_EVERY: u32 = 3;
+/// Every this many big-map frames (about once a second) the whole game window is read,
+/// for map icons far from the player (they move on screen only as fast as the player).
+pub const SCAN_EVERY: u32 = 8;
 /// Panels over the big map, left out of the whole-window icon search, as fractions of
 /// the game window (x0, y0, x1, y1; measured at 3840x2160): this app's checklist panel
 /// at its default place (first: replaced by where the panel really is, when known), the

@@ -53,6 +53,8 @@ interface LayoutView {
   player: [number, number];
   pois: { kind: string; label: string; x: number; y: number }[];
   guide: GuideView | null;
+  /** Only the needle is new: keep the map drawn. */
+  light: boolean;
 }
 
 /** The compass arrow (its own window): direction along the walkable path to the next exit, from poe2way's terrain. */
@@ -298,10 +300,11 @@ function renderMinimap(view: MinimapView) {
 
 const POI_COLORS: Record<string, string> = { arrived: '#7fd18b', start: '#7fd18b', left: '#8edce8', npc: '#f2d36b' };
 function renderLayout(view: LayoutView | null) {
+  setGuideTarget(view?.guide?.target || null);
+  if (view?.light) return;
   const context = minimapCanvas.getContext('2d');
   if (!context) return;
   context.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
-  setGuideTarget(view?.guide?.target || null);
   if (!view) return;
   const scale = Math.min(minimapCanvas.width / view.cols, minimapCanvas.height / view.rows);
   context.fillStyle = '#b9b4e6';

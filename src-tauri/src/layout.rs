@@ -38,12 +38,12 @@ const MIN_MATCH: f64 = 0.55;
 /// Search radius in cells around the predicted move, then a wider retry.
 const NEAR: i32 = 12;
 const WIDE: i32 = 32;
-/// Consecutive unmatched frames before a new part is started.
-const LOST_LIMIT: u32 = 9;
+/// Consecutive unmatched frames before a new part is started (about three seconds).
+const LOST_LIMIT: u32 = 25;
 const SAVE_EVERY: Duration = Duration::from_secs(15);
 /// Far icons from a whole-screen scan stand in for this many frames after it
-/// (the scan comes every third big-map frame).
-const FAR_FRAMES: u32 = 3;
+/// (the scan comes every `minimap::SCAN_EVERY`-th big-map frame).
+const FAR_FRAMES: u32 = crate::minimap::SCAN_EVERY;
 /// A big-map wall cell is kept once seen with the player this many cells (either axis)
 /// from where it was first seen (I9). The character is about 115 cells tall in the owner's
 /// captures, so this does not clear it: what keeps its cells out is that the patches of its
@@ -298,7 +298,7 @@ struct NamedSeen {
 
 /// The same named icon in two frames: this close (cells), within this many frames.
 const SAME_ICON: f32 = 4.0;
-const NAMED_FRAMES: u32 = 12;
+const NAMED_FRAMES: u32 = 33;
 /// A grey twin this close (cells) to where this part saw the pair alive is that boss, dead.
 const SAME_PLACE: f32 = 12.0;
 /// Bosses' own icons are evidence for the navigator. Off (shadow: read, logged, used for
@@ -707,6 +707,9 @@ pub struct LayoutView {
     player: [f32; 2],
     pois: Vec<ViewPoi>,
     guide: Option<guide::GuideView>,
+    /// Only the needle is new: the map (walls, trail, pois) is left out and the page
+    /// keeps the one it has. Sent on the frames between two full views.
+    light: bool,
 }
 
 fn now() -> u64 {
@@ -948,8 +951,12 @@ impl Recorder {
                 crate::minimap::bigmap::set_icon_hints(vec![]);
                 // A live arrival with no zone before it (e.g. a new character) still starts at the arrival point.
                 state.previous_area = if live { Some(left.unwrap_or_default()) } else { None };
-                let recording = state
-                    .load(area, *seed)
+                // A town (seed 1) has one file for every visit: pieces of many visits piled
+                // up there and drifted (the owner's Clearfell Encampment, 2026-11-12). Its
+                // map is small and seen again in seconds: each visit starts a new one.
+                let recording = Some(seed)
+                    .filter(|seed| **seed != Some(1))
+                    .and_then(|seed| state.load(area, *seed))
                     .unwrap_or(Recording {
                         version: FORMAT_VERSION,
                         area: area.clone(),
@@ -1150,13 +1157,14 @@ impl Recorder {
             state.save();
             state.last_save = Some(Instant::now());
         }
-        // Every frame (about three a second): the needle should turn as the player does.
-        let due_view = state.last_view.is_none_or(|t| t.elapsed() >= Duration::from_millis(300));
-        if !due_view {
-            return None;
+        // The needle on every frame, so it turns as the player moves; the map with it
+        // about once a second (it is the larger part and changes slowly).
+        let full = state.last_view.is_none_or(|t| t.elapsed() >= Duration::from_millis(900));
+        if full {
+            state.last_view = Some(Instant::now());
+            return state.view();
         }
-        state.last_view = Some(Instant::now());
-        state.view()
+        state.needle_view()
     }
 
     pub fn view(&self) -> Option<LayoutView> {
@@ -1493,6 +1501,27 @@ impl State {
         )
     }
 
+    /// The view with only the needle (`LayoutView::light`).
+    fn needle_view(&self) -> Option<LayoutView> {
+        let session = self.session.as_ref()?;
+        let live = &session.live;
+        Some(LayoutView {
+            area: session.recording.area.clone(),
+            seed: session.recording.seed,
+            part: session.recording.parts.len() + 1,
+            frames: live.part.frames,
+            matched: live.part.matched,
+            cols: VIEW_COLS,
+            rows: VIEW_ROWS,
+            walls: vec![],
+            trail: vec![],
+            player: [0.0, 0.0],
+            pois: vec![],
+            guide: self.guide(session),
+            light: true,
+        })
+    }
+
     fn view(&self) -> Option<LayoutView> {
         let session = self.session.as_ref()?;
         let live = &session.live;
@@ -1539,6 +1568,7 @@ impl State {
                 })
                 .collect(),
             guide: self.guide(session),
+            light: false,
         })
     }
 }
