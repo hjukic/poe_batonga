@@ -227,13 +227,27 @@ pub fn parse_line(line: &str) -> Option<(String, LogEvent)> {
         return None;
     }
     let (speaker, text) = message.split_once(": ")?;
-    if speaker.is_empty() || speaker.contains(':') {
+    if speaker.is_empty() || speaker.contains(':') || is_system_line(speaker, text) {
         return None;
     }
     Some((
         timestamp,
         LogEvent::Dialogue { speaker: speaker.to_string(), text: text.trim().to_string() },
     ))
+}
+
+/// The game's own `INFO` lines of the form "X: Y" that are no one speaking. Seen in the
+/// owner's Client.txt (2026-11-12, 1.5 MB, every "X: Y" line read): passive allocation
+/// ("Successfully allocated passive skill id: projectiles15, name: …"), the graphics
+/// adapter lines, tile and doodad hashes and a disconnect. "Successfully unallocated" is
+/// assumed to be logged the same way. An NPC's name can have spaces ("The Bloated
+/// Miller", "Beira of the Rotten Pack"), so it is these known starts, not a shape.
+const SYSTEM_SPEAKERS: &[&str] = &["Successfully ", "Enumerated ", "Tile hash", "Doodad hash", "Abnormal disconnect"];
+
+fn is_system_line(speaker: &str, text: &str) -> bool {
+    // A number alone is a value being logged ("Tile hash: 1435737370"), not a line said.
+    let number = !text.trim().is_empty() && text.trim().chars().all(|c| c.is_ascii_digit());
+    number || SYSTEM_SPEAKERS.iter().any(|start| speaker.starts_with(start))
 }
 
 // ---------- Progress ----------
@@ -1054,6 +1068,29 @@ mod tests {
         assert!(parse_line(&line("INFO", "&: GUILD UPDATE: hello")).is_none());
         assert!(parse_line(&line("INFO", "[SCENE] Set Source [The Riverbank]")).is_none());
         assert!(parse_line(&line("WARN", "Something: failed")).is_none());
+        // The game's own "X: Y" lines, as in the owner's log: no one speaks there.
+        for system in [
+            "Successfully allocated passive skill id: projectiles15, name: Projectile Damage",
+            "Successfully unallocated passive skill id: projectiles15, name: Projectile Damage",
+            "Enumerated adapter: AMD Radeon RX 7900 XTX (RADV NAVI31)",
+            "Enumerated device for adapter: AMD Radeon RX 7900 XTX (RADV NAVI31). Selected feature level: 49664.",
+            "Tile hash: 1435737370",
+            "Doodad hash: 1446108392",
+            "Abnormal disconnect: An unexpected disconnection occurred.",
+        ] {
+            assert!(parse_line(&line("INFO", system)).is_none(), "{system}");
+        }
+        // NPCs of the owner's log, names with spaces too, still speak.
+        for (speaker, said) in [("The Bloated Miller", "Saw you in half!"), ("Beira of the Rotten Pack", "Sleep in ice, wake in snow."), ("Una", "Please, take your time.")] {
+            let (_, event) = parse_line(&line("INFO", &format!("{speaker}: {said}"))).unwrap();
+            assert_eq!(event, LogEvent::Dialogue { speaker: speaker.into(), text: said.into() });
+        }
+        // No line a checklist waits for is taken for a system line.
+        for step in load_routes().iter().flat_map(|r| &r.steps) {
+            if let Some(Trigger::NpcLine { lines, .. }) = &step.trigger {
+                assert!(lines.iter().all(|l| !is_system_line(&l.speaker, &l.text)), "{}", step.id);
+            }
+        }
     }
 
     fn feed(progress: &mut Progress, lines: &[String]) {
