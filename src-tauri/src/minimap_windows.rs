@@ -2,7 +2,7 @@
 //! Revalidate focus, physical client bounds and occlusion before every capture.
 //! Two crops: the corner minimap and, while the minimap is hidden, the big map
 //! around the player.
-use super::{big_layout, bigmap, Image, REGION_H, REGION_W};
+use super::{big_layout, bigmap, scan_layout, Image, Scan, REGION_H, REGION_W};
 use std::{ffi::c_void, mem::size_of, ptr::null_mut};
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HWND, LPARAM, POINT, RECT},
@@ -41,9 +41,12 @@ pub struct Region {
     bounds: Bounds,
     /// The big-map crop around the player.
     big: Bounds,
+    /// The whole client area, read now and then for map icons far from the player.
+    whole: Bounds,
     /// Where the minimap draws the player, inside the minimap crop, in pixels.
     pub minimap_marker: [f64; 2],
     pub plan: bigmap::Plan,
+    pub scan: Scan,
 }
 
 struct DpiGuard(DPI_AWARENESS_CONTEXT);
@@ -126,8 +129,9 @@ fn crop_bounds(origin: [i32; 2], size: [i32; 2]) -> Result<Bounds, String> {
 }
 
 /// The big-map crop for a client area at `origin` of `size` whose minimap crop is
-/// `minimap`, where the minimap draws the player inside that crop, and how to read it.
-fn big_crop(origin: [i32; 2], size: [i32; 2], minimap: Bounds) -> (Bounds, [f64; 2], bigmap::Plan) {
+/// `minimap`, where the minimap draws the player inside that crop, how to read it, and
+/// how to read the whole client area.
+fn big_crop(origin: [i32; 2], size: [i32; 2], minimap: Bounds) -> (Bounds, [f64; 2], bigmap::Plan, Scan) {
     let window = [size[0] as f64, size[1] as f64];
     let minimap_origin = [(minimap.x - origin[0]) as f64, (minimap.y - origin[1]) as f64];
     let layout = big_layout(window, minimap_origin, [minimap.width as usize, minimap.height as usize]);
@@ -137,7 +141,8 @@ fn big_crop(origin: [i32; 2], size: [i32; 2], minimap: Bounds) -> (Bounds, [f64;
     let crop = Bounds { x: origin[0] + x0, y: origin[1] + y0, width: x1 - x0, height: y1 - y0 };
     let marker = [layout.marker[0] - x0 as f64, layout.marker[1] - y0 as f64];
     let plan = bigmap::Plan { marker, radius: bigmap::radius(window), frame: layout.frame };
-    (crop, layout.minimap_marker, plan)
+    let scan = scan_layout(window, [0.0, 0.0], [size[0] as usize, size[1] as usize], &layout);
+    (crop, layout.minimap_marker, plan, scan)
 }
 
 fn client_area(window: HWND) -> Result<([i32; 2], [i32; 2]), String> {
@@ -161,13 +166,16 @@ pub fn locate_minimap() -> Result<Region, String> {
     let window = game_window()?;
     let (origin, size) = client_area(window)?;
     let bounds = crop_bounds(origin, size)?;
-    let (big, minimap_marker, plan) = big_crop(origin, size, bounds);
+    let (big, minimap_marker, plan, scan) = big_crop(origin, size, bounds);
+    let whole = Bounds { x: origin[0], y: origin[1], width: size[0], height: size[1] };
     Ok(Region {
         window,
         bounds,
         big,
+        whole,
         minimap_marker,
         plan,
+        scan,
     })
 }
 
@@ -219,6 +227,11 @@ pub fn capture(region: &Region) -> Result<Image, String> {
 /// The big-map crop, read while the minimap is hidden.
 pub fn capture_bigmap(region: &Region) -> Result<Image, String> {
     capture_crop(region, region.big, Some(unsafe { GetCurrentProcessId() }))
+}
+
+/// The whole client area, read now and then for map icons far from the player.
+pub fn capture_window(region: &Region) -> Result<Image, String> {
+    capture_crop(region, region.whole, Some(unsafe { GetCurrentProcessId() }))
 }
 
 fn capture_crop(region: &Region, bounds: Bounds, skip_process: Option<u32>) -> Result<Image, String> {
@@ -408,7 +421,10 @@ mod tests {
         // 3840x2160 client at a negative origin: the big map's marker at 1919, 1059.
         let origin = [-3840, 0];
         let minimap = crop_bounds(origin, [3840, 2160]).unwrap();
-        let (big, minimap_marker, plan) = big_crop(origin, [3840, 2160], minimap);
+        let (big, minimap_marker, plan, scan) = big_crop(origin, [3840, 2160], minimap);
+        // The whole client: the same marker, panels left out.
+        assert!((scan.plan.marker[0] - 1918.8).abs() < 0.1 && (scan.plan.marker[1] - 1059.0).abs() < 0.2);
+        assert_eq!(scan.skip[0], [0, 0, 729, 864]);
         let marker = [big.x as f64 + plan.marker[0], big.y as f64 + plan.marker[1]];
         assert!((marker[0] - (-3840.0 + 1918.8)).abs() < 0.1 && (marker[1] - 1059.0).abs() < 0.2, "{marker:?}");
         // Wide frames: 600x518 cells (1200x1036 px) around the player, inside the crop.

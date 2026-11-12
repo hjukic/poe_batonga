@@ -432,13 +432,32 @@ big map open: 91 frames, all placed, slowest 227 ms.
 
 Each frame also lists the map icons around the player, in either view: zone exits
 (orange), checkpoints and waypoints, as minimap cells from the player
-(`bigmap::Icon`, kept in `Minimap.icons`; nothing reads them yet). The search takes
+(`bigmap::Icon`, handed to `Recorder::on_icons` before each frame). The search takes
 one byte per pixel (about 0.4 MB for a big-map capture, not 5.6 MB). Colours and
 least sizes, measured on the big map: exits are orange blobs in the player cross's
 colour, 359–373 px (the cross is 58, so it never counts); a checkpoint is a cyan
 crystal over a cyan base (about 100,170,220; 145–185 px, joined within 20 px); a
 waypoint is a pale blue ring (about 170,180,225, B−R 24–72); labels are neutral grey
 and do not pass.
+
+**Icons across the whole big map (pass 3).** With the big map open every icon found so
+far is on screen, mostly far beyond the wall frame. Every third big-map frame the
+reader captures the whole game window instead of the area around the player, reads the
+wall frame from it as usual, and looks for icons over all of it, on every second pixel,
+except where panels sit (fractions of the window: this app's checklist panel at its
+default place, top left 19% x 40%; the zone and quest text, right 21% x 46%; the life
+orb and flasks, left 32% of the bottom 22%; the mana orb and skills, right 28% of the
+bottom 22%; the bottom 8%). If the panel is moved elsewhere, its orange boss names can
+show up as exits. Those frames hand the recorder (`Recorder::on_icons`) every icon on
+screen, in cells from the player; the other frames only the ones around the player.
+If the whole-window capture fails, the area around the player is read as usual.
+Live (Clearfell, idle near the Grelwood exit): every one of 7 whole-window scans found
+all 6 icons on screen (2 exits, 3 checkpoints, the waypoint; the Mud Burrow exit 823
+cells right of the player) and nothing else. Fixtures: the two real crops pasted at
+their places on a window-sized canvas with orange text in the panels give the 5 icons
+they hold and nothing from the panels. Cost at opt-level 0: whole-window frames 319 ms
+(read 294, recorder 25), others 179 ms, 226 ms on average, so three frames a second
+hold; release 127 and 88 ms.
 
 Quality: on the whole Clearfell screenshot all six map icons are found (2 exits, 3
 checkpoints, 1 waypoint) at their centres within a pixel or two, with no false ones

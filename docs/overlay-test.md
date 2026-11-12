@@ -116,6 +116,10 @@ app running, in a zone with walls nearby:
 If the trail jumps or a new part starts at a switch, note the zone, the direction
 and whether the big map was zoomed.
 
+Icons: with the big map open, `cargo test live_timing -- --ignored --nocapture` (in
+`src-tauri`, the app may keep running) prints every icon each whole-window frame found,
+in cells from the player; compare with the exits, checkpoints and waypoints on screen.
+
 If the game lets the big map be zoomed (mouse wheel or a setting), zoom it in and out
 once with the big map open and note the minimap state: "map lines … px wide" means
 the zoom was caught; "Reading big map" at another zoom means it was not, and the

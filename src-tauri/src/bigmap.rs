@@ -214,7 +214,13 @@ fn blobs(mask: &mut [u8], w: usize, h: usize) -> Vec<(u8, Blob)> {
 /// player cross where the big map draws it, enough map lines, not too much of the frame
 /// covered, and lines as wide as at the default zoom; else the message says which failed.
 /// Also returns the map icons around the player while the big map is read.
+#[cfg(test)]
 pub fn read(image: &Image, plan: &Plan) -> (MinimapView, Vec<Icon>) {
+    read_with(image, plan, &[])
+}
+
+/// `read`, with the icons looked for over the whole image but the `skip` rectangles.
+pub fn read_with(image: &Image, plan: &Plan, skip: &[[usize; 4]]) -> (MinimapView, Vec<Icon>) {
     let Some(centre) = marker_near(image, plan.marker, plan.radius) else {
         return (not_visible(plan, "player marker not found".into()), vec![]);
     };
@@ -241,7 +247,7 @@ pub fn read(image: &Image, plan: &Plan) -> (MinimapView, Vec<Icon>) {
         walls,
         player: Some(plan.frame.player),
     };
-    (view, icons_in(image, centre, SCALE, size(plan), 2, &[]))
+    (view, icons_in(image, centre, SCALE, size(plan), 2, skip))
 }
 
 fn not_visible(plan: &Plan, why: String) -> MinimapView {

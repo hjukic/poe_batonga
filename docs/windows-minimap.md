@@ -34,7 +34,8 @@ left visible.
 ## Big map
 
 When the corner minimap is hidden by the big map (Tab), the adapter reads the big
-map around the player instead, as on Linux ([map reading, "Big map"](map-reading.md#big-map)):
+map around the player instead (and every third frame the whole client area, for map
+icons far away; this app's windows don't count as covering it either), as on Linux ([map reading, "Big map"](map-reading.md#big-map)):
 a second crop of the client area, about 637x555 px at 3840x2160, centred on where
 the big map draws the player (49.97%, 49.03% of the client area). It gets the same
 focus, geometry and desktop-bounds checks as the minimap crop. In the occlusion
