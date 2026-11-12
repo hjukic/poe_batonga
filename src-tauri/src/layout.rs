@@ -676,10 +676,17 @@ impl Recorder {
 
     /// The map icons of the frame about to be handed to `on_frame` (zone exits,
     /// checkpoints, the waypoint), in minimap cells from the player; its exits go to
-    /// the navigator with the frame.
-    pub fn on_icons(&self, icons: &[crate::minimap::bigmap::Icon]) {
+    /// the navigator with the frame. `whole`: a whole-window scan, listing every icon on
+    /// screen (other frames list only those inside the wall frame): the far icons of the
+    /// last scan are replaced by this one's, also when it has none.
+    pub fn on_icons(&self, icons: &[crate::minimap::bigmap::Icon], whole: bool) {
         if let Ok(mut state) = self.0.lock() {
             state.icons = icons.to_vec();
+            if whole {
+                if let Some(session) = state.session.as_mut() {
+                    session.far_age = FAR_FRAMES;
+                }
+            }
         }
     }
 
@@ -1085,13 +1092,13 @@ mod tests {
         recorder.on_frame(&frame((0, 0)), [300, 260]);
         // A whole-window scan: The Grelwood's exit, labelled, outside the wall frame.
         let grelwood = Icon { kind: "exit", x: -136.0, y: 83.0, label: Some("The Grelwood".into()) };
-        recorder.on_icons(&[grelwood]);
+        recorder.on_icons(&[grelwood], true);
         recorder.on_frame(&frame((4, 0)), [300, 260]);
         let needle = |r: &Recorder| r.0.lock().unwrap().view().unwrap().guide.unwrap();
         let view = needle(&recorder);
         assert!(guide::angle_between(view.degrees.unwrap(), guide::screen_bearing(-136.0, 83.0).unwrap()) < 15.0, "{view:?}");
         // The next frame lists only icons inside the frame: the far one is kept, moved with the player.
-        recorder.on_icons(&[]);
+        recorder.on_icons(&[], false);
         recorder.on_frame(&frame((8, 0)), [300, 260]);
         let later = needle(&recorder);
         assert!(guide::angle_between(later.degrees.unwrap(), guide::screen_bearing(-140.0, 83.0).unwrap()) < 15.0, "{later:?}");
@@ -1099,6 +1106,11 @@ mod tests {
         let state = recorder.0.lock().unwrap();
         assert_eq!(state.session.as_ref().unwrap().far_icons.len(), 1);
         assert_eq!(state.session.as_ref().unwrap().far_age, 1);
+        drop(state);
+        // A scan with no far icon: the old far icon is not handed over again.
+        recorder.on_icons(&[], true);
+        recorder.on_frame(&frame((12, 0)), [300, 260]);
+        assert_eq!(recorder.0.lock().unwrap().session.as_ref().unwrap().far_age, FAR_FRAMES);
     }
 
     #[test]
