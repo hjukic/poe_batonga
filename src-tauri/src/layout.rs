@@ -1186,7 +1186,13 @@ fn navigator_on_recordings() {
             println!("   no layout graphs (terrain arrow)");
             continue;
         };
-        let mut nav = nav::Navigator::new(&area, nav::Arrival::Unknown, None, graph::SCALE, recording.seed.unwrap_or(0));
+        let seed = recording.seed.unwrap_or(0);
+        let mut nav = nav::Navigator::new(&area, nav::Arrival::Unknown, None, graph::SCALE, seed);
+        // The truth from the big map (Clearfell 2693856399 is ClearFell_W_E_N): its
+        // probability after each part, and the most any layout reached.
+        let truth = (own == "G1_2" && seed == 2693856399).then_some("ClearFell_W_E_N");
+        let mut truth_p: Vec<f64> = Vec::new();
+        let mut most: f64 = 0.0;
         let top = |nav: &nav::Navigator| {
             nav.ranking().iter().take(3).map(|(id, p)| format!("{id} {:.2}", p)).collect::<Vec<_>>().join(", ")
         };
@@ -1221,9 +1227,16 @@ fn navigator_on_recordings() {
                 }
                 for (_, poi) in at.iter().filter(|(index, _)| *index == j) {
                     match poi.kind.as_str() {
-                        "arrived" | "left" if poi.label != own && !poi.label.is_empty() => {
-                            nav.seen(nav::Seen::Exit(&poi.label));
-                            anchors += &format!(" {} {}", poi.kind, poi.label);
+                        // As in the app: leaving is soft evidence; an arrival starts a new
+                        // visit at that exit from what the instance's memory holds.
+                        "left" if poi.label != own && !poi.label.is_empty() => {
+                            nav.seen(nav::Seen::Left(&poi.label));
+                            anchors += &format!(" left {}", poi.label);
+                        }
+                        "arrived" if poi.label != own && !poi.label.is_empty() => {
+                            let memory = nav.memory();
+                            nav = nav::Navigator::new(&area, nav::Arrival::From(&poi.label), Some(&memory), graph::SCALE, seed);
+                            anchors += &format!(" arrived {}", poi.label);
                         }
                         // Into the same zone again (a checkpoint after dying, a new instance): somewhere else.
                         "arrived" | "left" => nav.lost(f64::INFINITY),
@@ -1233,6 +1246,11 @@ fn navigator_on_recordings() {
             }
             let (walked, _) = nav.progress();
             println!("   part {i:2}: {:4} trail points, walked {:5.0} |{anchors} | {}", part.trail.len(), walked, top(&nav));
+            let ranking = nav.ranking();
+            most = most.max(ranking[0].1);
+            if let Some(id) = truth {
+                truth_p.push(ranking.iter().find(|(l, _)| *l == id).map_or(0.0, |r| r.1));
+            }
         }
         let mut exits: Vec<(&String, &String)> = area.names.iter().collect();
         exits.sort();
@@ -1259,6 +1277,17 @@ fn navigator_on_recordings() {
                 }
             }
             println!("   layouts with The Grelwood left of Mud Burrow (±25°): {}", fits.join(", "));
+        }
+        println!("   most any layout reached: {most:.2}");
+        if let Some(id) = truth {
+            let least = truth_p.iter().copied().fold(1.0, f64::min);
+            println!("   {id} (the truth): {:.3} after part 0, least {least:.3}", truth_p[0]);
+            // The walked line alone must keep the true layout alive (no lower than
+            // uniform after the first part, never under 2%) and claim no certainty.
+            assert!(truth_p[0] >= 1.0 / area.layouts.len() as f64 && least >= 0.02, "{id}: {truth_p:?}");
+        }
+        if recording.parts.len() > 1 {
+            assert!(most <= 0.6, "the path alone reached {most}");
         }
     }
 }

@@ -26,6 +26,21 @@ const STRAY: f64 = 0.1;
 const STRAY_TOWN: f64 = 0.3;
 /// World units walked between two weighings.
 const WEIGH_EVERY: f64 = 15.0;
+/// The walked line's evidence is tempered: successive weighings see the same
+/// stretch of corridor, so each counts half.
+const TEMPER: f64 = 0.5;
+/// What the walked line alone can claim: the top layout at most this share of the
+/// belief (the lead over every other layout is capped accordingly). The graph's
+/// straight corridors differ from the real ones in ways that do not average out
+/// (Clearfell 2693856399: the walk prefers a wrong layout), so walking on must not
+/// turn a lead into certainty; anchors and exit icons do that.
+const PATH_MOST: f64 = 0.6;
+
+/// The most log evidence the walked line can give one layout over another, for `n` layouts.
+fn path_cap(n: usize) -> f64 {
+    (PATH_MOST / (1.0 - PATH_MOST) * (n as f64 - 1.0).max(1.0)).ln().max(0.5)
+}
+
 /// Closeness to a corridor: full weight within `FLAT` world units of its centre
 /// line (the walkable width), then a Gaussian of width `SIGMA` …
 /// Real walks stray far: on the recorded Clearfell and Riverbank visits the best
@@ -123,6 +138,11 @@ pub struct Memory {
     /// Where the player was: layout id → equally weighted [x, y, scale error].
     #[serde(default)]
     pub positions: BTreeMap<String, Vec<[f32; 3]>>,
+    /// The walked line's and the anchors' log evidence per layout (layouts above).
+    #[serde(default)]
+    pub path: BTreeMap<String, f64>,
+    #[serde(default)]
+    pub anchors: BTreeMap<String, f64>,
     /// Unix seconds of the last data it holds.
     #[serde(default)]
     pub at: u64,
@@ -139,6 +159,9 @@ struct Particle {
 
 struct Bank {
     prior: f64,
+    /// Log evidence of the walked line, relative to the best layout, in [-path_cap, 0].
+    path: f64,
+    /// Log evidence of anchors (and later exit icons).
     evidence: f64,
     particles: Vec<Particle>,
 }
@@ -205,7 +228,9 @@ impl Navigator {
     pub fn new(area: &Area, arrival: Arrival, memory: Option<&Memory>, scale: f64, seed: u64) -> Self {
         let mut rng = Rng(seed ^ 0x5EED_0F_BA70_4A);
         let n = area.layouts.len();
-        let remembered = memory.filter(|m| !m.layouts.is_empty());
+        // Evidence kept per kind carries on; an older memory has only the posterior.
+        let evidence = memory.filter(|m| !m.path.is_empty() || !m.anchors.is_empty());
+        let remembered = memory.filter(|m| !m.layouts.is_empty() && evidence.is_none());
         let resume = memory.filter(|m| {
             matches!(arrival, Arrival::Unknown) && !m.positions.is_empty() && unix_now().saturating_sub(m.at) <= RESUME
         });
@@ -231,7 +256,9 @@ impl Navigator {
                         .collect(),
                     None => start(layout, arrival, &mut rng),
                 };
-                let mut bank = Bank { prior, evidence: 0.0, particles };
+                let path = evidence.map_or(0.0, |m| m.path.get(&layout.id).copied().unwrap_or(-path_cap(n)).clamp(-path_cap(n), 0.0));
+                let anchors = evidence.map_or(0.0, |m| m.anchors.get(&layout.id).copied().unwrap_or(0.0));
+                let mut bank = Bank { prior, path, evidence: anchors, particles };
                 normalise(&mut bank.particles);
                 bank
             })
@@ -415,7 +442,7 @@ impl Navigator {
 
     /// Layout probabilities, in layout order.
     fn posterior(&self) -> Vec<f64> {
-        let logs: Vec<f64> = self.banks.iter().map(|b| b.prior + b.evidence).collect();
+        let logs: Vec<f64> = self.banks.iter().map(|b| b.prior + b.path + b.evidence).collect();
         let top = logs.iter().copied().fold(f64::MIN, f64::max);
         let raw: Vec<f64> = logs.iter().map(|l| (l - top).exp()).collect();
         let sum: f64 = raw.iter().sum();
@@ -437,6 +464,7 @@ impl Navigator {
         let posterior = self.posterior();
         let mut cache = self.guidance.borrow_mut();
         let (mut vx, mut vy, mut togo, mut weight) = (0.0, 0.0, 0.0, 0.0);
+        let mut bins = [0.0f64; BINS];
         for (k, (layout, bank)) in self.area.layouts.iter().zip(&self.banks).enumerate() {
             let pk = posterior[k];
             if pk < NEGLIGIBLE {
@@ -461,6 +489,8 @@ impl Navigator {
                 if len * layout.unit > 1.0 {
                     vx += pk * p.w * sx / len;
                     vy += pk * p.w * sy / len;
+                    let bin = ((sy.atan2(sx) / std::f64::consts::TAU).rem_euclid(1.0) * BINS as f64) as usize % BINS;
+                    bins[bin] += pk * p.w;
                 }
                 togo += pk * p.w * (rest + off.min(FAR));
                 weight += pk * p.w;
@@ -479,7 +509,7 @@ impl Navigator {
             variant: if p_top >= SURE { self.area.layouts[top].id.clone() } else { String::new() },
             target_kind: if target.exit.is_some() { "entrance".into() } else { target.tag.clone().unwrap_or_default() },
             target: target.label.clone(),
-            degrees: screen_bearing(vx, vy),
+            degrees: mode(&bins).or_else(|| screen_bearing(vx, vy)),
             source: source.into(),
             distance: if weight > 0.0 { (togo / weight * self.scale) as f32 } else { 0.0 },
             confidence: confidence.min(1.0) as f32,
@@ -511,8 +541,11 @@ impl Navigator {
             }
             positions.insert(layout.id.clone(), kept);
         }
+        let ids = || self.area.layouts.iter().map(|l| l.id.clone());
         Memory {
-            layouts: self.area.layouts.iter().map(|l| l.id.clone()).zip(posterior).collect(),
+            layouts: ids().zip(posterior).collect(),
+            path: ids().zip(self.banks.iter().map(|b| b.path)).collect(),
+            anchors: ids().zip(self.banks.iter().map(|b| b.evidence)).collect(),
             walked: self.walked_before + self.walked,
             positions,
             at: self.data_at,
@@ -554,15 +587,11 @@ impl Navigator {
         for (layout, bank) in area.layouts.iter().zip(banks.iter_mut()) {
             let mut fit = 0.0;
             for p in &mut bank.particles {
-                let (d, _) = layout.corridor((p.x, p.y));
-                // A steady sideways offset inside the corridor costs nothing, so
-                // weighing often does not count the same offset again and again.
-                let out = (d - FLAT).max(0.0);
-                let like = FLOOR + (1.0 - FLOOR) * (-out * out / (2.0 * SIGMA * SIGMA)).exp();
+                let like = closeness(layout.corridor((p.x, p.y)).0);
                 fit += p.w * like;
                 p.w *= like;
             }
-            bank.evidence += fit.ln();
+            bank.path += TEMPER * fit.ln();
             normalise(&mut bank.particles);
             let ess = 1.0 / bank.particles.iter().map(|p| p.w * p.w).sum::<f64>();
             if ess < PARTICLES as f64 / 2.0 {
@@ -577,7 +606,44 @@ impl Navigator {
                 }
             }
         }
+        // Only the lead counts, and only up to the cap.
+        let best = banks.iter().map(|b| b.path).fold(f64::MIN, f64::max);
+        let cap = path_cap(banks.len());
+        for bank in banks.iter_mut() {
+            bank.path = (bank.path - best).max(-cap);
+        }
     }
+}
+
+/// Directions are binned this finely to find where most of the belief points.
+const BINS: usize = 72;
+
+/// The direction most of the belief points (screen degrees): the bin with the
+/// most weight within ±45°, refined by the weighted mean of those bins. With
+/// layouts pointing different ways the mean of all directions falls between
+/// them; this follows the largest group.
+fn mode(bins: &[f64; BINS]) -> Option<f32> {
+    let width = BINS / 8;
+    let around = |b: usize| (0..=2 * width).map(|i| bins[(b + BINS - width + i) % BINS]).sum::<f64>();
+    let best = (0..BINS).max_by(|&a, &b| around(a).total_cmp(&around(b)))?;
+    if around(best) <= 0.0 {
+        return None;
+    }
+    let (mut x, mut y) = (0.0, 0.0);
+    for i in 0..=2 * width {
+        let b = (best + BINS - width + i) % BINS;
+        let a = (b as f64 + 0.5) / BINS as f64 * std::f64::consts::TAU;
+        (x, y) = (x + bins[b] * a.cos(), y + bins[b] * a.sin());
+    }
+    screen_bearing(x, y)
+}
+
+/// How well a point `d` world units from the nearest corridor fits: a steady
+/// sideways offset inside the corridor costs nothing, so weighing often does not
+/// count the same offset again and again; far off costs the floor.
+fn closeness(d: f64) -> f64 {
+    let out = (d - FLAT).max(0.0);
+    FLOOR + (1.0 - FLOOR) * (-out * out / (2.0 * SIGMA * SIGMA)).exp()
 }
 
 fn scale_limits(layout: &Layout) -> (f64, f64) {
@@ -718,10 +784,11 @@ mod tests {
         for bank in &mut nav.banks {
             bank.particles.iter_mut().for_each(|p| (p.x, p.y) = (p.x - 5000.0, p.y + 5000.0));
         }
-        let before = nav.banks[0].evidence;
+        // Far off costs the floor, not a capped distance.
+        let far = nav.banks[0].particles[0];
+        assert_eq!(closeness(area.layouts[0].corridor((far.x, far.y)).0), FLOOR);
+        assert_eq!(closeness(10.0), 1.0);
         nav.weigh();
-        // Each weighing far off costs the floor, not a capped distance.
-        assert!((nav.banks[0].evidence - before - FLOOR.ln()).abs() < 1e-9, "{}", nav.banks[0].evidence - before);
         // A share of every layout's particles is redrawn near its corridors.
         let near: usize = area.layouts.iter().zip(&nav.banks)
             .map(|(layout, bank)| bank.particles.iter().filter(|p| layout.corridor((p.x, p.y)).0 <= FLAT).count())
@@ -751,7 +818,8 @@ mod tests {
         feed(&mut nav, &events[..cut]);
         let ranking = nav.ranking();
         assert_eq!(ranking[0].0, WALKED, "{:?}", &ranking[..3]);
-        assert!(ranking[0].1 >= SURE, "{:?}", &ranking[..3]);
+        // The walked line alone claims no certainty.
+        assert!(ranking[0].1 <= PATH_MOST + 1e-9, "{:?}", &ranking[..3]);
         let view = nav.guide(&[exit("G1_4", "The Grelwood")]).unwrap();
         let Some(Event::Moved { truth: Some(truth), .. }) = events[..cut].iter().rev().find(|e| matches!(e, Event::Moved { truth: Some(_), .. })) else { panic!() };
         let off = super::super::guide::angle_between(view.degrees.unwrap(), *truth);
