@@ -820,6 +820,21 @@ puts the player: through the wall), rough, 80 cells. After: −28°, at the door
 gold, 157 cells. Walked 30 cells right with the icon out of view: −45° to the doorway,
 gold, from the sighting.
 
+**Simulation.** The walker's world has no walls, so the 4-9% of gold needles more than 60°
+off the walkable route (above) cannot be checked against this there. It would need a
+walled world per layout: the corridors drawn as outlines at a walkable width (60-120
+units, the recorded distances) with islands and side pockets, exits off the corridor
+ends as in play; the walker's own trail; the walls the minimap would show within its
+view around each step, with the recorder's faults (registration drift of a few cells,
+one-cell gaps, specks, the trail over a line now and then); and the truth as the shortest
+way through that world, not the graph. Then Gate A's "gold off" with and without the map.
+
+**Limits.** The way trusts the recording: a misplaced line (16% of Clearfell part 0's
+walk lies on one) makes it go round an obstacle that is not there, or not where drawn.
+How often that misleads a gold needle on today's recordings needs the owner's play: a
+named exit behind a wall or river, the needle checked against the walk. The arrival
+point is where the player appeared, a few cells from the exit icon.
+
 ## Flight recorder (2026-11-12, day build)
 
 Every zone visit with layout graphs leaves behind exactly what the navigator was fed,
