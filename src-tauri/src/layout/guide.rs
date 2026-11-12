@@ -100,7 +100,13 @@ pub struct Zone {
 /// The in-game map shows the world grid turned 45° with its y axis pointing up:
 /// screen = ((x - y), -(x + y)) / √2. Fitted on a recorded Clearfell Encampment
 /// visit (2026-11-12, 2,744 walls, 87% on the outline at 0.80 cells per unit).
-fn to_screen((x, y): (f64, f64)) -> (f64, f64) {
+pub(super) fn to_screen((x, y): (f64, f64)) -> (f64, f64) {
+    let c = std::f64::consts::FRAC_1_SQRT_2;
+    (c * (x - y), -c * (x + y))
+}
+
+/// The inverse of `to_screen`: screen-oriented units back to world (x east, y north).
+pub(super) fn from_screen((x, y): (f64, f64)) -> (f64, f64) {
     let c = std::f64::consts::FRAC_1_SQRT_2;
     (c * (x - y), -c * (x + y))
 }
@@ -355,11 +361,16 @@ const NEIGHBOURS: [(i32, i32, u32); 8] =
 
 pub struct Catalog {
     zones: HashMap<String, Zone>,
+    /// The game's layout graphs; used instead of `zones` where present.
+    graphs: HashMap<String, super::graph::Area>,
 }
 
 impl Catalog {
     pub fn load() -> Catalog {
-        Catalog { zones: ZONES.iter().map(|&(id, json, svg)| (id.to_string(), Zone::load(json, svg))).collect() }
+        Catalog {
+            zones: ZONES.iter().map(|&(id, json, svg)| (id.to_string(), Zone::load(json, svg))).collect(),
+            graphs: super::graph::load(),
+        }
     }
 }
 
@@ -395,18 +406,18 @@ fn unturn(t: &[f64; 4], (x, y): (f64, f64)) -> (f64, f64) {
     (t[0] * x + t[2] * y, t[1] * x + t[3] * y)
 }
 
-fn angle_between(a: f32, b: f32) -> f64 {
+pub(super) fn angle_between(a: f32, b: f32) -> f64 {
     let d = ((a - b) as f64).rem_euclid(360.0);
     d.min(360.0 - d)
 }
 
 /// Screen direction in degrees (0 = right, 90 = down). A coincident target has none.
-fn screen_bearing(dx: f64, dy: f64) -> Option<f32> {
+pub(super) fn screen_bearing(dx: f64, dy: f64) -> Option<f32> {
     (dx.hypot(dy) > 1e-6).then(|| dy.atan2(dx).to_degrees() as f32)
 }
 
 /// "G1_2" < "G1_11": compare the numbers in area ids as numbers.
-fn area_order(id: &str) -> Vec<(u32, String)> {
+pub(super) fn area_order(id: &str) -> Vec<(u32, String)> {
     id.split('_').map(|part| (part.parse().unwrap_or(u32::MAX), part.to_string())).collect()
 }
 
@@ -416,6 +427,8 @@ pub struct Evidence<'a> {
     /// Area id the player came from; the arrival point is that zone's exit (or a waypoint).
     pub arrived_from: &'a str,
     pub walls: &'a [(i32, i32)],
+    /// The player's walked path since arrival, oldest first.
+    pub trail: &'a [(i32, i32)],
     pub player: (i32, i32),
     /// Explicit objective completion from the checklist.
     pub completed: &'a [String],
@@ -533,6 +546,14 @@ fn fits(zone: &Zone, ev: &Evidence) -> Vec<Fit> {
 }
 
 pub fn guide(catalog: &Catalog, ev: &Evidence) -> Option<GuideView> {
+    if let Some(area) = catalog.graphs.get(ev.area) {
+        return super::graph::guide(area, ev);
+    }
+    terrain(catalog, ev)
+}
+
+/// The arrow from poe2way's collected terrain (used where no layout graph helps).
+fn terrain(catalog: &Catalog, ev: &Evidence) -> Option<GuideView> {
     let zone = catalog.zones.get(ev.area)?;
     let (_, exits) = next_exit(zone, ev.arrived_from, ev.completed)?;
     let target = exits.first()?.label.clone();
@@ -613,7 +634,7 @@ pub fn measure_scale(catalog: &Catalog, area: &str, arrived_from: &str, walls: &
     if walls.len() < MIN_WALLS {
         return None;
     }
-    let ev = Evidence { area, arrived_from, walls, player: (0, 0), completed: &[], scale: None };
+    let ev = Evidence { area, arrived_from, walls, trail: &[], player: (0, 0), completed: &[], scale: None };
     let all = fits(zone, &ev);
     let best = all.first()?;
     // Another placement nearly as good at a different scale makes the scale unclear.
@@ -626,7 +647,7 @@ mod tests {
     use super::*;
 
     fn ev<'a>(area: &'a str, from: &'a str, walls: &'a [(i32, i32)]) -> Evidence<'a> {
-        Evidence { area, arrived_from: from, walls, player: (0, 0), completed: &[], scale: None }
+        Evidence { area, arrived_from: from, walls, trail: &[], player: (0, 0), completed: &[], scale: None }
     }
 
     /// Minimap walls a visit would record: the outline near the arrival point, as
@@ -696,7 +717,7 @@ mod tests {
 
     #[test]
     fn no_walls_yet_gives_a_rough_direction() {
-        let view = guide(&Catalog::load(), &ev("G1_2", "G1_town", &[])).unwrap();
+        let view = terrain(&Catalog::load(), &ev("G1_2", "G1_town", &[])).unwrap();
         assert_eq!(view.target, "Mud Burrow");
         assert!(view.degrees.is_some(), "{view:?}");
         assert_eq!(view.source, "rough");
@@ -709,7 +730,7 @@ mod tests {
         let zone = &catalog.zones["G1_2"];
         let fit = Fit { anchor: town_exit(zone), turn: 0, scale: 0.8, score: 0.0 };
         let walls = recorded_walls(zone, &fit, 450.0);
-        let view = guide(&catalog, &ev("G1_2", "G1_town", &walls)).unwrap();
+        let view = terrain(&catalog, &ev("G1_2", "G1_town", &walls)).unwrap();
         assert_eq!(view.source, "estimated", "{view:?}");
         assert!(view.degrees.is_some());
         assert!(!view.turned);
@@ -723,7 +744,7 @@ mod tests {
         let zone = &catalog.zones["G1_2"];
         let fit = Fit { anchor: town_exit(zone), turn: 8, scale: 0.8, score: 0.0 };
         let walls = recorded_walls(zone, &fit, 450.0);
-        let view = guide(&catalog, &ev("G1_2", "G1_town", &walls)).unwrap();
+        let view = terrain(&catalog, &ev("G1_2", "G1_town", &walls)).unwrap();
         assert_eq!(view.source, "estimated", "{view:?}");
         assert!(view.turned);
     }
@@ -733,7 +754,7 @@ mod tests {
         // A plain grid of walls fits no part of Clearfell well.
         let walls: Vec<(i32, i32)> = (0..40).flat_map(|i| [(i * 7 - 140, 0), (0, i * 7 - 140)]).chain(
             (0..120).map(|i| ((i * 37 % 200) - 100, (i * 53 % 200) - 100))).collect();
-        let view = guide(&Catalog::load(), &ev("G1_2", "G1_town", &walls)).unwrap();
+        let view = terrain(&Catalog::load(), &ev("G1_2", "G1_town", &walls)).unwrap();
         assert_eq!(view.source, "rough", "{view:?}");
     }
 
@@ -786,13 +807,9 @@ fn guide_on_recording() {
         let walls: Vec<(i32, i32)> =
             part.walls.iter().filter(|w| w[2] >= 2).map(|w| (w[0] - arrival.x, w[1] - arrival.y)).collect();
         let player = part.trail.last().map_or((0, 0), |t| (t[0] - arrival.x, t[1] - arrival.y));
-        let ev = Evidence { area: &recording.area, arrived_from: &from, walls: &walls, player, completed: &[], scale: None };
-        let zone = &catalog.zones[recording.area.as_str()];
-        let all = fits(zone, &ev);
-        eprintln!("{} walls, player {:?}", walls.len(), player);
-        for f in all.iter().take(10) {
-            eprintln!("  turn {} scale {:.3} score {:.3} anchor {:?}", f.turn, f.scale, f.score, f.anchor);
-        }
+        let trail: Vec<(i32, i32)> = part.trail.iter().map(|t| (t[0] - arrival.x, t[1] - arrival.y)).collect();
+        let ev = Evidence { area: &recording.area, arrived_from: &from, walls: &walls, trail: &trail, player, completed: &[], scale: None };
+        eprintln!("{} walls, {} path points, player {:?}", walls.len(), trail.len(), player);
         eprintln!("{:?}", guide(&catalog, &ev));
     }
 }

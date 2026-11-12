@@ -86,7 +86,8 @@ for (const areaId of areas) {
     }
     graphs.push({ id, file: path, ...graph });
   }
-  const out = { areaId, name: area.Name, connections, topologies: graphs };
+  const connectionNames = connections.map((id) => worldAreas.get(id)?.Name ?? id);
+  const out = { areaId, name: area.Name, connections, connectionNames, topologies: graphs };
   writeFileSync(join(outDir, `${areaId}.json`), JSON.stringify(out) + '\n');
   console.log(`${areaId} ${area.Name}: ${graphs.length} layouts`);
 }

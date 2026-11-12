@@ -7,6 +7,7 @@
 //! A visit that cannot be related to earlier parts of the same instance (another
 //! entry, a teleport, tracking lost) starts a new part with its own coordinates.
 
+mod graph;
 pub mod guide;
 
 use crate::minimap::MinimapView;
@@ -610,6 +611,7 @@ impl State {
                 area,
                 arrived_from: &arrival.label,
                 walls: &walls,
+                trail: &live.part.trail.iter().map(|&[x, y]| (x - ax, y - ay)).collect::<Vec<_>>(),
                 player: (live.pos.0 - ax, live.pos.1 - ay),
                 completed: self.completed.get(area).map(Vec::as_slice).unwrap_or_default(),
                 scale,
@@ -754,10 +756,12 @@ mod tests {
     #[test]
     fn completion_untick_and_tracking_loss_update_guidance() {
         let recorder = Recorder::new(None);
-        // The Riverbank has no poe2way terrain, so no arrow there.
+        // The Riverbank's arrow heads for the Miller first (no direction before a walk).
         enter(&recorder, "G1_1");
         recorder.on_frame(&frame((0, 0)), [300, 260]);
-        assert!(recorder.view().unwrap().guide.is_none());
+        let guide = recorder.view().unwrap().guide.unwrap();
+        assert_eq!(guide.target, "The Bloated Miller");
+        assert_eq!(guide.degrees, None);
 
         enter(&recorder, "G1_town");
         recorder.on_frame(&frame((0, 0)), [300, 260]);
@@ -767,8 +771,8 @@ mod tests {
         }
         let guide = recorder.view().unwrap().guide.unwrap();
         assert_eq!(guide.target, "Mud Burrow");
-        // A corridor that is not Clearfell gives only the rough direction.
-        assert_eq!(guide.source, "rough");
+        // A short corridor that is not Clearfell confirms nothing.
+        assert_ne!(guide.source, "estimated");
 
         let guide = recorder.set_completed(vec![("G1_2".into(), "Mud Burrow".into())]).unwrap().guide.unwrap();
         assert_eq!(guide.target, "The Grelwood");
