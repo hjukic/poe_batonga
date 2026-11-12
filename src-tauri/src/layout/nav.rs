@@ -416,6 +416,8 @@ pub struct Navigator {
     sightings: Vec<Sighting>,
     /// The last named-exit fit: no layout fits the named exits within `NAMED_LOOSE`.
     named_loose: bool,
+    /// Two or more exits were read by name this visit: only then is a layout drawn.
+    named_pair: bool,
     /// Checkpoints counted this visit: where the belief put each, per layout (file units).
     checkpoints_counted: Vec<Vec<(f64, f64)>>,
     /// Where the player is by dead reckoning since the last loss (world units,
@@ -502,6 +504,7 @@ impl Navigator {
             icons_now: Vec::new(),
             sightings: Vec::new(),
             named_loose: false,
+            named_pair: false,
             checkpoints_counted: Vec::new(),
             track: (0.0, 0.0),
             icon_walked: 0.0,
@@ -743,6 +746,7 @@ impl Navigator {
         // How well the best layout fits the named exits, against what one pair missing by
         // `NAMED_LOOSE` would score (per pair: the fit is a product over the pairs).
         if let Some(best) = named_best {
+            self.named_pair = true;
             let pairs = icons.iter().filter(|i| i.to.is_some()).count().saturating_sub(1) as i32;
             let per_pair = (-(NAMED_LOOSE * NAMED_LOOSE) / (4.0 * ICON_TOL * ICON_TOL)).exp();
             self.named_loose = best < per_pair.powi(pairs.max(1));
@@ -1074,9 +1078,10 @@ impl Navigator {
         let posterior = self.posterior();
         let (top, share) = posterior.iter().copied().enumerate().max_by(|a, b| a.1.total_cmp(&b.1))?;
         let candidates = posterior.iter().filter(|&&p| p >= NEGLIGIBLE).count();
-        // Named exits that no layout fits (`named_loose`): none is drawn, however the belief
-        // leans (the owner's Clearfell of 2026-11-12 showed ClearFell_W_N_E, its exits misplaced).
-        if share < PICTURE_FROM || self.named_loose {
+        // A layout is drawn only once two exits read by name fit it: the walked line and a
+        // remembered belief alone showed wrong layouts (the owner's Clearfell of 2026-11-12:
+        // ClearFell_W_N_E, then W_N_S, its exits misplaced).
+        if share < PICTURE_FROM || self.named_loose || !self.named_pair {
             return Some(Picture { known: false, candidates, no_fit: self.named_loose, ..Picture::default() });
         }
         let layout = &self.area.layouts[top];
@@ -2034,6 +2039,12 @@ mod tests {
         let picture = nav.picture().unwrap();
         assert!(!picture.known && picture.paths.is_empty());
         assert_eq!(picture.candidates, 33);
+        // A belief from walking alone, however strong, draws nothing.
+        let mut walked = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 2693856399);
+        for _ in 0..200 {
+            walked.moved(10.0, 0.0);
+        }
+        assert!(!walked.picture().unwrap().known);
         // The known instance: its two exits read by name (as in `live_frames`).
         let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 2693856399);
         live_frames(&mut nav);
