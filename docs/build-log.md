@@ -41,9 +41,11 @@ anchors, five to fix, none blocking. All accepted findings were fixed in the sam
   last fix: `ClearFell_W_E_N` 0.997, the needle gold at the Grelwood exit.
 - **Simulated walks** (every Riverbank and Clearfell layout, a walker that strays like the recordings, 30% told
   a wrong arrival): without icons the needle is within 45° at 60% of the walk in about 30% of runs and is never
-  gold; with named icons in the wide view about 57%, gold on about 5% of steps, of which 2.5–4% are more than
-  60° off depending on the seed. The 3% bar set for gold is not met on every seed: exits sit up to about 100
-  units from their graph nodes.
+  gold; with icons 35–52%. Gold appears on up to 4% of steps. With unnamed icons 2% of gold needles are more
+  than 60° off the walkable route; with named icons in the minimap view 8.6% (three seeds), in the wide view
+  3.9% (one seed). The 3% bar set for gold is therefore not met with named icons. A gold needle there points
+  straight at a named exit icon that is on the map; the route to it can bend (a wall, a river), and exits sit
+  up to about 100 units from their graph nodes.
 - Numbers and method: [map reading](map-reading.md).
 
 ### Found on the live screen, not by tests
@@ -57,7 +59,7 @@ anchors, five to fix, none blocking. All accepted findings were fixed in the sam
 
 - Movement across the minimap and the big map, a zone change, and the Grelwood (first zone not measured) need
   the owner's play: checks in [overlay test](overlay-test.md), "Big map reading".
-- Gold with icons is 2.5–4% wrong in simulation; the bar was 3%.
+- Gold with named icons is 4–9% off the walkable route in simulation; the bar was 3% (see above).
 - Exit labels on the corner minimap are not read (no full-size minimap screenshot was available).
 - Dungeon (`.dgr`) scale is derived from the files, not checked in play; needles there are gray unless a named
   target exit is in view.
