@@ -1,0 +1,30 @@
+{
+  "formatVersion": 1,
+  "order": 950,
+  "zone": { "id": "P2_6", "name": "Qimah", "level": 56 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "orbalas-pillar",
+      "kind": "objective",
+      "parts": [{ "text": "Orbala's Pillar: a Boon" }, { "text": "Permanent Boon", "style": "reward" }],
+      "trigger": null,
+      "evidence": "One of seven boons; it can be swapped later. No log line known. Tick by hand."
+    },
+    {
+      "id": "summon-jado",
+      "kind": "objective",
+      "parts": [{ "text": "Summon " }, { "text": "Jado", "style": "npc" }, { "text": ", open the door" }],
+      "trigger": null,
+      "evidence": "If he is missing, finish the Sel Khari Sanctuary first. No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-qimah-reservoir",
+      "kind": "objective",
+      "navigationTarget": { "area": "P2_6", "label": "Qimah Reservoir", "exit": "P2_7" },
+      "parts": [{ "text": "Enter Qimah Reservoir" }],
+      "trigger": { "type": "zoneEntered", "area": "P2_7" },
+      "evidence": "Zone-generation line for P2_7."
+    }
+  ]
+}

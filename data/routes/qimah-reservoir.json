@@ -1,0 +1,47 @@
+{
+  "formatVersion": 1,
+  "order": 960,
+  "zone": { "id": "P2_7", "name": "Qimah Reservoir", "level": 56 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "sacred-wells",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "2 Sacred Wells (vials)" }, { "text": "Currency", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-bloodbilge",
+      "kind": "objective",
+      "navigationTarget": { "area": "P2_7", "label": "Giant vase", "tag": "landmark_vase" },
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Bloodbilge", "style": "boss" }, { "text": " (vase)" }, { "text": "Exalt + Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "Click the giant vase to spawn it. No kill line known. Tick by hand. Target: the one 'landmark_vase' node in all 4 layouts."
+    },
+    {
+      "id": "kill-azmadi",
+      "kind": "objective",
+      "navigationTarget": { "area": "P2_7", "label": "Azmadi", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Azmadi", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 4 layouts."
+    },
+    {
+      "id": "grand-barya",
+      "kind": "objective",
+      "parts": [{ "text": "Grand Barya, Jado, Asala" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "reservoir-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "The Khari Bazaar was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

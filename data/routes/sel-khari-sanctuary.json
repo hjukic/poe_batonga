@@ -1,0 +1,38 @@
+{
+  "formatVersion": 1,
+  "order": 930,
+  "zone": { "id": "P2_3", "name": "Sel Khari Sanctuary", "level": 55 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "sanctuary-waypoint",
+      "kind": "objective",
+      "parts": [{ "text": "Take the waypoint" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "two-wishes",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Two Wishes: place Baryas" }, { "text": "Rare jewellery", "style": "reward" }],
+      "trigger": null,
+      "evidence": "Yoon's and Rangeen's Baryas on their pedestals. No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-elzarah",
+      "kind": "objective",
+      "navigationTarget": { "area": "P2_3", "label": "Elzarah", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Elzarah", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in both layouts."
+    },
+    {
+      "id": "sanctuary-to-crossing",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to Khari Crossing" }],
+      "trigger": null,
+      "evidence": "The Khari Crossing was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

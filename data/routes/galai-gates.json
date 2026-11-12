@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "order": 940,
+  "zone": { "id": "P2_5", "name": "The Galai Gates", "level": 56 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-vornas",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Vornas", "style": "boss" }],
+      "trigger": null,
+      "evidence": "Not in the guide. WorldAreas: this area's boss; Qimah needs PartTwoInterludeFireBeastBossKilled. No kill line known. Tick by hand."
+    },
+    {
+      "id": "enter-qimah",
+      "kind": "objective",
+      "navigationTarget": { "area": "P2_5", "label": "Qimah", "exit": "P2_6" },
+      "parts": [{ "text": "Enter Qimah" }],
+      "trigger": { "type": "zoneEntered", "area": "P2_6" },
+      "evidence": "Zone-generation line for P2_6."
+    }
+  ]
+}

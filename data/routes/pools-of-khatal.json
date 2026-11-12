@@ -1,0 +1,16 @@
+{
+  "formatVersion": 1,
+  "order": 920,
+  "zone": { "id": "P2_2", "name": "Pools of Khatal", "level": 55 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "enter-sel-khari-sanctuary",
+      "kind": "objective",
+      "navigationTarget": { "area": "P2_2", "label": "Sel Khari Sanctuary", "exit": "P2_3" },
+      "parts": [{ "text": "Enter Sel Khari Sanctuary" }],
+      "trigger": { "type": "zoneEntered", "area": "P2_3" },
+      "evidence": "Zone-generation line for P2_3."
+    }
+  ]
+}

@@ -158,6 +158,13 @@
       "parts": [{ "text": "Travel to The Refuge" }],
       "trigger": { "type": "zoneEntered", "area": "P1_Town" },
       "evidence": "Zone-generation line for P1_Town. Interlude 5.1, by The Hooded One."
+    },
+    {
+      "id": "travel-khari-bazaar",
+      "kind": "objective",
+      "parts": [{ "text": "Travel to Khari Bazaar" }],
+      "trigger": { "type": "zoneEntered", "area": "P2_Town" },
+      "evidence": "Zone-generation line for P2_Town. Interlude 5.2, by The Hooded One."
     }
   ]
 }
