@@ -137,7 +137,20 @@ struct Live {
     /// Size of the last frame: another size is another view (minimap or big map).
     frame_size: (usize, usize),
     part: Part,
+    /// The map was loaded from an earlier visit and the player is not found on it yet:
+    /// frames are looked for on it (around `hint`, e.g. where the player came in by the same
+    /// exit before), and after `FIND_FRAMES` without a place a new part starts.
+    unplaced: bool,
+    hint: Option<(i32, i32)>,
+    tries: u32,
 }
+
+/// The eight cells around a cell.
+const NEIGHBOURS: [(i32, i32); 8] = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)];
+/// Frames to find the player on a known map before starting a new part (about 3 s).
+const FIND_FRAMES: u32 = 24;
+/// Times a wall cell counts as seen at most: more sightings add nothing.
+const SEEN_MOST: u32 = 50;
 
 impl Live {
     fn new() -> Self {
@@ -151,7 +164,26 @@ impl Live {
             centre: None,
             frame_size: (0, 0),
             part: Part { started_at: now(), ..Part::default() },
+            unplaced: false,
+            hint: None,
+            tries: 0,
         }
+    }
+
+    /// The map of an earlier visit to this instance, to go on with: the instance keeps its
+    /// layout, so a return draws no second copy of what is known. `hint`: where to look first.
+    fn from_part(part: Part, hint: Option<(i32, i32)>) -> Self {
+        let mut live = Live::new();
+        for &[x, y, n] in &part.walls {
+            live.walls.insert((x, y), n as u32);
+            live.kept.insert((x, y), n as u32);
+        }
+        live.pos = hint.unwrap_or((0, 0));
+        live.part = part;
+        live.part.walls = vec![];
+        live.unplaced = !live.walls.is_empty();
+        live.hint = hint;
+        live
     }
 
     /// The wall cells that are kept: every one but those held back.
@@ -166,17 +198,46 @@ impl Live {
     /// stays on its cell and the scene, which scrolls faster, or the character, who moves
     /// with the player, mostly does not. Minimap cells are kept at once (the fault was not
     /// seen there).
+    ///
+    /// A cell that is not known but has a known neighbour is that neighbour seen a cell
+    /// off: it counts for the neighbour and adds nothing, so walls seen again (a return to
+    /// the zone, a frame placed a cell off) do not thicken or double.
     fn add_walls(&mut self, rel: &[(i32, i32)], pos: (i32, i32), big: bool) {
-        for &(rx, ry) in rel {
-            let cell = (pos.0 + rx, pos.1 + ry);
+        // Which known cell each one is, decided before this frame adds any: a line's own
+        // cells touch each other and are all new.
+        let cells: Vec<((i32, i32), bool)> = rel
+            .iter()
+            .map(|&(rx, ry)| {
+                let cell = (pos.0 + rx, pos.1 + ry);
+                let known = self.known_as(cell);
+                (known, known == cell)
+            })
+            .collect();
+        for (cell, exact) in cells {
+            self.count(cell, 1, pos, big, exact);
+        }
+    }
+
+    /// The known wall cell `cell` is: itself, else a known neighbour, else itself (new).
+    fn known_as(&self, cell: (i32, i32)) -> (i32, i32) {
+        if self.walls.contains_key(&cell) {
+            return cell;
+        }
+        NEIGHBOURS.iter().map(|&(dx, dy)| (cell.0 + dx, cell.1 + dy)).find(|c| self.walls.contains_key(c)).unwrap_or(cell)
+    }
+
+    /// Counts `times` sightings of the wall at `cell`. Only a sighting of the cell itself
+    /// (`exact`) frees a held one: a neighbour seen from elsewhere is often scene.
+    fn count(&mut self, cell: (i32, i32), times: u32, pos: (i32, i32), big: bool, exact: bool) {
+        {
             let n = self.walls.entry(cell).or_insert(0);
-            *n += 1;
+            *n = (*n + times).min(SEEN_MOST);
             let n = *n;
             if !big {
                 self.held.remove(&cell);
-            } else if n == 1 {
+            } else if n == times {
                 self.held.insert(cell, pos);
-            } else if self.held.get(&cell).is_some_and(|first| (first.0 - pos.0).abs().max((first.1 - pos.1).abs()) >= HOLD_MOVE) {
+            } else if exact && self.held.get(&cell).is_some_and(|first| (first.0 - pos.0).abs().max((first.1 - pos.1).abs()) >= HOLD_MOVE) {
                 self.held.remove(&cell);
             }
             if !self.held.contains_key(&cell) {
@@ -915,14 +976,11 @@ fn merge_pieces(session: &mut Session) -> bool {
         let piece: Vec<(i32, i32)> = part.walls.iter().map(|&[x, y, _]| (x, y)).collect();
         let Some((dx, dy)) = locate_piece(&live.walls, &piece, None) else { continue };
         let part = session.recording.parts.remove(index);
-        for [x, y, n] in part.walls {
-            // A kept piece's cells are kept.
-            let cell = (x + dx, y + dy);
-            let count = live.walls.entry(cell).or_insert(0);
-            *count += n as u32;
-            let count = *count;
-            live.held.remove(&cell);
-            live.kept.insert(cell, count);
+        // A kept piece's cells are kept; a cell next to a known one is that one.
+        let cells: Vec<((i32, i32), u32)> = part.walls.iter().map(|&[x, y, n]| (live.known_as((x + dx, y + dy)), n as u32)).collect();
+        for (cell, n) in cells {
+            let pos = live.pos;
+            live.count(cell, n, pos, false, true);
         }
         let mut trail: Vec<[i32; 2]> = part.trail.iter().map(|&[x, y]| [x + dx, y + dy]).collect();
         trail.append(&mut live.part.trail);
@@ -1029,10 +1087,23 @@ impl Recorder {
                     let neighbour = from.is_empty() || state.catalog.graph(area).is_none_or(|g| g.names.contains_key(&from));
                     if neighbour { from } else { String::new() }
                 });
+                // A return to the instance goes on with its map: the largest part, the player
+                // looked for first where they came in by the same exit before.
+                let mut recording = recording;
+                let largest = (0..recording.parts.len()).max_by_key(|&i| recording.parts[i].walls.len());
+                let live = match largest {
+                    Some(i) if recording.parts[i].walls.len() >= MERGE_MIN_WALLS => {
+                        let part = recording.parts.remove(i);
+                        let from = arrived_from.as_deref();
+                        let hint = part.pois.iter().filter(|p| p.kind == "arrived" && Some(p.label.as_str()) == from).map(|p| (p.x, p.y)).last();
+                        Live::from_part(part, hint)
+                    }
+                    _ => Live::new(),
+                };
                 let file = state.path(area, *seed);
                 let mut session = Session {
                     recording,
-                    live: Live::new(),
+                    live,
                     came_from: arrived_from.clone().unwrap_or_default(),
                     arrived_from,
                     started: false,
@@ -1128,6 +1199,23 @@ impl Recorder {
         live.part.frames += 1;
         let placed = if live.walls.is_empty() {
             Some(live.pos)
+        } else if live.unplaced {
+            // On the map of an earlier visit: where on it, unambiguous only.
+            let found = locate_piece(&live.walls, &rel, live.hint).or_else(|| live.hint.and_then(|_| locate_piece(&live.walls, &rel, None)));
+            if found.is_some() {
+                live.unplaced = false;
+            } else {
+                live.tries += 1;
+                if live.tries >= FIND_FRAMES {
+                    // Not found: the known map waits in the parts (joined when it can be),
+                    // this visit starts a part of its own.
+                    let known = std::mem::replace(live, Live::new());
+                    live.centre = known.centre;
+                    live.frame_size = known.frame_size;
+                    session.recording.parts.push(known.snapshot());
+                }
+            }
+            found
         } else {
             let predicted = (live.pos.0 + live.velocity.0, live.pos.1 + live.velocity.1);
             let (near, score) = register(&live.walls, &rel, predicted, NEAR);
@@ -1754,6 +1842,50 @@ mod tests {
 
     fn enter(recorder: &Recorder, area: &str) {
         recorder.on_log(&LogEvent::ZoneEntered { area: area.into(), level: 1, seed: Some(7) }, true);
+    }
+
+    #[test]
+    fn walls_seen_again_a_cell_off_add_nothing() {
+        let rel: Vec<(i32, i32)> = (0..40).map(|x| (x, 5)).collect();
+        let mut live = Live::new();
+        live.add_walls(&rel, (0, 0), false);
+        assert_eq!(live.walls.len(), 40);
+        // The same line a cell lower and a cell to the side: it is the line seen again.
+        live.add_walls(&rel, (1, 1), false);
+        assert_eq!(live.walls.len(), 40, "even the end, next to the old end, is the old line");
+        assert!(live.walls[&(10, 5)] >= 2);
+        // Seen many times: the count stops growing.
+        for _ in 0..100 {
+            live.add_walls(&rel, (0, 0), false);
+        }
+        assert_eq!(live.walls[&(10, 5)], SEEN_MOST);
+    }
+
+    #[test]
+    fn a_return_to_the_instance_goes_on_with_its_map() {
+        let dir = scratch("return");
+        let recorder = Recorder::new(Some(dir.clone()));
+        enter(&recorder, "G1_town");
+        enter(&recorder, "G1_2");
+        for step in 0..40 {
+            recorder.on_frame(&frame((step * 4, 0)), [300, 260]);
+        }
+        let first = recorder.0.lock().unwrap().session.as_ref().unwrap().live.walls.len();
+        // To town and back by the same exit: the player appears where they came in before.
+        enter(&recorder, "G1_town");
+        recorder.on_frame(&frame((0, 0)), [300, 260]);
+        enter(&recorder, "G1_2");
+        for step in 0..40 {
+            recorder.on_frame(&frame((step * 4, 0)), [300, 260]);
+        }
+        let state = recorder.0.lock().unwrap();
+        let session = state.session.as_ref().unwrap();
+        assert!(session.recording.parts.is_empty(), "no second part: {}", session.recording.parts.len());
+        assert!(!session.live.unplaced);
+        assert_eq!(session.live.pos, (156, 0), "the first visit's coordinates");
+        assert!(session.live.walls.len() <= first + 2, "the same corridor drawn again: {} -> {}", first, session.live.walls.len());
+        drop(state);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
