@@ -281,3 +281,53 @@ last one of the visit stays, gray. With nothing onward (back in the encampment f
 Clearfell, back in The Riverbank from the encampment) the target is the zone just
 left. It is hidden only in zones without route data and while the overlay is hidden.
 
+
+## Big map
+
+The owner plays with the big map (Tab) open most of the time. It hides the corner
+minimap, so until 2026-11-12 tracking stopped for most of a zone: the Clearfell
+visit (seed 2693856399) is 17 unrelated parts and the walk from Mud Burrow to the
+Grelwood exit was not recorded at all. The reader now reads the big map whenever the
+minimap is not showing, and hands the recorder frames in the minimap's units, so one
+recording and one movement track continue across both views.
+
+### Measurements (2026-11-12, Clearfell, 3840x2160, game idle near the Grelwood exit)
+
+- **Line colour.** The big map draws its lines in the minimap's lavender, and the
+  minimap's colour test finds them unchanged. Line pixels (groups of 60 px or more,
+  50,254 px): mean RGB 95,96,128; 10th–90th percentile R 72–106, B 101–145; B−R
+  median 35 (10th percentile 24). Lines are about 3 px wide. Lit ground behind the
+  translucent map adds specks that pass the same test (3,305 px: mean 76,81,100, B−R
+  median 23), almost all tiny: of 856 groups, 569 are 1–3 px. In 2 px cells, 1200x1036
+  px around the player hold 226 groups of which 212 are under 15 cells. Dropping
+  groups under 12 cells keeps every line cell and removes all specks of a plain-scene
+  crop (207 lavender px, 0 cells left). Water edges (blue, about 24,72,136), labels
+  and icons do not pass the test.
+- **Player.** The big map is centred on the player: the orange marker (11x11 px, 59
+  px) sits at 1919, 1059 px of the 3840x2160 game window, 21 px above the window
+  centre, whatever the scene. (The character sprite stands higher; the map marker
+  is what counts.)
+- **Scale.** The big map's walls laid on recorded minimap walls of the same visit
+  (parts 13–15, 2 px cells of the 600x518 capture), scale searched from 0.6 to 2.0
+  in steps of 0.05, then 0.97–1.03 in steps of 0.005: best at **1.00** for every part,
+  0.995 and 1.005 within 0.3% of it, 0.95 and 1.05 at about half. Big map and
+  minimap draw at the same pixel scale, same orientation, no perspective: the lines
+  overlap along the whole view (mean residual offset −0.1, +0.1 cell). The spacing of
+  the Grelwood exit and the checkpoint next to it is 78x35 px in both views. Of a
+  part's cells 58–60% land within a cell of big-map walls; the rest are recording
+  artefacts (next point) and stitching drift. The test fixture (380x300 px around
+  the player) gives 88% of recorded walls within a cell at scale 1.00, 31% at 0.94
+  and 39% at 1.06.
+- **Vertical bars in recordings.** The game window floats 10 logical px left of
+  DP-1 (at 1910,1, size 1920x1080), so the monitor's last 20 px show a lavender
+  window border, and that strip lay inside the minimap crop: it was recorded as
+  walls. With the big map open the corner held only that strip (1,743 lavender px)
+  and the recorder "tracked" it, which smeared it into the bars seen in parts 1–16.
+  The capture areas now follow the game window and are clipped to it.
+- **Minimap player.** About 3556, 284 px of the window (read from a quarter-size
+  screenshot, so ±4 px): cell 158, 142 of the 300x259 minimap frame, below the
+  frame centre (150, 129.5).
+- **Time per frame** with the big map open (two grim captures, reading, recorder;
+  20 live frames): debug build 107 ms (captures 40 + 41, reading 19, recorder 8),
+  release 85 ms (captures 39 + 44, reading 0.9, recorder 0.8). With the minimap
+  showing it is one capture, as before. Both fit the 330 ms frame interval.
