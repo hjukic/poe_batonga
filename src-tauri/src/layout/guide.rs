@@ -429,6 +429,11 @@ pub struct Evidence<'a> {
     pub walls: &'a [(i32, i32)],
     /// The player's walked path since arrival, oldest first.
     pub trail: &'a [(i32, i32)],
+    /// Coordinates start at the arrival point. False when the recorded piece has
+    /// none (tracking lost, or the overlay started mid-zone): then they start anywhere.
+    pub anchored: bool,
+    /// Layout already recognised on an earlier piece of this instance.
+    pub layout_hint: Option<&'a str>,
     pub player: (i32, i32),
     /// Explicit objective completion from the checklist.
     pub completed: &'a [String],
@@ -569,6 +574,9 @@ fn terrain(catalog: &Catalog, ev: &Evidence) -> Option<GuideView> {
         measured: ev.scale.is_some(),
         turned: false,
     };
+    if !ev.anchored {
+        return Some(view);
+    }
     let Some(&anchor) = anchors(zone, ev.arrived_from).first() else { return Some(view) };
 
     let dist = zone.distances(&goals);
@@ -634,7 +642,7 @@ pub fn measure_scale(catalog: &Catalog, area: &str, arrived_from: &str, walls: &
     if walls.len() < MIN_WALLS {
         return None;
     }
-    let ev = Evidence { area, arrived_from, walls, trail: &[], player: (0, 0), completed: &[], scale: None };
+    let ev = Evidence { area, arrived_from, walls, trail: &[], anchored: true, layout_hint: None, player: (0, 0), completed: &[], scale: None };
     let all = fits(zone, &ev);
     let best = all.first()?;
     // Another placement nearly as good at a different scale makes the scale unclear.
@@ -647,7 +655,7 @@ mod tests {
     use super::*;
 
     fn ev<'a>(area: &'a str, from: &'a str, walls: &'a [(i32, i32)]) -> Evidence<'a> {
-        Evidence { area, arrived_from: from, walls, trail: &[], player: (0, 0), completed: &[], scale: None }
+        Evidence { area, arrived_from: from, walls, trail: &[], anchored: true, layout_hint: None, player: (0, 0), completed: &[], scale: None }
     }
 
     /// Minimap walls a visit would record: the outline near the arrival point, as
@@ -803,13 +811,18 @@ fn guide_on_recording() {
     let recording: super::Recording = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
     let catalog = Catalog::load();
     for part in &recording.parts {
-        let Some(arrival) = part.pois.iter().find(|p| p.kind == "arrived") else { continue };
+        let arrival = part.pois.iter().find(|p| p.kind == "arrived");
+        let (ax, ay) = arrival.map_or((0, 0), |a| (a.x, a.y));
         let walls: Vec<(i32, i32)> =
-            part.walls.iter().filter(|w| w[2] >= 2).map(|w| (w[0] - arrival.x, w[1] - arrival.y)).collect();
-        let player = part.trail.last().map_or((0, 0), |t| (t[0] - arrival.x, t[1] - arrival.y));
-        let trail: Vec<(i32, i32)> = part.trail.iter().map(|t| (t[0] - arrival.x, t[1] - arrival.y)).collect();
-        let ev = Evidence { area: &recording.area, arrived_from: &from, walls: &walls, trail: &trail, player, completed: &[], scale: None };
-        eprintln!("{} walls, {} path points, player {:?}", walls.len(), trail.len(), player);
+            part.walls.iter().filter(|w| w[2] >= 2).map(|w| (w[0] - ax, w[1] - ay)).collect();
+        let player = part.trail.last().map_or((0, 0), |t| (t[0] - ax, t[1] - ay));
+        let trail: Vec<(i32, i32)> = part.trail.iter().map(|t| (t[0] - ax, t[1] - ay)).collect();
+        let hint = std::env::var("LAYOUT_HINT").ok();
+        let ev = Evidence {
+            area: &recording.area, arrived_from: arrival.map_or("", |_| from.as_str()), walls: &walls, trail: &trail,
+            anchored: arrival.is_some(), layout_hint: hint.as_deref(), player, completed: &[], scale: None,
+        };
+        eprintln!("{} walls, {} path points, player {:?}, arrival {}", walls.len(), trail.len(), player, arrival.is_some());
         eprintln!("{:?}", guide(&catalog, &ev));
     }
 }

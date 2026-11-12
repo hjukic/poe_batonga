@@ -130,6 +130,8 @@ struct Session {
     arrived_from: Option<String>,
     started: bool,
     file: Option<PathBuf>,
+    /// Layout recognised on an earlier piece of this instance (worked out once).
+    layout_hint: std::cell::OnceCell<Option<String>>,
 }
 
 struct State {
@@ -377,7 +379,7 @@ impl Recorder {
                     });
                 let arrived_from = state.previous_area.clone();
                 let file = state.path(area, *seed);
-                state.session = Some(Session { recording, live: Live::new(), arrived_from, started: false, file });
+                state.session = Some(Session { recording, live: Live::new(), arrived_from, started: false, file, layout_hint: Default::default() });
             }
             LogEvent::Dialogue { speaker, .. } if live => {
                 if let Some(session) = state.session.as_mut().filter(|s| s.started) {
@@ -584,9 +586,11 @@ impl State {
         if live.lost_streak > 0 {
             return None;
         }
-        // Everything relative to the (first) arrival point, where the terrain match starts.
-        let arrival = live.part.pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at)?;
-        let (ax, ay) = (arrival.x, arrival.y);
+        // Everything relative to the (first) arrival point, where the terrain match starts;
+        // a piece without one (tracking lost, overlay restarted) is placed anywhere.
+        let arrival = live.part.pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at);
+        let (ax, ay) = arrival.map_or((0, 0), |a| (a.x, a.y));
+        let arrived_from = arrival.map_or("", |a| a.label.as_str());
         let mut walls: Vec<(i32, i32)> =
             live.walls.iter().filter(|(_, &n)| n >= 2).map(|(&(x, y), _)| (x - ax, y - ay)).collect();
         if walls.len() > GUIDE_WALLS {
@@ -605,18 +609,40 @@ impl State {
             .get(area)
             .and_then(|all| median(all.clone()))
             .or_else(|| median(self.scales.values().flatten().copied().collect()));
+        let layout_hint = if arrival.is_some() {
+            None
+        } else {
+            session.layout_hint.get_or_init(|| self.recognised_layout(session, scale)).as_deref()
+        };
         guide::guide(
             &self.catalog,
             &guide::Evidence {
                 area,
-                arrived_from: &arrival.label,
+                arrived_from,
                 walls: &walls,
                 trail: &live.part.trail.iter().map(|&[x, y]| (x - ax, y - ay)).collect::<Vec<_>>(),
+                anchored: arrival.is_some(),
+                layout_hint,
                 player: (live.pos.0 - ax, live.pos.1 - ay),
                 completed: self.completed.get(area).map(Vec::as_slice).unwrap_or_default(),
                 scale,
             },
         )
+    }
+
+    /// The layout an earlier piece of this instance (one with an arrival point) matches.
+    fn recognised_layout(&self, session: &Session, scale: Option<f64>) -> Option<String> {
+        let area = session.recording.area.as_str();
+        session.recording.parts.iter().filter_map(|part| {
+            let arrival = part.pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at)?;
+            let trail: Vec<(i32, i32)> = part.trail.iter().map(|&[x, y]| (x - arrival.x, y - arrival.y)).collect();
+            let player = *trail.last()?;
+            let view = guide::guide(&self.catalog, &guide::Evidence {
+                area, arrived_from: &arrival.label, walls: &[], trail: &trail, anchored: true, layout_hint: None,
+                player, completed: &[], scale,
+            })?;
+            (view.source != "unconfirmed" && !view.variant.is_empty()).then_some(view.variant)
+        }).next()
     }
 
     fn view(&self) -> Option<LayoutView> {
@@ -797,7 +823,7 @@ fn join_real_recording() {
     live.walls = first.walls.iter().map(|&[x, y, n]| ((x, y), n as u32)).collect();
     live.part = Part { walls: vec![], ..first };
     let parts = recording.parts.len();
-    let mut session = Session { recording, live, arrived_from: None, started: true, file: None };
+    let mut session = Session { recording, live, arrived_from: None, started: true, file: None, layout_hint: Default::default() };
     let started = Instant::now();
     while merge_pieces(&mut session) {}
     let recorder = Recorder::new(None);

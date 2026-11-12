@@ -45,6 +45,9 @@ const ROUGH_MEAN: f64 = 80.0;
 const MIN_CONFIDENCE: f32 = 0.2;
 /// Two directions closer than this count as agreeing.
 const SAME_WAY: f64 = 45.0;
+/// Without an arrival point: grid step (world units) and path points used.
+const LOOSE_STEP: f64 = 30.0;
+const LOOSE_POINTS: usize = 120;
 /// How far along the corridors the arrow looks (world units).
 const LOOK: f64 = 120.0;
 /// Bosses that wait at a zone exit: (area, exit area, boss) until the boss is ticked.
@@ -90,6 +93,8 @@ pub struct Area {
 
 struct Layout {
     id: String,
+    /// Width and height in world units.
+    extent: (f64, f64),
     nodes: Vec<Node>,
     /// Corridors: (node a, node b, points from a to b).
     edges: Vec<(usize, usize, Vec<(f64, f64)>)>,
@@ -175,7 +180,7 @@ pub fn load() -> HashMap<String, Area> {
                         })
                         .collect();
                     let field = Field::new(t.size, &edges);
-                    Layout { id: t.id, nodes: t.nodes, edges, field }
+                    Layout { id: t.id, extent: (t.size[0] * TILE, t.size[1] * TILE), nodes: t.nodes, edges, field }
                 })
                 .collect();
             (id.to_string(), Area { id: id.to_string(), names, layouts })
@@ -305,8 +310,46 @@ struct Placement {
     mean: f64,
 }
 
+/// Without an arrival point: every position on the recognised layout (or, if none,
+/// on every main layout) on a coarse grid. All placements, best first.
+fn loose_placements(area: &Area, ev: &Evidence, path: &[(f64, f64)], base: f64) -> Vec<Placement> {
+    let step = path.len().div_ceil(LOOSE_POINTS).max(1);
+    let path: Vec<(f64, f64)> = path.iter().step_by(step).copied().collect();
+    let hinted: Vec<usize> = (0..area.layouts.len()).filter(|&i| Some(area.layouts[i].id.as_str()) == ev.layout_hint).collect();
+    let layouts: Vec<usize> = if hinted.is_empty() {
+        (0..area.layouts.len()).filter(|&i| !area.layouts[i].id.ends_with("_League")).collect()
+    } else {
+        hinted
+    };
+    let mut out = Vec::new();
+    for index in layouts {
+        let layout = &area.layouts[index];
+        for factor in SCALE_FACTORS {
+            let scale = base * factor;
+            let rel: Vec<(f64, f64)> = path.iter().map(|&(x, y)| from_screen((x / scale, y / scale))).collect();
+            let mut y = 0.0;
+            while y <= layout.extent.1 {
+                let mut x = 0.0;
+                while x <= layout.extent.0 {
+                    let mean = rel.iter().map(|&(rx, ry)| layout.field.at((x + rx, y + ry))).sum::<f64>()
+                        / rel.len().max(1) as f64;
+                    out.push(Placement { layout: index, origin: (x, y), scale, mean });
+                    x += LOOSE_STEP;
+                }
+                y += LOOSE_STEP;
+            }
+        }
+    }
+    out.sort_by(|a, b| a.mean.total_cmp(&b.mean));
+    out.truncate(400);
+    out
+}
+
 /// Each layout's best placement of the walked path, best layout first.
 fn placements(area: &Area, ev: &Evidence, path: &[(f64, f64)], base: f64) -> Vec<Placement> {
+    if !ev.anchored {
+        return loose_placements(area, ev, path, base);
+    }
     let mut out = Vec::new();
     for (index, layout) in area.layouts.iter().enumerate() {
         let mut anchors: Vec<(f64, f64)> = layout
@@ -358,7 +401,16 @@ pub fn guide(area: &Area, ev: &Evidence) -> Option<GuideView> {
     let step = ev.trail.len().div_ceil(PATH_POINTS).max(1);
     let mut path: Vec<(f64, f64)> = ev.trail.iter().step_by(step).map(|&(x, y)| (x as f64, y as f64)).collect();
     path.push((ev.player.0 as f64, ev.player.1 as f64));
-    let reach = path.iter().map(|&(x, y)| x.hypot(y) / base).fold(0.0, f64::max);
+    // How far the path spreads: from the arrival point, or across the piece without one.
+    let reach = if ev.anchored {
+        path.iter().map(|&(x, y)| x.hypot(y) / base).fold(0.0, f64::max)
+    } else {
+        let (mut lo, mut hi) = ((f64::MAX, f64::MAX), (f64::MIN, f64::MIN));
+        for &(x, y) in &path {
+            (lo, hi) = ((lo.0.min(x), lo.1.min(y)), (hi.0.max(x), hi.1.max(y)));
+        }
+        (hi.0 - lo.0).hypot(hi.1 - lo.1) / base
+    };
     let all = placements(area, ev, &path, base);
     // Bearing (screen degrees) and walking distance (minimap cells) under one placement.
     let heading = |p: &Placement| -> Option<(f32, f64)> {
@@ -399,7 +451,8 @@ pub fn guide(area: &Area, ev: &Evidence) -> Option<GuideView> {
         .find(|p| heading(p).is_none_or(|(d, _)| super::guide::angle_between(d, degrees) > SAME_WAY))
         .map_or(f64::MAX, |p| p.mean);
     view.confidence = (1.0 - best.mean / rival.max(1e-9)) as f32;
-    if best.mean <= MAX_MEAN && view.confidence >= MIN_CONFIDENCE {
+    // Without an arrival point the placement is never more than rough.
+    if ev.anchored && best.mean <= MAX_MEAN && view.confidence >= MIN_CONFIDENCE {
         view.degrees = Some(degrees);
         view.source = "estimated".into();
     } else if best.mean <= ROUGH_MEAN {
@@ -415,7 +468,7 @@ mod tests {
     use super::*;
 
     fn ev<'a>(area: &'a str, from: &'a str, trail: &'a [(i32, i32)], player: (i32, i32)) -> Evidence<'a> {
-        Evidence { area, arrived_from: from, walls: &[], trail, player, completed: &[], scale: None }
+        Evidence { area, arrived_from: from, walls: &[], trail, anchored: true, layout_hint: None, player, completed: &[], scale: None }
     }
 
     /// The minimap path of a walk along `layout`'s corridors from `start` through `via` nodes.
@@ -484,6 +537,24 @@ mod tests {
     }
 
     #[test]
+    fn without_an_arrival_point_the_recognised_layout_still_places_the_walk() {
+        let areas = load();
+        let area = &areas["G1_2"];
+        let layout = area.layouts.iter().find(|l| l.id == "ClearFell_W_S_N").unwrap();
+        // A walk between two inner nodes, recorded from wherever tracking resumed.
+        let (a, b, _) = layout.edges.iter().find(|(a, b, p)| {
+            layout.nodes[*a].exit.is_none() && layout.nodes[*b].exit.is_none() && length(p) > 300.0
+        }).unwrap();
+        let start = (layout.nodes[*a].x, layout.nodes[*a].y);
+        let trail = walk(layout, start, &[*b]);
+        let player = *trail.last().unwrap();
+        let e = Evidence { anchored: false, layout_hint: Some("ClearFell_W_S_N"), ..ev("G1_2", "", &trail, player) };
+        let view = guide(area, &e).unwrap();
+        assert_eq!(view.variant, "ClearFell_W_S_N");
+        assert_eq!(view.target, "Mud Burrow");
+    }
+
+    #[test]
     fn no_walk_yet_names_the_target_without_a_direction() {
         let areas = load();
         // Clearfell's layouts put Mud Burrow on every side: no needle yet.
@@ -503,7 +574,7 @@ mod tests {
         ];
         let edges = vec![(0, 1, vec![(0.0, 0.0), (400.0, 0.0)]), (1, 2, vec![(400.0, 0.0), (400.0, 400.0)])];
         let field = Field::new([20.0, 20.0], &edges);
-        let layout = Layout { id: "L".into(), nodes, edges, field };
+        let layout = Layout { id: "L".into(), extent: (460.0, 460.0), nodes, edges, field };
         let (route, total) = layout.route((0.0, 0.0), &[2]).unwrap();
         assert!((total - 800.0).abs() < 1e-6);
         let (x, y) = ahead(&route, LOOK);
