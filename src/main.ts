@@ -94,6 +94,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     </header>
     <p class="restart-status" id="restart-status" role="status" hidden></p>
     <div class="route" id="route"></div>
+    <p class="tick-hint" id="tick-hint" hidden></p>
     <div class="minimap" id="minimap" hidden>
       <canvas id="minimap-canvas" width="300" height="260"></canvas>
     </div>
@@ -137,6 +138,7 @@ function render(next: Status) {
   lockButton.setAttribute('aria-label', lockButton.title);
   lockButton.setAttribute('aria-pressed', String(!next.interactive));
   syncStepControls();
+  markHeading();
   if (!next.interactive) setSettingsOpen(false);
   if (!recording) shortcutButton.textContent = shortcutLabel(next.toggleShortcut);
   $('#tick-shortcut').textContent = shortcutLabel(next.tickShortcut);
@@ -247,6 +249,11 @@ function markHeading() {
     ?? open.find((row) => !row.classList.contains('optional'))
     ?? open[0];
   for (const row of open) row.classList.toggle('heading', row === heading);
+  // A step the log can't tick: say how to tick it from inside the game.
+  const byHand = heading?.classList.contains('manual') ?? false;
+  const hint = $('#tick-hint');
+  hint.hidden = !byHand || !status;
+  if (byHand && status) hint.textContent = `${shortcutLabel(status.tickShortcut)} ticks the step`;
 }
 function setGuideTarget(target: string | null) {
   if (target === guideTarget) return;
