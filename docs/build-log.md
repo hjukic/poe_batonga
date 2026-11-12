@@ -111,3 +111,59 @@ The owner asked for bosses. A zone boss's first line in the log now tells the na
 boss's place in the layout: soft evidence, never an anchor, never gold on its own. 58 of the 74 boss steps
 have a place in the layout graphs. When a boss speaks, the app saves a capture of the minimap and the big map
 (`samples/boss-*.ppm`), to see what the map draws for a boss.
+
+## Third build and the first live session, 2026-11-12 (v0.1.51 → v0.1.59)
+
+The owner asked for further improvements, then started the game with a new character and played the
+Riverbank and the Clearfell Encampment while the build ran. For the first time the app was seen in play;
+much of what follows came from that, not from the plan.
+
+| Package | Builder | Passes | Result |
+| --- | --- | --- | --- |
+| Triggers from the game's dialogue table | Claude Opus, xhigh; a fresh Opus for the fix pass (the first pane had closed) | 2 | `npcLine` triggers with several lines and `after`; a checker against the game tables (`npm run triggers:check`); 81 triggers. Play then showed that dialogue-panel text is not logged: the 58 "panel" ones cannot fire |
+| Map icons by the game's sprites | Claude Opus, xhigh | 3 | `data/icons/` from the game's sprite sheet; icons named by sprite; false exits, checkpoints and waypoints from scene pixels gone on the owner's captures; checkpoints as capped soft evidence; big-map wall cells kept only once seen from two places; `Recorder::dead_bosses` |
+| Chair | — | — | The live fixes below; wiring; merges |
+
+Reviews (Cursor still out of usage, Codex not trusted for the folder: Claude Sonnet, three reviews). The
+triggers review found nothing blocking and four triggers to narrow. The icons review said not ready, four
+blocking: checkpoint evidence without a cap changed 248 of 400 needles on the owner's own Riverbank
+recording; a false checkpoint passed its threshold by 0.008; boss icons raised wrong gold from about 2% to 4%
+in simulation; three of four "boss is dead" rules could fire on ordinary kills. After the fix pass a second
+reviewer said ready, with three small findings, fixed in a last pass.
+
+### What play showed
+
+- The overlay returns when the game starts (not checked before). The compass was drawn over the login
+  screen: it now waits for a zone.
+- Three app restarts during one zone visit (the chair's updates, dev mode) cut the recording into parts
+  and left the navigator on a wrong layout. Updates to the Rust side now wait for a town.
+- Talks in a dialogue panel write nothing to the log. Steps the log cannot see are now taken as done when a
+  later step of their list is logged (`imply_earlier`), and a click on a row ticks a step at any time.
+- A town has no layout graphs: the needle ignored the exit the map showed by name. A named exit icon now
+  leads the needle there, sure.
+- Bosses do have map icons: the Miller's own icon with its place name ("Besieged Encampment") while alive,
+  its grey twin without a name after the kill (two real captures). Kills are ticked from that pair only.
+  Boss icons do not feed the navigator (shadow): in simulation they made gold worse.
+- Blue foam, wet stones and the character's clothes were read as map walls and as waypoints on the big map.
+- A first replay of a real visit (`replay_obs`): the needle pointed the right way; three look-alike
+  Riverbank layouts shared 88% of the belief, none was confirmed.
+
+### Chair's changes in the session
+
+v0.1.51 label never cut off · v0.1.52 "Optional content" switch (off: speedrun list), hollow needle for a
+likely direction · v0.1.54 the overlay hides during a boss fight · v0.1.55 named exit icons lead the needle
+where there is no navigator · v0.1.56 the needle updates every frame · v0.1.57 click to tick, no shortcut,
+implied ticks · v0.1.58 no compass before the first zone · v0.1.59 the icons merge, kills from the map.
+
+### Open
+
+- The click on a row, the fight hide, the implied ticks and the kill from the map have not been seen working
+  in play yet. The hold on big-map walls has no real sequence behind it.
+- Checkpoint evidence is capped (1.5 nats, six a visit) and has no real visit behind it either: check the
+  replay after the next zones.
+- The Riverbank's measured walk is 1.14–1.18 times the graphs' (Clearfell's exits 1.10): the scale may be
+  nearer 0.9 cells per unit than 0.78.
+- 54 boss kills have no log line; 41 of them have an icon pair and can tick from the map.
+
+Run numbers: 7 agents and 2 follow-up passes in 165 minutes of wall time; 210 task-minutes; parallelism 1.3.
+The icons package set the wall time (136 minutes with two fix passes).
