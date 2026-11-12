@@ -5,79 +5,22 @@ The design lives in `docs/architecture.md`, the decisions and their reasons in `
 
 ## Roadmap (owner, 2026-11-12)
 
-The owner's call after the first live session: "if we are unable to figure out layout first,
-the arrow is just not right feature for now". The arrow is parked. Two phases come first:
-the radar (reading the map), then layout recognition, shown under the checklist. The
-checklist itself keeps improving beside them.
+The arrow is parked: "if we are unable to figure out layout first, the arrow is just not right
+feature for now". Keep it simple: "figure out the layout without too much effort, features,
+code and overcomplications".
 
-**Where it stands (measured 2026-11-12).** Map icons on the owner's 24 captures: every
-real exit, checkpoint and waypoint found, nothing false (since v0.1.59). Exit names read on
-the big map and the minimap when the label is fully on screen. One real boss icon (the
-Miller's). Tracking: an app restart or a lost frame run starts a new part with its own
-coordinates; drift is not measured. Scale: 0.78 cells per world unit assumed; the
-Riverbank's walk was 1.14–1.18 times the graphs', the Clearfell Encampment's outline fit
-at 0.80. Layout fit: the one instance with a known layout fit its graph within 132 units;
-the owner's Clearfell of 2026-11-12 fits no layout as drawn, but several within 50–70
-cells once the graphs may be turned or mirrored: whether the game turns layouts is open.
+The idea: the big map shows every exit the player has passed near, with its name. Each layout
+in the game's graphs puts the zone's exits at fixed places. Two named exits on the map and
+their distance and direction pick the layout.
 
-### Phase 1: the radar
-
-The radar turns screenshots of the minimap and the big map into one map of the zone
-visit: the player's track, the walls, and every map icon with its kind, name and place,
-in one frame, with a known scale. Everything in phase 2 rests on it, so each item has a
-measured "done when".
-
-- [ ] **R1. Truth set and scoreboard.** A capture mode that keeps, while the owner plays,
-  frames the radar read and what it read; a format to mark what is really there; a test
-  that scores the radar on the set (per icon kind: found and false; names right; place
-  error). Done when: at least 200 marked frames from 8 or more Act 1 zones, both views,
-  and the score runs as a test.
-- [ ] **R2. One map per visit.** The player's place carries across big map and minimap
-  switches, tracking losses and app restarts (a restart continues the saved map).
-  Done when: a static icon seen again lands within 10 cells of where it was first seen,
-  on recorded visits, and a restart mid-zone keeps the map.
-- [ ] **R3. Every icon, named.** All zone transitions (exit icons and place icons such as
-  "Besieged Encampment"), waypoint, checkpoints, boss places, NPCs, quest objects; the
-  label of every labelled icon, also when partly off screen; both views.
-  Done when: on the truth set exits and their names are found 98% of the time and never
-  invented (99% of named icons right), other kinds 95% / 98%.
-- [ ] **R4. Clean walls.** Scene pixels (water, foam, fire, the character) stay out; real
-  map lines stay in. Done when: false wall cells under 2% and real ones kept 95% on the
-  truth set.
-- [ ] **R5. Exits where they are.** Each exit recorded at its icon, not where the player
-  appeared; the arrival known for exits, waypoints, portals, deaths and new characters.
-  Done when: every exit of a recorded visit has one place, and arrivals are right on the
-  truth set.
-- [ ] **R6. Scale and turn measured.** Cells per world unit and how the map is turned,
-  measured on visits whose exits were all seen, cross-checked with the walked distance.
-  Done when: the scale is known within 3% and the method is in `docs/map-reading.md`.
-- [ ] **R7. Fast and robust.** About 8 frames a second at no more than 15% of a core;
-  correct with panels over the map, the inventory open, loading screens, and at other
-  resolutions (1920x1080, 2560x1440). Done when: measured on the truth set and on the
-  co-owner's Windows machine.
-- [ ] **R8. The radar under the checklist.** The panel shows what the radar knows: walls,
-  icons with their names, the player. The owner's check while playing, and the base the
-  layout view of phase 2 draws on.
-
-### Phase 2: layout recognition
-
-- [ ] **L1. Truth.** Every visit whose exits were all seen and named gets its layout (and
-  any turn) as truth; a table of such visits per zone.
-- [ ] **L2. Matching.** Exits (named and not), checkpoints, the waypoint, boss places and
-  the shape of the walls against each layout's graph, with turns and mirrors if R6/L1
-  show the game uses them, and how far exits sit from their graph nodes (learnt from L1).
-- [ ] **L3. Honest answer.** A layout with how sure it is, or "not known"; never sure and
-  wrong.
-- [ ] **L4. The layout under the checklist.** The recognised layout drawn (corridors, exits
-  by name, boss and other places), the player on it, the checklist's next places marked;
-  the candidates while it is not known.
-- [ ] **L5. Score.** Done when, on real visits to Act 1's outdoor zones: the right layout
-  in 80% of visits by the time two exits are named, and sure-and-wrong in under 1%.
-
-### Phase 3 (parked): the arrow
-
-The compass needle, on top of a recognised layout. Off by default (setting "Compass
-(parked)"); the navigator keeps running and writing its flight recorder.
+- [ ] **Phase 1: the radar reads exits.** Exit icons and their names on the big map and the
+  minimap, also near the screen's edges. Checked on the owner's real captures (a short list of
+  which exits each capture shows, and a test).
+- [ ] **Phase 2: the layout.** From the named exits seen in a visit, the layout that fits, or
+  "not known" when none fits clearly. Shown under the checklist: its name and a small drawing of
+  its exits and paths, with the player on it. Open question to settle with the first real
+  visits: whether the game turns or mirrors layouts.
+- Parked: the arrow (setting "Compass (parked)").
 
 ## Earlier plan (2026-11-11)
 
