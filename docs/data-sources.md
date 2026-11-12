@@ -231,6 +231,12 @@ encampment: its walked path lies on average 44 units from that graph's corridors
 57 for the runner-up `W_N_E`, 75+ for the rest. The screen-to-world turn is the
 one fitted on the encampment (`to_screen` in `guide.rs`).
 
+## Game font
+
+`data/fonts/fontin-regular.ttf`: Fontin Regular from the game's own data
+(`art/2dart/fonts/fontin-regular.ttf`, extracted with poe_data_tools, `scripts/fetch-fonts.sh`),
+compiled in to read the big map's exit labels. Private project; not redistributed.
+
 ## Other candidates
 
 - [Exile-UI](https://github.com/Lailloken/Exile-UI) Act-Decoder layouts: its

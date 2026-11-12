@@ -565,6 +565,18 @@ fn follow(app: &AppHandle, path: &Path) -> std::io::Result<()> {
     }
 }
 
+/// The names of the zones `area`'s exits lead to (its layout file's
+/// `connectionNames`); empty when the area has no layout file.
+fn exit_names(area: &str) -> Vec<String> {
+    crate::bundle::LAYOUTS
+        .iter()
+        .find(|(id, _)| *id == area)
+        .and_then(|(_, json)| serde_json::from_str::<serde_json::Value>(json).ok())
+        .and_then(|file| file.get("connectionNames")?.as_array().cloned())
+        .map(|names| names.iter().filter_map(|n| n.as_str().map(str::to_string)).collect())
+        .unwrap_or_default()
+}
+
 fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: bool) {
     let recorder = app.state::<crate::layout::Recorder>();
     let tracker = app.state::<Tracker>();
@@ -575,6 +587,10 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
     for line in String::from_utf8_lossy(bytes).lines() {
         if let Some((timestamp, event)) = parse_line(line) {
             changed |= apply(routes, progress, &timestamp, &event);
+            if let LogEvent::ZoneEntered { area, .. } = &event {
+                // The big map's exit labels are read against this zone's exit names.
+                crate::minimap::set_label_candidates(exit_names(area));
+            }
             recorder.on_log(&event, live);
             if let (true, LogEvent::Dialogue { speaker, text }) = (live, &event) {
                 recent.push_back((timestamp, speaker.clone(), text.clone()));
