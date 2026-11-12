@@ -36,8 +36,6 @@ const WIDE: i32 = 32;
 /// Consecutive unmatched frames before a new part is started.
 const LOST_LIMIT: u32 = 9;
 const SAVE_EVERY: Duration = Duration::from_secs(15);
-/// A gap in placed frames longer than this (seconds) is a tracking loss for the navigator.
-const NAV_GAP: f64 = 2.0;
 /// A checklist step completed this soon after a live NPC line was completed by
 /// the log (the tracker hands both over in the same batch; a hand tick comes
 /// later) and puts the player at the step's target.
@@ -166,17 +164,14 @@ impl Session {
         Some(self.file.as_ref()?.with_extension("nav.json"))
     }
 
-    /// Hands the navigator the move to `pos`; a gap or a new part is a loss first.
+    /// Hands the navigator the move to `pos`. Within a part the move is measured
+    /// exactly (the frames were registered), however long the pause between them;
+    /// only a new part is a loss.
     fn feed(&mut self, pos: (i32, i32)) {
         let Some(nav) = self.navigator.as_mut() else { return };
         let gap = self.fed_at.map(|t| t.elapsed().as_secs_f64());
         match self.fed {
-            Some(prev) => {
-                if let Some(gap) = gap.filter(|&g| g > NAV_GAP) {
-                    nav.lost(gap);
-                }
-                nav.moved((pos.0 - prev.0) as f64, (pos.1 - prev.1) as f64);
-            }
+            Some(prev) => nav.moved((pos.0 - prev.0) as f64, (pos.1 - prev.1) as f64),
             // A new part: where it starts relative to the last one is unknown.
             None => {
                 if let Some(gap) = gap {
@@ -1001,6 +996,31 @@ mod tests {
         assert!(nav.ranking().iter().take(3).any(|(id, _)| id == top), "{:?}", &nav.ranking()[..3]);
         drop(state);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_pause_within_a_part_leaves_the_belief_as_it_was() {
+        let recorder = Recorder::new(None);
+        enter(&recorder, "G1_town");
+        enter(&recorder, "G1_2");
+        for step in 0..30 {
+            recorder.on_frame(&frame((step * 4, 0)), [300, 260]);
+        }
+        let needle = |r: &Recorder| {
+            let state = r.0.lock().unwrap();
+            let nav = state.session.as_ref().unwrap().navigator.as_ref().unwrap();
+            let view = nav.guide(&[guide::NavTarget { label: "Mud Burrow".into(), exit: Some("G1_3".into()), ..Default::default() }]).unwrap();
+            (view.degrees, view.confidence)
+        };
+        let before = needle(&recorder);
+        // Standing still for 10 s (inventory open), then the same place again.
+        {
+            let mut state = recorder.0.lock().unwrap();
+            let session = state.session.as_mut().unwrap();
+            session.fed_at = Instant::now().checked_sub(Duration::from_secs(10));
+        }
+        recorder.on_frame(&frame((29 * 4, 0)), [300, 260]);
+        assert_eq!(needle(&recorder), before);
     }
 
     #[test]
