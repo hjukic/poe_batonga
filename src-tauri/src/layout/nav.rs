@@ -881,21 +881,24 @@ impl Navigator {
         let in_view = self
             .icons_now
             .iter()
-            .map(|(icon, _)| (icon, self.icon_is_target(icon, target, &posterior)))
-            .max_by(|a, b| a.1.total_cmp(&b.1));
+            .map(|(icon, read_twice)| (icon, *read_twice, self.icon_is_target(icon, target, &posterior)))
+            .max_by(|a, b| a.2.total_cmp(&b.2));
         // … but only where the way there is about straight: a river or a wall between
         // makes the route bend, and pointing across it was wrong in the simulation,
         // labelled or not (8.6% of such gold needles over 60° off). Then the route's
         // needle stays; the icon has pinned the position, so it is good too.
         let route_degrees = mode(&bins).or_else(|| screen_bearing(vx, vy));
         let straight = |icon: &ExitIcon| route_cells <= ICON_STRAIGHT * icon.dx.hypot(icon.dy) || route_cells <= 0.0;
-        if let Some((icon, share)) = in_view.filter(|(icon, share)| *share >= ICON_SURE && straight(icon)) {
-            // Gold when the label says it is the target's exit, or when one layout
-            // carries the belief (an unlabelled icon could be another exit of a
-            // layout not ruled out); and only within ICON_GOLD_WITHIN.
-            let named = icon.to.is_some();
+        if let Some((icon, read_twice, share)) = in_view.filter(|(icon, _, share)| *share >= ICON_SURE && straight(icon)) {
+            // Gold when the label says it is the target's exit (read the same in two
+            // scans, and not against a sure belief), or when one layout carries the
+            // belief (an unlabelled icon could be another exit of a layout not ruled
+            // out); and only within ICON_GOLD_WITHIN.
+            let unlabelled = ExitIcon { to: None, ..icon.clone() };
+            let against = icon.to.is_some() && p_top >= GOLD_LAYOUT && self.icon_is_target(&unlabelled, target, &posterior) < 0.5;
+            let named = icon.to.is_some() && read_twice && !against;
             let near = icon.dx.hypot(icon.dy) <= ICON_GOLD_WITHIN;
-            let sure = if near && (named || p_top >= GOLD_LAYOUT) { "estimated" } else { "rough" };
+            let sure = if near && !against && (named || p_top >= GOLD_LAYOUT) { "estimated" } else { "rough" };
             return Some(GuideView {
                 variant: if p_top >= SURE { self.area.layouts[top].id.clone() } else { String::new() },
                 target_kind: if target.exit.is_some() { "entrance".into() } else { target.tag.clone().unwrap_or_default() },
@@ -1314,6 +1317,9 @@ mod tests {
             let icon = |to: Option<&str>| ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: to.map(String::from) };
             let mut nav = Navigator::new(&area, Arrival::From("B"), None, SCALE, 3);
             nav.icons(&[icon(Some("A"))]);
+            // One scan's label is not enough for gold; the same name again is.
+            assert_ne!(nav.guide(&[exit("A", "A")]).unwrap().source, "estimated", "{format}");
+            nav.icons(&[icon(Some("A"))]);
             let view = nav.guide(&[exit("A", "A")]).unwrap();
             assert_eq!(view.source, "estimated", "{format}: {view:?}");
             // Unlabelled, the same icon is inferred: capped.
@@ -1429,6 +1435,41 @@ mod tests {
             late.icons(&bare);
         }
         assert!(late.posterior().iter().zip(&upgraded).all(|(x, y)| (x - y).abs() < 1e-9));
+    }
+
+    #[test]
+    fn a_label_is_gold_only_when_read_twice_and_not_against_a_sure_belief() {
+        let area = graph::load("G1_2");
+        let l = area.layouts.iter().find(|l| l.id == "ClearFell_W_E_N").unwrap();
+        let at = (l.nodes.iter().find(|n| n.exit.as_deref() == Some("G1_3")).unwrap().x + 60.0, l.nodes.iter().find(|n| n.exit.as_deref() == Some("G1_3")).unwrap().y);
+        let mud = icon_of(&area, "ClearFell_W_E_N", "G1_3", at);
+        let label = |to: &str| ExitIcon { to: Some(to.into()), ..mud.clone() };
+        let target = [exit("G1_4", "The Grelwood")];
+        // Mud Burrow's exit, its label misread as The Grelwood in one scan in three: never gold.
+        let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 5);
+        for scan in 0..12 {
+            let read = if scan % 3 == 2 { label("The Grelwood") } else { label("Mud Burrow") };
+            for frame in [read, mud.clone(), mud.clone()] {
+                nav.icons(&[frame]);
+                assert_ne!(nav.guide(&target).unwrap().source, "estimated", "scan {scan}");
+            }
+        }
+        // A sure belief that this is Mud Burrow, and a label saying The Grelwood twice: rough at most.
+        let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 5).trusted();
+        let k = area.layouts.iter().position(|l| l.id == "ClearFell_W_E_N").unwrap();
+        nav.banks[k].evidence += 20.0;
+        nav.icons(&[label("Mud Burrow")]);
+        nav.icons(&[label("Mud Burrow")]);
+        let mut wrong = Navigator::new(&area, Arrival::Unknown, None, SCALE, 5).trusted();
+        wrong.banks[k].evidence += 20.0;
+        for bank in &mut wrong.banks {
+            bank.particles = nav.banks[k].particles.clone();
+        }
+        wrong.banks[k].particles = nav.banks[k].particles.clone();
+        wrong.icons(&[label("The Grelwood")]);
+        wrong.icons(&[label("The Grelwood")]);
+        let view = wrong.guide(&target).unwrap();
+        assert_ne!(view.source, "estimated", "{view:?}");
     }
 
     #[test]
