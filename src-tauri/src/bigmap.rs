@@ -656,6 +656,9 @@ struct Template {
 
 /// Alpha a template pixel needs to be compared.
 const CORE: f32 = 0.9;
+/// A sprite cut by the image's edge is compared on what is inside when that is at least
+/// this share of its core.
+const EDGE_PART: f64 = 0.6;
 
 impl Template {
     /// `sprite` drawn `k` screen pixels per stored (32 px) sprite pixel, its centre at
@@ -726,16 +729,23 @@ impl Template {
 
     /// `score` over every `step`-th core pixel (a coarse look costs less).
     fn score_every(&self, image: &Image, at: [i64; 2], step: usize) -> Option<Match> {
-        if at[0] < 0 || at[1] < 0 || at[0] as usize + self.w > image.width || at[1] as usize + self.h > image.height {
-            return None;
-        }
-        let (x0, y0) = (at[0] as usize, at[1] as usize);
-        let base = y0 * image.width + x0;
+        let inside = at[0] >= 0 && at[1] >= 0 && at[0] as usize + self.w <= image.width && at[1] as usize + self.h <= image.height;
         let (mut n, mut channel, mut tsum) = (0usize, [0.0f32; 3], [0.0f32; 3]);
         let (mut ss, mut tt, mut st, mut chroma) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
+        let base = if inside { at[1] as usize * image.width + at[0] as usize } else { 0 };
         for k in (0..self.core.len()).step_by(step) {
-            let (off, t) = (self.offsets[k] as usize, &self.core_rgb[k]);
-            let p = (base + off) * 3;
+            let t = &self.core_rgb[k];
+            // Cut by the image's edge: only the part inside counts (`EDGE_PART` of it at least).
+            let p = if inside {
+                (base + self.offsets[k] as usize) * 3
+            } else {
+                let i = self.core[k] as usize;
+                let (x, y) = (at[0] + (i % self.w) as i64, at[1] + (i / self.w) as i64);
+                if x < 0 || y < 0 || x as usize >= image.width || y as usize >= image.height {
+                    continue;
+                }
+                (y as usize * image.width + x as usize) * 3
+            };
             let c = [image.pixels[p] as f32, image.pixels[p + 1] as f32, image.pixels[p + 2] as f32];
             for j in 0..3 {
                 channel[j] += c[j];
@@ -747,7 +757,7 @@ impl Template {
             chroma += ((c[0] - c[1]) - (t[0] - t[1])).abs() + ((c[2] - c[1]) - (t[2] - t[1])).abs();
             n += 1;
         }
-        if n == 0 {
+        if n == 0 || (n as f64) < EDGE_PART * self.core.len().div_ceil(step) as f64 {
             return None;
         }
         let count = (3 * n) as f32;
@@ -888,8 +898,12 @@ fn best_match(image: &Image, at: [f64; 2], index: usize, size: f64, scale: f64, 
 /// real pixels scores 0.95-1.0.
 const ACCEPT: f64 = 0.72;
 const LEAD: f64 = 0.15;
-/// A colour-found icon keeps the name of its own kind's best sprite from this value.
-const OWN: f64 = 0.5;
+/// A colour-found checkpoint or waypoint must look like its own sprite this much to be
+/// kept (and is named by it). Real ones: checkpoints 0.55-0.66 (Clearfell, the Riverbank),
+/// the waypoint 0.67; the false ones the scene made on the Riverbank captures (water foam,
+/// a spell's glow): checkpoints at most 0.06, waypoints at most 0.39. An exit keeps its
+/// kind whatever it scores (none false seen) and is named from this value.
+const OWN: f64 = 0.47;
 /// A sprite whose mean colour differs this much (0-1) from the pixels under it where the
 /// search starts is not searched further: at its best place it could not reach `ACCEPT`
 /// (3 x 0.15 of colour alone; the real exits differ by 0.001-0.004 at their place, the thin waypoint ring up to 0.1 where its search starts).
@@ -955,8 +969,10 @@ fn identify(image: &Image, icons: &mut Vec<(Icon, [f64; 2])>, found: &[(u8, Blob
     let reach = (REACH * window).round().max(1.0) as i64;
     let group_reach = (GROUP_REACH * window).round().max(1.0) as i64;
     let side = ICON_SIDE * window;
-    // Colour-found icons: checked, relabelled when another kind is clearly it.
-    for (icon, at) in icons.iter_mut() {
+    // Colour-found icons: checked, relabelled when another kind is clearly it; a checkpoint
+    // or waypoint that does not look like one is dropped (scene pixels: foam, glow).
+    let mut drop = vec![false; icons.len()];
+    for (n, (icon, at)) in icons.iter_mut().enumerate() {
         let ranked = rank(image, *at, &among, window, reach);
         let own = ranked.iter().find(|(i, _, _)| sprites()[*i].kind == icon.kind);
         match verdict(&ranked) {
@@ -966,9 +982,17 @@ fn identify(image: &Image, icons: &mut Vec<(Icon, [f64; 2])>, found: &[(u8, Blob
                     (icon.kind, icon.sprite, *at) = (kind, Some(sprites()[i].id.as_str()), c);
                 }
             }
-            _ => icon.sprite = own.filter(|(_, m, _)| m.value() >= OWN).map(|(i, _, _)| sprites()[*i].id.as_str()),
+            _ => {
+                icon.sprite = own.filter(|(_, m, _)| m.value() >= OWN).map(|(i, _, _)| sprites()[*i].id.as_str());
+                drop[n] = icon.sprite.is_none() && matches!(icon.kind, "checkpoint" | "waypoint");
+            }
         }
     }
+    let mut n = 0;
+    icons.retain(|_| {
+        n += 1;
+        !drop[n - 1]
+    });
     let px = |v: f64| (v - 0.5) * stride as f64 + 0.5;
     let taken = |at: [f64; 2], icons: &[(Icon, [f64; 2])]| {
         (at[0] - centre[0]).hypot(at[1] - centre[1]) < 0.5 * side || icons.iter().any(|(_, p)| (p[0] - at[0]).hypot(p[1] - at[1]) < 0.6 * side)
@@ -1074,6 +1098,12 @@ pub fn draw_for_tests(image: &mut Image, index: usize, at: [f64; 2], scale: f64)
 
 #[cfg(test)]
 thread_local! {
+    /// Wall groups kept by `lines`: cells, box width and height, a cell of it (tests).
+    static GROUPS: std::cell::RefCell<Vec<(usize, usize, usize, usize, usize, Vec<[u16; 2]>)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+thread_local! {
     /// Off: the reader as it was before the sprite matcher (for tests that compare).
     static MATCHING: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
     /// Every place `identify` tried (colour-found icons first), and its reach: for tests.
@@ -1164,6 +1194,12 @@ fn lines(occupied: &[bool], cols: usize, rows: usize) -> Vec<[u16; 2]> {
             }
         }
         let filled = group.iter().filter(|&&i| inside(i)).count() as f64 > MAX_INSIDE * group.len() as f64;
+        #[cfg(test)]
+        if group.len() >= MIN_GROUP && !filled {
+            let (xs, ys): (Vec<usize>, Vec<usize>) = group.iter().map(|&i| (i % cols, i / cols)).unzip();
+            let (w, h) = (xs.iter().max().unwrap() - xs.iter().min().unwrap() + 1, ys.iter().max().unwrap() - ys.iter().min().unwrap() + 1);
+            GROUPS.with(|g| g.borrow_mut().push((group.len(), w, h, xs[0], ys[0], group.iter().map(|&i| [(i % cols) as u16, (i / cols) as u16]).collect())));
+        }
         if group.len() >= MIN_GROUP && !filled {
             walls.extend(group.iter().map(|&i| [(i % cols) as u16, (i / cols) as u16]));
         }
@@ -1577,6 +1613,35 @@ mod tests {
     }
 
     #[test]
+    fn scene_pixels_are_no_waypoint_or_checkpoint() {
+        // I9, the Riverbank (it has no waypoint): water foam and the glow of a checkpoint's
+        // world object passed the colours; the flight recorder logged about 3,900 waypoints
+        // and 470 checkpoints. A checkpoint or waypoint must now look like its sprite.
+        set_icon_area(Some("G1_1"));
+        let read = |name: &str, stride: usize, matching: bool| -> Vec<(&'static str, i64, i64)> {
+            let image = fixture(name);
+            let go = || icons_in(&image, [0.0, 0.0], SCALE, 1.0, stride, &[], false);
+            let icons = if matching { go() } else { without_matching(go) };
+            let mut found: Vec<_> = icons.into_iter().map(|i| (i.kind, (i.x * 2.0).round() as i64, (i.y * 2.0).round() as i64)).collect();
+            found.sort();
+            found
+        };
+        for stride in [1, 2] {
+            // Foam by the bridge (capture at 640, 560 of the big map's area): the old reader saw
+            // 9 waypoints and 4 checkpoints, one of them real (at 18, 38).
+            let old = read("bigmap-riverbank-foam.ppm", stride, false);
+            assert!(old.iter().filter(|i| i.0 == "waypoint").count() >= 5 && old.iter().filter(|i| i.0 == "checkpoint").count() >= 3, "{old:?}");
+            let new = read("bigmap-riverbank-foam.ppm", stride, true);
+            assert_eq!(new.len(), 1, "every {stride} px: {new:?}");
+            assert!(new[0].0 == "checkpoint" && (new[0].1 - 18).abs() <= 2 && (new[0].2 - 38).abs() <= 2, "{new:?}");
+            // Wet stones and a spell's glow at the zone's start: two waypoints before, none now.
+            assert_eq!(read("bigmap-riverbank-glow.ppm", stride, false).len(), 2);
+            assert!(read("bigmap-riverbank-glow.ppm", stride, true).is_empty());
+        }
+        set_icon_area(None);
+    }
+
+    #[test]
     fn a_boss_icon_is_known_by_name_only_in_its_area() {
         // The Grim Tangle's boss icon (tan and brown: warm pixels point the matcher at it).
         let at = PLACES[0];
@@ -1666,6 +1731,14 @@ mod tests {
             let old = without_matching(|| icons_in(&image, centre, SCALE, 1.0, stride, &[], false));
             println!("every {stride}, old reader: {:?}", old.iter().map(|i| (i.kind, (centre[0] + i.x as f64 * 2.0).round(), (centre[1] + i.y as f64 * 2.0).round())).collect::<Vec<_>>());
         }
+        // Every colour-found checkpoint and waypoint against its own kind's sprites.
+        let old = without_matching(|| icons_in(&image, centre, SCALE, 1.0, 2, &[], false));
+        for i in old.iter().filter(|i| i.kind != "exit") {
+            let at = [centre[0] + i.x as f64 * 2.0, centre[1] + i.y as f64 * 2.0];
+            let own: Vec<usize> = (0..sprites().len()).filter(|&k| sprites()[k].kind == i.kind).collect();
+            let best = rank(&image, at, &own, 1.0, 4).first().map(|(k, m, _)| (sprites()[*k].id.as_str(), (m.value() * 1000.0).round() / 1000.0, (m.ncc * 1000.0).round() / 1000.0));
+            println!("own: {} at {:.0},{:.0}: {best:?}", i.kind, at[0], at[1]);
+        }
         if let Ok(at) = std::env::var("LIVE_AT") {
             let v: Vec<f64> = at.split(',').map(|v| v.parse().unwrap()).collect();
             let all: Vec<usize> = (0..sprites().len()).collect();
@@ -1679,6 +1752,103 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The walls read from a real big-map capture (`LIVE_SHOT`, the reader's 1286 x 1122 px
+    /// area around the player), drawn over it into `LIVE_OUT` (a PPM: wall pixels red, wall
+    /// cells kept green): `cargo test live_walls -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn live_walls() {
+        let image = parse_ppm(&std::fs::read(std::env::var("LIVE_SHOT").unwrap()).unwrap()).unwrap();
+        let plan = Plan { marker: [643.0, 561.0], radius: 16.0, frame: Frame::wide(600, 518, [600, 518]) };
+        GROUPS.with(|g| g.borrow_mut().clear());
+        let (view, _) = read(&image, &plan);
+        println!("{}: {} wall cells", view.message, view.walls.len());
+        let mut groups = GROUPS.with(|g| g.take());
+        groups.sort();
+        let centre0 = marker_near(&image, plan.marker, plan.radius).unwrap();
+        for (n, w, h, x, y, cells) in groups {
+            // Mean colour and brightness spread of the wall pixels in its cells.
+            let (mut sum, mut count, mut lums) = ([0f64; 3], 0, vec![]);
+            for [cx, cy] in &cells {
+                let px = (centre0[0] + (*cx as f64 - 300.0) * 2.0) as usize;
+                let py = (centre0[1] + (*cy as f64 - 259.0) * 2.0) as usize;
+                for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    let i = ((py + dy) * image.width + px + dx) * 3;
+                    let (r, g, b) = (image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]);
+                    if is_wall(r, g, b) {
+                        sum = [sum[0] + r as f64, sum[1] + g as f64, sum[2] + b as f64];
+                        count += 1;
+                        lums.push(r as f64 + g as f64 + b as f64);
+                    }
+                }
+            }
+            lums.sort_by(f64::total_cmp);
+            let c = count.max(1) as f64;
+            println!("group {n} cells, {w}x{h}, at {x},{y}: mean {:.0},{:.0},{:.0}, sum p10 {:.0} p90 {:.0}", sum[0] / c, sum[1] / c, sum[2] / c, lums[lums.len() / 10], lums[lums.len() * 9 / 10]);
+        }
+        let centre = marker_near(&image, plan.marker, plan.radius).unwrap();
+        let mut out = image.clone();
+        for p in out.pixels.iter_mut() {
+            *p /= 3;
+        }
+        for y in 0..image.height {
+            for x in 0..image.width {
+                let i = (y * image.width + x) * 3;
+                if is_wall(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]) {
+                    out.pixels[i..i + 3].copy_from_slice(&[255, 40, 40]);
+                }
+            }
+        }
+        for &[cx, cy] in &view.walls {
+            let x = (centre[0] + (cx as f64 - plan.frame.player[0] as f64) * 2.0) as usize;
+            let y = (centre[1] + (cy as f64 - plan.frame.player[1] as f64) * 2.0) as usize;
+            for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                if x + dx < out.width && y + dy < out.height {
+                    let i = ((y + dy) * out.width + x + dx) * 3;
+                    out.pixels[i + 1] = 255;
+                }
+            }
+        }
+        let mut bytes = format!("P6\n{} {}\n255\n", out.width, out.height).into_bytes();
+        bytes.extend_from_slice(&out.pixels);
+        std::fs::write(std::env::var("LIVE_OUT").unwrap(), bytes).unwrap();
+    }
+
+    /// Writes `LIVE_JSON`: the wall cells read from `LIVE_SHOT` (frame cells, the player at
+    /// 300, 259), by group, judged map line or scene by the group's mean colour (map lines:
+    /// blue 118 or more, blue − red 30 or more, green − red 5 or less, not bright; checked by
+    /// eye on the overlays of `live_walls`): `cargo test live_wall_fixture -- --ignored`.
+    #[test]
+    #[ignore]
+    fn live_wall_fixture() {
+        let image = parse_ppm(&std::fs::read(std::env::var("LIVE_SHOT").unwrap()).unwrap()).unwrap();
+        let plan = Plan { marker: [643.0, 561.0], radius: 16.0, frame: Frame::wide(600, 518, [600, 518]) };
+        GROUPS.with(|g| g.borrow_mut().clear());
+        let _ = read(&image, &plan);
+        let centre = marker_near(&image, plan.marker, plan.radius).unwrap();
+        let (mut line, mut scene) = (vec![], vec![]);
+        for (_, _, _, _, _, cells) in GROUPS.with(|g| g.take()) {
+            let (mut sum, mut count) = ([0f64; 3], 0.0);
+            for [cx, cy] in &cells {
+                let px = (centre[0] + (*cx as f64 - 300.0) * 2.0) as usize;
+                let py = (centre[1] + (*cy as f64 - 259.0) * 2.0) as usize;
+                for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                    let i = ((py + dy) * image.width + px + dx) * 3;
+                    if is_wall(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]) {
+                        sum = [sum[0] + image.pixels[i] as f64, sum[1] + image.pixels[i + 1] as f64, sum[2] + image.pixels[i + 2] as f64];
+                        count += 1.0;
+                    }
+                }
+            }
+            let [r, g, b] = sum.map(|v| v / count);
+            let is_line = b >= 118.0 && b - r >= 30.0 && g - r <= 5.0 && r + g + b <= 450.0;
+            if is_line { line.extend(cells) } else { scene.extend(cells) }
+        }
+        println!("{} line cells, {} scene cells", line.len(), scene.len());
+        let json = serde_json::json!({"source": std::env::var("LIVE_SHOT").unwrap().rsplit('/').next(), "player": [300, 259], "line": line, "scene": scene});
+        std::fs::write(std::env::var("LIVE_JSON").unwrap(), serde_json::to_string(&json).unwrap()).unwrap();
     }
 
     /// I2, measured: what today's colour reader made of icons it was not built for, drawn

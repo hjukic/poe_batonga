@@ -1307,3 +1307,58 @@ layout graphs; c applies wherever a or b does):
 those 24 stay hand-ticked. Two pairs are in zones with two bosses and name neither (the Count's in Ogham
 Manor, the Volcanic Warrens'): by elimination the Count's is Count Geonor's (the Gargoyle's names
 Candlemass), not built.
+
+## Scene pixels read as map (third build, I9)
+
+Seen live on the owner's Riverbank (2026-11-12): the flight recorder of a zone without a waypoint logged about
+3,900 waypoint and 470 checkpoint icons, and the map preview showed specks and streaks along the river. Both
+come from the game scene showing through the translucent big map. Material: three big-map captures and the
+boss capture the app kept (`samples/`), copied by the chair.
+
+**False icons.** Pale blue water foam, a spell's glow and the checkpoint's own world object (a glowing
+pillar) pass the waypoint's and checkpoint's colours. A colour-found checkpoint or waypoint is now kept only
+when it looks like its own sprite (`OWN` 0.47; an icon cut by the image's edge is scored on its visible
+part when that is at least 60% of it):
+
+| | Real | False (scene) |
+| --- | ---: | ---: |
+| Checkpoints, own sprite score | 0.55–0.66 (Clearfell 3, Riverbank 4, one cut by the edge 0.67) | at most 0.06 |
+| Waypoint | 0.67 (Clearfell) | at most 0.39 |
+
+On the four Riverbank captures the old reader made 15 waypoints and 9 checkpoints that are not there; now
+none, and all four real checkpoints stay (`scene_pixels_are_no_waypoint_or_checkpoint`, fixtures
+`bigmap-riverbank-foam.ppm`, `bigmap-riverbank-glow.ppm`). Clearfell's six icons are unchanged. Exits are
+kept whatever they score (no false exit was seen).
+
+**False walls.** The line colour test passes the real map lines cleanly (the map's teal river lines do not
+pass) and also white-blue foam, wet stones, the character's clothes and a tutorial panel. On the frames
+read from the captures, by the groups' mean colour (map lines: blue 118 or more, blue − red 30 or more,
+green − red 5 or less; checked by eye on the overlays of `live_walls`): 2,467 / 3,852 / 5,570 line cells
+against 260 / 1,001 / 60 scene cells kept by the reader. Shape alone does not part them: the 12-cell rule
+already drops specks, and the scene groups left (12–62 cells, 4–20 cells across) are as large as real
+fragments of line (47 cells, 15 x 16), and the character's clothes pass the colour as well as the lines.
+
+What parts them is movement: a map line stays on its map cell while the player walks, the scene scrolls
+several times faster, and the character (and any panel) moves with the player. So the recorder now
+**holds a big-map wall cell back until it was seen from two player positions 24 cells apart** (either axis;
+more than the character is tall in cells). Held cells still place frames (registration uses every cell),
+but they are left out of the recording, the overview, the map's ways and the scale measure (`Live::kept`).
+Corner-minimap cells are kept at once, as before: the fault was not seen there. Joining pieces
+(`locate_piece`) looks for a saved piece (kept cells only) on the live map (every cell), so it works as
+before; a joined piece's cells are kept. At a zone's start with the big map open nothing is kept until the
+player has walked 24 cells: the way back to the arrival has no walls to follow until then (it is a straight
+line over unrecorded ground, never gold).
+
+A walk built from each capture's own cells (lines fixed on the map, the scene scrolling 5 times as fast,
+what lies on the character moving with the player; 20 frames of 4 x 1 cells,
+`scene_pixels_on_the_big_map_are_not_recorded`):
+
+| Capture | Scene cells recorded, before | after | Line cells kept, of those seen |
+| --- | ---: | ---: | ---: |
+| Zone start (stones, the character) | 4,413 | 0 | 2,358 of 2,463 (96%) |
+| By the bridge (foam, panel, character) | 13,965 | 209 | 3,521 of 3,846 (92%) |
+| Middle (stones) | 1,142 | 0 | 5,286 of 5,559 (95%) |
+
+The line cells not kept were seen only from places less than 24 cells apart (at the view's edge as the
+walk ended); a longer walk keeps them. Measured on real cell shapes, but the walk is built, not recorded:
+the next real visit's recording is where to check it.

@@ -42,6 +42,10 @@ const SAVE_EVERY: Duration = Duration::from_secs(15);
 /// Far icons from a whole-screen scan stand in for this many frames after it
 /// (the scan comes every third big-map frame).
 const FAR_FRAMES: u32 = 3;
+/// A big-map wall cell is kept once seen with the player this many cells (either axis)
+/// from where it was first seen: more than the character is tall in cells where its
+/// clothes pass the line colour, so neither it nor the scene keeps a cell (I9).
+const HOLD_MOVE: i32 = 24;
 
 /// A needle without a placed frame for this long is not "estimated": the player
 /// may have walked on with the map hidden, and the bearing is a screen direction.
@@ -113,7 +117,11 @@ pub struct Recording {
 
 /// The part being recorded, with walls in a map for quick lookup.
 struct Live {
+    /// Wall cells and how often seen: all of them place frames (`register`).
     walls: HashMap<(i32, i32), u32>,
+    /// Big-map wall cells not yet seen from two player positions `HOLD_MOVE` apart, with
+    /// the first: left out of the recording, the overview and the map's ways (`kept`).
+    held: HashMap<(i32, i32), (i32, i32)>,
     pos: (i32, i32),
     velocity: (i32, i32),
     lost_streak: u32,
@@ -128,6 +136,7 @@ impl Live {
     fn new() -> Self {
         Live {
             walls: HashMap::new(),
+            held: HashMap::new(),
             pos: (0, 0),
             velocity: (0, 0),
             lost_streak: 0,
@@ -137,9 +146,36 @@ impl Live {
         }
     }
 
+    /// The wall cells that are kept: every one but those held back.
+    fn kept(&self) -> impl Iterator<Item = (&(i32, i32), &u32)> {
+        self.walls.iter().filter(|(cell, _)| !self.held.contains_key(cell))
+    }
+
+    /// One frame's wall cells (`rel`, from the player) seen with the player at `pos`. The
+    /// big map shows the game scene through it, and some of the scene passes the line
+    /// colour (water foam, wet stones, the character's clothes: Riverbank captures, I9):
+    /// a big-map cell is kept once seen from two places `HOLD_MOVE` apart, where a map line
+    /// stays on its cell and the scene, which scrolls several times faster, or the
+    /// character, who moves with the player, does not. Minimap cells are kept at once
+    /// (the fault was not seen there).
+    fn add_walls(&mut self, rel: &[(i32, i32)], pos: (i32, i32), big: bool) {
+        for &(rx, ry) in rel {
+            let cell = (pos.0 + rx, pos.1 + ry);
+            let n = self.walls.entry(cell).or_insert(0);
+            *n += 1;
+            if !big {
+                self.held.remove(&cell);
+            } else if *n == 1 {
+                self.held.insert(cell, pos);
+            } else if self.held.get(&cell).is_some_and(|first| (first.0 - pos.0).abs().max((first.1 - pos.1).abs()) >= HOLD_MOVE) {
+                self.held.remove(&cell);
+            }
+        }
+    }
+
     fn snapshot(&self) -> Part {
         let mut part = self.part.clone();
-        let mut walls: Vec<[i32; 3]> = self.walls.iter().map(|(&(x, y), &n)| [x, y, n as i32]).collect();
+        let mut walls: Vec<[i32; 3]> = self.kept().map(|(&(x, y), &n)| [x, y, n as i32]).collect();
         walls.sort_unstable();
         part.walls = walls;
         part
@@ -720,7 +756,9 @@ fn merge_pieces(session: &mut Session) -> bool {
         let Some((dx, dy)) = locate_piece(&live.walls, &piece, None) else { continue };
         let part = session.recording.parts.remove(index);
         for [x, y, n] in part.walls {
+            // A kept piece's cells are kept.
             *live.walls.entry((x + dx, y + dy)).or_insert(0) += n as u32;
+            live.held.remove(&(x + dx, y + dy));
         }
         let mut trail: Vec<[i32; 2]> = part.trail.iter().map(|&[x, y]| [x + dx, y + dy]).collect();
         trail.append(&mut live.part.trail);
@@ -931,9 +969,7 @@ impl Recorder {
                 live.pos = pos;
                 live.lost_streak = 0;
                 live.part.matched += 1;
-                for &(rx, ry) in &rel {
-                    *live.walls.entry((pos.0 + rx, pos.1 + ry)).or_insert(0) += 1;
-                }
+                live.add_walls(&rel, pos, frame.message.starts_with("Reading big map"));
                 let moved = live.part.trail.last().is_none_or(|&[x, y]| (x - pos.0).abs() + (y - pos.1).abs() >= 2);
                 if moved {
                     live.part.trail.push([pos.0, pos.1]);
@@ -1208,8 +1244,7 @@ impl State {
         let area = &session.recording.area;
         let walls: Vec<(i32, i32)> = session
             .live
-            .walls
-            .iter()
+            .kept()
             .filter(|(_, &n)| n >= 2)
             .map(|(&(x, y), _)| (x - arrival.x, y - arrival.y))
             .collect();
@@ -1286,8 +1321,15 @@ impl State {
                 targets.extend(graph::target(&graph, &session.came_from, completed));
             }
             // The part's recorded map, lent: the way to a target whose place on it is known.
+            let kept: HashMap<(i32, i32), u32>;
+            let walls = if live.held.is_empty() {
+                &live.walls
+            } else {
+                kept = live.kept().map(|(&c, &n)| (c, n)).collect();
+                &kept
+            };
             let place = nav::Place {
-                map: route::Map { walls: &live.walls, trail: &live.part.trail },
+                map: route::Map { walls, trail: &live.part.trail },
                 player: live.pos,
                 came_in: session.came_in.as_ref().filter(|c| !c.from.is_empty()).map(|c| nav::CameIn {
                     from: &c.from,
@@ -1311,8 +1353,7 @@ impl State {
         let arrival = live.part.pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at);
         let (ax, ay) = arrival.map_or((0, 0), |a| (a.x, a.y));
         let arrived_from = arrival.map_or("", |a| a.label.as_str());
-        let mut walls: Vec<(i32, i32)> =
-            live.walls.iter().filter(|(_, &n)| n >= 2).map(|(&(x, y), _)| (x - ax, y - ay)).collect();
+        let mut walls: Vec<(i32, i32)> = live.kept().filter(|(_, &n)| n >= 2).map(|(&(x, y), _)| (x - ax, y - ay)).collect();
         if walls.len() > GUIDE_WALLS {
             walls.sort_unstable();
             let step = walls.len().div_ceil(GUIDE_WALLS);
@@ -1335,7 +1376,7 @@ impl State {
     fn view(&self) -> Option<LayoutView> {
         let session = self.session.as_ref()?;
         let live = &session.live;
-        let solid: Vec<(i32, i32)> = live.walls.iter().filter(|(_, &n)| n >= 2).map(|(&k, _)| k).collect();
+        let solid: Vec<(i32, i32)> = live.kept().filter(|(_, &n)| n >= 2).map(|(&k, _)| k).collect();
         let points = solid.iter().copied().chain(live.part.trail.iter().map(|&[x, y]| (x, y))).chain([live.pos]);
         let (mut x0, mut y0, mut x1, mut y1) = (i32::MAX, i32::MAX, i32::MIN, i32::MIN);
         for (x, y) in points {
@@ -1841,6 +1882,113 @@ mod tests {
         let visits = obs::replay::replay(&text, &graph::Graphs::default());
         assert!(visits[0].agree == visits[0].logged && visits[0].logged > 0, "{:?}", visits[0].differ);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A walk built from a real big-map frame (`riverbank-walls-*.json`: its wall cells,
+    /// map lines and scene by colour): the lines stay on their map cells, the scene scrolls
+    /// 5 times as fast, what lies on the character (within 30 cells of the player) moves
+    /// with the player. The player walks `steps` frames of 4 x 1 cells. Returns the scene
+    /// cells the recorder keeps with the hold and without it, the line cells kept, and the
+    /// line cells it saw.
+    fn walk_real_walls(name: &str, steps: i32) -> (usize, usize, usize, usize) {
+        let path = format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
+        let json: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        let cells = |key: &str| -> Vec<(i32, i32)> {
+            json[key].as_array().unwrap().iter().map(|c| (c[0].as_i64().unwrap() as i32 - 300, c[1].as_i64().unwrap() as i32 - 259)).collect()
+        };
+        let (line, scene) = (cells("line"), cells("scene"));
+        let on_player = |c: &(i32, i32)| c.0.abs() <= 30 && c.1.abs() <= 30;
+        let recorder = Recorder::new(None);
+        enter(&recorder, "G1_1");
+        let mut seen = std::collections::HashSet::new();
+        for i in 0..steps {
+            let pos = (4 * i, i);
+            let rel: Vec<(i32, i32)> = line
+                .iter()
+                .map(|&(x, y)| (x - pos.0, y - pos.1))
+                .chain(scene.iter().map(|&(x, y)| if on_player(&(x, y)) { (x, y) } else { (x - 5 * pos.0, y - 5 * pos.1) }))
+                .filter(|&(x, y)| x.abs() < 300 && y.abs() < 259)
+                .collect();
+            seen.extend(line.iter().map(|&(x, y)| (x, y)).filter(|&(x, y)| (x - pos.0).abs() < 300 && (y - pos.1).abs() < 259));
+            let view = MinimapView {
+                enabled: true,
+                visible: true,
+                message: "Reading big map".into(),
+                cols: 600,
+                rows: 518,
+                walls: rel.iter().map(|&(x, y)| [(x + 300) as u16, (y + 259) as u16]).collect(),
+                player: Some([300.0, 259.0]),
+            };
+            recorder.on_icons(&[], false);
+            recorder.on_frame(&view, [600, 518]);
+        }
+        let state = recorder.0.lock().unwrap();
+        let live = &state.session.as_ref().unwrap().live;
+        assert_eq!(live.pos, (4 * (steps - 1), steps - 1), "the walk was not followed");
+        let lines: std::collections::HashSet<(i32, i32)> = line.iter().copied().collect();
+        let kept: Vec<(i32, i32)> = live.kept().map(|(&c, _)| c).collect();
+        let scene_kept = kept.iter().filter(|c| !lines.contains(c)).count();
+        let scene_all = live.walls.keys().filter(|c| !lines.contains(c)).count();
+        let line_kept = kept.iter().filter(|c| lines.contains(c)).count();
+        (scene_kept, scene_all, line_kept, seen.len())
+    }
+
+    #[test]
+    fn scene_pixels_on_the_big_map_are_not_recorded() {
+        // I9, from the Riverbank captures: foam, wet stones, the character's clothes and a
+        // tutorial panel passed the line colour. Held until seen from two places 24 cells
+        // apart, none of them is recorded; lines seen from such places all are.
+        for name in ["riverbank-walls-1794481095.json", "riverbank-walls-1794481536.json", "riverbank-walls-1794482137.json"] {
+            let (scene_kept, scene_all, line_kept, line_seen) = walk_real_walls(name, 20);
+            println!("{name}: scene cells recorded {scene_all} without the hold, {scene_kept} with; line cells {line_kept} of {line_seen} seen");
+            assert!(scene_kept * 50 <= scene_all.max(1), "{name}: {scene_kept} of {scene_all}");
+            assert!(line_kept as f64 >= 0.9 * line_seen as f64, "{name}: {line_kept} of {line_seen}");
+        }
+    }
+
+    #[test]
+    fn a_big_map_cell_is_kept_once_seen_from_two_places_a_minimap_cell_at_once() {
+        let recorder = Recorder::new(None);
+        enter(&recorder, "G1_1");
+        let big = |pos: (i32, i32)| MinimapView { message: "Reading big map".into(), ..frame(pos) };
+        let kept = || recorder.0.lock().unwrap().session.as_ref().unwrap().live.kept().count();
+        // Standing still with the big map open: nothing kept yet.
+        for _ in 0..5 {
+            recorder.on_frame(&big((0, 0)), [300, 260]);
+        }
+        assert_eq!(kept(), 0);
+        // Walking on: the corridor seen from 24 cells further is kept.
+        for step in 1..=7 {
+            recorder.on_frame(&big((step * 4, 0)), [300, 260]);
+        }
+        assert!(kept() > 100, "{}", kept());
+        // The corner minimap's cells are kept at once.
+        let recorder = Recorder::new(None);
+        enter(&recorder, "G1_1");
+        recorder.on_frame(&frame((0, 0)), [300, 260]);
+        assert!(recorder.0.lock().unwrap().session.as_ref().unwrap().live.kept().count() > 100);
+    }
+
+    /// Exploration: the Riverbank captures' big-map frames (`LIVE_DIR`, files in time order)
+    /// fed to the recorder: where each is placed, what is kept:
+    /// `LIVE_DIR=… cargo test live_frames_held -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn live_frames_held() {
+        use crate::minimap::bigmap;
+        let dir = std::env::var("LIVE_DIR").unwrap();
+        let recorder = Recorder::new(None);
+        enter(&recorder, "G1_1");
+        let plan = bigmap::Plan { marker: [643.0, 561.0], radius: 16.0, frame: bigmap::Frame::wide(600, 518, [600, 518]) };
+        for name in ["bigmap-1794481095", "bigmap-1794481536", "bigmap-1794482137", "boss-bigmap-1794482345"] {
+            let image = crate::minimap::parse_ppm(&std::fs::read(format!("{dir}/{name}.ppm")).unwrap()).unwrap();
+            let (view, _) = bigmap::read_with(&image, &plan, &[], false);
+            recorder.on_icons(&[], false);
+            recorder.on_frame(&view, [600, 518]);
+            let state = recorder.0.lock().unwrap();
+            let live = &state.session.as_ref().unwrap().live;
+            println!("{name}: {} cells read; placed at {:?}; {} cells, {} held, parts {}", view.walls.len(), live.pos, live.walls.len(), live.held.len(), state.session.as_ref().unwrap().recording.parts.len());
+        }
     }
 
     #[test]
