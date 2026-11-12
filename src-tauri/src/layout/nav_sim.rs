@@ -23,7 +23,7 @@
 
 use super::graph::{self, Area, Layout, SCALE};
 use super::guide::{angle_between, screen_bearing, to_screen, NavTarget};
-use super::nav::{Arrival, ExitIcon, Navigator, Tuning};
+use super::nav::{Arrival, BossAt, ExitIcon, Navigator, Tuning};
 
 /// World units per frame at the base speed (60 units/s, 3 frames a second).
 const STEP: f64 = 20.0;
@@ -71,6 +71,8 @@ const EXIT_OFFSET: f64 = 100.0;
 const ICON_MISS: f64 = 0.2;
 const ICON_NOISE: f64 = 2.0;
 const FALSE_ICON: f64 = 0.01;
+/// A boss's icon stands this far (world units) from its node at most: it is in its arena.
+const BOSS_OFFSET: f64 = 100.0;
 
 pub(super) struct Rng(u64);
 
@@ -303,6 +305,7 @@ fn plan(layout: &Layout, from: usize, goals: &[usize], rng: &mut Rng) -> Option<
     Some((plan, line))
 }
 
+#[derive(Clone)]
 pub(super) struct Options {
     /// Movement turned by this many degrees (a planted fault).
     pub turn: f64,
@@ -318,11 +321,25 @@ pub(super) struct Options {
     pub view: Option<f64>,
     /// Icons carry the name of the area they lead to.
     pub labels: bool,
+    /// The zone's boss shows an icon where it stands (with `view`): the places it may be
+    /// (`run` sets them from `boss_icons` and the area).
+    pub bosses: Vec<BossAt>,
+    pub boss_icons: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { turn: 0.0, losses: true, long_loss: None, wrong: 0.3, tuning: Tuning::default(), view: None, labels: false }
+        Options { turn: 0.0, losses: true, long_loss: None, wrong: 0.3, tuning: Tuning::default(), view: None, labels: false, bosses: vec![], boss_icons: false }
+    }
+}
+
+/// Where each simulated area's checklist boss stands (as `set_bosses` gives it): the
+/// Bloated Miller by the Riverbank's way to the encampment, Beira at Clearfell's boss node.
+pub(super) fn boss_places(area: &str) -> Vec<BossAt> {
+    match area {
+        "G1_1" => vec![BossAt::Exit("G1_town".into())],
+        "G1_2" => vec![BossAt::Tag("boss".into())],
+        _ => vec![],
     }
 }
 
@@ -356,6 +373,23 @@ pub(super) fn walk(layout: &Layout, from: usize, goals: &[usize], seed: u64, opt
             Some(((n.x + r * a.cos(), n.y + r * a.sin()), exit))
         })
         .collect();
+    // Where the boss really is: in its arena, up to `BOSS_OFFSET` from one of its nodes
+    // (of several, one, as the game picks).
+    let boss_nodes: Vec<&super::graph::Node> = layout
+        .nodes
+        .iter()
+        .filter(|n| {
+            options.bosses.iter().any(|b| match b {
+                BossAt::Tag(tag) => n.has_tag(tag),
+                BossAt::Exit(area) => n.exit.as_deref() == Some(area.as_str()),
+            })
+        })
+        .collect();
+    let boss_at = (!boss_nodes.is_empty()).then(|| {
+        let n = boss_nodes[rng.below(boss_nodes.len())];
+        let (r, a) = (BOSS_OFFSET * rng.uniform().sqrt(), std::f64::consts::TAU * rng.uniform());
+        (n.x + r * a.cos(), n.y + r * a.sin())
+    });
     let mut frame = 0usize;
     while (cursor as usize) < line.len() {
         let i = cursor as usize;
@@ -420,11 +454,19 @@ pub(super) fn walk(layout: &Layout, from: usize, goals: &[usize], seed: u64, opt
                 if cx.abs() <= vx && cy.abs() <= vy && rng.uniform() >= ICON_MISS {
                     let to = options.labels.then(|| exit.clone());
                     let (cx, cy) = (cx * cos - cy * sin, cx * sin + cy * cos);
-                    icons.push(ExitIcon { dx: cx, dy: cy, to });
+                    icons.push(ExitIcon { dx: cx, dy: cy, to, boss: vec![] });
+                }
+            }
+            if let Some((x, y)) = boss_at {
+                let (sx, sy) = to_screen((x - at.0, y - at.1));
+                let (cx, cy) = (sx * scale + rng.gauss() * ICON_NOISE, sy * scale + rng.gauss() * ICON_NOISE);
+                if cx.abs() <= vx && cy.abs() <= vy && rng.uniform() >= ICON_MISS {
+                    let (cx, cy) = (cx * cos - cy * sin, cx * sin + cy * cos);
+                    icons.push(ExitIcon { dx: cx, dy: cy, to: None, boss: options.bosses.clone() });
                 }
             }
             if rng.uniform() < FALSE_ICON {
-                icons.push(ExitIcon { dx: rng.range(-vx, vx), dy: rng.range(-vy, vy), to: None });
+                icons.push(ExitIcon { dx: rng.range(-vx, vx), dy: rng.range(-vy, vy), to: None, boss: vec![] });
             }
         }
         events.push(Event::Moved { dx, dy, truth, done: i as f64 / line.len() as f64, walked, off, icons });
@@ -468,7 +510,8 @@ pub(super) fn run(area: &Area, k: usize, from: &str, told: bool, wrong: bool, ta
     if goals.is_empty() || goals.contains(&node) {
         return None;
     }
-    let events = walk(layout, node, &goals, seed, options)?;
+    let with_bosses = Options { bosses: if options.boss_icons { boss_places(&area.id) } else { vec![] }, ..options.clone() };
+    let events = walk(layout, node, &goals, seed, &with_bosses)?;
     let arrival = if told { Arrival::From(from) } else { Arrival::Unknown };
     let mut nav = Navigator::new(area, arrival, None, SCALE, seed).tuned(options.tuning);
     let mut out = Outcome { layout: layout.id.clone(), ..Default::default() };
@@ -734,6 +777,73 @@ mod tests {
         let (gold, off) = c.layouts.get("ClearFell_S_N_E").copied().unwrap_or_default();
         eprintln!("ClearFell_S_N_E: {off} of {gold} gold wrong");
         assert!(off <= 8, "ClearFell_S_N_E: {off} of {gold}");
+    }
+
+    #[test]
+    fn what_boss_icons_add() {
+        // The same walks with and without the boss's icon where it stands (the Miller by the
+        // Riverbank's way to the encampment, Beira at one of Clearfell's boss nodes, up to 100
+        // units off it), unlabelled exit icons in the minimap's view and in the wide view.
+        let views = [1.0, 2.0];
+        let checks: Vec<(Check, Check)> = std::thread::scope(|scope| {
+            let handles: Vec<_> = views
+                .iter()
+                .map(|&view| {
+                    scope.spawn(move || {
+                        let without = all(1, true, &Options { view: Some(view), ..Default::default() }).0;
+                        let with = all(1, true, &Options { view: Some(view), boss_icons: true, ..Default::default() }).0;
+                        (without, with)
+                    })
+                })
+                .collect();
+            handles.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        for (view, (without, with)) in views.iter().zip(&checks) {
+            print(&format!("view {view}, exit icons"), without);
+            print(&format!("view {view}, exit and boss icons"), with);
+            // They help the layout and do not make the needle worse at 60% of the walk.
+            assert!(with.settled_share >= without.settled_share, "{view}: {} against {}", with.settled_share, without.settled_share);
+            assert!(with.coverage >= without.coverage - 0.01, "{view}: {} against {}", with.coverage, without.coverage);
+        }
+        // Gold gets worse with them, pinned so it cannot get worse unnoticed: wide view, one
+        // seed, 7 of 183 more than 60° off (3.8%; without them 1 of 173), two seeds 11 of
+        // 412 (2.7%; 5 of 295); minimap view, one seed 2 of 6 (0 of 12), two seeds 2 of 10
+        // (0 of 14). Gate A's 3% holds at two seeds, not at one.
+        let (minimap, wide) = (&checks[0].1, &checks[1].1);
+        assert!(wide.off_share() <= 0.04, "{wide:?}");
+        assert!(minimap.gold_off <= 2, "{minimap:?}");
+    }
+
+    /// `what_boss_icons_add` at three seeds (or SEEDS), also in the wide view, and with the
+    /// two choices switched (a boss sighting confirms; bosses count toward gold's share).
+    /// The cases run side by side.
+    #[test]
+    #[ignore]
+    fn boss_icons_report() {
+        let seeds = std::env::var("SEEDS").ok().and_then(|s| s.parse().ok()).unwrap_or(3);
+        let base = Tuning::default();
+        let cases = [
+            ("minimap view, no boss icons", 1.0, false, base),
+            ("minimap view, boss icons", 1.0, true, base),
+            ("minimap view, boss icons, they count for gold", 1.0, true, Tuning { boss_gold: true, ..base }),
+            ("minimap view, boss icons, they count for gold and confirm", 1.0, true, Tuning { boss_gold: true, boss_confirms: true, ..base }),
+            ("minimap view, boss icons, they move particles", 1.0, true, Tuning { boss_particles: true, ..base }),
+            ("wide view, no boss icons", 2.0, false, base),
+            ("wide view, boss icons", 2.0, true, base),
+            ("wide view, boss icons, they move particles", 2.0, true, Tuning { boss_particles: true, ..base }),
+        ];
+        let results: Vec<(String, Check)> = std::thread::scope(|scope| {
+            let handles: Vec<_> = cases
+                .iter()
+                .map(|&(name, view, bosses, tuning)| {
+                    scope.spawn(move || (name.to_string(), all(seeds, true, &Options { view: Some(view), boss_icons: bosses, tuning, ..Default::default() }).0))
+                })
+                .collect();
+            handles.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        for (name, c) in &results {
+            print(name, c);
+        }
     }
 
     #[test]

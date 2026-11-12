@@ -107,7 +107,7 @@ fn is_exit(kind: &str) -> bool {
 }
 
 /// A map icon as the reader handed it over (minimap cells from the player); `kind`
-/// is left out for exits.
+/// is left out for exits; `sprite` the sprite the reader named it by (bosses).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct LoggedIcon {
     #[serde(default = "exit_kind", skip_serializing_if = "is_exit")]
@@ -116,26 +116,32 @@ pub struct LoggedIcon {
     pub y: f32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sprite: Option<String>,
+}
+
+/// Icons the navigator is fed (exits, bosses' icons): written exactly as handed over.
+fn fed(kind: &str) -> bool {
+    matches!(kind, "exit" | "boss" | "boss-dead")
 }
 
 impl LoggedIcon {
     fn of(icon: &Icon) -> Self {
-        LoggedIcon { kind: icon.kind.to_string(), x: icon.x, y: icon.y, label: icon.label.clone() }
+        // A colour-found exit's sprite says nothing the kind does not: left out.
+        let sprite = icon.sprite.filter(|_| icon.kind != "exit").map(String::from);
+        LoggedIcon { kind: icon.kind.to_string(), x: icon.x, y: icon.y, label: icon.label.clone(), sprite }
     }
 
     fn same(&self, icon: &Icon) -> bool {
-        self.kind == icon.kind && self.x == icon.x && self.y == icon.y && self.label == icon.label
+        *self == LoggedIcon::of(icon)
     }
 
     #[cfg(test)]
     fn icon(&self) -> Icon {
-        let kind = match self.kind.as_str() {
-            "exit" => "exit",
-            "checkpoint" => "checkpoint",
-            "waypoint" => "waypoint",
-            _ => "other",
-        };
-        Icon { kind, x: self.x, y: self.y, label: self.label.clone(), sprite: None }
+        const KINDS: [&str; 10] = ["exit", "checkpoint", "waypoint", "boss", "boss-dead", "dead", "rare", "portal", "npc", "quest"];
+        let kind = KINDS.iter().find(|k| **k == self.kind).copied().unwrap_or("other");
+        let sprite = self.sprite.as_deref().and_then(|id| crate::minimap::bigmap::sprites().iter().find(|s| s.id == id)).map(|s| s.id.as_str());
+        Icon { kind, x: self.x, y: self.y, label: self.label.clone(), sprite }
     }
 }
 
@@ -196,6 +202,8 @@ pub struct Start {
     pub memory: Option<nav::Memory>,
     pub age: Option<u64>,
     pub resumed: bool,
+    /// The zone's bosses as the recorder had them (where a boss's icon may be).
+    pub bosses: Vec<super::Boss>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -218,6 +226,9 @@ pub enum Entry {
         /// number-keyed maps directly).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         remembered: Option<serde_json::Value>,
+        /// The zone's bosses (name, `exit` or `tag`): the replay places boss icons by them.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        bosses: Vec<super::Boss>,
     },
     /// `Navigator::moved`, minimap cells (zero moves are not written).
     Move {
@@ -402,6 +413,7 @@ impl Log {
                 age: start.age,
                 remembered: start.memory.as_ref().and_then(|m| serde_json::to_value(m).ok()),
                 resumed: start.resumed,
+                bosses: start.bosses.clone(),
             },
         );
         log.start = Some(log.buf.clone());
@@ -506,21 +518,21 @@ impl Log {
         self.write(t, Entry::Lost { f: self.frame, seconds });
     }
 
-    /// The frame's icons: every exit, exactly as handed over (the navigator's input),
-    /// and the checkpoints and waypoints not yet written in this part (the navigator
-    /// does not use them; they don't move). Written when the exits differ from the
+    /// The frame's icons: every exit and boss icon, exactly as handed over (the
+    /// navigator's input), and the other icons (checkpoints, waypoints, grey skulls, …)
+    /// not yet written in this part (the navigator does not use them; they don't move). Written when the exits differ from the
     /// last written, on a whole-window scan with an exit or while far exits are kept
     /// (`far`: the recorder holds far exits that this frame uses or replaces), when
     /// the frame size changed while far exits are kept (it decides which are far),
     /// and for a new checkpoint or waypoint.
     pub fn icons(&mut self, t: u64, icons: &[Icon], whole: bool, size: (usize, usize), far: bool) {
         let size = [size.0, size.1];
-        let exits: Vec<&Icon> = icons.iter().filter(|i| i.kind == "exit").collect();
+        let exits: Vec<&Icon> = icons.iter().filter(|i| fed(i.kind)).collect();
         let same = exits.len() == self.last_icons.len() && self.last_icons.iter().zip(&exits).all(|(a, b)| a.same(b));
         let resized = self.last_size != Some(size);
         let (px, py) = (self.pos.0 as f32, self.pos.1 as f32);
         let mut new_marks = Vec::new();
-        for icon in icons.iter().filter(|i| i.kind != "exit") {
+        for icon in icons.iter().filter(|i| !fed(i.kind)) {
             let at = (px + icon.x, py + icon.y);
             let known = self.marks.iter().chain(&new_marks).any(|(k, x, y)| k == icon.kind && ((x - at.0).hypot(y - at.1) as f64) <= MARK_SAME);
             if !known {
@@ -537,7 +549,7 @@ impl Log {
         }
         self.last_icons = exits.iter().map(|i| LoggedIcon::of(i)).collect();
         let mut listed = self.last_icons.clone();
-        listed.extend(new_marks.iter().map(|(kind, x, y)| LoggedIcon { kind: kind.clone(), x: x - px, y: y - py, label: None }));
+        listed.extend(new_marks.iter().map(|(kind, x, y)| LoggedIcon { kind: kind.clone(), x: x - px, y: y - py, label: None, sprite: None }));
         self.marks.extend(new_marks);
         self.write(t, Entry::Icons { f: self.frame, whole, size, icons: listed });
     }
@@ -887,6 +899,7 @@ pub(super) mod replay {
         area: Area,
         nav: Navigator,
         scale: f64,
+        bosses: Vec<super::super::Boss>,
         targets: Vec<NavTarget>,
         raw: Vec<Icon>,
         whole: bool,
@@ -921,7 +934,7 @@ pub(super) mod replay {
 
     impl Run {
         fn new(area: Area, start: &Line) -> Run {
-            let Entry::Start { area: id, seed, from, scale, version, memory, resumed, age, remembered } = &start.entry else {
+            let Entry::Start { area: id, seed, from, scale, version, memory, resumed, age, remembered, bosses } = &start.entry else {
                 unreachable!()
             };
             let arrival = match from {
@@ -940,6 +953,7 @@ pub(super) mod replay {
                 area,
                 nav,
                 scale,
+                bosses: bosses.clone(),
                 targets: Vec::new(),
                 raw: Vec::new(),
                 whole: false,
@@ -995,7 +1009,7 @@ pub(super) mod replay {
 
         /// One frame's icons to the navigator, then a needle sample.
         fn close(&mut self) {
-            let list = super::super::exit_list(&self.raw, self.whole, self.pos, self.size, &mut self.far, &mut self.far_age);
+            let list = super::super::exit_list(&self.raw, self.whole, self.pos, self.size, &mut self.far, &mut self.far_age, &self.visit.area, &self.bosses);
             self.nav.icons(&list);
             self.whole = false;
             self.visit.frames += 1;
@@ -1452,7 +1466,7 @@ mod tests {
     const T0: u64 = 1_762_945_000_000;
 
     fn start(area: &str, from: &str) -> Start {
-        Start { area: area.into(), seed: Some(11), from: Some(from.into()), scale: SCALE, memory: None, age: None, resumed: false }
+        Start { area: area.into(), seed: Some(11), from: Some(from.into()), scale: SCALE, memory: None, age: None, resumed: false, bosses: vec![] }
     }
 
     /// A simulated Clearfell visit written as the app writes it: the walker's moves and
@@ -1514,7 +1528,7 @@ mod tests {
             let whole = i % frames_whole == 0;
             log.icons(t, &icons, whole, size, false);
             let list: Vec<ExitIcon> =
-                icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: i.label.clone() }).collect();
+                icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: i.label.clone(), boss: vec![] }).collect();
             nav.icons(&list);
             if let Some(view) = nav.guide(&targets) {
                 log.needle(t, &targets, &view, false, false, None, None);
@@ -1531,7 +1545,7 @@ mod tests {
             nav.moved(dx as f64, dy as f64);
             let icon = Icon { kind: "exit", x: (at.0 - pos.0 - dx as f64) as f32, y: (at.1 - pos.1 - dy as f64) as f32, label: Some("G1_3".into()), sprite: None };
             log.icons(t, &[icon.clone()], true, size, false);
-            nav.icons(&[ExitIcon { dx: icon.x as f64, dy: icon.y as f64, to: icon.label.clone() }]);
+            nav.icons(&[ExitIcon { dx: icon.x as f64, dy: icon.y as f64, to: icon.label.clone(), boss: vec![] }]);
             if let Some(view) = nav.guide(&targets) {
                 log.needle(t, &targets, &view, false, false, None, None);
                 needles.push(view);
@@ -1678,7 +1692,7 @@ mod tests {
             // An exit far away, then nothing.
             let icons = if step < 3 { vec![Icon { kind: "exit", x: 200.0 - 6.0 * step as f32, y: 90.0, label: None, sprite: None }] } else { vec![] };
             log.icons(t, &icons, step % 3 == 0, (300, 260), false);
-            nav.icons(&icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: None }).collect::<Vec<_>>());
+            nav.icons(&icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: None, boss: vec![] }).collect::<Vec<_>>());
             if let Some(view) = nav.guide(&town) {
                 log.needle(t, &town, &view, false, false, None, None);
             }

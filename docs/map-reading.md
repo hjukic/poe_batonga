@@ -1196,3 +1196,99 @@ a `boss` part); the step's target says where the layout graphs put it (an exit, 
 When a boss speaks, the reader also keeps one capture of the minimap corner and one of the big map's area
 (`samples/boss-minimap-*.ppm`, `boss-bigmap-*.ppm`): nobody has yet looked at whether the map draws a boss
 icon that could be read like the exits.
+
+## Boss icons as evidence and as kills (third build)
+
+What the reader names a boss icon ([icons by their sprite](#icons-by-their-sprite-2026-11-12-third-build))
+goes to the navigator like an exit icon, and a grey one can tell the checklist that a boss is dead. Nothing
+of this has been seen on a real screen: no boss icon has been read yet.
+
+### Evidence for the navigator
+
+`layout::boss_candidates` says which of the zone's bosses (`Recorder::set_bosses`, from the checklists) an
+icon may be:
+
+- a boss's own icon (`MillerActive`, `GrimTangleBossInactive`) only in its own area, and then the boss its
+  pair names (`data/icons/index.json`, `boss`), else (pair unnamed) any of the zone's bosses; never a pair
+  known to be no checklist boss's (`CarnivorousPlant` in The Grelwood);
+- an orange skull (a unique monster alive): any of the zone's bosses;
+- a grey skull, a rare, anything else: none (a grey skull is a dead unique or a dead rare).
+
+Each place (`Boss::place`: the exit to an area, a tagged node, else a node tagged `boss`) becomes
+`nav::BossAt`, and the icon an `ExitIcon` with `boss` set: its candidate nodes are those places' nodes
+instead of the exits. One place is an exact sighting (as an exit icon is); several are weighed as an
+unlabelled exit icon is over the exits (the nearest candidate counts). A tagged place is an arena's centre:
+the icon may stand 150 units from it (`BOSS_TOL`, as a log anchor at a tag), an exit place 100 (`ICON_TOL`).
+An exit and a boss's icon at one place (the Miller by his exit) are two sightings. Boss icons are never
+labelled, so they never make the "named exits" fit and never the label's gold. Two choices go further
+than "as an unlabelled exit icon", because the simulation said so (below): a new boss sighting the belief
+predicted does **not** confirm it (`BOSS_CONFIRMS`, no anchor from a boss icon), and what bosses' icons add
+to a layout is kept apart (`Bank::boss`): it is in the posterior and the needle, **not** in the 90% share
+gold needs (`BOSS_GOLD`). They move the particles as exit icons do (`BOSS_PARTICLES`). A needle to a boss
+target points at its icon once the belief says it is the target's (`icon_is_target`).
+
+**Simulation** (`nav_sim::what_boss_icons_add`, one seed in `cargo test`; `boss_icons_report`, two seeds,
+release): the same walks, unlabelled exit icons, with and without the boss's icon (the Miller by the
+Riverbank's way to the encampment; Beira at one of Clearfell's boss nodes, up to 100 units off it):
+
+| View | Boss icons | Within 45° at 60% | Top layout true for good | Gold steps | Gold > 60° off |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Minimap, 2 seeds | no | 36.2% | 35% | 14 | 0 |
+| Minimap, 2 seeds | yes | 38.0% | 45% | 10 | 2 (20%) |
+| Wide, 2 seeds | no | 51.9% | 46% | 295 | 5 (1.7%) |
+| Wide, 2 seeds | yes | 61.5% | 54% | 412 | 11 (2.7%) |
+| Wide, 1 seed | no | 52.8% | 50% | 173 | 1 (0.6%) |
+| Wide, 1 seed | yes | 61.1% | 54% | 183 | 7 (3.8%) |
+
+Boss icons help the needle (+9 points within 45° in the wide view) and the layout (+8–10 points), and make
+gold worse: Gate A's 3% holds at two seeds, not at one. Letting them count for gold's share made it worse
+still (minimap view 5 of 22 off), letting them confirm changed nothing more, keeping them off the
+particles was no better (wide view 6 of 145 off, 58.5% within 45°). The test pins the numbers above so
+they cannot get worse unnoticed; the simulation's labels are perfect and its boss is always where the
+checklist says.
+
+Recorder: `exit_list` hands the navigator exits and boss icons (kept from whole-window scans for 3 frames
+like far exits). Flight recorder: boss icons are written with exits (`kind`, `sprite`), the `start` line
+carries the zone's `bosses`, and the replay places them the same way
+(`boss_icons_are_logged_and_replayed_as_fed`). Grey skulls are written once per part, as checkpoints are.
+
+Each frame the recorder tells the reader where this part saw each boss pair (`set_icon_hints`), so a
+boss's dark grey icon, which has no label and little colour, is looked for there.
+
+Tests: `a_boss_icon_is_weighed_at_the_boss_places_not_the_exits` (Clearfell `W_E_N`, just arrived from the
+encampment, Beira's icon in view: the layout gains more than from the walk; the same place read as an
+exit says something else), `a_boss_icon_never_confirms_the_belief` (alone, six frames: no anchor, no
+gold; after two named exits fixed the layout, a boss icon where the belief expects it confirms only with
+`BOSS_CONFIRMS` switched on; the needle to Beira points at it), `a_boss_icon_counts_only_for_the_bosses_it_may_be`.
+
+### "This boss is dead" (`Recorder::dead_bosses`)
+
+The current zone's bosses (names as `set_bosses` gave them) the map showed dead in this visit, for the
+checklist (the chair wires it). Strict: a false "dead" ticks a step not done. A boss is dead when
+
+- **a**: its own pair's grey icon is read and the zone has one boss;
+- **b**: the grey icon's pair names it;
+- **c**: a grey icon (its own or a grey skull) lies within 12 cells of where this part saw it alive by its
+  own icon (a or b);
+- **d**: with a trusted layout (the top one at 90%), a grey skull lies at its node in at least 90% of the
+  belief, and at no other boss's node in 50%.
+
+A grey skull alone, an orange skull turning grey (an unrelated unique, as far as the map can tell), a pair
+of another area or of no checklist boss count for nothing
+(`the_map_names_a_boss_dead_only_when_the_grey_icon_is_its`). Places are per part: a new part starts
+without them; the names stay for the visit.
+
+Which of the 74 boss steps each rule can attribute (from `data/icons/index.json`, the checklists and the
+layout graphs; c applies wherever a or b does):
+
+| Rule | Steps | Bosses |
+| --- | ---: | --- |
+| b (own icon names it) | 24 | The Bloated Miller, The Devourer, Draven, Asinia, The Crowbell, The Executioner, Candlemass, Rathbreaker, Balbala, Kabala, Tor Gul, Rudja, Rootdredge, Xyclucian, Blackjaw, Zicoatl, Ignagduk, Queen of Filth, Viper Napuatzi, Doryani, Blind Beast, Captain Hartlin, Great White One, Clawcrunch |
+| a (its area's pair, one boss) | 17 | Beira, Ervig, Lachlann, Jamanra (×2), Azarian, Iktab & Ekbab, Zalmarath, Mighty Silverfist, Ketzuli, Diamora, Yama the White, The Prisoner, Scourge of the Skies, Torvian, Benedictus, Tavakai |
+| d only (grey skull at its node, trusted layout) | 24 | Gerung, Areagne, Count Geonor, Magma Twins, Krutog, Omniphobia, Tombgrowl, Doran, Ninth Treasure, Narag, Mektul, 2 Vultures, Mad Butcher, Forael, the interludes' Godwin & Sigbert, Oswin, Akthi & Anundr, Elzarah, Bloodbilge, Azmadi, Rakkar, the Yeti, Stormgore, Zolin & Zelina |
+| none | 9 | King in the Mists, The Rust King, The Rotten Druid, Noxious Behemoth, Mimok, Vornas, Lythara, Isolde & Heldra, Wulfric & Elswyth |
+
+"d" needs the navigator at 90% on one layout, which outside the two measured areas is rare; in practice
+those 24 stay hand-ticked. Two pairs are in zones with two bosses and name neither (the Count's in Ogham
+Manor, the Volcanic Warrens'): by elimination the Count's is Count Geonor's (the Gargoyle's names
+Candlemass), not built.

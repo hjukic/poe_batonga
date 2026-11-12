@@ -176,6 +176,20 @@ const ICON_CONFIRM: f64 = 0.5;
 /// The needle points at an exit icon once this share of the belief says it is the
 /// target's exit (a labelled icon says so itself).
 const ICON_SURE: f64 = 0.95;
+/// A new boss sighting the belief predicted is no absolute evidence (gold stays with exits
+/// and log anchors), though a new unlabelled exit sighting is. A boss's arena is wide and
+/// Clearfell's layouts have up to two boss nodes.
+const BOSS_CONFIRMS: bool = false;
+/// Whether what bosses' icons add to a layout's share counts for the 90% gold needs. Off:
+/// in the simulation (2 seeds, minimap view, `nav_sim::boss_icons_report`) counting it made
+/// 5 of 22 gold needles point more than 60° off, against 2 of 10 without it and 0 of 14
+/// without boss icons; confirming as well changed nothing.
+const BOSS_GOLD: bool = false;
+/// Bosses' icons move the particles (weigh them, redraw some where they put the player)
+/// as exit icons do. Off, they would only weigh the layouts (`Bank::boss`); in the
+/// simulation (one seed, wide view) that gave 6 of 145 gold needles off against 7 of 183,
+/// and within 45° at 60% 58.5% against 61.1% (`nav_sim::boss_icons_report`).
+const BOSS_PARTICLES: bool = true;
 
 /// A way through the recorded map is taken unless it is longer than this many
 /// times the straight line (and this many minimap cells more): a longer one
@@ -228,11 +242,16 @@ pub(super) const MEMORY_VERSION: u32 = 1;
 
 /// Icons this close (world units) on the dead-reckoned track are one exit.
 const SIGHT_MATCH: f64 = 40.0;
+/// A boss's icon stands where the boss is, in its arena: a tagged node is the arena's
+/// centre (as for a log anchor at a tag, `TAG_SIGMA`); at an exit, as an exit icon.
+const BOSS_TOL: f64 = 150.0;
 
-/// One exit seen on the map since the last loss.
+/// One exit (or boss) seen on the map since the last loss.
 #[derive(Clone, Debug)]
 struct Sighting {
     at: (f64, f64),
+    /// A boss's icon: the places it may be (see `ExitIcon::boss`).
+    boss: Vec<BossAt>,
     /// The label read most recently, and in how many scans in a row it was the same.
     name: Option<String>,
     scans: u32,
@@ -255,6 +274,31 @@ pub struct ExitIcon {
     pub dx: f64,
     pub dy: f64,
     pub to: Option<String>,
+    /// Not an exit but a boss's icon (a skull, or the boss's own icon): the places of the
+    /// zone's bosses it may be. One place is an exact sighting of it (as an exit icon
+    /// is); several are weighed as an unlabelled exit icon is over the exits. It is never
+    /// labelled: what makes it gold is what makes an unlabelled exit icon gold.
+    pub boss: Vec<BossAt>,
+}
+
+/// Where a boss of the zone stands in the layout graphs.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum BossAt {
+    /// At a node with this tag ("boss", "arena", …).
+    Tag(String),
+    /// At the exit to this area id (the Bloated Miller by the way to the encampment).
+    Exit(String),
+}
+
+impl ExitIcon {
+    /// How far its object may stand from its node (world units).
+    fn tolerance(&self) -> f64 {
+        if self.boss.iter().any(|b| matches!(b, BossAt::Tag(_))) {
+            BOSS_TOL
+        } else {
+            ICON_TOL
+        }
+    }
 }
 
 /// Where the visit starts.
@@ -331,6 +375,9 @@ struct Bank {
     /// How well this layout's exits fit the last whole scan's named exits (log),
     /// replaced at every such scan: position-free and absolute.
     named: f64,
+    /// What bosses' icons added to the icon evidence (log): in the posterior, not in the
+    /// share gold needs (`BOSS_GOLD`), not kept in the memory.
+    boss: f64,
     particles: Vec<Particle>,
 }
 
@@ -342,11 +389,17 @@ pub(super) struct Tuning {
     pub gold_walk: f64,
     pub missing: f64,
     pub flat: f64,
+    /// A new boss sighting the belief predicted confirms it, as an exit's does.
+    pub boss_confirms: bool,
+    /// What bosses' icons add counts in the layout share gold needs.
+    pub boss_gold: bool,
+    /// Bosses' icons weigh and redraw particles (`BOSS_PARTICLES`).
+    pub boss_particles: bool,
 }
 
 impl Default for Tuning {
     fn default() -> Self {
-        Tuning { gold: GOLD, gold_layout: GOLD_LAYOUT, gold_walk: GOLD_WALK, missing: MISSING, flat: FLAT }
+        Tuning { gold: GOLD, gold_layout: GOLD_LAYOUT, gold_walk: GOLD_WALK, missing: MISSING, flat: FLAT, boss_confirms: BOSS_CONFIRMS, boss_gold: BOSS_GOLD, boss_particles: BOSS_PARTICLES }
     }
 }
 
@@ -515,7 +568,7 @@ impl Navigator {
                     (m.anchors.get(&layout.id).copied().unwrap_or(best - path_cap(n)) - best).clamp(-path_cap(n), 0.0)
                 });
                 let named = evidence.map_or(0.0, |m| m.named.get(&layout.id).copied().unwrap_or(0.0));
-                let mut bank = Bank { prior, path, evidence: anchors, named, particles };
+                let mut bank = Bank { prior, path, evidence: anchors, named, boss: 0.0, particles };
                 normalise(&mut bank.particles);
                 bank
             })
@@ -569,8 +622,19 @@ impl Navigator {
     }
 
     /// The exits a map icon can be in one layout: those leading to its label's area,
-    /// or every exit when it has none.
+    /// or every exit when it has none; for a boss's icon, the nodes of its places.
     fn icon_nodes(&self, layout: &Layout, icon: &ExitIcon) -> Vec<usize> {
+        if !icon.boss.is_empty() {
+            return (0..layout.nodes.len())
+                .filter(|&i| {
+                    let n = &layout.nodes[i];
+                    icon.boss.iter().any(|b| match b {
+                        BossAt::Tag(tag) => !tag.is_empty() && n.has_tag(tag),
+                        BossAt::Exit(area) => n.exit.as_deref() == Some(area.as_str()),
+                    })
+                })
+                .collect();
+        }
         let to = icon.to.as_deref().map(|t| self.exit_ids(t));
         (0..layout.nodes.len())
             .filter(|&i| match (&layout.nodes[i].exit, &to) {
@@ -587,17 +651,19 @@ impl Navigator {
         // Each icon to its sighting: the same exit in the next frames (labelled on a
         // whole-window scan, unlabelled between) is one sighting; a label read
         // later upgrades it.
-        let (mut new, mut upgraded) = (false, false);
+        let (mut new, mut upgraded, mut new_exit) = (false, false, false);
         let mut now = Vec::with_capacity(icons.len());
         for icon in icons {
             let (wx, wy) = super::guide::from_screen((icon.dx / self.scale, icon.dy / self.scale));
             let at = (self.track.0 + wx, self.track.1 + wy);
-            let found = self.sightings.iter().position(|s| (s.at.0 - at.0).hypot(s.at.1 - at.1) <= SIGHT_MATCH);
+            // An exit and a boss by it (the Miller at his exit) are two sightings.
+            let found = self.sightings.iter().position(|s| s.boss == icon.boss && (s.at.0 - at.0).hypot(s.at.1 - at.1) <= SIGHT_MATCH);
             let i = match found {
                 Some(i) => i,
                 None => {
                     new = true;
-                    self.sightings.push(Sighting { at, name: None, scans: 0, labelled: icon.to.is_some(), jumps: self.jumps });
+                    new_exit |= icon.boss.is_empty();
+                    self.sightings.push(Sighting { at, boss: icon.boss.clone(), name: None, scans: 0, labelled: icon.to.is_some(), jumps: self.jumps });
                     self.sightings.len() - 1
                 }
             };
@@ -639,6 +705,7 @@ impl Navigator {
         let scale = self.scale;
         let candidates: Vec<Vec<Vec<usize>>> =
             self.area.layouts.iter().map(|l| icons.iter().map(|i| self.icon_nodes(l, i)).collect()).collect();
+        let boss_still = !self.tuning.boss_particles;
         let Navigator { area, banks, rng, exits_seen, .. } = self;
         let mut learnt = Vec::new();
         for (k, (layout, bank)) in area.layouts.iter().zip(banks.iter_mut()).enumerate() {
@@ -652,10 +719,12 @@ impl Navigator {
                 let (x, y) = super::guide::from_screen((icon.dx / (scale * s), icon.dy / (scale * s)));
                 (x / layout.unit, y / layout.unit)
             };
-            let like = |p: &Particle| -> f64 {
+            // How well the icons (those `only` lets through) land on their nodes from a particle.
+            let like_of = |p: &Particle, only: &dyn Fn(&ExitIcon) -> bool| -> f64 {
                 icons
                     .iter()
                     .zip(cands)
+                    .filter(|(icon, _)| only(icon))
                     .map(|(icon, nodes)| {
                         let (ox, oy) = offset(icon, p.s);
                         let d2 = nodes
@@ -665,10 +734,12 @@ impl Navigator {
                                 ((p.x + ox - x).powi(2) + (p.y + oy - y).powi(2)) * layout.unit * layout.unit
                             })
                             .fold(f64::INFINITY, f64::min);
-                        ICON_FLOOR + (1.0 - ICON_FLOOR) * (-d2 / (2.0 * ICON_TOL * ICON_TOL)).exp()
+                        let tol = icon.tolerance();
+                        ICON_FLOOR + (1.0 - ICON_FLOOR) * (-d2 / (2.0 * tol * tol)).exp()
                     })
                     .product()
             };
+            let like = |p: &Particle| like_of(p, &|_| true);
             let agree: f64 = bank.particles.iter().map(|p| p.w * like(p)).sum();
             confirmed += before[k] * agree;
             // Two icons: does any pair of this layout's exits lie as far apart? This
@@ -699,14 +770,16 @@ impl Navigator {
                     fit *= best;
                 }
                 bank.named = fit.max(NAMED_BASE).ln();
-            } else if icons.len() >= 2 {
-                geometry = 1.0;
+            }
+            // How well the first of `ids` and each other lie as two of this layout's nodes do.
+            let pairs = |ids: &[usize]| -> f64 {
                 let world = |i: &ExitIcon| super::guide::from_screen((i.dx / scale, i.dy / scale));
-                for j in 1..icons.len() {
-                    let (a, b) = (world(&icons[0]), world(&icons[j]));
+                let mut fit = 1.0;
+                for &j in &ids[1..] {
+                    let (a, b) = (world(&icons[ids[0]]), world(&icons[j]));
                     let want = (b.0 - a.0, b.1 - a.1);
                     let mut best = 0.0f64;
-                    for &n1 in &cands[0] {
+                    for &n1 in &cands[ids[0]] {
                         for &n2 in &cands[j] {
                             if n1 == n2 {
                                 continue;
@@ -717,17 +790,40 @@ impl Navigator {
                             best = best.max((-d2 / (4.0 * ICON_TOL * ICON_TOL)).exp());
                         }
                     }
-                    geometry *= best;
+                    fit *= best;
                 }
+                fit
+            };
+            if labelled.len() < 2 && icons.len() >= 2 {
+                geometry = pairs(&(0..icons.len()).collect::<Vec<_>>());
             }
-            bank.evidence += weight * agree.max(geometry).max(ICON_BASE).ln();
+            let total = weight * agree.max(geometry).max(ICON_BASE).ln();
+            // A boss's icon moves the belief but is kept apart (`Bank::boss`): gold does not
+            // lean on it (see `BOSS_GOLD`). The exits alone give `evidence` as before.
+            let exits: Vec<usize> = (0..icons.len()).filter(|&j| icons[j].boss.is_empty()).collect();
+            if exits.len() == icons.len() {
+                bank.evidence += total;
+            } else {
+                let alone = if exits.is_empty() {
+                    0.0
+                } else {
+                    let agree_exits: f64 = bank.particles.iter().map(|p| p.w * like_of(p, &|i| i.boss.is_empty())).sum();
+                    let geometry_exits = if labelled.len() < 2 && exits.len() >= 2 { pairs(&exits) } else { 0.0 };
+                    weight * agree_exits.max(geometry_exits).max(ICON_BASE).ln()
+                };
+                bank.evidence += alone;
+                bank.boss += total - alone;
+            }
             // The belief does not explain the icons: also try where they put the player,
             // unless this layout already carries the belief (a false or misread icon
             // must not move a confident bank much).
             let confident = before[k] >= ICON_FIRM;
             if agree < 0.3 && !confident {
+                // Not where a boss's icon puts the player (`BOSS_PARTICLES`): an arena is
+                // wide, and a layout may have two boss nodes.
+                let soft = |j: usize| boss_still && !icons[j].boss.is_empty();
                 let labelled: Vec<usize> = (0..icons.len()).filter(|&j| icons[j].to.is_some() && !cands[j].is_empty()).collect();
-                let any: Vec<usize> = (0..icons.len()).filter(|&j| !cands[j].is_empty()).collect();
+                let any: Vec<usize> = (0..icons.len()).filter(|&j| !cands[j].is_empty() && !soft(j)).collect();
                 let pool = if labelled.is_empty() { any } else { labelled };
                 if !pool.is_empty() {
                     for p in bank.particles.iter_mut() {
@@ -746,7 +842,7 @@ impl Navigator {
                 }
             }
             for p in bank.particles.iter_mut() {
-                let l = like(p);
+                let l = if boss_still { like_of(p, &|i| i.boss.is_empty()) } else { like(p) };
                 p.w *= if confident { 0.5 + 0.5 * l } else { l };
             }
             normalise(&mut bank.particles);
@@ -792,7 +888,7 @@ impl Navigator {
         // Absolute evidence (gold allowed) only when the belief held before a new
         // sighting predicted it: an icon that reshuffles a diffuse belief, or the
         // same sighting again, confirms nothing.
-        if new && confirmed >= ICON_CONFIRM {
+        if (new_exit || (new && self.tuning.boss_confirms)) && confirmed >= ICON_CONFIRM {
             self.anchored = true;
         }
     }
@@ -835,13 +931,46 @@ impl Navigator {
                     let (nx, ny) = at(n);
                     (n, ((q.0 - nx).powi(2) + (q.1 - ny).powi(2)).sqrt() * layout.unit)
                 }).min_by(|a, b| a.1.total_cmp(&b.1));
-                if near.is_some_and(|(n, d)| d <= 2.0 * ICON_TOL && goals.contains(&n)) {
+                if near.is_some_and(|(n, d)| d <= 2.0 * icon.tolerance() && goals.contains(&n)) {
                     hit += p.w;
                 }
             }
             share += posterior[k] * hit;
         }
         share
+    }
+
+    /// With a trusted layout (the top one at `GOLD_LAYOUT`), the share of the belief that
+    /// puts an icon at offset (`dx`, `dy`) (minimap cells) on a node of `place`; None
+    /// without one, or when no layout has the place.
+    pub fn icon_at_place(&self, dx: f64, dy: f64, place: &BossAt) -> Option<f64> {
+        let posterior = self.posterior();
+        // Trusted by exits and anchors, not by bosses' icons (a grey skull is one).
+        if self.gold_posterior().iter().copied().fold(0.0, f64::max) < GOLD_LAYOUT {
+            return None;
+        }
+        let icon = ExitIcon { dx, dy, to: None, boss: vec![place.clone()] };
+        let mut share = 0.0;
+        let mut any = false;
+        for (k, (layout, bank)) in self.area.layouts.iter().zip(&self.banks).enumerate() {
+            let nodes = self.icon_nodes(layout, &icon);
+            if posterior[k] < NEGLIGIBLE || nodes.is_empty() {
+                continue;
+            }
+            any = true;
+            let mut hit = 0.0;
+            for p in &bank.particles {
+                let (x, y) = self.position(layout, p);
+                let (ox, oy) = super::guide::from_screen((dx / (self.scale * p.s), dy / (self.scale * p.s)));
+                let q = (x + ox / layout.unit, y + oy / layout.unit);
+                let near = nodes.iter().any(|&n| (q.0 - layout.nodes[n].x).hypot(q.1 - layout.nodes[n].y) * layout.unit <= icon.tolerance());
+                if near {
+                    hit += p.w;
+                }
+            }
+            share += posterior[k] * hit;
+        }
+        any.then_some(share)
     }
 
     /// Data came in since the start: the memory changed.
@@ -1036,7 +1165,17 @@ impl Navigator {
 
     /// Layout probabilities, in layout order.
     fn posterior(&self) -> Vec<f64> {
-        let logs: Vec<f64> = self.banks.iter().map(|b| b.prior + b.path + b.evidence + b.named).collect();
+        self.posterior_with(true)
+    }
+
+    /// The layout share gold needs: without what bosses' icons added (`BOSS_GOLD`).
+    fn gold_posterior(&self) -> Vec<f64> {
+        self.posterior_with(self.tuning.boss_gold)
+    }
+
+    fn posterior_with(&self, bosses: bool) -> Vec<f64> {
+        let boss = |b: &Bank| if bosses { b.boss } else { 0.0 };
+        let logs: Vec<f64> = self.banks.iter().map(|b| b.prior + b.path + b.evidence + b.named + boss(b)).collect();
         let top = logs.iter().copied().fold(f64::MIN, f64::max);
         let raw: Vec<f64> = logs.iter().map(|l| (l - top).exp()).collect();
         let sum: f64 = raw.iter().sum();
@@ -1126,7 +1265,9 @@ impl Navigator {
         // Gold needs one layout to carry the belief, which only anchors and icons can
         // do (the walked line alone gives at most PATH_MOST): with the belief spread
         // over layouts that happen to point the same way the needle was often wrong.
-        let source = if confidence >= t.gold && p_top >= t.gold_layout && (self.walked >= t.gold_walk || self.anchored) {
+        // Gold judges the layout by exits and anchors only: a boss's icon may have raised it.
+        let p_gold = self.gold_posterior()[top];
+        let source = if confidence >= t.gold && p_gold >= t.gold_layout && (self.walked >= t.gold_walk || self.anchored) {
             "estimated"
         } else if confidence >= ROUGH {
             "rough"
@@ -1193,7 +1334,7 @@ impl Navigator {
             // icon implies from the exit's node (up to 100 units off) it was wrong
             // more often (4.4% of gold, one seed).
             let near = icon.dx.hypot(icon.dy) <= ICON_GOLD_WITHIN && pointing;
-            let sure = if near && !against && (named || p_top >= GOLD_LAYOUT) { "estimated" } else { "rough" };
+            let sure = if near && !against && (named || p_gold >= GOLD_LAYOUT) { "estimated" } else { "rough" };
             return Some(GuideView {
                 variant: if p_top >= SURE { self.area.layouts[top].id.clone() } else { String::new() },
                 target_kind: if target.exit.is_some() { "entrance".into() } else { target.tag.clone().unwrap_or_default() },
@@ -1272,7 +1413,7 @@ impl Navigator {
                 .map(|s| {
                     // The inverse of how `icons` placed it on the track.
                     let (sx, sy) = to_screen((s.at.0 - self.track.0, s.at.1 - self.track.1));
-                    (ExitIcon { dx: sx * self.scale, dy: sy * self.scale, to: s.name.clone() }, s.scans >= 2)
+                    (ExitIcon { dx: sx * self.scale, dy: sy * self.scale, to: s.name.clone(), boss: s.boss.clone() }, s.scans >= 2)
                 })
                 .collect();
             best(list)
@@ -1285,7 +1426,7 @@ impl Navigator {
             let c = place.came_in.filter(|c| c.from == exit && !town(c.from) && c.delay <= ARRIVAL_DELAY && !c.waypoint)?;
             let sure = c.exits.iter().any(|l| l.as_deref().is_none_or(|l| self.exit_ids(l).contains(&exit)));
             let (dx, dy) = ((c.at.0 - place.player.0) as f64, (c.at.1 - place.player.1) as f64);
-            Some((ExitIcon { dx, dy, to: None }, sure, 1.0))
+            Some((ExitIcon { dx, dy, to: None, boss: vec![] }, sure, 1.0))
         };
         // The icon in view, else the arrival point (on the map itself), else a
         // sighting (placed by dead reckoning).
@@ -1327,7 +1468,8 @@ impl Navigator {
             let against = icon.to.is_some() && p_top >= GOLD_LAYOUT && self.icon_is_target(&unlabelled, target, posterior) < 0.5;
             let named = icon.to.is_some() && read_twice && !against;
             let near = straight <= ICON_GOLD_WITHIN;
-            let sure = if near && !against && (named || p_top >= GOLD_LAYOUT) { "estimated" } else { "rough" };
+            let p_gold = self.gold_posterior()[top];
+            let sure = if near && !against && (named || p_gold >= GOLD_LAYOUT) { "estimated" } else { "rough" };
             if named && near { "estimated" } else { self.cap_source(sure, posterior) }
         };
         // Mostly across fog, or a long way round: a guess, however the target is known.
@@ -1737,7 +1879,7 @@ mod tests {
             let area = Area::parse("X", &near.replace("FORMAT", format)).unwrap();
             let l = &area.layouts[0];
             let (sx, sy) = super::super::guide::to_screen(((l.nodes[0].x - l.nodes[1].x) * l.unit, 0.0));
-            let icon = |to: Option<&str>| ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: to.map(String::from) };
+            let icon = |to: Option<&str>| ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: to.map(String::from), boss: vec![] };
             let mut nav = Navigator::new(&area, Arrival::From("B"), None, SCALE, 3);
             nav.icons(&[icon(Some("A"))]);
             // One scan's label is not enough for gold; the same name again is.
@@ -1800,7 +1942,7 @@ mod tests {
         let l = area.layouts.iter().find(|l| l.id == layout).unwrap();
         let n = l.nodes.iter().find(|n| n.exit.as_deref() == Some(to)).unwrap();
         let (sx, sy) = super::super::guide::to_screen((n.x - at.0, n.y - at.1));
-        ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: None }
+        ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: None, boss: vec![] }
     }
 
     #[test]
@@ -1924,7 +2066,7 @@ mod tests {
         let at = (300.0, 0.0);
         let icon = |n: (f64, f64)| {
             let (sx, sy) = super::super::guide::to_screen((n.0 - at.0, n.1 - at.1));
-            ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: Some("Aville".into()) }
+            ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: Some("Aville".into()), boss: vec![] }
         };
         let (near, far) = (icon((300.0, 300.0)), icon((0.0, 0.0)));
         let bearing = |icons: &[ExitIcon]| {
@@ -1974,6 +2116,79 @@ mod tests {
         assert_ne!(nav.guide(&target).unwrap().degrees, view.degrees);
     }
 
+    /// A boss's icon at Clearfell's boss node of `layout`, seen from `at` (world units).
+    fn boss_icon_of(area: &Area, layout: &str, at: (f64, f64)) -> ExitIcon {
+        let l = area.layouts.iter().find(|l| l.id == layout).unwrap();
+        let n = l.nodes.iter().find(|n| n.has_tag("boss")).unwrap();
+        let (sx, sy) = super::super::guide::to_screen((n.x - at.0, n.y - at.1));
+        ExitIcon { dx: sx * SCALE, dy: sy * SCALE, to: None, boss: vec![BossAt::Tag("boss".into())] }
+    }
+
+    #[test]
+    fn a_boss_icon_is_weighed_at_the_boss_places_not_the_exits() {
+        let area = graph::load("G1_2");
+        let k = area.layouts.iter().position(|l| l.id == "ClearFell_W_E_N").unwrap();
+        let l = &area.layouts[k];
+        let town = l.nodes.iter().find(|n| n.exit.as_deref() == Some("G1_town")).unwrap();
+        let at = (town.x, town.y);
+        let boss = boss_icon_of(&area, "ClearFell_W_E_N", at);
+        // Its candidate nodes are the boss nodes; one place or several, as given.
+        let nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 4);
+        let tagged: Vec<usize> = (0..l.nodes.len()).filter(|&i| l.nodes[i].has_tag("boss")).collect();
+        assert_eq!(nav.icon_nodes(l, &boss), tagged);
+        let both = ExitIcon { boss: vec![BossAt::Tag("boss".into()), BossAt::Exit("G1_3".into())], ..boss.clone() };
+        assert_eq!(nav.icon_nodes(l, &both).len(), tagged.len() + 1);
+        // Just arrived from the encampment, Beira's icon in view: the layout whose boss
+        // node lies there gains, more than from the walk alone.
+        let share = |icons: &[ExitIcon]| {
+            let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 4);
+            nav.icons(icons);
+            nav.posterior()[k]
+        };
+        let (none, seen) = (share(&[]), share(std::slice::from_ref(&boss)));
+        assert!(seen > 1.5 * none, "W_E_N without {none:.3}, with Beira's icon {seen:.3}");
+        // The same place taken for an exit says something else.
+        let as_exit = share(&[ExitIcon { boss: vec![], ..boss.clone() }]);
+        assert!((as_exit - seen).abs() > 0.01, "as an exit {as_exit:.3}, as a boss {seen:.3}");
+        // A boss's icon and an exit's at one place are two sightings.
+        let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 4);
+        nav.icons(&[boss.clone(), ExitIcon { boss: vec![], ..boss.clone() }]);
+        assert_eq!(nav.sightings.len(), 2);
+    }
+
+    #[test]
+    fn a_boss_icon_never_confirms_the_belief() {
+        let area = graph::load("G1_2");
+        let l = area.layouts.iter().find(|l| l.id == "ClearFell_W_E_N").unwrap();
+        let at = l.samples[l.samples.len() / 3].at;
+        let target = [NavTarget { label: "Beira".into(), tag: Some("boss".into()), ..Default::default() }];
+        // Nothing known: a boss's icon alone, seen again and again, is no anchor and no gold.
+        let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 4);
+        for _ in 0..6 {
+            nav.icons(&[boss_icon_of(&area, "ClearFell_W_E_N", at)]);
+            assert_ne!(nav.guide(&target).unwrap().source, "estimated");
+        }
+        assert!(!nav.progress().1, "a boss icon alone confirmed itself");
+        // Two exits read by name fix the layout and place; the boss's icon where the belief
+        // expects it is a new sighting the belief predicted. An unlabelled exit icon would
+        // confirm the belief then; a boss's does not (`BOSS_CONFIRMS`), unless switched on.
+        let named = |to: &str, exit: &str| ExitIcon { to: Some(to.into()), ..icon_of(&area, "ClearFell_W_E_N", exit, at) };
+        let pinned = |tuning: Tuning| {
+            let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 4).tuned(tuning);
+            nav.icons(&[named("The Grelwood", "G1_4"), named("Mud Burrow", "G1_3")]);
+            assert!(!nav.progress().1);
+            nav.icons(&[named("The Grelwood", "G1_4"), named("Mud Burrow", "G1_3"), boss_icon_of(&area, "ClearFell_W_E_N", at)]);
+            nav
+        };
+        assert!(!pinned(Tuning::default()).progress().1);
+        let nav = pinned(Tuning { boss_confirms: true, ..Tuning::default() });
+        assert!(nav.progress().1);
+        // The needle to Beira points at her icon.
+        let icon = boss_icon_of(&area, "ClearFell_W_E_N", at);
+        let view = nav.guide(&target).unwrap();
+        assert!(super::super::guide::angle_between(view.degrees.unwrap(), screen_bearing(icon.dx, icon.dy).unwrap()) < 30.0, "{view:?}");
+    }
+
     /// The owner's live case (N7): Clearfell 2693856399, app restarted (arrival
     /// unknown, no memory), big map open, the Grelwood exit icon at (−136, +83)
     /// cells; the wider capture also sees Mud Burrow at (823, 110).
@@ -1981,8 +2196,8 @@ mod tests {
     fn the_live_clearfell_case() {
         let area = graph::load("G1_2");
         let target = [exit("G1_4", "The Grelwood")];
-        let grelwood = ExitIcon { dx: -136.0, dy: 83.0, to: None };
-        let mud = ExitIcon { dx: 823.0, dy: 110.0, to: None };
+        let grelwood = ExitIcon { dx: -136.0, dy: 83.0, to: None, boss: vec![] };
+        let mud = ExitIcon { dx: 823.0, dy: 110.0, to: None, boss: vec![] };
         let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 2693856399);
         nav.icons(&[grelwood.clone()]);
         let one = nav.guide(&target).unwrap();
@@ -2016,10 +2231,10 @@ mod tests {
     /// Grelwood exit, its memory from earlier builds, then the reader's frames: the
     /// near exit unlabelled, the whole-window scan with both named, unlabelled again.
     fn live_frames(nav: &mut Navigator) {
-        let near = ExitIcon { dx: -136.0, dy: 83.0, to: None };
+        let near = ExitIcon { dx: -136.0, dy: 83.0, to: None, boss: vec![] };
         let scan = [
             ExitIcon { to: Some("The Grelwood".into()), ..near.clone() },
-            ExitIcon { dx: 823.0, dy: 110.0, to: Some("Mud Burrow".into()) },
+            ExitIcon { dx: 823.0, dy: 110.0, to: Some("Mud Burrow".into()), boss: vec![] },
         ];
         for round in 0..4 {
             nav.icons(&[near.clone()]);
@@ -2183,7 +2398,7 @@ mod tests {
         let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 3).map_ahead_live();
         // The Grelwood's exit 80 cells up, read by name in two scans; a wall across
         // halfway, with a 20-cell doorway to the right.
-        let icon = ExitIcon { dx: 0.0, dy: -80.0, to: Some("The Grelwood".into()) };
+        let icon = ExitIcon { dx: 0.0, dy: -80.0, to: Some("The Grelwood".into()), boss: vec![] };
         nav.icons(std::slice::from_ref(&icon));
         nav.icons(std::slice::from_ref(&icon));
         let target = [exit("G1_4", "The Grelwood")];
@@ -2225,7 +2440,7 @@ mod tests {
     fn without_a_way_the_needle_is_as_before() {
         let area = graph::load("G1_2");
         let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 3).map_ahead_live();
-        let icon = ExitIcon { dx: 0.0, dy: -80.0, to: Some("The Grelwood".into()) };
+        let icon = ExitIcon { dx: 0.0, dy: -80.0, to: Some("The Grelwood".into()), boss: vec![] };
         nav.icons(std::slice::from_ref(&icon));
         nav.icons(std::slice::from_ref(&icon));
         let target = [exit("G1_4", "The Grelwood")];
@@ -2307,7 +2522,7 @@ mod tests {
         let target = [exit("G1_4", "The Grelwood")];
         let mut times = Vec::new();
         for (k, &[x, y]) in trail.iter().enumerate().step_by(25) {
-            let icon = ExitIcon { dx: 240.0, dy: -180.0, to: Some("The Grelwood".into()) };
+            let icon = ExitIcon { dx: 240.0, dy: -180.0, to: Some("The Grelwood".into()), boss: vec![] };
             nav.icons(std::slice::from_ref(&icon));
             nav.icons(std::slice::from_ref(&icon));
             let started = std::time::Instant::now();
@@ -2324,7 +2539,7 @@ mod tests {
 
     /// A named exit icon, read in two scans.
     fn named_icon(nav: &mut Navigator, dx: f64, dy: f64, to: &str) {
-        let icon = ExitIcon { dx, dy, to: Some(to.into()) };
+        let icon = ExitIcon { dx, dy, to: Some(to.into()), boss: vec![] };
         nav.icons(std::slice::from_ref(&icon));
         nav.icons(std::slice::from_ref(&icon));
     }

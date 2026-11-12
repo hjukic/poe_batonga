@@ -524,8 +524,9 @@ pub struct Sprite {
     /// `data/icons/index.json` has them.
     pub pair: Option<String>,
     pub area: Option<String>,
-    #[allow(dead_code)] // read by the recorder from I6 on
     pub boss: Option<String>,
+    /// False for a pair known to be no checklist boss's (the Grelwood's carnivorous plant).
+    pub checklist: bool,
     rgba: &'static [u8],
 }
 
@@ -543,6 +544,11 @@ pub fn sprites() -> &'static [Sprite] {
             area: Option<String>,
             #[serde(default)]
             boss: Option<String>,
+            #[serde(default = "yes")]
+            checklist: bool,
+        }
+        fn yes() -> bool {
+            true
         }
         #[derive(serde::Deserialize)]
         struct Index {
@@ -558,7 +564,7 @@ pub fn sprites() -> &'static [Sprite] {
             .filter_map(|(i, e)| {
                 let kind = *KINDS.iter().find(|k| **k == e.kind)?;
                 let rgba = SPRITE_PIXELS.get(i * bytes..(i + 1) * bytes)?;
-                Some(Sprite { id: e.id, kind, pair: e.pair, area: e.area, boss: e.boss, rgba })
+                Some(Sprite { id: e.id, kind, pair: e.pair, area: e.area, boss: e.boss, checklist: e.checklist, rgba })
             })
             .collect()
     })
@@ -609,7 +615,6 @@ fn area_sprites() -> Vec<usize> {
 }
 
 /// `hints`: (pair stem, cells from the player), replacing the last ones.
-#[allow(dead_code)] // the recorder sets them from I5 on
 pub fn set_icon_hints(hints: Vec<(String, [f32; 2])>) {
     #[cfg(not(test))]
     if let Ok(mut current) = ICON_HINTS.lock() {

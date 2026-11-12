@@ -290,9 +290,10 @@ orange door, 9 the waypoint ring, 804/805 the orange and grey skulls). Check wit
   game draws (the exit icon is 0.48 of its sprite on the big map at 2160 px height).
 - `index.json`: the game build and tool; per icon `id` (the table's), `row`, `kind` (what the
   reader calls it: `exit`, `checkpoint`, `waypoint`, `portal`, `boss`, `boss-dead`, `rare`,
-  `dead` (both grey skulls: one picture), `npc`, `quest`), the table's `minimapRadius` / `largemapRadius`, the opaque box at
-  64 px (`box`: x, y, w, h); boss pairs also `pair`, `area`, `areaName`, `boss`, `how`, and the
-  place name the game gives the live icon (`place`, the Active row's `Name`).
+  `dead` (both grey skulls: one picture), `npc`, `quest`), the table's `minimapRadius` /
+  `largemapRadius`, the opaque box at 64 px (`box`: x, y, w, h); boss pairs also `pair`, `area`,
+  `areaName`, `boss`, `how`, `checklist` (only when false), and the place name the game gives the
+  live icon (`place`, the Active row's `Name`).
 - **Which icons:** `Entrance`, `EntrancePortal` (exits), `Portal`, `Waypoint`, `Checkpoint`,
   `CheckpointNotActive`, `BossCheckpointActive`, `UniqueMonsterAlive`/`Dead` (orange and grey
   skull), `RareMonsterAlive`/`Dead` (yellow and grey skull), `NPC`, `QuestObject`, `QuestItem`, and
@@ -308,8 +309,9 @@ orange door, 9 the waypoint ring, 804/805 the orange and grey skulls). Check wit
   `BeetleBoss` ("The Galleria") and `GoldcrushBoss` ("The Aureaduct") have none.
 - `boss` is the checklist's name for the boss (the text of a step's boss part; the script checks it
   is one of the area's) and is set only where the tie names that boss (24 pairs); never for
-  `assumed` ties. A pair whose boss is no checklist boss (`CarnivorousPlant` in The Grelwood,
-  `SnakePitBoss` in The Venom Crypts) has an area and no `boss`.
+  `assumed` ties. A pair whose boss is no checklist boss has an area and no `boss`, and
+  `"checklist": false` where the area has checklist bosses it must not be taken for
+  (`CarnivorousPlant` in The Grelwood; `SnakePitBoss`'s Venom Crypts has none).
 
 Nothing here says that a campaign boss shows its icon, when, or that it turns grey when killed:
 that is the table's word, not seen on a real screen yet.

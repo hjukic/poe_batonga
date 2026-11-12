@@ -153,15 +153,26 @@ impl Live {
 
 /// A boss named in a zone's checklist, and where the layout graphs put it: at the
 /// exit to an area, at a tagged node, or (neither given) at a node tagged "boss".
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Boss {
     /// As the checklist writes it ("Beira", "The Bloated Miller").
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tag: Option<String>,
 }
 
 impl Boss {
+    /// Where the layout graphs put it.
+    fn place(&self) -> nav::BossAt {
+        match (&self.exit, &self.tag) {
+            (Some(exit), _) => nav::BossAt::Exit(exit.clone()),
+            (None, Some(tag)) => nav::BossAt::Tag(tag.clone()),
+            (None, None) => nav::BossAt::Tag("boss".into()),
+        }
+    }
+
     /// The log names the speaker in full ("Beira of the Rotten Pack"); the checklist
     /// may shorten it.
     fn speaks_as(&self, speaker: &str) -> bool {
@@ -189,7 +200,7 @@ struct Session {
     fed_at: Option<Instant>,
     /// Exit icons outside the wall frame from the last whole-screen icon scan, in
     /// this part's coordinates, and how many frames ago that scan was.
-    far_icons: Vec<(f32, f32, Option<String>)>,
+    far_icons: FarIcons,
     far_age: u32,
     /// Exits the map showed by name during this part: (x, y) in the part's cells and
     /// the zone they lead to. An exit does not move: seen once, its place is known.
@@ -200,11 +211,34 @@ struct Session {
     obs: std::cell::RefCell<Option<obs::Log>>,
     /// Bosses whose first line in this visit was already taken as "near its place".
     bosses_heard: Vec<String>,
+    /// Bosses' icons seen in the live part (gone with it), and the zone's bosses the map
+    /// showed dead in this visit (`Recorder::dead_bosses`).
+    boss_icons: Vec<BossIcon>,
+    dead: Vec<String>,
     /// When the zone was entered, and what the first placed frame showed at the
     /// arrival point (in the live part's coordinates; gone with the part).
     entered: Instant,
     came_in: Option<CameIn>,
 }
+
+/// A boss's icon (or a grey skull) seen in the live part.
+#[derive(Clone, Debug)]
+struct BossIcon {
+    /// Where, in the part's cells.
+    at: (f32, f32),
+    /// "boss", "boss-dead" or "dead" (see `bigmap::Icon`).
+    kind: &'static str,
+    /// The sprite's boss pair, for the reader to look there again (`set_icon_hints`).
+    pair: Option<String>,
+    /// The one checklist boss it is: its own icon names that boss, or the zone has one boss.
+    who: Option<String>,
+}
+
+/// A grey icon this close (cells) to where this part saw a boss alive is that boss, dead.
+const SAME_PLACE: f32 = 12.0;
+/// A grey skull is a dead boss at its node only with this share of a belief whose top
+/// layout holds `nav`'s gold share (a trusted layout), and no other boss's place near.
+const AT_NODE: f64 = 0.9;
 
 /// The arrival point and what tells whether the player came in by the exit there.
 struct CameIn {
@@ -229,13 +263,49 @@ fn icon_label(icon: &crate::minimap::bigmap::Icon) -> Option<String> {
     icon.label.clone().filter(|l| !l.is_empty())
 }
 
-/// Exits kept from the last whole-window scan: place in the part's cells, label.
-type FarIcons = Vec<(f32, f32, Option<String>)>;
+/// Exits (and bosses) kept from the last whole-window scan: place in the part's cells,
+/// label, the boss places of a boss's icon.
+type FarIcons = Vec<(f32, f32, Option<String>, Vec<nav::BossAt>)>;
 
-/// The exits handed to the navigator with one frame (`Session::feed_icons`; the
-/// replay of a flight recording builds them the same way). Every third big-map frame
-/// lists every icon on screen, the frames between only those inside the wall frame:
-/// icons outside it are kept from the last whole scan for a few frames.
+/// Which of the zone's bosses a map icon may be (see `nav::ExitIcon::boss`): none but for
+/// a live or grey boss icon. A boss's own icon counts only in its own area, for the boss
+/// its pair names, else (pair unnamed) for any of the zone's bosses, never when the pair
+/// is known to be no checklist boss's (the Grelwood's carnivorous plant); an orange skull
+/// (a unique monster) for any of them. A grey skull is a dead unique or a dead rare: none.
+pub(crate) fn boss_candidates<'b>(icon: &crate::minimap::bigmap::Icon, area: &str, bosses: &'b [Boss]) -> Vec<&'b Boss> {
+    if !matches!(icon.kind, "boss" | "boss-dead") {
+        return vec![];
+    }
+    let sprite = icon.sprite.and_then(|id| crate::minimap::bigmap::sprites().iter().find(|s| s.id == id));
+    match sprite.filter(|s| s.pair.is_some()) {
+        Some(s) if s.area.as_deref() != Some(area) || !s.checklist => vec![],
+        Some(s) => match &s.boss {
+            Some(name) => bosses.iter().filter(|b| b.name.eq_ignore_ascii_case(name)).collect(),
+            None => bosses.iter().collect(),
+        },
+        None if icon.kind == "boss" => bosses.iter().collect(),
+        None => vec![],
+    }
+}
+
+/// The places of `boss_candidates`, each once.
+fn boss_places(icon: &crate::minimap::bigmap::Icon, area: &str, bosses: &[Boss]) -> Vec<nav::BossAt> {
+    let mut places: Vec<nav::BossAt> = Vec::new();
+    for boss in boss_candidates(icon, area, bosses) {
+        let place = boss.place();
+        if !places.contains(&place) {
+            places.push(place);
+        }
+    }
+    places
+}
+
+/// The exits (and bosses' icons, with the places of the zone's `bosses` in `area` they
+/// may be) handed to the navigator with one frame (`Session::feed_icons`; the replay of
+/// a flight recording builds them the same way). Every third big-map frame lists every
+/// icon on screen, the frames between only those inside the wall frame: icons outside it
+/// are kept from the last whole scan for a few frames.
+#[allow(clippy::too_many_arguments)]
 fn exit_list(
     icons: &[crate::minimap::bigmap::Icon],
     whole: bool,
@@ -243,29 +313,37 @@ fn exit_list(
     size: (usize, usize),
     far_icons: &mut FarIcons,
     far_age: &mut u32,
+    area: &str,
+    bosses: &[Boss],
 ) -> Vec<nav::ExitIcon> {
     let (hw, hh) = (size.0 as f32 / 2.0, size.1 as f32 / 2.0);
     let outside = |x: f32, y: f32| x.abs() > hw || y.abs() > hh;
-    let exits: Vec<&crate::minimap::bigmap::Icon> = icons.iter().filter(|i| i.kind == "exit").collect();
+    let fed: Vec<(&crate::minimap::bigmap::Icon, Vec<nav::BossAt>)> = icons
+        .iter()
+        .filter_map(|i| match i.kind {
+            "exit" => Some((i, vec![])),
+            _ => Some((i, boss_places(i, area, bosses))).filter(|(_, places)| !places.is_empty()),
+        })
+        .collect();
     let mut list: Vec<nav::ExitIcon> =
-        exits.iter().map(|i| nav::ExitIcon { dx: i.x as f64, dy: i.y as f64, to: icon_label(i) }).collect();
+        fed.iter().map(|(i, boss)| nav::ExitIcon { dx: i.x as f64, dy: i.y as f64, to: icon_label(i), boss: boss.clone() }).collect();
     if whole {
-        // A whole-window scan (marked by the reader): its far exits replace the
+        // A whole-window scan (marked by the reader): its far icons replace the
         // kept ones, none if it saw none.
-        *far_icons = exits
+        *far_icons = fed
             .iter()
-            .filter(|i| outside(i.x, i.y))
-            .map(|i| (pos.0 as f32 + i.x, pos.1 as f32 + i.y, icon_label(i)))
+            .filter(|(i, _)| outside(i.x, i.y))
+            .map(|(i, boss)| (pos.0 as f32 + i.x, pos.1 as f32 + i.y, icon_label(i), boss.clone()))
             .collect();
         *far_age = 0;
     } else if *far_age < FAR_FRAMES {
         *far_age += 1;
-        for (x, y, to) in far_icons.iter() {
+        for (x, y, to, boss) in far_icons.iter() {
             let (dx, dy) = (x - pos.0 as f32, y - pos.1 as f32);
             // Not when this frame shows it already (an icon in the capture's margin).
-            let shown = exits.iter().any(|i| (i.x - dx).abs() <= 10.0 && (i.y - dy).abs() <= 10.0);
+            let shown = fed.iter().any(|(i, b)| b == boss && (i.x - dx).abs() <= 10.0 && (i.y - dy).abs() <= 10.0);
             if outside(dx, dy) && !shown {
-                list.push(nav::ExitIcon { dx: dx as f64, dy: dy as f64, to: to.clone() });
+                list.push(nav::ExitIcon { dx: dx as f64, dy: dy as f64, to: to.clone(), boss: boss.clone() });
             }
         }
     }
@@ -304,15 +382,81 @@ fn named_exit_guide(target: &guide::NavTarget, named: &[(f32, f32, String)], pos
 }
 
 impl Session {
-    /// Hands the navigator the frame's exit icons (see `exit_list`).
-    fn feed_icons(&mut self, icons: &[crate::minimap::bigmap::Icon], whole: bool, pos: (i32, i32), size: (usize, usize)) {
+    /// Keeps the bosses' icons of the frame (the player at `pos`, the part's cells) and
+    /// names a boss dead only when the grey icon is attributable to it: its own grey icon
+    /// names it, or is its pair's while the zone has one boss; or the grey icon lies where
+    /// this part saw that boss alive (by its own icon); or, with a trusted layout, a grey
+    /// skull lies at its node and at no other boss's. A grey skull alone is a dead unique or
+    /// a dead rare: never.
+    fn see_bosses(&mut self, icons: &[crate::minimap::bigmap::Icon], pos: (i32, i32), bosses: &[Boss]) {
+        let area = self.recording.area.clone();
+        for icon in icons.iter().filter(|i| matches!(i.kind, "boss" | "boss-dead" | "dead")) {
+            let at = (pos.0 as f32 + icon.x, pos.1 as f32 + icon.y);
+            let sprite = icon.sprite.and_then(|id| crate::minimap::bigmap::sprites().iter().find(|s| s.id == id));
+            let pair = sprite.and_then(|s| s.pair.clone());
+            // Its own icon (not a skull): the boss it names, or the zone's only boss.
+            let own = pair.is_some().then(|| boss_candidates(icon, &area, bosses)).unwrap_or_default();
+            let who = match own.as_slice() {
+                [one] => Some(one.name.clone()),
+                _ => None,
+            };
+            let mut dead = None;
+            if icon.kind == "boss-dead" {
+                dead = who.clone();
+            }
+            if dead.is_none() && icon.kind != "boss" {
+                // Where this part saw a boss alive by its own icon.
+                dead = self
+                    .boss_icons
+                    .iter()
+                    .filter(|b| b.kind == "boss" && (b.at.0 - at.0).hypot(b.at.1 - at.1) <= SAME_PLACE)
+                    .find_map(|b| b.who.clone());
+            }
+            if dead.is_none() && icon.kind == "dead" {
+                // A trusted layout puts it at one boss's node.
+                if let Some(nav) = self.navigator.as_ref() {
+                    let shares: Vec<(String, f64)> = bosses
+                        .iter()
+                        .filter_map(|b| nav.icon_at_place(icon.x as f64, icon.y as f64, &b.place()).map(|share| (b.name.clone(), share)))
+                        .collect();
+                    let sure: Vec<&(String, f64)> = shares.iter().filter(|(_, s)| *s >= AT_NODE).collect();
+                    let near = shares.iter().filter(|(_, s)| *s >= 0.5).count();
+                    if let ([(name, _)], 1) = (sure.as_slice(), near) {
+                        dead = Some(name.clone());
+                    }
+                }
+            }
+            if let Some(name) = dead.filter(|n| !self.dead.contains(n)) {
+                self.dead.push(name);
+            }
+            let same = self.boss_icons.iter_mut().find(|b| b.kind == icon.kind && b.pair == pair && (b.at.0 - at.0).hypot(b.at.1 - at.1) <= SAME_PLACE);
+            match same {
+                Some(b) => b.at = at,
+                None => self.boss_icons.push(BossIcon { at, kind: icon.kind, pair, who }),
+            }
+        }
+        // Where to look again in the next frame: each pair seen, from where the player is.
+        let mut hints: Vec<(String, [f32; 2])> = Vec::new();
+        for b in &self.boss_icons {
+            if let Some(pair) = &b.pair {
+                if !hints.iter().any(|(p, _)| p == pair) {
+                    hints.push((pair.clone(), [b.at.0 - pos.0 as f32, b.at.1 - pos.1 as f32]));
+                }
+            }
+        }
+        crate::minimap::bigmap::set_icon_hints(hints);
+    }
+
+    /// Hands the navigator the frame's exit and boss icons (see `exit_list`).
+    fn feed_icons(&mut self, icons: &[crate::minimap::bigmap::Icon], whole: bool, pos: (i32, i32), size: (usize, usize), bosses: &[Boss]) {
+        self.see_bosses(icons, pos, bosses);
         let Some(nav) = self.navigator.as_mut() else { return };
         if let Some(log) = self.obs.get_mut() {
             // Far exits this frame uses or replaces: the replay needs this frame's icons.
             let far = !self.far_icons.is_empty() && (whole || self.far_age < FAR_FRAMES);
             log.icons(obs::now_ms(), icons, whole, size, far);
         }
-        let list = exit_list(icons, whole, pos, size, &mut self.far_icons, &mut self.far_age);
+        let list = exit_list(icons, whole, pos, size, &mut self.far_icons, &mut self.far_age, &self.recording.area, bosses);
         nav.icons(&list);
     }
 
@@ -641,8 +785,9 @@ impl Recorder {
                     }
                 }
                 state.finish();
-                // The map reader compares this area's boss icons too.
+                // The map reader compares this area's boss icons too; nothing seen yet.
                 crate::minimap::bigmap::set_icon_area(Some(area));
+                crate::minimap::bigmap::set_icon_hints(vec![]);
                 // A live arrival with no zone before it (e.g. a new character) still starts at the arrival point.
                 state.previous_area = if live { Some(left.unwrap_or_default()) } else { None };
                 let recording = state
@@ -674,6 +819,8 @@ impl Recorder {
                     last_guide: Default::default(),
                     obs: Default::default(),
                     bosses_heard: Vec::new(),
+                    boss_icons: Vec::new(),
+                    dead: Vec::new(),
                     entered: Instant::now(),
                     came_in: None,
                 };
@@ -722,7 +869,9 @@ impl Recorder {
         let mut state = self.0.lock().ok()?;
         let icons = std::mem::take(&mut state.icons);
         let whole = std::mem::take(&mut state.icons_whole);
-        let session = state.session.as_mut()?;
+        let State { session, bosses, .. } = &mut *state;
+        let session = session.as_mut()?;
+        let bosses: &[Boss] = bosses.get(&session.recording.area).map_or(&[], Vec::as_slice);
         if !frame.visible {
             return None;
         }
@@ -762,7 +911,7 @@ impl Recorder {
         match placed {
             Some(pos) => {
                 session.feed(pos);
-                session.feed_icons(&icons, whole, pos, (frame.cols, frame.rows));
+                session.feed_icons(&icons, whole, pos, (frame.cols, frame.rows), bosses);
                 note_named_exits(&mut session.named_exits, &icons, pos);
                 let live = &mut session.live;
                 live.velocity = ((pos.0 - live.pos.0).clamp(-NEAR, NEAR), (pos.1 - live.pos.1).clamp(-NEAR, NEAR));
@@ -808,6 +957,9 @@ impl Recorder {
                     session.far_icons.clear();
                     session.named_exits.clear();
                     session.came_in = None;
+                    // Places of the old part mean nothing in the new one's cells.
+                    session.boss_icons.clear();
+                    crate::minimap::bigmap::set_icon_hints(vec![]);
                     if finished.part.matched > 0 {
                         session.recording.parts.push(finished.snapshot());
                     }
@@ -874,6 +1026,15 @@ impl Recorder {
             state.icons = icons.to_vec();
             state.icons_whole = whole;
         }
+    }
+
+    /// The current zone's bosses (names as given to `set_bosses`) that the map showed
+    /// dead in this visit (see `Session::see_bosses` for when a grey icon counts). Empty
+    /// outside a zone, and whenever no boss icon was read: being wrong about the icons
+    /// costs nothing.
+    #[allow(dead_code)] // for the chair to wire to the checklist
+    pub fn dead_bosses(&self) -> Vec<String> {
+        self.0.lock().ok().and_then(|s| s.session.as_ref().map(|s| s.dead.clone())).unwrap_or_default()
     }
 
     /// The zones' bosses, from the checklists: (area, boss). Set once at start.
@@ -981,6 +1142,7 @@ impl State {
             memory: kept.cloned(),
             age: kept.map(|m| now().saturating_sub(m.at)),
             resumed,
+            bosses: self.bosses.get(&session.recording.area).cloned().unwrap_or_default(),
         };
         Some((nav::Navigator::new(&area, arrival, memory.as_ref(), scale, session.recording.seed.unwrap_or(0)), start))
     }
@@ -1214,10 +1376,10 @@ mod tests {
     #[test]
     fn an_exit_the_map_named_leads_the_needle_where_no_layout_is_known() {
         use crate::minimap::bigmap::Icon;
-        let exit = |x: f32, y: f32, label: Option<&str>| Icon { kind: "exit", x, y, label: label.map(String::from) };
+        let exit = |x: f32, y: f32, label: Option<&str>| Icon { kind: "exit", x, y, label: label.map(String::from), sprite: None };
         let mut named = Vec::new();
         // Seen from (100, 50): Clearfell's exit 30 cells right and 40 up; an unnamed exit and a checkpoint.
-        let icons = [exit(30.0, -40.0, Some("Clearfell")), exit(-80.0, 5.0, None), Icon { kind: "checkpoint", x: 1.0, y: 1.0, label: None }];
+        let icons = [exit(30.0, -40.0, Some("Clearfell")), exit(-80.0, 5.0, None), Icon { kind: "checkpoint", x: 1.0, y: 1.0, label: None, sprite: None }];
         note_named_exits(&mut named, &icons, (100, 50));
         assert_eq!(named, vec![(130.0, 10.0, "Clearfell".to_string())]);
         let target = |label: &str, exit: Option<&str>| guide::NavTarget { label: label.into(), exit: exit.map(String::from), tag: None, optional: false };
@@ -1548,6 +1710,123 @@ mod tests {
         assert!(Boss { name: "Zed".into(), exit: None, tag: None }.speaks_as("Zeda") == false, "short names never match");
     }
 
+    fn boss(name: &str, exit: Option<&str>, tag: Option<&str>) -> Boss {
+        Boss { name: name.into(), exit: exit.map(String::from), tag: tag.map(String::from) }
+    }
+
+    fn icon(kind: &'static str, sprite: Option<&'static str>, x: f32, y: f32) -> crate::minimap::bigmap::Icon {
+        let sprite = sprite.map(|id| crate::minimap::bigmap::sprites().iter().find(|s| s.id == id).unwrap().id.as_str());
+        crate::minimap::bigmap::Icon { kind, x, y, label: None, sprite }
+    }
+
+    #[test]
+    fn a_boss_icon_counts_only_for_the_bosses_it_may_be() {
+        let grelwood = [boss("Gerung", None, Some("bossman")), boss("Areagne", None, Some("witch_hut"))];
+        let manor = [boss("Candlemass", None, None), boss("Count Geonor", None, None)];
+        let miller = [boss("The Bloated Miller", Some("G1_town"), None)];
+        let names = |icon: &crate::minimap::bigmap::Icon, area: &str, bosses: &[Boss]| -> Vec<String> {
+            boss_candidates(icon, area, bosses).into_iter().map(|b| b.name.clone()).collect()
+        };
+        // An orange skull may be any of the zone's bosses; a grey skull is none (a dead rare too).
+        assert_eq!(names(&icon("boss", Some("UniqueMonsterAlive"), 0.0, 0.0), "G1_4", &grelwood), ["Gerung", "Areagne"]);
+        assert!(names(&icon("dead", Some("UniqueMonsterDead"), 0.0, 0.0), "G1_4", &grelwood).is_empty());
+        assert!(names(&icon("rare", Some("RareMonsterAlive"), 0.0, 0.0), "G1_4", &grelwood).is_empty());
+        // The Grelwood's carnivorous plant is no checklist boss.
+        assert!(names(&icon("boss", Some("CarnivorousPlantActive"), 0.0, 0.0), "G1_4", &grelwood).is_empty());
+        // A boss's own icon: by name, in its own area only.
+        assert_eq!(names(&icon("boss", Some("MillerActive"), 0.0, 0.0), "G1_1", &miller), ["The Bloated Miller"]);
+        assert!(names(&icon("boss", Some("MillerActive"), 0.0, 0.0), "G1_2", &[boss("Beira", None, None)]).is_empty());
+        assert_eq!(names(&icon("boss-dead", Some("GargoyleInactive"), 0.0, 0.0), "G1_15", &manor), ["Candlemass"]);
+        // An unnamed pair (the Count's, read by hand as Count Geonor): either of the zone's.
+        assert_eq!(names(&icon("boss", Some("CountActive"), 0.0, 0.0), "G1_15", &manor), ["Candlemass", "Count Geonor"]);
+        // Its places for the navigator, each once.
+        assert_eq!(boss_places(&icon("boss", Some("CountActive"), 0.0, 0.0), "G1_15", &manor), [nav::BossAt::Tag("boss".into())]);
+        assert_eq!(boss_places(&icon("boss", Some("MillerActive"), 0.0, 0.0), "G1_1", &miller), [nav::BossAt::Exit("G1_town".into())]);
+    }
+
+    #[test]
+    fn the_map_names_a_boss_dead_only_when_the_grey_icon_is_its() {
+        let recorder = Recorder::new(None);
+        recorder.set_bosses(vec![
+            ("G1_1".into(), boss("The Bloated Miller", Some("G1_town"), None)),
+            ("G1_4".into(), boss("Gerung", None, Some("bossman"))),
+            ("G1_4".into(), boss("Areagne", None, Some("witch_hut"))),
+            ("G1_6".into(), boss("Ervig", None, Some("boss"))),
+            ("G1_15".into(), boss("Candlemass", None, None)),
+            ("G1_15".into(), boss("Count Geonor", None, None)),
+        ]);
+        // Frames walking along the corridor with these icons (cells from the player).
+        let walk = |frames: std::ops::Range<i32>, icons: &dyn Fn(i32) -> Vec<crate::minimap::bigmap::Icon>| {
+            for step in frames {
+                recorder.on_icons(&icons(step * 4), false);
+                recorder.on_frame(&frame((step * 4, 0)), [300, 260]);
+            }
+        };
+        // The Grelwood: grey skulls, an orange skull turning grey (an unrelated unique or a
+        // rare, as far as the map can tell), the plant's grey icon: nobody is dead.
+        enter(&recorder, "G1_4");
+        walk(0..3, &|x| vec![icon("boss", Some("UniqueMonsterAlive"), 40.0 - x as f32, 5.0)]);
+        walk(3..6, &|x| vec![icon("dead", Some("UniqueMonsterDead"), 40.0 - x as f32, 5.0), icon("dead", Some("RareMonsterDead"), -30.0 - x as f32, 8.0)]);
+        walk(6..8, &|x| vec![icon("boss-dead", Some("CarnivorousPlantInactive"), 20.0 - x as f32, -9.0)]);
+        assert!(recorder.dead_bosses().is_empty(), "{:?}", recorder.dead_bosses());
+        // The Grim Tangle has one boss: its own grey icon is Ervig's.
+        enter(&recorder, "G1_6");
+        assert!(recorder.dead_bosses().is_empty());
+        walk(0..3, &|x| vec![icon("boss-dead", Some("GrimTangleBossInactive"), 50.0 - x as f32, 0.0)]);
+        assert_eq!(recorder.dead_bosses(), ["Ervig"]);
+        // Ogham Manor has two: the Gargoyle's grey icon names Candlemass; the Count's pair is
+        // not named, so its grey icon names nobody.
+        enter(&recorder, "G1_15");
+        walk(0..3, &|x| vec![icon("boss-dead", Some("CountInactive"), 50.0 - x as f32, 0.0)]);
+        assert!(recorder.dead_bosses().is_empty());
+        walk(3..5, &|x| vec![icon("boss-dead", Some("GargoyleInactive"), 50.0 - x as f32, 0.0)]);
+        assert_eq!(recorder.dead_bosses(), ["Candlemass"]);
+        // The Riverbank: the Miller seen alive by his icon, then a grey skull where he stood
+        // (his own grey icon not read): dead. A grey skull elsewhere would not be.
+        enter(&recorder, "G1_1");
+        walk(0..3, &|x| vec![icon("boss", Some("MillerActive"), 60.0 - x as f32, 4.0), icon("dead", Some("UniqueMonsterDead"), -60.0 - x as f32, 0.0)]);
+        assert!(recorder.dead_bosses().is_empty());
+        walk(3..6, &|x| vec![icon("dead", Some("UniqueMonsterDead"), 61.0 - x as f32, 3.0)]);
+        assert_eq!(recorder.dead_bosses(), ["The Bloated Miller"]);
+        // The reader is told where the Miller's pair was seen, from where the player is now.
+        enter(&recorder, "G1_town");
+        assert!(recorder.dead_bosses().is_empty());
+    }
+
+    #[test]
+    fn boss_icons_are_logged_and_replayed_as_fed() {
+        use crate::minimap::bigmap::Icon;
+        let dir = scratch("boss-icons");
+        let recorder = Recorder::new(Some(dir.clone()));
+        recorder.set_bosses(vec![("G1_2".into(), boss("Beira", None, None))]);
+        enter(&recorder, "G1_town");
+        enter(&recorder, "G1_2");
+        recorder.set_targets(vec![("G1_2".into(), guide::NavTarget { label: "The Grelwood".into(), exit: Some("G1_4".into()), ..Default::default() })]);
+        for step in 0..30 {
+            let whole = step % 3 == 0;
+            let x = step * 4;
+            let mut icons = vec![Icon { kind: "exit", x: -136.0 - x as f32, y: 83.0, label: whole.then(|| "The Grelwood".into()), sprite: None }];
+            // Beira's icon (the Crone's, Clearfell's pair) far east on the scans, and a grey skull.
+            if whole {
+                icons.push(icon("boss", Some("CroneActive"), 400.0 - x as f32, -60.0));
+                icons.push(icon("dead", Some("RareMonsterDead"), 30.0 - x as f32, 40.0));
+            }
+            recorder.on_icons(&icons, whole);
+            recorder.on_frame(&frame((x, 0)), [300, 260]);
+            recorder.view();
+        }
+        recorder.save_now();
+        let text = std::fs::read_to_string(dir.join("G1_2").join("7.obs.jsonl")).unwrap();
+        let first = text.lines().find(|l| !l.is_empty()).unwrap();
+        assert!(first.contains(r#""bosses":[{"name":"Beira"}]"#), "{first}");
+        assert!(text.contains(r#""kind":"boss","x":400.0,"y":-60.0,"sprite":"CroneActive""#), "{text}");
+        // The grey skull is no navigator input: written once, as a mark.
+        assert_eq!(text.matches(r#""kind":"dead""#).count(), 1, "{text}");
+        let visits = obs::replay::replay(&text, &graph::Graphs::default());
+        assert!(visits[0].agree == visits[0].logged && visits[0].logged > 0, "{:?}", visits[0].differ);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn the_flight_recorder_logs_what_the_navigator_is_fed() {
         let dir = scratch("obs");
@@ -1737,7 +2016,7 @@ fn join_real_recording() {
         fed: None, fed_at: None, far_icons: Vec::new(), far_age: FAR_FRAMES, named_exits: Vec::new(),
         last_guide: Default::default(),
         obs: Default::default(), entered: Instant::now(), came_in: None,
-        bosses_heard: Vec::new(),
+        bosses_heard: Vec::new(), boss_icons: Vec::new(), dead: Vec::new(),
     };
     let started = Instant::now();
     while merge_pieces(&mut session) {}

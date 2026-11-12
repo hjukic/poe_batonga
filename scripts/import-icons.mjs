@@ -57,7 +57,7 @@ const BOSSES = [
   { stem: "Miller", area: "G1_1", boss: "The Bloated Miller", how: "monster" },
   { stem: "Crone", area: "G1_2", how: "assumed" }, // UrchinHagBoss: a hag; Clearfell's one boss is Beira
   { stem: "MudBurrower", area: "G1_3", boss: "The Devourer", how: "monster" },
-  { stem: "CarnivorousPlant", area: "G1_4", how: "monster" }, // not a checklist boss (Gerung, Areagne)
+  { stem: "CarnivorousPlant", area: "G1_4", how: "monster", checklist: false }, // not a checklist boss (Gerung, Areagne)
   { stem: "GrimTangleBoss", area: "G1_6", how: "name" },
   { stem: "GraveyardBoss", area: "G1_7", how: "name" }, // Cemetery of the Eternals
   { stem: "Husband", area: "G1_8", boss: "Draven", how: "monster" },
@@ -172,6 +172,8 @@ function main() {
       const a = b.area && area.get(b.area);
       if (b.area && !a) problems.push(`${p.id}: no area ${b.area}`);
       const entry = { ...p, pair: b.stem, how: b.how ?? null, area: b.area ?? null, areaName: a ? a.Name.trim() : null, boss: b.boss ?? null };
+      // A pair known to be no checklist boss's: never counted for one.
+      if (b.checklist === false) entry.checklist = false;
       if (p.kind === "boss") entry.place = (icons[rowOf.get(p.id)]?.Name ?? "").trim() || null;
       wanted.push(entry);
     }
