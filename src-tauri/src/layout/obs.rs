@@ -153,6 +153,14 @@ impl LoggedTarget {
     }
 }
 
+/// A needle that followed a way through the recorded map, with what the navigator
+/// tells about it (nothing yet: see `Entry::Needle`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Way {
+    pub ahead: Option<[f32; 2]>,
+    pub fog: Option<f32>,
+}
+
 /// How the visit's navigator was made.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Start {
@@ -231,6 +239,13 @@ pub enum Entry {
         stale: bool,
         #[serde(default, skip_serializing_if = "is_false")]
         way: bool,
+        /// On `way` lines, once the navigator gives them: the look-ahead point the
+        /// needle aims at, from the player (cells, screen axes), and the share of the
+        /// way over unrecorded ground. Absent until fed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ahead: Option<[f32; 2]>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fog: Option<f32>,
     },
     End {
         #[serde(default, skip_serializing_if = "is_zero")]
@@ -439,7 +454,7 @@ impl Log {
     }
 
     /// The needle shown, asked for `targets`; written by the rules above.
-    pub fn needle(&mut self, t: u64, targets: &[NavTarget], view: &GuideView, kept: bool, stale: bool, way: bool) {
+    pub fn needle(&mut self, t: u64, targets: &[NavTarget], view: &GuideView, kept: bool, stale: bool, way: Option<Way>) {
         if !self.active {
             return;
         }
@@ -460,7 +475,9 @@ impl Log {
             distance: view.distance.round(),
             kept,
             stale,
-            way,
+            way: way.is_some(),
+            ahead: way.and_then(|w| w.ahead),
+            fog: way.and_then(|w| w.fog),
         };
         let due = match &self.last_needle {
             None => true,
@@ -630,6 +647,44 @@ pub(super) mod replay {
         target_exit: Option<String>,
         degrees: Option<f32>,
         source: String,
+        /// A shown needle that followed the way through the recorded map.
+        way: bool,
+    }
+
+    /// Needle samples against the exit taken.
+    #[derive(Default, Debug, Clone)]
+    pub struct Score {
+        /// Per source (`SOURCES`): (within 45°, all).
+        pub by_source: [(usize, usize); 4],
+        /// Samples of the last part pointing at another target.
+        pub other_target: usize,
+        /// Scored samples that followed the way through the recorded map.
+        pub way: usize,
+        /// When the needle was right for good: (ms since start, cells walked).
+        pub right_for_good: Option<(u64, f64)>,
+    }
+
+    impl Score {
+        pub fn count(&self) -> usize {
+            self.by_source.iter().map(|s| s.1).sum()
+        }
+
+        fn add(&mut self, other: &Score) {
+            for (s, a) in self.by_source.iter_mut().zip(&other.by_source) {
+                (s.0, s.1) = (s.0 + a.0, s.1 + a.1);
+            }
+            self.way += other.way;
+        }
+
+        fn shares(&self) -> String {
+            let parts: Vec<String> = SOURCES
+                .iter()
+                .zip(&self.by_source)
+                .filter(|(_, s)| s.1 > 0)
+                .map(|(n, s)| format!("{n} {} of {}", pct(s.0, s.1), s.1))
+                .collect();
+            if parts.is_empty() { "no samples".into() } else { parts.join(", ") }
+        }
     }
 
     /// What one visit (a `start` line and what follows) gave.
@@ -658,12 +713,10 @@ pub(super) mod replay {
         /// Left with no exit icon at the place (a portal, a waypoint, a death): the
         /// area left to is no exit taken, and the needle is not scored.
         pub unscored: bool,
-        /// Needle samples to the exit taken, per source: (within 45°, all).
-        pub scored: [(usize, usize); 4],
-        /// Samples of the last part pointing at another target.
-        pub other_target: usize,
-        /// When the needle was right for good: (ms since start, cells walked).
-        pub right_for_good: Option<(u64, f64)>,
+        /// Against the exit taken, every frame: the needle the app showed (the last
+        /// `needle` line, kept ones included) and the one the replay gives (no recorded map).
+        pub shown: Score,
+        pub replayed: Score,
         /// The app's needles, those the current code gives alike, the first that differ.
         pub logged: usize,
         pub agree: usize,
@@ -694,6 +747,9 @@ pub(super) mod replay {
         /// Exit icons seen: (part, place in cells, label).
         exits: Vec<(usize, (f64, f64), Option<String>)>,
         samples: Vec<Sample>,
+        shown: Vec<Sample>,
+        /// The needle on screen: the last `needle` line (target's exit, degrees, source, way).
+        on_screen: Option<(Option<String>, Option<f32>, String, bool)>,
         top: Option<String>,
         visit: Visit,
     }
@@ -726,6 +782,8 @@ pub(super) mod replay {
                 named: vec![BTreeMap::new()],
                 exits: Vec::new(),
                 samples: Vec::new(),
+                shown: Vec::new(),
+                on_screen: None,
                 top: None,
                 visit: Visit {
                     area: id.clone(),
@@ -785,7 +843,12 @@ pub(super) mod replay {
                 target_exit,
                 degrees: view.as_ref().and_then(|v| v.degrees),
                 source: view.map_or("none".into(), |v| v.source),
+                way: false,
             });
+            // And the needle the player saw on this frame.
+            if let Some((target_exit, degrees, source, way)) = self.on_screen.clone() {
+                self.shown.push(Sample { t: self.t, part: self.part, pos: self.pos, walked: self.visit.walked, target_exit, degrees, source, way });
+            }
             let ranking = self.nav.ranking();
             let (id, p) = ranking[0];
             if self.top.as_deref() != Some(id) {
@@ -854,6 +917,9 @@ pub(super) mod replay {
                 },
                 Entry::Targets { targets, .. } => self.targets = targets.iter().map(LoggedTarget::target).collect(),
                 Entry::Needle { target, degrees, source, variant, kept, stale, way, .. } => {
+                    // What the player sees from now on (a kept needle too: gray).
+                    let target_exit = self.targets.iter().find(|t| t.label == *target).and_then(|t| t.exit.clone());
+                    self.on_screen = Some((target_exit, *degrees, source.clone(), *way));
                     if *kept {
                         return;
                     }
@@ -967,10 +1033,19 @@ pub(super) mod replay {
                 self.visit.unscored = true;
                 return;
             }
-            let mut right: Vec<(bool, u64, f64)> = Vec::new();
-            for s in self.samples.iter().filter(|s| s.part == self.part) {
-                if s.target_exit.as_deref() != Some(exit.as_str()) {
-                    self.visit.other_target += 1;
+            self.visit.replayed = tally(&self.samples, self.part, &exit, at, self.visit.start);
+            self.visit.shown = tally(&self.shown, self.part, &exit, at, self.visit.start);
+        }
+    }
+
+    /// The samples of `part` aimed at `exit`, against the straight line to `at`.
+    fn tally(samples: &[Sample], part: usize, exit: &str, at: (i32, i32), start: u64) -> Score {
+        let mut score = Score::default();
+        let mut right: Vec<(bool, u64, f64)> = Vec::new();
+        {
+            for s in samples.iter().filter(|s| s.part == part) {
+                if s.target_exit.as_deref() != Some(exit) {
+                    score.other_target += 1;
                     continue;
                 }
                 let (dx, dy) = ((at.0 - s.pos.0) as f64, (at.1 - s.pos.1) as f64);
@@ -985,16 +1060,18 @@ pub(super) mod replay {
                     _ => 3,
                 };
                 let ok = matches!((s.degrees, truth), (Some(d), Some(t)) if angle_between(d, t) <= RIGHT);
-                self.visit.scored[source].1 += 1;
-                self.visit.scored[source].0 += ok as usize;
-                right.push((ok, s.t - self.visit.start, s.walked));
-            }
-            // The first sample after which every one was right.
-            if right.last().is_some_and(|r| r.0) {
-                let from = right.iter().rposition(|r| !r.0).map_or(0, |i| i + 1);
-                self.visit.right_for_good = Some((right[from].1, right[from].2));
+                score.by_source[source].1 += 1;
+                score.by_source[source].0 += ok as usize;
+                score.way += s.way as usize;
+                right.push((ok, s.t - start, s.walked));
             }
         }
+        // The first sample after which every one was right.
+        if right.last().is_some_and(|r| r.0) {
+            let from = right.iter().rposition(|r| !r.0).map_or(0, |i| i + 1);
+            score.right_for_good = Some((right[from].1, right[from].2));
+        }
+        score
     }
 
     /// Replays a flight recording's text: one result per visit.
@@ -1066,17 +1143,19 @@ pub(super) mod replay {
             Some((exit, at, how)) if v.unscored => out += &format!("   left to {exit} at ({}, {}); {how}: not scored\n", at.0, at.1),
             Some((exit, at, how)) => {
                 out += &format!("   left through {exit} at ({}, {}); {how}\n", at.0, at.1);
-                let parts: Vec<String> =
-                    SOURCES.iter().zip(&v.scored).filter(|(_, s)| s.1 > 0).map(|(n, s)| format!("{n} {} of {}", pct(s.0, s.1), s.1)).collect();
-                out += &format!(
-                    "   needle within 45° of the exit taken (last part): {}; {} samples to another target\n",
-                    if parts.is_empty() { "no samples".into() } else { parts.join(", ") },
-                    v.other_target
-                );
-                out += &match v.right_for_good {
-                    Some((t, w)) => format!("   right for good after {:.0} s, {:.0} cells walked ({:.0} units)\n", t as f64 / 1000.0, w, w / v.scale),
-                    None => "   never right for good\n".into(),
+                out += "   needle within 45° of the exit taken (last part):\n";
+                let good = |s: &Score| match s.right_for_good {
+                    Some((t, w)) => format!("right for good after {:.0} s, {:.0} cells ({:.0} units)", t as f64 / 1000.0, w, w / v.scale),
+                    None => "never right for good".into(),
                 };
+                out += &format!(
+                    "     shown by the app: {} ({} through the recorded map); {}; {} to another target\n",
+                    v.shown.shares(), v.shown.way, good(&v.shown), v.shown.other_target
+                );
+                out += &format!(
+                    "     replayed, no map, every frame: {}; {}; {} to another target\n",
+                    v.replayed.shares(), good(&v.replayed), v.replayed.other_target
+                );
             }
             None => out += "   exit taken: unknown (no live zone change)\n",
         }
@@ -1096,21 +1175,21 @@ pub(super) mod replay {
         let truths = played.iter().filter(|v| v.truth.as_ref().is_some_and(|t| t.1 >= FIXED)).count();
         let exits = played.iter().filter(|v| v.left.is_some() && !v.unscored).count();
         let unscored = played.iter().filter(|v| v.unscored).count();
-        let mut scored = [(0, 0); 4];
+        let (mut shown, mut replayed) = (Score::default(), Score::default());
         for v in &played {
-            for (s, add) in scored.iter_mut().zip(&v.scored) {
-                (s.0, s.1) = (s.0 + add.0, s.1 + add.1);
-            }
+            shown.add(&v.shown);
+            replayed.add(&v.replayed);
         }
         let (logged, agree): (usize, usize) = played.iter().fold((0, 0), |a, v| (a.0 + v.logged, a.1 + v.agree));
-        let parts: Vec<String> = SOURCES.iter().zip(&scored).map(|(n, s)| format!("{n} {} of {}", pct(s.0, s.1), s.1)).collect();
         format!(
             "replay: {files} file(s), {} visit(s) replayed ({} skipped), {truths} with a layout truth, {exits} with the exit taken, \
              {unscored} unscored exit(s) (no exit icon where they left); \
-             needle within 45°: {}; app's needles agree {} ({agree} of {logged})",
+             needle within 45°, shown: {} ({} through the map); replayed: {}; app's needles agree {} ({agree} of {logged})",
             played.len(),
             visits.len() - played.len(),
-            parts.join(", "),
+            shown.shares(),
+            shown.way,
+            replayed.shares(),
             pct(agree, logged),
         )
     }
@@ -1181,7 +1260,7 @@ mod tests {
                 icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: i.label.clone() }).collect();
             nav.icons(&list);
             if let Some(view) = nav.guide(&targets) {
-                log.needle(t, &targets, &view, false, false, false);
+                log.needle(t, &targets, &view, false, false, None);
                 needles.push(view);
             }
         }
@@ -1197,7 +1276,7 @@ mod tests {
             log.icons(t, &[icon.clone()], true, size, false);
             nav.icons(&[ExitIcon { dx: icon.x as f64, dy: icon.y as f64, to: icon.label.clone() }]);
             if let Some(view) = nav.guide(&targets) {
-                log.needle(t, &targets, &view, false, false, false);
+                log.needle(t, &targets, &view, false, false, None);
                 needles.push(view);
             }
         }
@@ -1229,10 +1308,45 @@ mod tests {
         assert!(ids.contains(&layout) && share >= 0.9 && read >= 2, "{ids:?} {share}");
         assert_eq!(v.left.as_ref().unwrap().0, "G1_3");
         assert!(!v.unscored);
-        let scored: usize = v.scored.iter().map(|s| s.1).sum();
-        assert!(scored > 50, "{:?}", v.scored);
-        let right: usize = v.scored.iter().map(|s| s.0).sum();
-        assert!(right * 10 >= scored * 8, "{:?}", v.scored);
+        let scored = v.replayed.count();
+        assert!(scored > 50, "{:?}", v.replayed);
+        let right: usize = v.replayed.by_source.iter().map(|s| s.0).sum();
+        assert!(right * 10 >= scored * 8, "{:?}", v.replayed);
+        // What the app showed is scored too: its needle lines.
+        assert!(v.shown.count() >= 5 && v.shown.way == 0, "{:?}", v.shown);
+    }
+
+    /// Needles that followed the way through the recorded map can't be replayed (the
+    /// log holds no walls) but are scored as shown; `ahead` and `fog` are written when given.
+    #[test]
+    fn needles_through_the_map_are_scored_as_shown() {
+        let (text, _, _) = simulated(false, 8.0);
+        let way = r#""way":true,"ahead":[12.0,-5.0],"fog":0.25,"distance""#;
+        let text = text.replace(r#""distance""#, way);
+        let visits = replay(&text, &Graphs::default());
+        let v = &visits[0];
+        let report = report(v);
+        eprint!("{report}");
+        assert!(v.mapped > 0 && v.logged == 0, "{} {}", v.mapped, v.logged);
+        assert!(v.shown.count() > 0 && v.shown.way == v.shown.count(), "{:?}", v.shown);
+        assert!(report.contains("shown by the app: ") && !report.contains("shown by the app: no samples"), "{report}");
+        let line = summary(1, &visits);
+        assert!(line.contains("shown: gold") || line.contains("shown: rough"), "{line}");
+        assert!(line.contains("replayed: "), "{line}");
+        // The writer.
+        let mut log = Log::memory(&start("G1_2", "G1_town"), T0);
+        log.frame();
+        let targets = [NavTarget { label: "Mud Burrow".into(), exit: Some("G1_3".into()), ..Default::default() }];
+        let view = GuideView {
+            variant: String::new(), target_kind: "entrance".into(), target: "Mud Burrow".into(), degrees: Some(10.0),
+            source: "rough".into(), distance: 300.0, confidence: 0.7, measured: false, turned: false,
+        };
+        log.needle(T0 + 1, &targets, &view, false, false, Some(Way { ahead: Some([3.5, -1.0]), fog: Some(0.4) }));
+        log.frame();
+        log.needle(T0 + 2, &targets, &GuideView { degrees: Some(50.0), ..view }, false, false, Some(Way::default()));
+        let text = log.text();
+        assert!(text.contains(r#""way":true,"ahead":[3.5,-1.0],"fog":0.4"#), "{text}");
+        assert_eq!(text.matches("ahead").count(), 1, "{text}");
     }
 
     /// A visit that ends with leaving to the town where no exit icon was (a portal
@@ -1254,7 +1368,7 @@ mod tests {
             log.icons(t, &icons, step % 3 == 0, (300, 260), false);
             nav.icons(&icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: None }).collect::<Vec<_>>());
             if let Some(view) = nav.guide(&town) {
-                log.needle(t, &town, &view, false, false, false);
+                log.needle(t, &town, &view, false, false, None);
             }
         }
         log.seen(t, Seen::Left("G1_town"));
@@ -1262,7 +1376,7 @@ mod tests {
         let visits = replay(&log.text(), &Graphs::default());
         let v = &visits[0];
         eprint!("{}", report(v));
-        assert!(v.unscored && v.scored.iter().all(|s| s.1 == 0) && v.right_for_good.is_none(), "{:?}", v.scored);
+        assert!(v.unscored && v.replayed.count() == 0 && v.shown.count() == 0 && v.replayed.right_for_good.is_none(), "{:?}", v.replayed);
         let line = summary(1, &visits);
         assert!(line.contains("0 with the exit taken, 1 unscored exit(s)"), "{line}");
     }
@@ -1277,7 +1391,7 @@ mod tests {
         assert!(v.parts > 1, "{}", v.parts);
         assert_eq!(v.agree, v.logged);
         // Only the last part's samples are scored.
-        let scored: usize = v.scored.iter().map(|s| s.1).sum();
+        let scored = v.replayed.count();
         assert!(scored > 0 && (scored as u64) < v.frames);
     }
 
@@ -1347,13 +1461,13 @@ mod tests {
         for (deg, source) in [(10.0, "rough"), (20.0, "rough"), (30.0, "rough"), (31.0, "estimated"), (31.0, "estimated")] {
             t += 900;
             log.frame();
-            log.needle(t, &targets, &view(deg, source), false, false, false);
+            log.needle(t, &targets, &view(deg, source), false, false, None);
         }
         // Then the same needle, frames still coming, for 6 s.
         for _ in 0..7 {
             t += 900;
             log.frame();
-            log.needle(t, &targets, &view(31.0, "estimated"), false, false, false);
+            log.needle(t, &targets, &view(31.0, "estimated"), false, false, None);
         }
         let text = log.text();
         let needles: Vec<u64> = text.lines().filter(|l| l.contains(r#""k":"needle""#)).map(|l| serde_json::from_str::<Line>(l).unwrap().t - T0).collect();
@@ -1467,7 +1581,7 @@ mod tests {
                         source: if frames % 30 < 15 { "rough".into() } else { "estimated".into() },
                         distance: 312.4, confidence: 0.734, measured: false, turned: false,
                     };
-                    log.needle(t, &[NavTarget { label: "Mud Burrow".into(), ..target.clone() }], &view, false, false, false);
+                    log.needle(t, &[NavTarget { label: "Mud Burrow".into(), ..target.clone() }], &view, false, false, None);
                 }
             }
         }

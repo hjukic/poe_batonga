@@ -860,7 +860,7 @@ counts, so the replay can hand the navigator every `icons` call the app made.
 | `icons` | `whole` (absent = false), `size` (frame cells, when it changed), `icons`: `kind` (absent = exit), `x`, `y`, `label` | when the exits differ from the last written, on every whole-window scan with an exit or while far exits are kept, for a checkpoint or waypoint not yet written in this part |
 | `seen` | `exit` or `tag`, `left` | each log anchor |
 | `targets` | `targets` (`label`, `exit`, `tag`, `optional`) | when the list asked for changes |
-| `needle` | `target`, `degrees`, `source`, `confidence`, `variant`, `distance`; `kept` (tracking lost, the last needle stayed), `stale` (no frame for 2 s), `way` (it followed a way through the recorded map) | when source, target or variant change or it turns more than 15°, else every 5 s while frames come |
+| `needle` | `target`, `degrees`, `source`, `confidence`, `variant`, `distance`; `kept` (tracking lost, the last needle stayed), `stale` (no frame for 2 s), `way` (it followed a way through the recorded map); on `way` lines `ahead` (the look-ahead point from the player, cells) and `fog` (share of the way over unrecorded ground), absent until the navigator gives them | when source, target or variant change or it turns more than 15°, else every 5 s while frames come |
 | `end` | | when the zone is left |
 
 Exits are written exactly as handed over (the navigator's input); checkpoints and
@@ -900,13 +900,14 @@ icons, `seen`); the needle is asked with the logged targets after every frame. P
 visit it prints:
 
 ```
-== G1_2 seed Some(11) (from G1_town, v0.1.44, scale 0.780): 69 frames, 1 part(s), 23 s, walked 1979 cells (2538 units)
+== G1_2 seed Some(11) (from G1_town, v0.1.47, scale 0.780): 70 frames, 1 part(s), 23 s, walked 2064 cells (2646 units)
    top layout: 0s ClearFell_W_S_N 1.00
    truth layout (3 exits read by name): ClearFell_W_S_N 1.00; the replay's last top agrees
-   left through G1_3 at (748, -434); no exit icon seen there (a portal or waypoint is possible)
-   needle within 45° of the exit taken (last part): gold 80% of 5, rough 98% of 62; 1 samples to another target
-   never right for good
-   app's needles: 12 logged, 12 agree with the current code
+   left through G1_3 at (771, -515); its labelled icon was there
+   needle within 45° of the exit taken (last part):
+     shown by the app: gold 100% of 5, rough 98% of 63 (0 through the recorded map); right for good after 14 s, 710 cells (910 units); 0 to another target
+     replayed, no map, every frame: gold 100% of 6, rough 98% of 62; right for good after 14 s, 687 cells (881 units); 1 to another target
+   app's needles: 13 logged, 13 agree with the current code; 0 through the recorded map (not replayed)
 ```
 
 - **top layout**: each time the replay's top layout changed, seconds from the start
@@ -925,7 +926,11 @@ visit it prints:
   leaving spot (frames within 10 cells of it left out), by source: gold
   (`estimated`), rough, gray (`unconfirmed`), none. Frames aiming at another
   target are counted apart. **Right for good**: the first such frame after which
-  every one was within 45°, seconds and cells walked from the start.
+  every one was within 45°, seconds and cells walked from the start. Two rows:
+  **shown by the app**, the needle the player saw on each frame (the last `needle`
+  line, `kept` and `way` ones included; how many went through the recorded map):
+  this is how the map's way is judged on real visits; and **replayed**, the
+  current code's needle without the recorded map (the log holds no walls).
 - **app's needles**: the `needle` lines (not `kept`, not `way`: the log holds no
   walls, so a needle through the recorded map is counted apart) against what the current code
   gives at the same point (same target, source, layout, within 5°; a `stale` gold
@@ -934,13 +939,14 @@ visit it prints:
   pointing at an icon and along the route has hysteresis, and the app asked about
   once a second where the replay asks every frame.
 - A last line: visits, how many have a truth and an exit, the needle's shares over
-  all visits and the agreement.
+  all visits, shown and replayed, and the agreement
+  (`needles_through_the_map_are_scored_as_shown`).
 
 The synthetic visit above is `a_simulated_visit_replays_as_it_was_fed` (the
 simulator's walker on `ClearFell_W_S_N`, exits named on every third frame);
 `the_flight_recorder_logs_what_the_navigator_is_fed` runs the recorder itself and
-replays its file. In the simulation the last steps count as wrong: the walker ends
-at the exit's graph node, its icon lies up to 100 units off.
+replays its file. The simulated walk ends at the exit's graph node, its icon up to
+100 units off: the test walks on to the icon before leaving, as the player does.
 
 ### Layout history
 

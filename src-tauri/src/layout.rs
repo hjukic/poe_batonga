@@ -935,7 +935,8 @@ impl State {
         };
         if let (Some(view), Some(log)) = (&view, session.obs.borrow_mut().as_mut()) {
             let stale = session.fed_at.is_none_or(|t| t.elapsed() > STALE);
-            let way = !kept && session.navigator.as_ref().is_some_and(|n| n.on_map());
+            // `ahead` and `fog` (see `obs::Way`) wait for the navigator to give them.
+            let way = (!kept && session.navigator.as_ref().is_some_and(|n| n.on_map())).then(obs::Way::default);
             log.needle(obs::now_ms(), &self.nav_targets(session), view, kept, stale, way);
         }
         view
