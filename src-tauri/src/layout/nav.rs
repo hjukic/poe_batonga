@@ -186,10 +186,9 @@ const BOSS_CONFIRMS: bool = false;
 /// without boss icons; confirming as well changed nothing.
 const BOSS_GOLD: bool = false;
 /// Bosses' icons move the particles (weigh them, redraw some where they put the player)
-/// as exit icons do. Off, they would only weigh the layouts (`Bank::boss`); in the
-/// simulation (one seed, wide view) that gave 6 of 145 gold needles off against 7 of 183,
-/// and within 45° at 60% 58.5% against 61.1% (`nav_sim::boss_icons_report`).
-const BOSS_PARTICLES: bool = true;
+/// as exit icons do. Off (the review): they only weigh the layouts (`Bank::boss`), the
+/// position comes from the walk, exits and anchors.
+const BOSS_PARTICLES: bool = false;
 
 /// A way through the recorded map is taken unless it is longer than this many
 /// times the straight line (and this many minimap cells more): a longer one
@@ -252,8 +251,14 @@ const CHECKPOINT_TOL: f64 = 120.0;
 const CHECKPOINT_FLOOR: f64 = 0.3;
 const CHECKPOINT_WEIGHT: f64 = 0.5;
 /// … and next to an exit icon of the same frame (minimap cells) it adds nothing: the exit
-/// counted already (Clearfell: 28 and 42 cells from their exits' icons).
+/// counted already (Clearfell: 28 and 42 cells from their exits' icons). What checkpoints
+/// can take from a layout is capped (log), at most this many count in a visit, and one
+/// the belief puts within `CHECKPOINT_SAME` units of a counted one is that one again
+/// (after a tracking loss its place on the track means nothing).
 const CHECKPOINT_BY_EXIT: f64 = 60.0;
+const CHECKPOINT_CAP: f64 = 1.5;
+const CHECKPOINT_MOST: usize = 6;
+const CHECKPOINT_SAME: f64 = 150.0;
 /// Node tags that name a corridor's shape, not a place: a node with none of these (or an
 /// exit) is a landmark. The most common tags of all the graphs' nodes, sorted by hand.
 const PLAIN: [&str; 24] = [
@@ -487,8 +492,8 @@ pub struct Navigator {
     icons_now: Vec<(ExitIcon, bool)>,
     /// Exits seen since the last loss, by their place (world units on `track`).
     sightings: Vec<Sighting>,
-    /// Checkpoints seen since the last loss, by their place (world units on `track`).
-    checkpoints_seen: Vec<(f64, f64)>,
+    /// Checkpoints counted this visit: where the belief put each, per layout (file units).
+    checkpoints_counted: Vec<Vec<(f64, f64)>>,
     /// Where the player is by dead reckoning since the last loss (world units,
     /// nominal scale): gives each icon a place, so one sighting counts once.
     track: (f64, f64),
@@ -618,7 +623,7 @@ impl Navigator {
             trusted: MEASURED.contains(&area.id.as_str()),
             icons_now: Vec::new(),
             sightings: Vec::new(),
-            checkpoints_seen: Vec::new(),
+            checkpoints_counted: Vec::new(),
             track: (0.0, 0.0),
             icon_walked: 0.0,
             jumps: 0,
@@ -921,27 +926,51 @@ impl Navigator {
         }
     }
 
-    /// The frame's checkpoint icons (minimap cells from the player), with the exit icons it
-    /// handed to `icons`: soft evidence for the layouts whose landmarks they lie by. A new
-    /// checkpoint (none seen within `SIGHT_MATCH` on the track since the last loss) not
-    /// next to an exit icon weighs each layout by how much of its belief puts it within
-    /// `CHECKPOINT_TOL` of a landmark (floor `CHECKPOINT_FLOOR`, counted at
-    /// `CHECKPOINT_WEIGHT`). Never an anchor, never in gold's share, no particle moved.
+    /// New checkpoint icons (minimap cells from the player; the recorder hands each once a
+    /// part), with the exit icons it handed to `icons`: soft evidence for the layouts whose
+    /// landmarks they lie by. One not next to an exit icon, not where the belief puts a
+    /// counted one (`CHECKPOINT_SAME`), within the visit's `CHECKPOINT_MOST`, weighs each
+    /// layout by how much of its belief puts it within `CHECKPOINT_TOL` of a landmark (floor
+    /// `CHECKPOINT_FLOOR`, counted at `CHECKPOINT_WEIGHT`, all of them together at most
+    /// `CHECKPOINT_CAP`). Never an anchor, never in gold's share, no particle moved.
     pub fn checkpoints(&mut self, points: &[(f64, f64)], exits: &[ExitIcon]) {
         self.apply();
         for &(dx, dy) in points {
+            if self.checkpoints_counted.len() >= CHECKPOINT_MOST {
+                return;
+            }
             if exits.iter().any(|e| e.boss.is_empty() && (e.dx - dx).hypot(e.dy - dy) <= CHECKPOINT_BY_EXIT) {
                 continue;
             }
-            let (wx, wy) = super::guide::from_screen((dx / self.scale, dy / self.scale));
-            let at = (self.track.0 + wx, self.track.1 + wy);
-            if let Some(seen) = self.checkpoints_seen.iter_mut().find(|s| (s.0 - at.0).hypot(s.1 - at.1) <= SIGHT_MATCH) {
-                *seen = ((seen.0 + at.0) / 2.0, (seen.1 + at.1) / 2.0);
+            let posterior = self.posterior();
+            let scale = self.scale;
+            // Where each layout's belief puts it (file units, the weighted mean).
+            let places: Vec<(f64, f64)> = self
+                .area
+                .layouts
+                .iter()
+                .zip(&self.banks)
+                .map(|(layout, bank)| {
+                    let (mut x, mut y) = (0.0, 0.0);
+                    for p in &bank.particles {
+                        let (ox, oy) = super::guide::from_screen((dx / (scale * p.s), dy / (scale * p.s)));
+                        (x, y) = (x + p.w * (p.x + ox / layout.unit), y + p.w * (p.y + oy / layout.unit));
+                    }
+                    (x, y)
+                })
+                .collect();
+            let again: f64 = (0..places.len())
+                .filter(|&k| {
+                    let unit = self.area.layouts[k].unit;
+                    self.checkpoints_counted.iter().any(|c| (c[k].0 - places[k].0).hypot(c[k].1 - places[k].1) * unit <= CHECKPOINT_SAME)
+                })
+                .map(|k| posterior[k])
+                .sum();
+            if again >= 0.5 {
                 continue;
             }
-            self.checkpoints_seen.push(at);
+            self.checkpoints_counted.push(places);
             self.touched();
-            let scale = self.scale;
             for (layout, bank) in self.area.layouts.iter().zip(self.banks.iter_mut()) {
                 let marks: Vec<(f64, f64)> = layout.nodes.iter().filter(|n| landmark(n)).map(|n| (n.x, n.y)).collect();
                 if marks.is_empty() {
@@ -958,7 +987,7 @@ impl Navigator {
                         p.w * (CHECKPOINT_FLOOR + (1.0 - CHECKPOINT_FLOOR) * (-d2 / (2.0 * tol * tol)).exp())
                     })
                     .sum();
-                bank.checkpoints += CHECKPOINT_WEIGHT * agree.max(CHECKPOINT_FLOOR).ln();
+                bank.checkpoints = (bank.checkpoints + CHECKPOINT_WEIGHT * agree.max(CHECKPOINT_FLOOR).ln()).max(-CHECKPOINT_CAP);
             }
         }
     }
@@ -1010,39 +1039,6 @@ impl Navigator {
         share
     }
 
-    /// With a trusted layout (the top one at `GOLD_LAYOUT`), the share of the belief that
-    /// puts an icon at offset (`dx`, `dy`) (minimap cells) on a node of `place`; None
-    /// without one, or when no layout has the place.
-    pub fn icon_at_place(&self, dx: f64, dy: f64, place: &BossAt) -> Option<f64> {
-        let posterior = self.posterior();
-        // Trusted by exits and anchors, not by bosses' icons (a grey skull is one).
-        if self.gold_posterior().iter().copied().fold(0.0, f64::max) < GOLD_LAYOUT {
-            return None;
-        }
-        let icon = ExitIcon { dx, dy, to: None, boss: vec![place.clone()] };
-        let mut share = 0.0;
-        let mut any = false;
-        for (k, (layout, bank)) in self.area.layouts.iter().zip(&self.banks).enumerate() {
-            let nodes = self.icon_nodes(layout, &icon);
-            if posterior[k] < NEGLIGIBLE || nodes.is_empty() {
-                continue;
-            }
-            any = true;
-            let mut hit = 0.0;
-            for p in &bank.particles {
-                let (x, y) = self.position(layout, p);
-                let (ox, oy) = super::guide::from_screen((dx / (self.scale * p.s), dy / (self.scale * p.s)));
-                let q = (x + ox / layout.unit, y + oy / layout.unit);
-                let near = nodes.iter().any(|&n| (q.0 - layout.nodes[n].x).hypot(q.1 - layout.nodes[n].y) * layout.unit <= icon.tolerance());
-                if near {
-                    hit += p.w;
-                }
-            }
-            share += posterior[k] * hit;
-        }
-        any.then_some(share)
-    }
-
     /// Data came in since the start: the memory changed.
     pub fn changed(&self) -> bool {
         self.changed
@@ -1085,7 +1081,6 @@ impl Navigator {
         // Icons in hand are stale, and their places on the track mean nothing now.
         self.icons_now.clear();
         self.sightings.clear();
-        self.checkpoints_seen.clear();
         *self.way.get_mut() = None;
         self.since_weigh = 0.0;
         let reach = (WALK_SPEED * seconds.max(0.0)).min(MAX_REACH);
@@ -2317,6 +2312,37 @@ mod tests {
         lost.checkpoints(&[(9000.0, 9000.0)], &[]);
         let change = lost.posterior().iter().zip(&all_before).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
         assert!(change < 1e-6, "{change}");
+    }
+
+    #[test]
+    fn checkpoints_take_at_most_the_cap_and_count_once() {
+        let area = graph::load("G1_2");
+        // 50 checkpoints all over the zone (false ones, say): at most six count, and no
+        // layout loses more than the cap against another.
+        let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 4);
+        let before = nav.posterior();
+        let points: Vec<(f64, f64)> = (0..50).map(|i| ((i % 10) as f64 * 90.0 - 450.0, (i / 10) as f64 * 90.0 - 225.0)).collect();
+        for p in &points {
+            nav.checkpoints(&[*p], &[]);
+        }
+        assert_eq!(nav.checkpoints_counted.len(), CHECKPOINT_MOST);
+        let soft: Vec<f64> = nav.banks.iter().map(|b| b.checkpoints).collect();
+        let spread = soft.iter().copied().fold(f64::MIN, f64::max) - soft.iter().copied().fold(f64::MAX, f64::min);
+        assert!(spread <= CHECKPOINT_CAP + 1e-9, "{spread}");
+        let odds = |p: &[f64], i: usize, j: usize| (p[i] / p[j]).ln();
+        let after = nav.posterior();
+        let moved = (0..after.len()).flat_map(|i| (0..after.len()).map(move |j| (i, j))).map(|(i, j)| (odds(&after, i, j) - odds(&before, i, j)).abs()).fold(0.0, f64::max);
+        assert!(moved <= CHECKPOINT_CAP + 1e-9, "{moved}");
+        // One checkpoint, a tracking loss, the same checkpoint again from the same place:
+        // the belief puts it where the counted one is, so it counts once.
+        let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 4);
+        let seen = middle_checkpoint_from_the_town(&area);
+        nav.checkpoints(&[seen], &[]);
+        let once = nav.posterior();
+        nav.lost(1.0);
+        nav.checkpoints(&[seen], &[]);
+        assert_eq!(nav.checkpoints_counted.len(), 1);
+        assert_eq!(nav.posterior(), once);
     }
 
     /// The owner's live case (N7): Clearfell 2693856399, app restarted (arrival

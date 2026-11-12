@@ -1213,6 +1213,9 @@ icon that could be read like the exits.
 
 ## Boss icons as evidence and as kills (third build)
 
+*Changed by the review's fix pass: boss icons are in shadow and one dead rule is left; see
+[fix pass 1](#fix-pass-1-review-ri). What follows is the first version, kept for its measurements.*
+
 What the reader names a boss icon ([icons by their sprite](#icons-by-their-sprite-2026-11-12-third-build))
 goes to the navigator like an exit icon, and a grey one can tell the checklist that a boss is dead. Nothing
 of this has been seen on a real screen: no boss icon has been read yet.
@@ -1372,6 +1375,8 @@ the next real visit's recording is where to check it.
 
 ## Checkpoints as soft evidence (third build, I8)
 
+*Capped and deduplicated by the review's fix pass; see [fix pass 1](#fix-pass-1-review-ri).*
+
 A checkpoint icon is a sighting of *some* landmark node of the layout (`Navigator::checkpoints`).
 
 - **Landmarks**: exit nodes, and nodes whose tag names a place rather than a corridor's shape: every tag but
@@ -1425,3 +1430,78 @@ layout's own spawn-to-town length (the measured walk is 1.14–1.18 times the gr
 
 In the best-fitting layout both lie within the 94 cells the tolerance allows; the check is rough while the
 Riverbank's scale is in question.
+
+## Fix pass 1 (review RI)
+
+The review (four blocking findings) and a new real capture: the Riverbank arena 4 minutes after the Miller's
+last line (`samples/bigmap-1794482737.ppm`, fixture crop `bigmap-miller-dead.ppm`): his icon **grey and
+without its place name at the same place**, and a new exit icon "Clearfell Encampment" by it. So for this
+boss the table's word is now seen: the pair's live icon with its place name while he lives, the grey twin
+without a name after the kill.
+
+**Reader.**
+- **The grey twin.** It scored 0.847 (`MillerInactive`) against the live twin's 0.774: the 0.15 lead between
+  kinds rejected it. A pair's two icons are now weighed apart: the best must lead its own twin by `TWIN_LEAD`
+  0.04 (alive: 0.78 against 0.58; grey: 0.85 against 0.77) and every other kind by 0.15. The reader finds it
+  only where the recorder hints the pair's place (`the_millers_grey_icon_after_the_kill_is_found_where_he_was`):
+  without a hint nothing points the matcher there (dark, no label, little colour).
+- **Checkpoints** must score their sprite 0.55 (`OWN_CHECKPOINT`): the glow of Clearfell Encampment's waypoint
+  stone scored 0.478 (fixture `bigmap-encampment-stone.ppm`); real checkpoints 0.55–0.67. The waypoint keeps
+  0.47 (real 0.65–0.68, scene at most 0.39).
+- **No candidate on the character** (`CHARACTER`: ±50 px, from 300 to 15 px above the cross at 2160 px): a grey
+  boss sprite reached 0.71 on the player's hair.
+- **Scale 0.53 for every icon but the exit**: every non-exit icon seen on a real screen (checkpoints, the
+  waypoint, the Miller alive and grey) is drawn at 0.52–0.53; skulls are assumed so.
+- **Cost.** A sure exit (own sprite ≥ 0.9) and a checkpoint or waypoint below its threshold skip the full
+  ranking; colour groups are capped at 8 and compared only with sprites that have the group's main colour.
+  Release, best of 4, the owner's 19 captures (`scan_samples`): big-map area (1286 x 1122) every second pixel
+  1.0–1.3 → 2.7–5.8 ms (+1.7–4.6 ms; the review measured +10–19), every pixel 3.9–4.8 → 6.1–11.2 ms; the corner
+  minimap (600 x 518) with no icon 0.9 → 2.4 ms every pixel (+1.5 ms), with an exit and the waypoint 0.8–0.9 →
+  3.9–5.5 ms. Clearfell's whole screenshot 5.1 → 10.1 ms (was 18.8), around the player 0.27 → 2.7 ms.
+- **Scan of all 19 captures** (`SAMPLES=… LIVE_AREA=G1_1 cargo test --release scan_samples -- --ignored`):
+  every exit, the 6 real checkpoints and the 8 real waypoints found, nothing else named but the Miller alive
+  (and the grey Miller where hinted). The highest boss/dead/rare score at any place tried, of all 108 sprites:
+  0.654 (`UniqueMonsterDead` on pale stones), 0.60 on the minimap captures; on the Clearfell screenshot 0.58.
+- The template cache keeps no colour planes outside tests and is cleared when the area changes.
+
+**Recorder.**
+- **Two frames.** A boss's icon, a grey one, a skull or a rare is used (fed, logged, kept for the dead rule)
+  only once read with the same sprite at the same map place (4 cells) in two frames within 12
+  (`confirm_named`): an icon stays where it is; scene a sprite was matched on does not.
+- **Boss icons in shadow** (`BOSS_EVIDENCE` false). Only a pair's own icon could count (the orange skull never:
+  an ordinary unique walks about, and no campaign boss was seen as one), read in two frames, off the particles
+  (`BOSS_PARTICLES` false), out of gold's share. Still, two seeds (`boss_icons_report`, the simulated icon also
+  needs two frames):
+
+  | View | Boss icons | Within 45° at 60% | Top layout true for good | Gold | Gold > 60° off |
+  | --- | --- | ---: | ---: | ---: | ---: |
+  | Minimap, 2 seeds | no / yes | 36.2% / 36.4% | 35% / 41% | 14 / 6 | 0 / 2 (33%) |
+  | Wide, 2 seeds | no / yes | 51.9% / 58.1% | 46% / 52% | 295 / 326 | 1.7% / 4.3% |
+  | Minimap, 3 seeds | no / yes | 35.4% / 37.1% | 34% / 40% | 16 / 6 | 0 / 2 (33%) |
+  | Wide, 3 seeds | no / yes | 51.8% / 59.1% | 42% / 50% | 387 / 443 | 2.1% / 4.1% |
+
+  The review allowed half a point: they stay in shadow (read, logged, the dead rule, the reader's hints; the
+  navigator gets nothing; the replay does the same).
+- **One dead rule** (`dead_bosses`): this part saw the pair's live icon at a place, and now reads its grey twin
+  within 12 cells and no live icon of that pair; the boss is the one the pair names, or the zone's only boss.
+  No grey twin never seen alive, no grey skull, no layout rule. The real pair of captures, through the reader
+  and the recorder (`the_real_miller_alive_then_dead_through_the_recorder`; wall frames
+  `riverbank-frame-*.json`): the second capture is placed 35, −25 cells from the first; its first frame still
+  hints from the old place, the second finds the grey twin, the third names the Miller dead. The review's
+  cases (a grey skull beside the live icon, a grey twin never seen alive, a grey skull at the node) name
+  nobody (`the_map_names_a_boss_dead_only_when_the_grey_icon_is_its`). It is cheap (a short list): ask it
+  whenever the overlay's state is refreshed, about once a second.
+- **Checkpoints exactly as the flight recorder writes them**: the recorder hands the navigator each
+  checkpoint once a part (`new_checkpoints`, 4 cells, as the log's marks), so the replay, which feeds a
+  checkpoint on the frame of its line, feeds exactly what the app fed. Logs now say on their `start` line that
+  their checkpoints were checked against their sprite (`sprites`); older logs' checkpoints (scene ones among
+  them) are not fed. On the owner's live folder the replay agrees with `main` on 400 of 400 needles.
+- **Kept cells**: `Live::kept` holds the cells not held back, so the map's ways borrow it instead of a copy
+  of all cells each frame. The hold's comment says what holds the character out (its small patches, not its
+  height).
+- The flight recorder marks only checkpoints, waypoints and grey skulls (not rares, portals, NPCs, quest icons).
+
+**Navigator, checkpoints** (`checkpoints_take_at_most_the_cap_and_count_once`): what checkpoints take from a
+layout against another is capped at 1.5 nats (`CHECKPOINT_CAP`), at most 6 count in a visit
+(`CHECKPOINT_MOST`), and one the belief puts within 150 units of a counted one is that one again, also after a
+tracking loss (`CHECKPOINT_SAME`). Fed 50 checkpoints, 6 count and no layout's odds move by more than 1.5.

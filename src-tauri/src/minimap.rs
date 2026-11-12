@@ -788,7 +788,7 @@ mod tests {
         });
         let skull = |at: [f64; 2], id: &str| bigmap::sprites().iter().position(|s| s.id == id).map(|i| (at, i)).unwrap();
         for (at, i) in [skull([60.0, 110.0], "UniqueMonsterAlive"), skull([190.0, 110.0], "RareMonsterAlive")] {
-            bigmap::draw_for_tests(&mut frame, i, at, 0.48);
+            bigmap::draw_for_tests(&mut frame, i, at, 0.53);
         }
         let mut kinds: Vec<_> = bigmap::icons(&frame, [120.5, 80.5], 1.0, 1.0).into_iter().map(|i| (i.kind, i.sprite)).collect();
         kinds.sort();

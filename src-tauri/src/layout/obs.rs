@@ -34,7 +34,7 @@ pub const HISTORY_FILE: &str = "layout-history.jsonl";
 const HISTORY_SHARE: f64 = 0.9;
 /// Checkpoints and waypoints don't move: one seen within this many cells of where
 /// one of its kind was seen in this part is the same, and not written again.
-const MARK_SAME: f64 = 4.0;
+pub(super) const MARK_SAME: f64 = 4.0;
 
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
@@ -229,6 +229,11 @@ pub enum Entry {
         /// The zone's bosses (name, `exit` or `tag`): the replay places boss icons by them.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         bosses: Vec<super::Boss>,
+        /// The checkpoints written were checked against their sprite (third build): only then
+        /// does the replay hand them to the navigator, as the app did. Older logs hold the
+        /// scene's false ones (676 marks in the owner's Riverbank, about 470 false).
+        #[serde(default, skip_serializing_if = "is_false")]
+        sprites: bool,
     },
     /// `Navigator::moved`, minimap cells (zero moves are not written).
     Move {
@@ -414,6 +419,7 @@ impl Log {
                 remembered: start.memory.as_ref().and_then(|m| serde_json::to_value(m).ok()),
                 resumed: start.resumed,
                 bosses: start.bosses.clone(),
+                sprites: true,
             },
         );
         log.start = Some(log.buf.clone());
@@ -532,7 +538,8 @@ impl Log {
         let resized = self.last_size != Some(size);
         let (px, py) = (self.pos.0 as f32, self.pos.1 as f32);
         let mut new_marks = Vec::new();
-        for icon in icons.iter().filter(|i| !fed(i.kind)) {
+        // Marks for what does not move: not rares, portals, NPCs or quest icons.
+        for icon in icons.iter().filter(|i| matches!(i.kind, "checkpoint" | "waypoint" | "dead")) {
             let at = (px + icon.x, py + icon.y);
             let known = self.marks.iter().chain(&new_marks).any(|(k, x, y)| k == icon.kind && ((x - at.0).hypot(y - at.1) as f64) <= MARK_SAME);
             if !known {
@@ -902,6 +909,8 @@ pub(super) mod replay {
         bosses: Vec<super::super::Boss>,
         /// An icons line came for the frame being closed (its checkpoints are fed once).
         fresh: bool,
+        /// The log's checkpoints were checked against their sprite: they are fed.
+        checkpoints: bool,
         targets: Vec<NavTarget>,
         raw: Vec<Icon>,
         whole: bool,
@@ -936,7 +945,7 @@ pub(super) mod replay {
 
     impl Run {
         fn new(area: Area, start: &Line) -> Run {
-            let Entry::Start { area: id, seed, from, scale, version, memory, resumed, age, remembered, bosses } = &start.entry else {
+            let Entry::Start { area: id, seed, from, scale, version, memory, resumed, age, remembered, bosses, sprites } = &start.entry else {
                 unreachable!()
             };
             let arrival = match from {
@@ -957,6 +966,7 @@ pub(super) mod replay {
                 scale,
                 bosses: bosses.clone(),
                 fresh: false,
+                checkpoints: *sprites,
                 targets: Vec::new(),
                 raw: Vec::new(),
                 whole: false,
@@ -1016,7 +1026,7 @@ pub(super) mod replay {
             self.nav.icons(&list);
             // Checkpoints are written once per part (they don't move): fed on that frame only,
             // as the app's later frames saw the same checkpoint again, which counts once.
-            if std::mem::take(&mut self.fresh) {
+            if std::mem::take(&mut self.fresh) && self.checkpoints {
                 self.nav.checkpoints(&super::super::checkpoint_list(&self.raw), &list);
             }
             self.whole = false;
