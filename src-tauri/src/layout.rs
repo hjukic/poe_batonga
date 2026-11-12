@@ -860,7 +860,15 @@ impl Recorder {
                         capture_px: [0, 0],
                         parts: vec![],
                     });
-                let arrived_from = state.previous_area.clone();
+                // From a zone that is no neighbour (no exit leads there): the zone's start, not
+                // that zone's exit. A new character's spawn in the Riverbank was recorded as
+                // "arrived from G1_2", the old character's last zone (the owner's run of
+                // 2026-11-12); the navigator already started at the start node, the recording,
+                // the flight recorder and the scale measure took the exit's name.
+                let arrived_from = state.previous_area.clone().map(|from| {
+                    let neighbour = from.is_empty() || state.catalog.graph(area).is_none_or(|g| g.names.contains_key(&from));
+                    if neighbour { from } else { String::new() }
+                });
                 let file = state.path(area, *seed);
                 let mut session = Session {
                     recording,
@@ -1512,7 +1520,8 @@ mod tests {
     #[test]
     fn pins_arrival_npcs_and_departure() {
         let recorder = Recorder::new(None);
-        enter(&recorder, "G1_1");
+        // From the encampment, a neighbour (from a zone that is none the arrival is the start).
+        enter(&recorder, "G1_town");
         recorder.on_frame(&frame((0, 0)), [300, 260]);
         enter(&recorder, "G1_2");
         for x in [0, 4, 8] {
@@ -1524,7 +1533,7 @@ mod tests {
         let state = recorder.0.lock().unwrap();
         let pois = &state.session.as_ref().unwrap().live.part.pois;
         let summary: Vec<(&str, &str, i32)> = pois.iter().map(|p| (p.kind.as_str(), p.label.as_str(), p.x)).collect();
-        assert_eq!(summary, [("arrived", "G1_1", 0), ("npc", "Wounded Man", 8)]);
+        assert_eq!(summary, [("arrived", "G1_town", 0), ("npc", "Wounded Man", 8)]);
     }
 
     #[test]
@@ -1807,6 +1816,25 @@ mod tests {
         // Its places for the navigator, each once.
         assert_eq!(boss_places(&icon("boss", Some("CountActive"), 0.0, 0.0), "G1_15", &manor), [nav::BossAt::Tag("boss".into())]);
         assert_eq!(boss_places(&icon("boss", Some("MillerActive"), 0.0, 0.0), "G1_1", &miller), [nav::BossAt::Exit("G1_town".into())]);
+    }
+
+    #[test]
+    fn an_arrival_from_no_neighbour_is_the_zones_start() {
+        // A new character spawns in the Riverbank after the old one left Clearfell: the log's
+        // last zone is no neighbour of G1_1. From the encampment it is the exit's place.
+        let recorder = Recorder::new(None);
+        let arrived = |recorder: &Recorder| {
+            recorder.on_frame(&frame((0, 0)), [300, 260]);
+            let state = recorder.0.lock().unwrap();
+            let session = state.session.as_ref().unwrap();
+            (session.came_from.clone(), session.live.part.pois.iter().find(|p| p.kind == "arrived").map(|p| p.label.clone()))
+        };
+        enter(&recorder, "G1_2");
+        enter(&recorder, "G1_1");
+        assert_eq!(arrived(&recorder), (String::new(), Some(String::new())));
+        enter(&recorder, "G1_town");
+        enter(&recorder, "G1_1");
+        assert_eq!(arrived(&recorder), ("G1_town".to_string(), Some("G1_town".to_string())));
     }
 
     #[test]

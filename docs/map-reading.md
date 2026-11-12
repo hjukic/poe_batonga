@@ -1359,6 +1359,13 @@ what lies on the character moving with the player; 20 frames of 4 x 1 cells,
 | By the bridge (foam, panel, character) | 13,965 | 209 | 3,521 of 3,846 (92%) |
 | Middle (stones) | 1,142 | 0 | 5,286 of 5,559 (95%) |
 
+**A new character's spawn.** The owner's new character spawned in the Riverbank after the old one had left
+Clearfell: the recording said "arrived from G1_2" (the log's last zone). An arrival from a zone that is no
+neighbour (no exit of the zone leads there) is now the zone's start (`""`): the navigator already started at
+the layout's start node then; the recording's arrival point, the flight recorder's `from` and the scale
+measure now say so too (`an_arrival_from_no_neighbour_is_the_zones_start`). A waypoint arrival from a far
+zone is still taken as the start, as before.
+
 The line cells not kept were seen only from places less than 24 cells apart (at the view's edge as the
 walk ended); a longer walk keeps them. Measured on real cell shapes, but the walk is built, not recorded:
 the next real visit's recording is where to check it.
