@@ -1056,7 +1056,7 @@ impl Recorder {
 
     /// Log events: zone changes start a new recording, live ones also leave POIs.
     pub fn on_log(&self, event: &LogEvent, live: bool) {
-        let Ok(mut state) = self.0.lock() else { return };
+        let mut state = crate::relock(&self.0);
         match event {
             LogEvent::ZoneEntered { area, level, seed } => {
                 let left = state.session.as_ref().map(|s| s.recording.area.clone());
@@ -1195,7 +1195,7 @@ impl Recorder {
 
     /// One analysed minimap frame. Returns an overview for the overlay, at most every 300 ms.
     pub fn on_frame(&self, frame: &MinimapView, capture_px: [usize; 2]) -> Option<LayoutView> {
-        let mut state = self.0.lock().ok()?;
+        let mut state = crate::relock(&self.0);
         let icons = std::mem::take(&mut state.icons);
         let whole = std::mem::take(&mut state.icons_whole);
         let State { session, bosses, .. } = &mut *state;
@@ -1344,24 +1344,23 @@ impl Recorder {
     }
 
     pub fn view(&self) -> Option<LayoutView> {
-        self.0.lock().ok()?.view()
+        crate::relock(&self.0).view()
     }
 
     /// Writes the current recording now (before a restart).
     pub fn save_now(&self) {
-        if let Ok(state) = self.0.lock() {
-            state.save();
-            if let Some(session) = &state.session {
-                if let Some(log) = session.obs.borrow_mut().as_mut() {
-                    log.flush_now();
-                }
+        let state = crate::relock(&self.0);
+        state.save();
+        if let Some(session) = &state.session {
+            if let Some(log) = session.obs.borrow_mut().as_mut() {
+                log.flush_now();
             }
         }
     }
 
     /// The open checklist steps that have a target, as (area, target) in checklist order.
     pub fn set_targets(&self, targets: Vec<(String, guide::NavTarget)>) {
-        let Ok(mut state) = self.0.lock() else { return };
+        let mut state = crate::relock(&self.0);
         state.targets.clear();
         for (area, target) in targets {
             let known = state.known_targets.entry(area.clone()).or_default();
@@ -1378,10 +1377,9 @@ impl Recorder {
     /// screen (other frames list only those inside the wall frame): the far icons of the
     /// last scan are replaced by this one's, also when it has none.
     pub fn on_icons(&self, icons: &[crate::minimap::bigmap::Icon], whole: bool) {
-        if let Ok(mut state) = self.0.lock() {
-            state.icons = icons.to_vec();
-            state.icons_whole = whole;
-        }
+        let mut state = crate::relock(&self.0);
+        state.icons = icons.to_vec();
+        state.icons_whole = whole;
     }
 
     /// The current zone's bosses (names as given to `set_bosses`) that the map showed
@@ -1389,30 +1387,27 @@ impl Recorder {
     /// outside a zone, and whenever no boss icon was read: being wrong about the icons
     /// costs nothing.
     pub fn dead_bosses(&self) -> Vec<String> {
-        self.0.lock().ok().and_then(|s| s.session.as_ref().map(|s| s.dead.clone())).unwrap_or_default()
+        crate::relock(&self.0).session.as_ref().map(|s| s.dead.clone()).unwrap_or_default()
     }
 
     /// The zones' bosses, from the checklists: (area, boss). Set once at start.
     pub fn set_bosses(&self, bosses: Vec<(String, Boss)>) {
-        if let Ok(mut state) = self.0.lock() {
-            state.bosses.clear();
-            for (area, boss) in bosses {
-                state.bosses.entry(area).or_default().push(boss);
-            }
+        let mut state = crate::relock(&self.0);
+        state.bosses.clear();
+        for (area, boss) in bosses {
+            state.bosses.entry(area).or_default().push(boss);
         }
     }
 
     /// Targets whose step the log completed (not a hand tick), as (area, label). Call
     /// before `set_completed`: a newly completed one is an anchor for the navigator.
     pub fn set_log_completed(&self, done: Vec<(String, String)>) {
-        if let Ok(mut state) = self.0.lock() {
-            state.log_completed = done.into_iter().collect();
-        }
+        crate::relock(&self.0).log_completed = done.into_iter().collect();
     }
 
     /// Replacing the snapshot also handles unticking/resetting a checklist.
     pub fn set_completed(&self, objectives: Vec<(String, String)>) -> Option<LayoutView> {
-        let mut state = self.0.lock().ok()?;
+        let mut state = crate::relock(&self.0);
         let before = std::mem::take(&mut state.completed);
         for (area, label) in objectives {
             state.completed.entry(area).or_default().push(label);
