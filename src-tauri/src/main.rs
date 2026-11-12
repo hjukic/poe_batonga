@@ -322,8 +322,7 @@ fn report(app: &AppHandle, result: Result<Status, String>) -> Result<Status, Str
 
 fn toggle_visibility(app: &AppHandle) {
     if let Ok(status) = snapshot(app) {
-        // The owner's own choice: the watcher no longer owes a show.
-        app.state::<Presence>().hidden_by_watcher.store(false, std::sync::atomic::Ordering::SeqCst);
+        app.state::<Presence>().owner_chose();
         if status.visible {
             let _ = report(app, apply_visibility(app, false));
         } else {
@@ -347,17 +346,51 @@ struct Presence {
     hidden_by_fight: std::sync::atomic::AtomicBool,
 }
 
+impl Presence {
+    fn new() -> Presence {
+        Presence {
+            auto_hide: std::sync::atomic::AtomicBool::new(true),
+            hidden_by_watcher: Default::default(),
+            page_ready: Default::default(),
+            fight_hide: std::sync::atomic::AtomicBool::new(true),
+            hidden_by_fight: Default::default(),
+        }
+    }
+
+    /// The owner showed or hid the overlay (the shortcut, Escape, a second launch): no
+    /// show is owed any more, neither the watcher's nor a fight's.
+    fn owner_chose(&self) {
+        use std::sync::atomic::Ordering;
+        self.hidden_by_watcher.store(false, Ordering::SeqCst);
+        self.hidden_by_fight.store(false, Ordering::SeqCst);
+    }
+
+    /// A boss fight started while the overlay is `visible`: true when it is to hide.
+    fn fight_starts(&self, visible: bool) -> bool {
+        use std::sync::atomic::Ordering;
+        let hide = visible && self.fight_hide.load(Ordering::SeqCst);
+        if hide {
+            self.hidden_by_fight.store(true, Ordering::SeqCst);
+        }
+        hide
+    }
+
+    /// The fight is over: true when the fight hid the overlay and nothing the owner did
+    /// since took that back, so it is to show again.
+    fn fight_ends(&self) -> bool {
+        self.hidden_by_fight.swap(false, std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
 /// A boss fight started or ended (`tracker::Fight`). The overlay hides for its length,
 /// so nothing sits over the fight, and comes back with the next target.
 pub fn set_fight(app: &AppHandle, fighting: bool) {
-    use std::sync::atomic::Ordering;
     let presence = app.state::<Presence>();
     if fighting {
-        if presence.fight_hide.load(Ordering::SeqCst) && snapshot(app).is_ok_and(|status| status.visible) {
-            presence.hidden_by_fight.store(true, Ordering::SeqCst);
+        if presence.fight_starts(snapshot(app).is_ok_and(|status| status.visible)) {
             let _ = report(app, apply_visibility(app, false));
         }
-    } else if presence.hidden_by_fight.swap(false, Ordering::SeqCst) {
+    } else if presence.fight_ends() {
         show_after_fight(app);
     }
 }
@@ -480,7 +513,7 @@ fn set_interaction(app: AppHandle, interactive: bool) -> Result<Status, String> 
 
 #[tauri::command]
 fn set_visibility(app: AppHandle, visible: bool) -> Result<Status, String> {
-    app.state::<Presence>().hidden_by_watcher.store(false, std::sync::atomic::Ordering::SeqCst);
+    app.state::<Presence>().owner_chose();
     report(&app, apply_visibility(&app, visible))
 }
 
@@ -760,16 +793,10 @@ fn main() {
         // Only one copy runs: a second launch shows the existing overlay and exits.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // A second launch asks for the overlay: show it whatever the watcher did.
-            app.state::<Presence>().hidden_by_watcher.store(false, std::sync::atomic::Ordering::SeqCst);
+            app.state::<Presence>().owner_chose();
             show_overlay(app);
         }))
-        .manage(Presence {
-            auto_hide: std::sync::atomic::AtomicBool::new(true),
-            hidden_by_watcher: Default::default(),
-            page_ready: Default::default(),
-            fight_hide: std::sync::atomic::AtomicBool::new(true),
-            hidden_by_fight: Default::default(),
-        })
+        .manage(Presence::new())
         .manage(InputRects(Mutex::new(Vec::new())))
         .manage(Dragging(Default::default()))
         .invoke_handler(tauri::generate_handler![
@@ -894,6 +921,28 @@ mod tests {
             relock(&state).clone()
         });
         assert_eq!(next, Some(vec![1, 2, 3]));
+    }
+
+    #[test]
+    fn a_fight_shows_again_only_what_it_hid() {
+        // A fight hides the overlay; the owner shows it and hides it again by hand; the
+        // fight ends: the overlay stays hidden (it came back once, 2026-11-12 review).
+        let presence = Presence::new();
+        assert!(presence.fight_starts(true));
+        presence.owner_chose(); // shown by hand
+        presence.owner_chose(); // hidden by hand
+        assert!(!presence.fight_ends());
+        // Left alone, the fight's hide is taken back once.
+        assert!(presence.fight_starts(true));
+        assert!(presence.fight_ends() && !presence.fight_ends());
+        // Already hidden, or the setting off: nothing to hide, nothing owed.
+        assert!(!presence.fight_starts(false) && !presence.fight_ends());
+        presence.fight_hide.store(false, std::sync::atomic::Ordering::SeqCst);
+        assert!(!presence.fight_starts(true) && !presence.fight_ends());
+        // The owner's choice also clears the watcher's owed show.
+        presence.hidden_by_watcher.store(true, std::sync::atomic::Ordering::SeqCst);
+        presence.owner_chose();
+        assert!(!presence.hidden_by_watcher.load(std::sync::atomic::Ordering::SeqCst));
     }
 
     #[test]
