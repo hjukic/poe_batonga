@@ -1,0 +1,37 @@
+{
+  "formatVersion": 1,
+  "order": 810,
+  "zone": { "id": "P1_1", "name": "Scorched Farmlands", "level": 54 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-scorched-farmlands",
+      "kind": "note",
+      "parts": [{ "text": "Stones of Serle south, Blackwood north", "style": "direction" }]
+    },
+    {
+      "id": "kill-isolde-heldra",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Isolde & Heldra", "style": "boss" }, { "text": " (east)" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "enter-stones-of-serle",
+      "kind": "objective",
+      "navigationTarget": { "area": "P1_1", "label": "Stones of Serle", "exit": "P1_2" },
+      "parts": [{ "text": "Enter Stones of Serle" }],
+      "trigger": { "type": "zoneEntered", "area": "P1_2" },
+      "evidence": "Zone-generation line for P1_2."
+    },
+    {
+      "id": "enter-blackwood",
+      "kind": "objective",
+      "navigationTarget": { "area": "P1_1", "label": "The Blackwood", "exit": "P1_3" },
+      "parts": [{ "text": "Enter The Blackwood" }],
+      "trigger": { "type": "zoneEntered", "area": "P1_3" },
+      "evidence": "Zone-generation line for P1_3. Its entrance opens once the Stones of Serle lift the Darkness."
+    }
+  ]
+}

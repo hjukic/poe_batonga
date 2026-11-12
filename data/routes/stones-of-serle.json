@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "order": 820,
+  "zone": { "id": "P1_2", "name": "Stones of Serle", "level": 54 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "runed-megaliths",
+      "kind": "objective",
+      "parts": [{ "text": "Activate 6 Runed Megaliths" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "serle-back",
+      "kind": "objective",
+      "navigationTarget": { "area": "P1_2", "label": "Scorched Farmlands", "exit": "P1_1" },
+      "parts": [{ "text": "Back to Scorched Farmlands" }],
+      "trigger": null,
+      "evidence": "Scorched Farmlands was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

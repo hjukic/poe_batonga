@@ -1,0 +1,16 @@
+{
+  "formatVersion": 1,
+  "order": 830,
+  "zone": { "id": "P1_3", "name": "The Blackwood", "level": 55 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "enter-holten",
+      "kind": "objective",
+      "navigationTarget": { "area": "P1_3", "label": "Holten", "exit": "P1_4" },
+      "parts": [{ "text": "Enter Holten" }],
+      "trigger": { "type": "zoneEntered", "area": "P1_4" },
+      "evidence": "Zone-generation line for P1_4."
+    }
+  ]
+}

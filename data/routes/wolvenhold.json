@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "order": 850,
+  "zone": { "id": "P1_5", "name": "Wolvenhold", "level": 56 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-oswin",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Oswin", "style": "boss" }, { "text": ", use the Ledger" }, { "text": "2 Skill Points", "style": "reward" }],
+      "trigger": null,
+      "evidence": "He drops the Warden's Ledger; using it gives the points. No kill line known. Tick by hand."
+    },
+    {
+      "id": "wolvenhold-back",
+      "kind": "objective",
+      "navigationTarget": { "area": "P1_5", "label": "Holten", "exit": "P1_4" },
+      "parts": [{ "text": "Back to Holten" }],
+      "trigger": null,
+      "evidence": "Holten was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "order": 860,
+  "zone": { "id": "P1_6", "name": "Holten Estate", "level": 56 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-holten-estate",
+      "kind": "note",
+      "parts": [{ "text": "Up two staircases to the courtyard", "style": "direction" }]
+    },
+    {
+      "id": "kill-wulfric-elswyth",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Wulfric & Elswyth", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "estate-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "The Refuge was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

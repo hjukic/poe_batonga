@@ -1,0 +1,41 @@
+{
+  "formatVersion": 1,
+  "order": 840,
+  "zone": { "id": "P1_4", "name": "Holten", "level": 55 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "soul-of-the-ferryman",
+      "kind": "objective",
+      "navigationTarget": { "area": "P1_4", "label": "Docks", "tag": "dock" },
+      "optional": true,
+      "parts": [{ "text": "" }, { "text": "Soul of the Ferryman", "style": "npc" }, { "text": "Greater Runes", "style": "reward" }],
+      "trigger": null,
+      "evidence": "A cheap rune vendor (~2000 gold). No log line known. Tick by hand. Target: the one 'dock' node in its only layout; he is at the docks."
+    },
+    {
+      "id": "kill-godwin-sigbert",
+      "kind": "objective",
+      "navigationTarget": { "area": "P1_4", "label": "Godwin & Sigbert", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Godwin & Sigbert", "style": "boss" }, { "text": "Whetstone", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in its only layout (this area's bosses)."
+    },
+    {
+      "id": "enter-wolvenhold",
+      "kind": "objective",
+      "navigationTarget": { "area": "P1_4", "label": "Wolvenhold", "exit": "P1_5" },
+      "parts": [{ "text": "Enter Wolvenhold" }],
+      "trigger": { "type": "zoneEntered", "area": "P1_5" },
+      "evidence": "Zone-generation line for P1_5."
+    },
+    {
+      "id": "enter-holten-estate",
+      "kind": "objective",
+      "navigationTarget": { "area": "P1_4", "label": "Holten Estate", "exit": "P1_6" },
+      "parts": [{ "text": "Enter Holten Estate" }],
+      "trigger": { "type": "zoneEntered", "area": "P1_6" },
+      "evidence": "Zone-generation line for P1_6."
+    }
+  ]
+}
