@@ -733,7 +733,10 @@ no recorded wall, on a grid of 3x3 minimap cells:
   is about 9 minimap cells thick.
 - Gaps (closed room round the target, one gap facing the player, three grid offsets):
   every gap of 1-8 cells is closed, every opening of 11 or more is open, 9-10 depend on
-  where the grid falls. A closed diamond of one-cell diagonal lines does not leak
+  where the grid falls. The grid lies on multiples of 3 cells (fix pass 1, review B-3),
+  so the same walls give the same doors on every call: before, its origin moved with
+  the search box, and a 9-cell gap opened and shut as the player walked
+  (`the_same_walls_give_the_same_doors_wherever_the_player_stands`). A closed diamond of one-cell diagonal lines does not leak
   (moves never pass a closed cell diagonally).
 - Cells the player walked through are open whatever was drawn there (trail steps up to
   30 cells; longer ones are jumps). The recordings need it: within a cell of a recorded

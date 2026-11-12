@@ -220,7 +220,9 @@ fn build(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> Gr
         outer.2.min(seen.2 + OUTSIDE),
         outer.3.min(seen.3 + OUTSIDE),
     );
-    let (x0, y0) = (outer.0.floor() as i32, outer.1.floor() as i32);
+    // On multiples of `COARSE`: the same walls give the same search cells, whatever
+    // the box (else a 9-10 cell gap opens and shuts as the player moves).
+    let (x0, y0) = ((outer.0.floor() as i32).div_euclid(COARSE) * COARSE, (outer.1.floor() as i32).div_euclid(COARSE) * COARSE);
     let w = ((outer.2.ceil() as i32 - x0) / COARSE + 1).max(1);
     let h = ((outer.3.ceil() as i32 - y0) / COARSE + 1).max(1);
     let mut grid = Grid { x0, y0, w, h, flags: vec![0; (w * h) as usize] };
@@ -605,6 +607,24 @@ pub(super) mod tests {
             println!("grid offset {offset}: open gaps {open:?}");
             assert!(open.iter().all(|&g| g > 8), "{open:?}");
             assert!((11..=14).all(|g| open.contains(&g)), "{open:?}");
+        }
+    }
+
+    #[test]
+    fn the_same_walls_give_the_same_doors_wherever_the_player_stands() {
+        // A closed room round the target, a gap of 9, 10 or 12 cells facing the
+        // player; the player one cell further left at each call (the search box, and
+        // with it an unaligned grid, moves with the player).
+        for gap in [9, 10, 12] {
+            let mut cells = [line((-40, -40), (40, -40)), line((40, -40), (40, 40)), line((-40, -40), (-40, 40))].concat();
+            cells.extend(line((-40, 40), (-1, 40)));
+            cells.extend(line((gap, 40), (40, 40)));
+            // Far recorded cells: the search box, not the recorded box, sets the edge.
+            cells.extend([(-1000, -600), (1000, 600)]);
+            let map = walls(cells);
+            let open: Vec<bool> = (0..6).map(|dx| find(&map, (-dx as f64, 120.0), (0.0, 0.0)).is_some()).collect();
+            println!("gap {gap}: {open:?}");
+            assert!(open.iter().all(|&o| o == open[0]), "gap {gap}: {open:?}");
         }
     }
 
