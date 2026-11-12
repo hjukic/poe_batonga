@@ -183,14 +183,16 @@ impl Session {
     /// Hands the navigator the frame's exit icons. Every third big-map frame lists
     /// every icon on screen, the frames between only those inside the wall frame:
     /// icons outside it are kept from the last whole scan for a few frames.
-    fn feed_icons(&mut self, icons: &[crate::minimap::bigmap::Icon], pos: (i32, i32), size: (usize, usize)) {
+    fn feed_icons(&mut self, icons: &[crate::minimap::bigmap::Icon], whole: bool, pos: (i32, i32), size: (usize, usize)) {
         let Some(nav) = self.navigator.as_mut() else { return };
         let (hw, hh) = (size.0 as f32 / 2.0, size.1 as f32 / 2.0);
         let outside = |x: f32, y: f32| x.abs() > hw || y.abs() > hh;
         let exits: Vec<&crate::minimap::bigmap::Icon> = icons.iter().filter(|i| i.kind == "exit").collect();
         let mut list: Vec<nav::ExitIcon> =
             exits.iter().map(|i| nav::ExitIcon { dx: i.x as f64, dy: i.y as f64, to: icon_label(i) }).collect();
-        if exits.iter().any(|i| outside(i.x, i.y)) {
+        if whole {
+            // A whole-window scan (marked by the reader): its far exits replace the
+            // kept ones, none if it saw none.
             self.far_icons = exits
                 .iter()
                 .filter(|i| outside(i.x, i.y))
@@ -201,7 +203,9 @@ impl Session {
             self.far_age += 1;
             for (x, y, to) in &self.far_icons {
                 let (dx, dy) = (x - pos.0 as f32, y - pos.1 as f32);
-                if outside(dx, dy) {
+                // Not when this frame shows it already (an icon in the capture's margin).
+                let shown = exits.iter().any(|i| (i.x - dx).abs() <= 10.0 && (i.y - dy).abs() <= 10.0);
+                if outside(dx, dy) && !shown {
                     list.push(nav::ExitIcon { dx: dx as f64, dy: dy as f64, to: to.clone() });
                 }
             }
@@ -234,6 +238,8 @@ impl Session {
 }
 
 struct State {
+    /// The next frame's icons came from a whole-window scan.
+    icons_whole: bool,
     /// Map icons for the next frame, in minimap cells from the player.
     icons: Vec<crate::minimap::bigmap::Icon>,
     /// (area, label) of targets whose step the log completed.
@@ -473,6 +479,7 @@ impl Recorder {
             targets: HashMap::new(),
             known_targets: HashMap::new(),
             icons: Vec::new(),
+            icons_whole: false,
             log_completed: Default::default(),
             scales,
             dir,
@@ -551,6 +558,7 @@ impl Recorder {
     pub fn on_frame(&self, frame: &MinimapView, capture_px: [usize; 2]) -> Option<LayoutView> {
         let mut state = self.0.lock().ok()?;
         let icons = std::mem::take(&mut state.icons);
+        let whole = std::mem::take(&mut state.icons_whole);
         let session = state.session.as_mut()?;
         if !frame.visible {
             return None;
@@ -591,7 +599,7 @@ impl Recorder {
         match placed {
             Some(pos) => {
                 session.feed(pos);
-                session.feed_icons(&icons, pos, (frame.cols, frame.rows));
+                session.feed_icons(&icons, whole, pos, (frame.cols, frame.rows));
                 let live = &mut session.live;
                 live.velocity = ((pos.0 - live.pos.0).clamp(-NEAR, NEAR), (pos.1 - live.pos.1).clamp(-NEAR, NEAR));
                 live.pos = pos;
@@ -682,11 +690,7 @@ impl Recorder {
     pub fn on_icons(&self, icons: &[crate::minimap::bigmap::Icon], whole: bool) {
         if let Ok(mut state) = self.0.lock() {
             state.icons = icons.to_vec();
-            if whole {
-                if let Some(session) = state.session.as_mut() {
-                    session.far_age = FAR_FRAMES;
-                }
-            }
+            state.icons_whole = whole;
         }
     }
 
@@ -1107,10 +1111,19 @@ mod tests {
         assert_eq!(state.session.as_ref().unwrap().far_icons.len(), 1);
         assert_eq!(state.session.as_ref().unwrap().far_age, 1);
         drop(state);
-        // A scan with no far icon: the old far icon is not handed over again.
+        // A frame with an icon in the capture's margin is no scan: the kept far icon stays.
+        let margin = Icon { kind: "exit", x: 90.0, y: 0.0, label: None };
+        recorder.on_icons(&[margin], false);
+        recorder.on_frame(&frame((8, 0)), [300, 260]);
+        assert_eq!(recorder.0.lock().unwrap().session.as_ref().unwrap().far_icons.len(), 1);
+        // A scan that sees no far exit clears them.
         recorder.on_icons(&[], true);
+        recorder.on_frame(&frame((8, 0)), [300, 260]);
+        assert!(recorder.0.lock().unwrap().session.as_ref().unwrap().far_icons.is_empty());
+        // So the frames after it hand over no old far icon.
+        recorder.on_icons(&[], false);
         recorder.on_frame(&frame((12, 0)), [300, 260]);
-        assert_eq!(recorder.0.lock().unwrap().session.as_ref().unwrap().far_age, FAR_FRAMES);
+        assert!(recorder.0.lock().unwrap().session.as_ref().unwrap().far_icons.is_empty());
     }
 
     #[test]
