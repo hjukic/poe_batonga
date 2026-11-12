@@ -44,7 +44,12 @@ const JUMP: i32 = 30;
 const MARGIN_SHARE: f64 = 0.75;
 const MARGIN_MIN: f64 = 150.0;
 const MARGIN_MAX: f64 = 600.0;
-const OUTSIDE: f64 = 2.0 * COARSE as f64;
+/// Beyond the recorded box ground is open too, this far (minimap cells): a wall that
+/// ends at the edge of what was seen can be gone round.
+const OUTSIDE: f64 = 60.0;
+/// The most search cells a grid may have (about 3,700 x 3,700 minimap cells): a
+/// target farther than that (a wrong merge, a bad sighting) gets no way.
+const MAX_GRID: i64 = 1_500_000;
 /// The most search cells expanded before giving up (a way 2,200 cells long
 /// across a crowded map needs 41,000; giving up after 60,000 takes 6 ms).
 const MAX_EXPAND: usize = 60_000;
@@ -98,7 +103,8 @@ pub struct Way {
     pub cells: Vec<(i32, i32)>,
     /// Its length (minimap cells).
     pub length: f64,
-    /// The point `LOOK` along it (the target when it is nearer).
+    /// The farthest point of it within `LOOK` that the player sees in a straight line
+    /// (the target when that is nearer).
     pub ahead: (f64, f64),
     /// Search cells expanded (for the time bound).
     #[allow(dead_code)] // tests and measurements
@@ -212,7 +218,7 @@ fn traverse((ax, ay): (f64, f64), (bx, by): (f64, f64), mut visit: impl FnMut((i
 
 /// The search grid around `from` and `to`, with the recorded walls, the walked
 /// trail and the kept way.
-fn build(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> Grid {
+fn build(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> Option<Grid> {
     let straight = (to.0 - from.0).hypot(to.1 - from.1);
     let margin = (straight * MARGIN_SHARE).clamp(MARGIN_MIN, MARGIN_MAX);
     let mut outer = (from.0.min(to.0) - margin, from.1.min(to.1) - margin, from.0.max(to.0) + margin, from.1.max(to.1) + margin);
@@ -234,6 +240,9 @@ fn build(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> Gr
     let (x0, y0) = ((outer.0.floor() as i32).div_euclid(COARSE) * COARSE, (outer.1.floor() as i32).div_euclid(COARSE) * COARSE);
     let w = ((outer.2.ceil() as i32 - x0) / COARSE + 1).max(1);
     let h = ((outer.3.ceil() as i32 - y0) / COARSE + 1).max(1);
+    if w as i64 * h as i64 > MAX_GRID {
+        return None;
+    }
     let mut grid = Grid { x0, y0, w, h, flags: vec![0; (w * h) as usize] };
     let index = |x: i32, y: i32| {
         let (i, j) = ((x - x0).div_euclid(COARSE), (y - y0).div_euclid(COARSE));
@@ -329,7 +338,7 @@ fn build(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> Gr
             }
         }
     }
-    grid
+    Some(grid)
 }
 
 /// Whether open ground joins two open cells within `CROSSING` search cells of the
@@ -389,13 +398,26 @@ fn region(grid: &Grid, cell: (i32, i32), across: bool) -> Vec<(usize, u32)> {
 /// recorded map, None when there is none within the search's bound. `keep`: the
 /// cells of the way of the last call to the same target (hysteresis).
 pub fn way(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> Option<Way> {
-    let mut grid = build(map, from, to, keep);
+    search(map, from, to, keep).0
+}
+
+/// What a search cost: search cells expanded, and the grid's size.
+#[derive(Clone, Copy, Debug, Default)]
+struct Stats {
+    expanded: usize,
+    cells: usize,
+}
+
+fn search(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> (Option<Way>, Stats) {
+    let mut stats = Stats::default();
+    let Some(mut grid) = build(map, from, to, keep) else { return (None, stats) };
+    stats.cells = grid.flags.len();
     let (start, goal) = (grid.cell(from), grid.cell(to));
     // The player is on one side of a line; a target on one is reached from either.
     let sources = region(&grid, start, false);
     let goals = region(&grid, goal, true);
     if sources.is_empty() || goals.is_empty() {
-        return None;
+        return (None, stats);
     }
     for &(k, _) in &goals {
         grid.flags[k] |= GOAL;
@@ -433,8 +455,9 @@ pub fn way(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> 
             break;
         }
         expanded += 1;
+        stats.expanded = expanded;
         if expanded > MAX_EXPAND {
-            return None;
+            return (None, stats);
         }
         let (i, j) = ((k as i32) % w, (k as i32) / w);
         for (di, dj) in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)] {
@@ -460,7 +483,7 @@ pub fn way(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> 
             }
         }
     }
-    let mut k = reached?;
+    let Some(mut k) = reached else { return (None, stats) };
     let mut cells = vec![(k as i32 % w, k as i32 / w)];
     while parent[k] != u32::MAX {
         k = parent[k] as usize;
@@ -496,8 +519,21 @@ pub fn way(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> 
     let share = |mask: u8| cells.iter().filter(|&&c| near(c, mask)).count() as f64 / cells.len().max(1) as f64;
     let (recorded, walked) = (share(SEEN | WALKED), share(WALKED));
     let opened = cells.iter().filter(|&&c| grid.index(c).is_some_and(|k| grid.flags[k] & (WALL | NEAR) != 0)).count();
-    Some(Way {
-        ahead: point_along(&points, LOOK),
+    // The needle looks at the farthest point of the way within `LOOK` it can see from
+    // the player in a straight line: past a corner the chord would cut the jamb.
+    let first = (points[1].0 - from.0).hypot(points[1].1 - from.1);
+    let mut ahead = point_along(&points, LOOK.min(first));
+    let mut d = LOOK.min(first).floor() + 1.0;
+    while d <= LOOK.min(length) {
+        let p = point_along(&points, d);
+        if !grid.clear(from, p) {
+            break;
+        }
+        ahead = p;
+        d += 1.0;
+    }
+    let way = Way {
+        ahead,
         cells: cells.iter().map(|&c| grid.centre(c)).map(|(x, y)| (x.round() as i32, y.round() as i32)).collect(),
         points,
         length,
@@ -505,7 +541,8 @@ pub fn way(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> 
         opened,
         recorded,
         walked,
-    })
+    };
+    (Some(way), stats)
 }
 
 /// The point `distance` along a polyline (its end when shorter).
@@ -766,31 +803,70 @@ pub(super) mod tests {
     fn the_search_stays_bounded_on_a_large_map() {
         let mut map = big_map();
         let cells = map.len();
-        // The fastest of three calls (the machine may be busy).
+        // The fastest of three calls (the machine may be busy), and what it cost.
         let time = |map: &HashMap<(i32, i32), u32>, to: (f64, f64)| {
-            let mut best = (std::time::Duration::MAX, None);
+            let mut best = (std::time::Duration::MAX, None, Stats::default());
             for _ in 0..3 {
                 let started = Instant::now();
-                let found = find(map, (40.0, 40.0), to);
-                best = (best.0.min(started.elapsed()), found);
+                let (found, stats) = search(&Map { walls: map, trail: &[] }, (40.0, 40.0), to, &[]);
+                best = (best.0.min(started.elapsed()), found, stats);
             }
             best
         };
-        let (near, way) = time(&map, (300.0, 260.0));
+        let (near, way, stats) = time(&map, (300.0, 260.0));
         let way = way.expect("a way between the rooms");
-        println!("{cells} wall cells: 330 cells away {near:?}, {} expanded, length {:.0}", way.expanded, way.length);
-        let (across, way) = time(&map, (1560.0, 1560.0));
+        println!("{cells} wall cells: 330 cells away {near:?}, {stats:?}, length {:.0}", way.length);
+        assert!(stats.expanded <= 2_000, "{stats:?}");
+        let (across, way, stats) = time(&map, (1560.0, 1560.0));
         let way = way.expect("a way across");
-        println!("across (2,150 cells): {across:?}, {} expanded, length {:.0}", way.expanded, way.length);
-        // A target walled in: the search gives up within its bound.
+        println!("across (2,150 cells): {across:?}, {stats:?}, length {:.0}", way.length);
+        assert!(stats.expanded <= 45_000 && stats.cells <= 350_000, "{stats:?}");
+        // A target walled in: the search gives up at its bound.
         map.extend(outline(1500, 1500, 1590, 1590).into_iter().map(|c| (c, 3)));
-        let (none, way) = time(&map, (1545.0, 1545.0));
+        let (none, way, stats) = time(&map, (1545.0, 1545.0));
         assert!(way.is_none());
-        println!("walled in: {none:?}");
-        // Generous: the test profile is barely optimised; release numbers are in the docs.
+        println!("walled in: {none:?}, {stats:?}");
+        assert_eq!(stats.expanded, MAX_EXPAND + 1);
+        // The test profile is optimised less than the app (opt-level 1 against 2):
+        // release numbers are in the docs.
         for t in [near, across, none] {
-            assert!(t.as_millis() < 400, "{t:?}");
+            assert!(t.as_millis() < 60, "{t:?}");
         }
+        // A target 4,000 cells off (a wrong merge, a bad sighting): no grid at all.
+        map.insert((5000, 5000), 3);
+        let started = Instant::now();
+        let (way, stats) = search(&Map { walls: &map, trail: &[] }, (40.0, 40.0), (4000.0, 4000.0), &[]);
+        assert!(way.is_none() && stats.cells == 0, "{stats:?}");
+        assert!(started.elapsed().as_millis() < 20, "{:?}", started.elapsed());
+    }
+
+    #[test]
+    fn the_needle_looks_at_the_corner_not_through_the_jamb() {
+        // A door 10-20 cells to the right in a wall below the player, a corridor going
+        // down behind it to the target.
+        let map = walls([line((-60, 6), (8, 6)), line((22, 6), (80, 6)), line((8, 6), (8, 120)), line((22, 6), (22, 120))].concat());
+        let (player, target) = ((0.0, 0.0), (15.0, 100.0));
+        let way = find(&map, player, target).expect("through the door");
+        let corner = way.points[1];
+        let needle = bearing(player, way.ahead);
+        println!("needle {needle:.0}°, corner {:?} {:.0}°, 40 along {:.0}°", corner, bearing(player, corner), bearing(player, point_along(&way.points, LOOK)));
+        assert!(angle_between(needle, bearing(player, corner)) < 10.0, "{needle} {corner:?}");
+        // The point 40 cells along is past the corner: the chord to it cuts the jamb.
+        let grid = build(&Map { walls: &map, trail: &[] }, player, target, &[]).unwrap();
+        assert!(!grid.clear(player, point_along(&way.points, LOOK)));
+    }
+
+    #[test]
+    fn a_wall_ending_at_the_edge_of_what_was_seen_can_be_gone_round() {
+        // All that is recorded is one line between player and target: its ends are the
+        // edge of the recorded box. The way goes round an end.
+        let map = walls(line((0, -100), (0, 100)));
+        let way = find(&map, (-20.0, 0.0), (20.0, 0.0)).expect("round an end");
+        assert!(way.length < 230.0, "{}", way.length);
+        // Open ground reaches 50 cells and more beyond the recorded box (it was 6: a
+        // doubled line's halo closed that).
+        let grid = build(&Map { walls: &map, trail: &[] }, (-20.0, 0.0), (20.0, 0.0), &[]).unwrap();
+        assert!(grid.y0 <= -150 && grid.y0 + grid.h * COARSE >= 150, "{} {}", grid.y0, grid.h);
     }
 
     /// The owner's Clearfell (seed 2693856399), part 0: wall cells (seen twice or
@@ -897,7 +973,7 @@ pub(super) mod tests {
             let started = Instant::now();
             let found_way = way(&ahead, pt(i), pt(j), &[]);
             slowest = slowest.max(started.elapsed());
-            let grid = build(&ahead, pt(i), pt(j), &[]);
+            let grid = build(&ahead, pt(i), pt(j), &[]).unwrap();
             cross_line += crossed(&grid, &[pt(i), pt(j)]);
             if let Some(way) = found_way {
                 found += 1;
@@ -989,7 +1065,7 @@ pub(super) mod tests {
                 }
             }
         }
-        let grid = build(&Map { walls: &map, trail: &[] }, (x0 as f64, y0 as f64), (x1 as f64, y1 as f64), &[]);
+        let grid = build(&Map { walls: &map, trail: &[] }, (x0 as f64, y0 as f64), (x1 as f64, y1 as f64), &[]).unwrap();
         let shut = |a: (i32, i32), b: (i32, i32)| {
             let (pa, pb) = (grid.at((a.0 as f64, a.1 as f64)), grid.at((b.0 as f64, b.1 as f64)));
             traverse(pa, pb, |cell| !grid.open(cell))

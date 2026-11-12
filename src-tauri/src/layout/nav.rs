@@ -2216,7 +2216,8 @@ mod tests {
         }
         times.sort();
         println!("guide_on on the real map: {} calls, median {:?}, slowest {:?}", times.len(), times[times.len() / 2], times[times.len() - 1]);
-        assert!(times[times.len() - 1].as_millis() < 100);
+        // The test profile is optimised less than the app; release: median 0.3 ms.
+        assert!(times[times.len() - 1].as_millis() < 20 && times[times.len() / 2].as_millis() < 5, "{times:?}");
     }
 
     /// A named exit icon, read in two scans.

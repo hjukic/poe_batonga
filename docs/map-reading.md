@@ -763,12 +763,19 @@ no recorded wall, on a grid of 3x3 minimap cells:
   same. The alternative, a higher cost away from where the player has been, was not
   built: it bends a way across fog towards the trail, where straight is the best guess.
 - The search box is the box round player and target, widened by 0.75 times their
-  distance (at least 150, at most 600 cells), cut to the recorded map's box: nothing
-  beyond what is recorded needs going round. It gives up after 60,000 search cells.
+  distance (at least 150, at most 600 cells), cut to the recorded map's box widened by
+  60 cells (fix pass 1, review B-7; it was 6, so a wall ending at the edge of what was
+  seen could not be gone round). It gives up after 60,000 search cells, and a grid of
+  more than 1.5 million search cells (a target some 3,700 cells off: a wrong merge, a
+  bad sighting) is not built at all.
   No way found (target walled in, or past the bound): `None`, and the needle is what
   it was before.
 - The result: the way's corners (cut by line of sight over up to 64 cells), its
-  length, its cells, and the point 40 minimap cells along it, where the needle looks.
+  length, its cells, and where the needle looks: the farthest point of the way within
+  40 cells that the player sees in a straight line (review B-9). The point 40 cells
+  along, past a corner, made the needle cut the jamb: a door 13 cells off with the way
+  turning down behind it gave 64° against the corner's 4°; now 9°
+  (`the_needle_looks_at_the_corner_not_through_the_jamb`).
 - Hysteresis: the cells of the last way to the same target (and their neighbours)
   cost 90%, so the needle keeps its way unless another is clearly shorter (an island
   between: a step that makes the other side 3% shorter keeps the way, 15% switches).
@@ -783,10 +790,12 @@ no recorded wall, on a grid of 3x3 minimap cells:
 | A walked trail across a closed room's wall | in along the trail; a 120-cell jump opens nothing |
 
 **Time** (release; the app's crate builds at opt-level 2): a map of 40,000 wall cells
-(room outlines over 1,600x1,600 cells): a target 330 cells off 0.4 ms (815 search cells),
-2,150 cells across 3.9 ms (41,000), a walled-in target 5.5 ms (gives up). On Clearfell's
+(room outlines over 1,600x1,600 cells): a target 330 cells off 0.4 ms (815 search cells
+expanded, a grid of 40,000), 2,150 cells across 4.7 ms (41,000 of 329,000), a walled-in
+target 5.5 ms (gives up at 60,000). The tests pin the expanded counts and the grid
+size, and times at about ten times the release ones (the test profile is opt-level 1). On Clearfell's
 part 0 (21,500 walls seen twice) a `guide_on` call with a named icon 300 cells off:
-median 0.31 ms, slowest 1.8 ms (25 places along the trail). It runs on the recorder's
+median 0.5 ms, slowest 2.0 ms (25 places along the trail; 0.31 and 1.8 before fix pass 1). It runs on the recorder's
 lock about once a second.
 
 **Real walls** (`clearfell-part0-map.txt`, Clearfell 2693856399 part 0: walls and
