@@ -575,7 +575,16 @@ fn exit_names(area: &str) -> Vec<String> {
         .find(|(id, _)| *id == area)
         .and_then(|(_, json)| serde_json::from_str::<serde_json::Value>(json).ok())
         .and_then(|file| file.get("connectionNames")?.as_array().cloned())
-        .map(|names| names.iter().filter_map(|n| n.as_str().map(str::to_string)).collect())
+        .map(|names| {
+            // Two exits to the same zone share a name: listed once, or no label could lead.
+            let mut unique: Vec<String> = Vec::new();
+            for name in names.iter().filter_map(|n| n.as_str()) {
+                if !unique.iter().any(|u| u == name) {
+                    unique.push(name.to_string());
+                }
+            }
+            unique
+        })
         .unwrap_or_default()
 }
 
@@ -783,6 +792,18 @@ mod tests {
         enter(&mut progress, "A");
         enter(&mut progress, "B");
         assert!(progress.completed.contains_key("move"));
+    }
+
+    #[test]
+    fn exit_names_are_listed_once() {
+        // The Cemetery has two exits each to the Mausoleum and the Tomb.
+        let names = exit_names("G1_7");
+        assert!(names.contains(&"Mausoleum of the Praetor".to_string()), "{names:?}");
+        let mut sorted = names.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), names.len(), "{names:?}");
+        assert!(exit_names("no such area").is_empty());
     }
 
     #[test]
