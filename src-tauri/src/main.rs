@@ -642,6 +642,7 @@ fn main() {
                 .and_then(|()| parse_shortcut(TICK_SHORTCUT))
                 .and_then(|shortcut| app.global_shortcut().register(shortcut).map_err(|e| e.to_string()));
             if let Err(error) = registered {
+                eprintln!("Overlay: global shortcut not registered: {error}");
                 app.state::<OverlayState>().0.lock().unwrap().shortcut_error = Some(error);
             }
             // The overlay is shown once its page has loaded (`page_ready`).
