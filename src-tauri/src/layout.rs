@@ -420,6 +420,12 @@ pub(crate) fn boss_candidates<'b>(icon: &crate::minimap::bigmap::Icon, area: &st
     }
 }
 
+/// The boss pair (`data/icons/index.json`) an icon's sprite belongs to, if any.
+fn boss_pair(icon: &crate::minimap::bigmap::Icon) -> Option<String> {
+    let sprites = crate::minimap::bigmap::sprites();
+    icon.sprite.and_then(|id| sprites.iter().find(|s| s.id == id)).and_then(|s| s.pair.clone())
+}
+
 /// The checkpoints of a flight recorder's icons line (written once a part, as the recorder
 /// hands them to the navigator: `Session::new_checkpoints`), for the replay.
 #[cfg(test)]
@@ -556,16 +562,14 @@ impl Session {
         self.frame_no += 1;
         let frame = self.frame_no;
         self.named_seen.retain(|n| frame - n.last <= NAMED_FRAMES);
-        let sprites = crate::minimap::bigmap::sprites();
-        let pair_of = |icon: &crate::minimap::bigmap::Icon| icon.sprite.and_then(|id| sprites.iter().find(|s| s.id == id)).and_then(|s| s.pair.clone());
-        let live: Vec<String> = icons.iter().filter(|i| i.kind == "boss").filter_map(pair_of).collect();
+        let live: Vec<String> = icons.iter().filter(|i| i.kind == "boss").filter_map(boss_pair).collect();
         let mut out = Vec::with_capacity(icons.len());
         for icon in icons {
             if matches!(icon.kind, "exit" | "checkpoint" | "waypoint") {
                 out.push(icon.clone());
                 continue;
             }
-            if icon.kind == "boss-dead" && pair_of(icon).is_some_and(|p| live.contains(&p)) {
+            if icon.kind == "boss-dead" && boss_pair(icon).is_some_and(|p| live.contains(&p)) {
                 continue;
             }
             let at = (pos.0 as f32 + icon.x, pos.1 as f32 + icon.y);
@@ -599,11 +603,9 @@ impl Session {
     /// never seen alive, a pair of another area: never.
     fn see_bosses(&mut self, icons: &[crate::minimap::bigmap::Icon], pos: (i32, i32), bosses: &[Boss]) {
         let area = self.recording.area.clone();
-        let sprites = crate::minimap::bigmap::sprites();
-        let pair_of = |icon: &crate::minimap::bigmap::Icon| icon.sprite.and_then(|id| sprites.iter().find(|s| s.id == id)).and_then(|s| s.pair.clone());
-        let live: Vec<String> = icons.iter().filter(|i| i.kind == "boss").filter_map(pair_of).collect();
+        let live: Vec<String> = icons.iter().filter(|i| i.kind == "boss").filter_map(boss_pair).collect();
         for icon in icons.iter().filter(|i| matches!(i.kind, "boss" | "boss-dead")) {
-            let Some(pair) = pair_of(icon) else { continue };
+            let Some(pair) = boss_pair(icon) else { continue };
             let at = (pos.0 as f32 + icon.x, pos.1 as f32 + icon.y);
             let alive = icon.kind == "boss";
             if !alive && !live.contains(&pair) {
