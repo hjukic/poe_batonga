@@ -29,10 +29,16 @@ button.icon { display: grid; place-items: center; width: 28px; height: 28px; pad
 button.icon svg { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 2px #000); }
 button.icon:hover, body[data-interactive="true"] button.icon { opacity: 1; }
 button.icon:hover { background: rgb(239 235 255 / .12); }
+#restart.busy svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.restart-status { margin: 0; padding: 6px 20px 0; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.restart-status.failed { color: #ffb7a3; }
+.restart-status[hidden] { display: none; }
 #exit:hover { background: rgb(214 92 80 / .6); color: #fff; }
-/* Locked: only the lock takes clicks; settings and close are click-through and look it. */
+/* Locked: only the lock takes clicks; restart, settings and close are click-through and look it. */
 body:not([data-interactive="true"]) #lock { opacity: .7; }
 body:not([data-interactive="true"]) #settings-toggle,
+body:not([data-interactive="true"]) #restart,
 body:not([data-interactive="true"]) #exit { opacity: .25; background: transparent; color: #e4dff0; }
 #settings-toggle[aria-expanded="true"] { background: rgb(190 176 227 / .22); opacity: 1; }
 .route { padding: 12px 20px; }

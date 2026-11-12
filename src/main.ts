@@ -66,6 +66,7 @@ const icon = (paths: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${p
 const LOCKED = icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>');
 const UNLOCKED = icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.75-1.4"/>');
 const GEAR = icon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>');
+const RESTART = icon('<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>');
 const CLOSE = icon('<path d="M18 6 6 18M6 6l12 12"/>');
 
 document.body.className = 'overlay';
@@ -75,10 +76,12 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
       <span class="zone"></span>
       <div class="header-actions">
         <button id="lock" class="icon" type="button"></button>
+        <button id="restart" class="icon" type="button" title="Restart with the latest version" aria-label="Restart with the latest version">${RESTART}</button>
         <button id="settings-toggle" class="icon" type="button" title="Settings" aria-label="Settings" aria-expanded="false" aria-controls="settings">${GEAR}</button>
         <button id="exit" class="icon" type="button" title="Quit" aria-label="Quit">${CLOSE}</button>
       </div>
     </header>
+    <p class="restart-status" id="restart-status" role="status" hidden></p>
     <div class="route" id="route"></div>
     <div class="guide" id="guide" hidden>
       <span id="guide-text"></span>
@@ -395,6 +398,20 @@ document.addEventListener('mousedown', (event) => {
   const target = event.target as Element;
   if (!settings.hidden && !settings.contains(target) && !settingsToggle.contains(target)) setSettingsOpen(false);
 });
+// ---- Restart with the latest version (pull, build, replace this process) ----
+const restartButton = $<HTMLButtonElement>('#restart');
+function renderRestart(step: string, error: string | null) {
+  restartButton.classList.toggle('busy', !!step);
+  const box = $('#restart-status');
+  box.classList.toggle('failed', !!error);
+  box.textContent = error ? `Restart failed: ${error}` : step;
+  box.hidden = !step && !error;
+}
+restartButton.addEventListener('click', () => {
+  if (!status?.interactive || restartButton.classList.contains('busy')) return;
+  renderRestart('Starting update…', null);
+  void invoke('restart_latest').catch((error) => renderRestart('', String(error)));
+});
 $('#exit').addEventListener('click', () => { if (status?.interactive) void invoke('quit').catch(console.error); });
 $('#reset-progress').addEventListener('click', () => {
   void invoke<TrackerView>('reset_progress').then(renderTracker).catch((error) => showMessage('#error', String(error)));
@@ -419,6 +436,7 @@ async function start() {
     renderTracker(browserPreview);
     return;
   }
+  await listen<{ step: string; error: string | null }>('restart-status', (event) => renderRestart(event.payload.step, event.payload.error));
   await listen<Status>('overlay-status', (event) => render(event.payload));
   await listen<TrackerView>('tracker-state', (event) => renderTracker(event.payload));
   await listen<MinimapView>('minimap-state', (event) => renderMinimap(event.payload));

@@ -484,6 +484,13 @@ impl Recorder {
         self.0.lock().ok()?.view()
     }
 
+    /// Writes the current recording now (before a restart).
+    pub fn save_now(&self) {
+        if let Ok(state) = self.0.lock() {
+            state.save();
+        }
+    }
+
     /// Replacing the snapshot also handles unticking/resetting a checklist.
     pub fn set_completed(&self, objectives: Vec<(String, String)>) -> Option<LayoutView> {
         let mut state = self.0.lock().ok()?;

@@ -24,7 +24,10 @@ npm run desktop
 
 **Ctrl+Space** shows and hides the overlay; change it under the settings (gear)
 button. The lock button unlocks the panel to move it, open settings or tick a step
-by hand; while locked, only the lock button takes clicks. On Wayland the overlay is
+by hand; while locked, only the lock button takes clicks. The restart button (unlocked)
+pulls the latest commit, runs `npm run desktop:build` and replaces the running app
+with the new build; build output goes to the app's terminal, and a failure leaves the
+current version running with the reason under the top bar. On Wayland the overlay is
 a layer-shell surface, so it stays above a fullscreen game and passes clicks through;
 this needs the `gtk-layer-shell` system library (Arch: `pacman -S gtk-layer-shell`).
 On Hyprland the global shortcut fires while the game (an XWayland window) has focus. See the

@@ -4,6 +4,7 @@
 mod layer_shell;
 mod layout;
 mod minimap;
+mod restart;
 mod tracker;
 
 use std::str::FromStr;
@@ -522,6 +523,7 @@ fn main() {
             reset_progress,
             minimap_state,
             layout_state,
+            restart::restart_latest,
             quit
         ])
         .setup(|app| {
