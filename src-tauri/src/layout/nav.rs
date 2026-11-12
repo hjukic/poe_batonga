@@ -153,6 +153,20 @@ const ICON_CONFIRM: f64 = 0.5;
 /// target's exit (a labelled icon says so itself).
 const ICON_SURE: f64 = 0.95;
 
+/// Icons this close (world units) on the dead-reckoned track are one exit.
+const SIGHT_MATCH: f64 = 40.0;
+
+/// One exit seen on the map since the last loss.
+#[derive(Clone, Debug)]
+struct Sighting {
+    at: (f64, f64),
+    /// The label read most recently, and in how many scans in a row it was the same.
+    name: Option<String>,
+    scans: u32,
+    /// Its label was counted in an update.
+    labelled: bool,
+}
+
 /// An exit icon of a map frame: its offset from the player in minimap cells
 /// (screen axes) and, when its label could be read, the area it leads to (an
 /// area id or the zone's name). Unlabelled it is "some exit".
@@ -295,10 +309,16 @@ pub struct Navigator {
     guidance: RefCell<HashMap<(usize, Vec<usize>), Guidance>>,
     /// Gold allowed (the area is measured; tests may say so for made-up areas).
     trusted: bool,
-    /// The latest frame's exit icons, and the last icon update (icon count and
-    /// labels, units walked then).
-    icons_now: Vec<ExitIcon>,
-    icon_mark: Option<(Vec<Option<String>>, f64)>,
+    /// The latest frame's exit icons, each with its sighting's label and whether
+    /// that label was read the same in two scans.
+    icons_now: Vec<(ExitIcon, bool)>,
+    /// Exits seen since the last loss, by their place (world units on `track`).
+    sightings: Vec<Sighting>,
+    /// Where the player is by dead reckoning since the last loss (world units,
+    /// nominal scale): gives each icon a place, so one sighting counts once.
+    track: (f64, f64),
+    /// Units walked at the last icon update.
+    icon_walked: f64,
     /// Exits seen per (layout, node): where the icons put them (file units).
     exits_seen: HashMap<(usize, usize), (f64, f64)>,
     tuning: Tuning,
@@ -365,7 +385,9 @@ impl Navigator {
             guidance: RefCell::default(),
             trusted: MEASURED.contains(&area.id.as_str()),
             icons_now: Vec::new(),
-            icon_mark: None,
+            sightings: Vec::new(),
+            track: (0.0, 0.0),
+            icon_walked: 0.0,
             exits_seen: memory
                 .map(|m| {
                     area.layouts
@@ -404,20 +426,55 @@ impl Navigator {
     /// The frame's exit icons (minimap cells from the player, screen axes).
     pub fn icons(&mut self, icons: &[ExitIcon]) {
         self.apply();
-        self.icons_now = icons.to_vec();
+        // Each icon to its sighting: the same exit in the next frames (labelled on a
+        // whole-window scan, unlabelled between) is one sighting; a label read
+        // later upgrades it.
+        let (mut new, mut upgraded) = (false, false);
+        let mut now = Vec::with_capacity(icons.len());
+        for icon in icons {
+            let (wx, wy) = super::guide::from_screen((icon.dx / self.scale, icon.dy / self.scale));
+            let at = (self.track.0 + wx, self.track.1 + wy);
+            let found = self.sightings.iter().position(|s| (s.at.0 - at.0).hypot(s.at.1 - at.1) <= SIGHT_MATCH);
+            let i = match found {
+                Some(i) => i,
+                None => {
+                    new = true;
+                    self.sightings.push(Sighting { at, name: None, scans: 0, labelled: icon.to.is_some() });
+                    self.sightings.len() - 1
+                }
+            };
+            let sight = &mut self.sightings[i];
+            sight.at = ((sight.at.0 + at.0) / 2.0, (sight.at.1 + at.1) / 2.0);
+            if let Some(label) = &icon.to {
+                if sight.name.as_ref() == Some(label) {
+                    sight.scans += 1;
+                } else {
+                    (sight.name, sight.scans) = (Some(label.clone()), 1);
+                }
+                if !sight.labelled {
+                    sight.labelled = true;
+                    upgraded = true;
+                }
+            }
+            let named = ExitIcon { to: sight.name.clone(), ..icon.clone() };
+            now.push((named, sight.scans >= 2));
+        }
+        self.icons_now = now;
         if icons.is_empty() {
             return;
         }
-        // The same icons a few frames later are the same sighting.
-        let labels: Vec<Option<String>> = icons.iter().map(|i| i.to.clone()).collect();
-        let again = self.icon_mark.as_ref().is_some_and(|(seen, _)| *seen == labels);
-        if let Some((_, at)) = self.icon_mark.as_ref().filter(|_| again) {
-            if self.walked - at < ICON_EVERY {
-                return;
-            }
-        }
-        let weight = if again { ICON_TEMPER } else { 1.0 };
-        self.icon_mark = Some((labels, self.walked));
+        // A new sighting counts in full; a label read for one already counted, or
+        // the same ones again after walking on, at half weight; else nothing new.
+        let weight = if new {
+            1.0
+        } else if upgraded || self.walked - self.icon_walked >= ICON_EVERY {
+            ICON_TEMPER
+        } else {
+            return;
+        };
+        self.icon_walked = self.walked;
+        let icons: Vec<ExitIcon> = self.icons_now.iter().map(|(i, _)| i.clone()).collect();
+        let icons = icons.as_slice();
         self.touched();
         let before = self.posterior();
         let mut confirmed = 0.0;
@@ -533,9 +590,10 @@ impl Navigator {
             }
         }
         exits_seen.extend(learnt);
-        // Absolute evidence (gold allowed) only when the belief predicted the icons:
-        // an icon that merely reshuffles a diffuse belief confirms nothing.
-        if confirmed >= ICON_CONFIRM {
+        // Absolute evidence (gold allowed) only when the belief held before a new
+        // sighting predicted it: an icon that reshuffles a diffuse belief, or the
+        // same sighting again, confirms nothing.
+        if new && confirmed >= ICON_CONFIRM {
             self.anchored = true;
         }
     }
@@ -594,6 +652,7 @@ impl Navigator {
         let walking = dx.hypot(dy) >= JITTER;
         self.pending = (self.pending.0 + wx, self.pending.1 + wy);
         self.pending_sq += step * step;
+        self.track = (self.track.0 + wx, self.track.1 + wy);
         let keep = (-step / HEADING_LENGTH).exp();
         self.heading = (self.heading.0 * keep + wx, self.heading.1 * keep + wy);
         if walking {
@@ -611,6 +670,9 @@ impl Navigator {
     /// No movement data for this long (seconds); infinite when unknown.
     pub fn lost(&mut self, seconds: f64) {
         self.apply();
+        // Icons in hand are stale, and their places on the track mean nothing now.
+        self.icons_now.clear();
+        self.sightings.clear();
         self.since_weigh = 0.0;
         let reach = (WALK_SPEED * seconds.max(0.0)).min(MAX_REACH);
         let heading = self.heading;
@@ -819,7 +881,7 @@ impl Navigator {
         let in_view = self
             .icons_now
             .iter()
-            .map(|icon| (icon, self.icon_is_target(icon, target, &posterior)))
+            .map(|(icon, _)| (icon, self.icon_is_target(icon, target, &posterior)))
             .max_by(|a, b| a.1.total_cmp(&b.1));
         // … but only where the way there is about straight: a river or a wall between
         // makes the route bend, and pointing across it was wrong in the simulation,
@@ -1337,6 +1399,36 @@ mod tests {
         assert_eq!(nav.ranking()[0].1, before);
         // The exits seen are kept.
         assert!(nav.memory().exits.contains_key("ClearFell_W_E_N"));
+    }
+
+    #[test]
+    fn one_sighting_counts_once_and_does_not_confirm_itself() {
+        let area = graph::load("G1_2");
+        let l = area.layouts.iter().find(|l| l.id == "ClearFell_W_E_N").unwrap();
+        let at = l.samples[l.samples.len() / 3].at;
+        let named = |to: &str, exit: &str| ExitIcon { to: Some(to.into()), ..icon_of(&area, "ClearFell_W_E_N", exit, at) };
+        let pair = [named("The Grelwood", "G1_4"), named("Mud Burrow", "G1_3")];
+        let bare: Vec<ExitIcon> = pair.iter().map(|i| ExitIcon { to: None, ..i.clone() }).collect();
+        let mut once = Navigator::new(&area, Arrival::Unknown, None, SCALE, 4);
+        once.icons(&pair);
+        let mut often = Navigator::new(&area, Arrival::Unknown, None, SCALE, 4);
+        // The live pattern: labels on the whole-window scan, every third frame.
+        for frame in 0..12 {
+            often.icons(if frame % 3 == 0 { &pair } else { &bare });
+        }
+        let (a, b) = (once.posterior(), often.posterior());
+        assert!(a.iter().zip(&b).all(|(x, y)| (x - y).abs() < 1e-9), "{:?} vs {:?}", &once.ranking()[..2], &often.ranking()[..2]);
+        assert!(!often.progress().1, "the sighting confirmed itself");
+        // Seen unlabelled first, then labelled: the label is one upgrade, counted once.
+        let mut late = Navigator::new(&area, Arrival::Unknown, None, SCALE, 4);
+        late.icons(&bare);
+        late.icons(&pair);
+        let upgraded = late.posterior();
+        for _ in 0..6 {
+            late.icons(&pair);
+            late.icons(&bare);
+        }
+        assert!(late.posterior().iter().zip(&upgraded).all(|(x, y)| (x - y).abs() < 1e-9));
     }
 
     #[test]
