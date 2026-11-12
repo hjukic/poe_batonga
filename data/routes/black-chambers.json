@@ -1,0 +1,30 @@
+{
+  "formatVersion": 1,
+  "order": 580,
+  "zone": { "id": "G3_17", "name": "The Black Chambers", "level": 45 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-doryani",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_17", "label": "Doryani", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Doryani", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in its only layout."
+    },
+    {
+      "id": "doryani-loot",
+      "kind": "objective",
+      "parts": [{ "text": "Wait ~30 s for the loot" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "chambers-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Ziggurat Encampment was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

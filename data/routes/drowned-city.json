@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "order": 520,
+  "zone": { "id": "G3_8", "name": "The Drowned City", "level": 40 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "apex-of-filth-wp",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_8", "label": "Apex of Filth", "exit": "G3_11" },
+      "parts": [{ "text": "Apex of Filth WP, return" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_11" },
+      "evidence": "Zone-generation line for G3_11."
+    },
+    {
+      "id": "molten-vault-wp",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_8", "label": "The Molten Vault", "exit": "G3_9" },
+      "parts": [{ "text": "Molten Vault WP, return" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_9" },
+      "evidence": "Zone-generation line for G3_9."
+    },
+    {
+      "id": "drowned-quarters",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Drowned Quarters rooms" }, { "text": "Runes", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "drowned-to-molten-vault",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to Molten Vault" }],
+      "trigger": null,
+      "evidence": "The Molten Vault was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "formatVersion": 1,
+  "order": 420,
+  "zone": { "id": "G3_3", "name": "Jungle Ruins", "level": 34 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-jungle-ruins",
+      "kind": "note",
+      "parts": [{ "text": "Explorers point the way to the next area", "style": "direction" }]
+    },
+    {
+      "id": "kill-silverfist",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_3", "label": "Mighty Silverfist", "tag": "clearing_boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Mighty Silverfist", "style": "boss" }, { "text": "2 Skill Points", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'clearing_boss' node in all 16 layouts."
+    },
+    {
+      "id": "jungle-grave-servi",
+      "kind": "objective",
+      "parts": [{ "text": "Jungle Grave: summon " }, { "text": "Servi", "style": "npc" }, { "text": "Rare Belt", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "troubled-camp-gwendolyn",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Troubled Camp (Gwendolyn)" }, { "text": "Rare Gloves", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "jungle-ruins-waypoint",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint by Venom Crypts" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-venom-crypts",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_3", "label": "The Venom Crypts", "exit": "G3_4" },
+      "parts": [{ "text": "Enter The Venom Crypts" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_4" },
+      "evidence": "Zone-generation line for G3_4."
+    },
+    {
+      "id": "enter-infested-barrens",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_3", "label": "Infested Barrens", "exit": "G3_2_1" },
+      "parts": [{ "text": "Enter Infested Barrens" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_2_1" },
+      "evidence": "Zone-generation line for G3_2_1. After the town visit for the Orok Poison."
+    },
+    {
+      "id": "large-soul-core-altar",
+      "kind": "objective",
+      "parts": [{ "text": "Soul Core on Stone Altar" }],
+      "trigger": null,
+      "evidence": "After Jiquani's Sanctum: the Large Soul Core resurfaces the Waterways entrance. No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-matlan-waterways",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_3", "label": "The Matlan Waterways", "exit": "G3_2_2" },
+      "parts": [{ "text": "Enter The Matlan Waterways" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_2_2" },
+      "evidence": "Zone-generation line for G3_2_2."
+    }
+  ]
+}

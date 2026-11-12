@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "order": 460,
+  "zone": { "id": "G3_10_Airlock", "name": "The Temple of Chaos", "level": 38 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "temple-of-chaos-waypoint",
+      "kind": "objective",
+      "parts": [{ "text": "Take the waypoint" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-trial-of-chaos",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_10_Airlock", "label": "The Trial of Chaos", "exit": "G3_10" },
+      "parts": [{ "text": "Ultimatum: Trial of Chaos" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_10" },
+      "evidence": "Zone-generation line for G3_10. Use the Inscribed Ultimatum at the trial entrance; for the 2nd Ascendancy, when ready."
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "formatVersion": 1,
+  "order": 560,
+  "zone": { "id": "G3_14", "name": "Utzaal", "level": 43 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-utzaal",
+      "kind": "note",
+      "parts": [{ "text": "Follow the paved road to Viper", "style": "direction" }]
+    },
+    {
+      "id": "sacrificial-heart",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Heart from Vaal Goliaths" }],
+      "trigger": null,
+      "evidence": "For the Aggorat altar; it can also drop in Aggorat. No log line known. Tick by hand."
+    },
+    {
+      "id": "utzaal-side-doors",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Side doors: idols" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-viper-napuatzi",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_14", "label": "Viper Napuatzi", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Viper Napuatzi", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 6 layouts."
+    },
+    {
+      "id": "enter-aggorat",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_14", "label": "Aggorat", "exit": "G3_16" },
+      "parts": [{ "text": "Enter Aggorat" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_16" },
+      "evidence": "Zone-generation line for G3_16."
+    }
+  ]
+}

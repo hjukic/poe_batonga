@@ -1,0 +1,47 @@
+{
+  "formatVersion": 1,
+  "order": 400,
+  "zone": { "id": "G3_1", "name": "Sandswept Marsh", "level": 33 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "marsh-hooded-one",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-rootdredge",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Rootdredge", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "orok-campsite-basket",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Basket at Orok Campsite" }, { "text": "Jeweller's Orb", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "hanging-tree-corpse",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Hanging tree corpse" }, { "text": "Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-ziggurat-encampment",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_1", "label": "Ziggurat Encampment", "exit": "G3_town" },
+      "parts": [{ "text": "Enter Ziggurat Encampment" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_town" },
+      "evidence": "Zone-generation line for G3_town."
+    }
+  ]
+}

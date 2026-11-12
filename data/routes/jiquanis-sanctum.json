@@ -1,0 +1,36 @@
+{
+  "formatVersion": 1,
+  "order": 490,
+  "zone": { "id": "G3_6_2", "name": "Jiquani's Sanctum", "level": 38 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "sanctum-alva",
+      "kind": "objective",
+      "parts": [{ "text": "Summon and talk to " }, { "text": "Alva", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "medium-soul-cores",
+      "kind": "objective",
+      "parts": [{ "text": "2 Medium Cores: generators" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-zicoatl",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Zicoatl", "style": "boss" }, { "text": "Soul Core", "style": "reward" }],
+      "trigger": null,
+      "evidence": "Back at the start, click the Large Soul Core; loot it after the kill. No kill line known. Tick by hand."
+    },
+    {
+      "id": "sanctum-to-jungle-ruins",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to Jungle Ruins" }],
+      "trigger": null,
+      "evidence": "Jungle Ruins was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

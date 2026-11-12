@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "order": 540,
+  "zone": { "id": "G3_11", "name": "Apex of Filth", "level": 41 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "apex-cauldron",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Mushrooms for the Cauldron" }, { "text": "Flask Quality", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-queen-of-filth",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_11", "label": "Queen of Filth", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Queen of Filth", "style": "boss" }, { "text": "Door Idol", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 6 layouts."
+    },
+    {
+      "id": "apex-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Ziggurat Encampment was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

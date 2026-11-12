@@ -1,0 +1,135 @@
+{
+  "formatVersion": 1,
+  "order": 410,
+  "zone": { "id": "G3_town", "name": "Ziggurat Encampment", "level": 44 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "ziggurat-alva",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Alva", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "ziggurat-oswald",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Oswald", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "ziggurat-hooded-one",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-jungle-ruins",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_town", "label": "Jungle Ruins", "exit": "G3_3" },
+      "parts": [{ "text": "Enter Jungle Ruins" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_3" },
+      "evidence": "Zone-generation line for G3_3. The top exit."
+    },
+    {
+      "id": "orok-poison-servi",
+      "kind": "objective",
+      "parts": [{ "text": "Orok Poison to " }, { "text": "Servi", "style": "npc" }, { "text": "Permanent buff", "style": "reward" }],
+      "trigger": null,
+      "evidence": "After The Venom Crypts. The buff is a permanent choice. No log line known. Tick by hand."
+    },
+    {
+      "id": "ziggurat-to-jungle-ruins",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to Jungle Ruins" }],
+      "trigger": null,
+      "evidence": "Jungle Ruins was entered before, so its zone line would tick this early. Tick by hand."
+    },
+    {
+      "id": "spear-to-servi",
+      "kind": "objective",
+      "parts": [{ "text": "Ignagduk's Spear to " }, { "text": "Servi", "style": "npc" }, { "text": "Charm", "style": "reward" }],
+      "trigger": null,
+      "evidence": "After The Azak Bog. No log line known. Tick by hand."
+    },
+    {
+      "id": "ziggurat-alva-downstairs",
+      "kind": "objective",
+      "parts": [{ "text": "Downstairs: talk to " }, { "text": "Alva", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-drowned-city",
+      "kind": "objective",
+      "parts": [{ "text": "Enter The Drowned City" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_8" },
+      "evidence": "Zone-generation line for G3_8. The bottom exit. No compass target: it would point here on the earlier town visits."
+    },
+    {
+      "id": "hammer-to-oswald",
+      "kind": "objective",
+      "parts": [{ "text": "Hammer to " }, { "text": "Oswald", "style": "npc" }, { "text": "Reforging Bench", "style": "reward" }],
+      "trigger": null,
+      "evidence": "After The Molten Vault: the Hammer of Kamasa (first character). No log line known. Tick by hand."
+    },
+    {
+      "id": "ziggurat-to-apex",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to Apex of Filth" }],
+      "trigger": null,
+      "evidence": "Apex of Filth was entered before, so its zone line would tick this early. Tick by hand."
+    },
+    {
+      "id": "ziggurat-alva-idol",
+      "kind": "objective",
+      "parts": [{ "text": "Downstairs: talk to " }, { "text": "Alva", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After Apex of Filth. No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-temple-of-kopec",
+      "kind": "objective",
+      "parts": [{ "text": "Enter Temple of Kopec" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_12" },
+      "evidence": "Zone-generation line for G3_12. The door behind Alva. No compass target: it would point here on the earlier town visits."
+    },
+    {
+      "id": "take-the-gateway",
+      "kind": "objective",
+      "parts": [{ "text": "Take the Gateway" }],
+      "trigger": null,
+      "evidence": "After Temple of Kopec. No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-utzaal",
+      "kind": "objective",
+      "parts": [{ "text": "Enter Utzaal" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_14" },
+      "evidence": "Zone-generation line for G3_14. Downstairs. No compass target: it would point here on the earlier town visits."
+    },
+    {
+      "id": "ziggurat-doryani",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Doryani", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After The Black Chambers. No log line known. Tick by hand."
+    },
+    {
+      "id": "ziggurat-doryani-again",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Doryani", "style": "npc" }, { "text": " again" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "ziggurat-end-talks",
+      "kind": "objective",
+      "parts": [{ "text": "Then " }, { "text": "Alva", "style": "npc" }, { "text": ", Hooded One, Alva" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    }
+  ]
+}

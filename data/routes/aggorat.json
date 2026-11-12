@@ -1,0 +1,35 @@
+{
+  "formatVersion": 1,
+  "order": 570,
+  "zone": { "id": "G3_16", "name": "Aggorat", "level": 44 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-aggorat",
+      "kind": "note",
+      "parts": [{ "text": "Altar top right, Black Chambers top left", "style": "direction" }]
+    },
+    {
+      "id": "sacrificial-altar",
+      "kind": "objective",
+      "parts": [{ "text": "Find the Sacrificial Altar" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "place-the-heart",
+      "kind": "objective",
+      "parts": [{ "text": "Place the Heart, stab it" }, { "text": "2 Skill Points", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-black-chambers",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_16", "label": "The Black Chambers", "exit": "G3_17" },
+      "parts": [{ "text": "Enter The Black Chambers" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_17" },
+      "evidence": "Zone-generation line for G3_17."
+    }
+  ]
+}

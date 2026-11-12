@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "order": 530,
+  "zone": { "id": "G3_9", "name": "The Molten Vault", "level": 41 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-mektul",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_9", "label": "Mektul", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Mektul", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "First character: he drops the Hammer of Kamasa for Oswald. No kill line known. Tick by hand. Target: the one 'boss' node in both layouts."
+    },
+    {
+      "id": "molten-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Ziggurat Encampment was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

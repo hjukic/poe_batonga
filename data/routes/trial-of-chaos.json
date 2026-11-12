@@ -1,0 +1,15 @@
+{
+  "formatVersion": 1,
+  "order": 470,
+  "zone": { "id": "G3_10", "name": "The Trial of Chaos", "level": 38 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "chaos-trial-complete",
+      "kind": "objective",
+      "parts": [{ "text": "Complete the trial" }, { "text": "Ascendancy", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "formatVersion": 1,
+  "order": 440,
+  "zone": { "id": "G3_2_1", "name": "Infested Barrens", "level": 35 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "barrens-alva",
+      "kind": "objective",
+      "parts": [{ "text": "Find and talk to " }, { "text": "Alva", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "barrens-waypoint",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint near Alva" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "troubled-camp-sebastian",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Troubled Camp (Sebastian)" }, { "text": "Rare Boots", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-chimeral-wetlands",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_2_1", "label": "Chimeral Wetlands", "exit": "G3_5" },
+      "parts": [{ "text": "Enter Chimeral Wetlands" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_5" },
+      "evidence": "Zone-generation line for G3_5."
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "formatVersion": 1,
+  "order": 510,
+  "zone": { "id": "G3_7", "name": "The Azak Bog", "level": 40 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "flameskin-rituals",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Flameskin rituals" }, { "text": "Fire Res", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "directions-azak-bog",
+      "kind": "note",
+      "parts": [{ "text": "The boss arena is always top right", "style": "direction" }]
+    },
+    {
+      "id": "kill-ignagduk",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_7", "label": "Ignagduk", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Ignagduk", "style": "boss" }, { "text": ", use Skull" }, { "text": "+30 Spirit", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 8 layouts."
+    },
+    {
+      "id": "bog-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Ziggurat Encampment was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

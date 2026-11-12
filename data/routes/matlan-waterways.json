@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "order": 500,
+  "zone": { "id": "G3_2_2", "name": "The Matlan Waterways", "level": 39 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-narag",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Narag", "style": "boss" }, { "text": " (hut)" }, { "text": "Rare Weapon", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "pressure-pads",
+      "kind": "objective",
+      "parts": [{ "text": "Step on the pressure pads" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "bog-corpse-servi",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Corpse by the Bog: " }, { "text": "Servi", "style": "npc" }, { "text": "Rare Belt", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-azak-bog",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_2_2", "label": "The Azak Bog", "exit": "G3_7" },
+      "parts": [{ "text": "Enter The Azak Bog" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_7" },
+      "evidence": "Zone-generation line for G3_7. The side entrance near the end of the zone."
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "formatVersion": 1,
+  "order": 450,
+  "zone": { "id": "G3_5", "name": "Chimeral Wetlands", "level": 36 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "ravaged-camp-logbook",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Ravaged Camp: Logbook" }, { "text": "Rare Armour", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-noxious-behemoth",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Noxious Behemoth", "style": "boss" }, { "text": "Magic Amulet", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "temple-of-chaos-wp",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_5", "label": "The Temple of Chaos", "exit": "G3_10_Airlock" },
+      "parts": [{ "text": "Temple of Chaos WP, return" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_10_Airlock" },
+      "evidence": "Zone-generation line for G3_10_Airlock."
+    },
+    {
+      "id": "kill-xyclucian",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Xyclucian", "style": "boss" }, { "text": "Ultimatum", "style": "reward" }],
+      "trigger": null,
+      "evidence": "Drops the Inscribed Ultimatum for the Trial of Chaos. No kill line known. Tick by hand."
+    },
+    {
+      "id": "enter-machinarium",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_5", "label": "Jiquani's Machinarium", "exit": "G3_6_1" },
+      "parts": [{ "text": "Enter the Machinarium" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_6_1" },
+      "evidence": "Zone-generation line for G3_6_1."
+    }
+  ]
+}

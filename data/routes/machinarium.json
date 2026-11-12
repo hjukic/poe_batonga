@@ -1,0 +1,50 @@
+{
+  "formatVersion": 1,
+  "order": 480,
+  "zone": { "id": "G3_6_1", "name": "Jiquani's Machinarium", "level": 37 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-machinarium",
+      "kind": "note",
+      "parts": [{ "text": "U-shaped: generators at the two tips", "style": "direction" }]
+    },
+    {
+      "id": "machinarium-alva",
+      "kind": "objective",
+      "parts": [{ "text": "Summon and talk to " }, { "text": "Alva", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "small-soul-core-altar",
+      "kind": "objective",
+      "parts": [{ "text": "Soul Core on Alva's altar" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "small-soul-cores",
+      "kind": "objective",
+      "parts": [{ "text": "Loot the other Soul Cores" }],
+      "trigger": null,
+      "evidence": "Four in all: one opens the Sanctum, two the Blackjaw door or a secret room. No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-blackjaw",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_6_1", "label": "Blackjaw", "tag": "bossoffice" },
+      "parts": [{ "text": "Kill " }, { "text": "Blackjaw", "style": "boss" }, { "text": ", use his Core" }, { "text": "+10% Fire Res", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'bossoffice' node in all 12 layouts (this area's boss is Blackjaw)."
+    },
+    {
+      "id": "enter-jiquanis-sanctum",
+      "kind": "objective",
+      "navigationTarget": { "area": "G3_6_1", "label": "Jiquani's Sanctum", "exit": "G3_6_2" },
+      "parts": [{ "text": "Enter Jiquani's Sanctum" }],
+      "trigger": { "type": "zoneEntered", "area": "G3_6_2" },
+      "evidence": "Zone-generation line for G3_6_2."
+    }
+  ]
+}

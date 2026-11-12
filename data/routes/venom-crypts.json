@@ -1,0 +1,37 @@
+{
+  "formatVersion": 1,
+  "order": 430,
+  "zone": { "id": "G3_4", "name": "The Venom Crypts", "level": 35 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act3_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "crypts-sarcophagus",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Sarcophagus event" }, { "text": "Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "orok-poison",
+      "kind": "objective",
+      "parts": [{ "text": "Loot Orok Poison (corpse)" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "a-reprieve",
+      "kind": "objective",
+      "parts": [{ "text": "Head to A Reprieve" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "crypts-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Ziggurat Encampment was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}
