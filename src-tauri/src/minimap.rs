@@ -204,28 +204,48 @@ fn regions(game: [f64; 4], monitor: [f64; 4], scale: f64) -> Result<CaptureRegio
     let window_px = [gw * scale, gh * scale];
     let origin_px = [(minimap.0 - gx) * scale, (minimap.1 - gy) * scale];
     let minimap_px = [(minimap.2 * scale).round() as usize, (minimap.3 * scale).round() as usize];
-    let frame = match BIG_FRAME {
-        BigFrame::LikeMinimap => bigmap::Frame::like_minimap(minimap_px, window_px, origin_px),
-        BigFrame::Wide(cols, rows) => bigmap::Frame::wide(cols, rows),
-    };
-    let ([ax, ay, aw, ah], marker) = bigmap::area(window_px, &frame);
+    let layout = big_layout(window_px, origin_px, minimap_px);
+    let [ax, ay, aw, ah] = layout.area;
     let big = area(
         (gx + ax / scale).floor(),
         (gy + ay / scale).floor(),
         (gx + (ax + aw) / scale).ceil(),
         (gy + (ay + ah) / scale).ceil(),
     );
-    let minimap_marker = bigmap::Frame::like_minimap(minimap_px, window_px, origin_px).player;
+    let marker = [layout.marker[0] - (big.0 - gx) * scale, layout.marker[1] - (big.1 - gy) * scale];
     Ok(CaptureRegion {
         minimap: geometry(minimap),
         bigmap: geometry(big),
-        minimap_marker: [minimap_marker[0] as f64 * CELL as f64, minimap_marker[1] as f64 * CELL as f64],
-        plan: bigmap::Plan {
-            marker: [(gx + (ax + marker[0]) / scale - big.0) * scale, (gy + (ay + marker[1]) / scale - big.1) * scale],
-            radius: bigmap::radius(window_px),
-            frame,
-        },
+        minimap_marker: layout.minimap_marker,
+        plan: bigmap::Plan { marker, radius: bigmap::radius(window_px), frame: layout.frame },
     })
+}
+
+/// Where the big map is read in a game window of `window_px` pixels whose minimap
+/// capture starts at `minimap_origin` (pixels inside the window) and is `minimap_px` large.
+struct BigLayout {
+    frame: bigmap::Frame,
+    /// The big-map capture inside the window, in pixels: x, y, width, height.
+    area: [f64; 4],
+    /// The big map's player marker inside the window, in pixels.
+    marker: [f64; 2],
+    /// Where the minimap draws the player, inside the minimap capture, in pixels.
+    minimap_marker: [f64; 2],
+}
+
+fn big_layout(window_px: [f64; 2], minimap_origin: [f64; 2], minimap_px: [usize; 2]) -> BigLayout {
+    let like_minimap = bigmap::Frame::like_minimap(minimap_px, window_px, minimap_origin);
+    let frame = match BIG_FRAME {
+        BigFrame::LikeMinimap => like_minimap,
+        BigFrame::Wide(cols, rows) => bigmap::Frame::wide(cols, rows),
+    };
+    let (area, marker) = bigmap::area(window_px, &frame);
+    BigLayout {
+        frame,
+        area,
+        marker: [area[0] + marker[0], area[1] + marker[1]],
+        minimap_marker: like_minimap.player.map(|v| v as f64 * CELL as f64),
+    }
 }
 
 /// Finds the game window and where to read its maps.
@@ -574,6 +594,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn regions_follow_the_game_window() {
         // The owner's setup: DP-1 at 1920,0 (3840x2160 px, scale 2), the game window
         // floating 10 logical px left of it and 1 down.
@@ -644,13 +665,13 @@ mod tests {
 
     /// Walks the player through `world` showing the minimap, then the big map, then the
     /// minimap again, and returns the recorder's overview as JSON.
-    fn walk(region: &CaptureRegion, big_size: [usize; 2]) -> (serde_json::Value, Vec<&'static str>, (i32, i32)) {
+    fn walk(minimap_marker: [f64; 2], plan: &bigmap::Plan, big_size: [usize; 2]) -> (serde_json::Value, Vec<&'static str>, (i32, i32)) {
         use crate::layout::Recorder;
         use crate::tracker::LogEvent;
         let recorder = Recorder::new(None);
         recorder.on_log(&LogEvent::ZoneEntered { area: "test".into(), level: 1, seed: Some(1) }, true);
-        let mini_marker = (region.minimap_marker[0] as i32, region.minimap_marker[1] as i32);
-        let big_marker = (region.plan.marker[0] as i32, region.plan.marker[1] as i32);
+        let mini_marker = (minimap_marker[0] as i32, minimap_marker[1] as i32);
+        let big_marker = (plan.marker[0] as i32, plan.marker[1] as i32);
         let (start, mut pos) = ((60, 80), (60, 80));
         let mut seen = vec![];
         for step in 0..90 {
@@ -658,7 +679,7 @@ mod tests {
             let big_open = (30..60).contains(&step);
             let corner = if big_open { image(600, 518, |_, _| [14, 16, 22]) } else { screen(600, 518, pos, mini_marker) };
             let big = screen(big_size[0], big_size[1], pos, big_marker);
-            let (view, size) = choose(&corner, region.minimap_marker, &region.plan, || Ok(big)).unwrap();
+            let (view, size) = choose(&corner, minimap_marker, plan, || Ok(big)).unwrap();
             seen.push(if view.message == "Reading big map" { "big" } else { "minimap" });
             recorder.on_frame(&view, size);
         }
@@ -677,10 +698,27 @@ mod tests {
         assert!((dx - moved.0 as f64).abs() <= 1.0 && (dy - moved.1 as f64).abs() <= 1.0, "moved {dx},{dy}, walked {moved:?}");
     }
 
+    /// The owner's game window (3840x2160 px, minimap capture 600x518 px at 3240,0):
+    /// where the minimap draws the player, how to read the big map, and its capture size.
+    fn owner_plan(frame: Option<bigmap::Frame>) -> ([f64; 2], bigmap::Plan, [usize; 2]) {
+        let window = [3840.0, 2160.0];
+        let mut layout = big_layout(window, [3240.0, 0.0], [600, 518]);
+        if let Some(frame) = frame {
+            (layout.area, _) = bigmap::area(window, &frame);
+            layout.frame = frame;
+        }
+        let [x, y, w, h] = layout.area;
+        let (x0, y0) = (x.floor(), y.floor());
+        let size = [((x + w).ceil() - x0) as usize, ((y + h).ceil() - y0) as usize];
+        let marker = [layout.marker[0] - x0, layout.marker[1] - y0];
+        (layout.minimap_marker, bigmap::Plan { marker, radius: bigmap::radius(window), frame: layout.frame }, size)
+    }
+
     #[test]
     fn one_track_across_minimap_and_big_map() {
-        let region = regions([1910.0, 1.0, 1920.0, 1080.0], [1920.0, 0.0, 1920.0, 1080.0], 2.0).unwrap();
-        let (json, seen, moved) = walk(&region, [638, 556]);
+        let (minimap_marker, plan, size) = owner_plan(None);
+        assert_eq!(size, [637, 555]);
+        let (json, seen, moved) = walk(minimap_marker, &plan, size);
         assert_eq!(seen.iter().filter(|&&v| v == "big").count(), 30);
         assert_eq!((seen[29], seen[30], seen[59], seen[60]), ("minimap", "big", "big", "minimap"));
         assert_one_track(&json, moved);
@@ -692,11 +730,8 @@ mod tests {
     #[test]
     #[ignore]
     fn one_track_with_wide_big_map_frames() {
-        let mut region = regions([1910.0, 1.0, 1920.0, 1080.0], [1920.0, 0.0, 1920.0, 1080.0], 2.0).unwrap();
-        let frame = bigmap::Frame::wide(600, 518);
-        let ([_, _, w, h], marker) = bigmap::area([3840.0, 2160.0], &frame);
-        region.plan = bigmap::Plan { marker, radius: region.plan.radius, frame };
-        let (json, _, moved) = walk(&region, [w as usize, h as usize]);
+        let (minimap_marker, plan, size) = owner_plan(Some(bigmap::Frame::wide(600, 518)));
+        let (json, _, moved) = walk(minimap_marker, &plan, size);
         assert_one_track(&json, moved);
     }
 

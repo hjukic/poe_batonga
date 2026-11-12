@@ -1,6 +1,8 @@
 //! Visible-desktop GDI capture for windowed/borderless PoE 2. No client hooks.
 //! Revalidate focus, physical client bounds and occlusion before every capture.
-use super::{Image, REGION_H, REGION_W, REGION_X};
+//! Two crops: the corner minimap and, while the minimap is hidden, the big map
+//! around the player.
+use super::{big_layout, bigmap, Image, REGION_H, REGION_W, REGION_X};
 use std::{ffi::c_void, mem::size_of, ptr::null_mut};
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HWND, LPARAM, POINT, RECT},
@@ -10,7 +12,8 @@ use windows_sys::Win32::{
         HBITMAP, HDC, HGDIOBJ, SRCCOPY,
     },
     System::Threading::{
-        OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+        GetCurrentProcessId, OpenProcess, QueryFullProcessImageNameW,
+        PROCESS_QUERY_LIMITED_INFORMATION,
     },
     UI::{
         HiDpi::{
@@ -36,6 +39,11 @@ struct Bounds {
 pub struct Region {
     window: HWND,
     bounds: Bounds,
+    /// The big-map crop around the player.
+    big: Bounds,
+    /// Where the minimap draws the player, inside the minimap crop, in pixels.
+    pub minimap_marker: [f64; 2],
+    pub plan: bigmap::Plan,
 }
 
 struct DpiGuard(DPI_AWARENESS_CONTEXT);
@@ -116,7 +124,22 @@ fn crop_bounds(origin: [i32; 2], size: [i32; 2]) -> Result<Bounds, String> {
     Ok(bounds)
 }
 
-fn window_bounds(window: HWND) -> Result<Bounds, String> {
+/// The big-map crop for a client area at `origin` of `size` whose minimap crop is
+/// `minimap`, where the minimap draws the player inside that crop, and how to read it.
+fn big_crop(origin: [i32; 2], size: [i32; 2], minimap: Bounds) -> (Bounds, [f64; 2], bigmap::Plan) {
+    let window = [size[0] as f64, size[1] as f64];
+    let minimap_origin = [(minimap.x - origin[0]) as f64, (minimap.y - origin[1]) as f64];
+    let layout = big_layout(window, minimap_origin, [minimap.width as usize, minimap.height as usize]);
+    let [x, y, w, h] = layout.area;
+    let (x0, y0) = (x.floor() as i32, y.floor() as i32);
+    let (x1, y1) = ((x + w).ceil() as i32, (y + h).ceil() as i32);
+    let crop = Bounds { x: origin[0] + x0, y: origin[1] + y0, width: x1 - x0, height: y1 - y0 };
+    let marker = [layout.marker[0] - x0 as f64, layout.marker[1] - y0 as f64];
+    let plan = bigmap::Plan { marker, radius: bigmap::radius(window), frame: layout.frame };
+    (crop, layout.minimap_marker, plan)
+}
+
+fn client_area(window: HWND) -> Result<([i32; 2], [i32; 2]), String> {
     let mut client = RECT::default();
     let mut origin = POINT::default();
     if unsafe { GetClientRect(window, &mut client) } == 0
@@ -124,15 +147,26 @@ fn window_bounds(window: HWND) -> Result<Bounds, String> {
     {
         return Err("Cannot locate the PoE 2 client area".into());
     }
-    crop_bounds([origin.x, origin.y], [client.right, client.bottom])
+    Ok(([origin.x, origin.y], [client.right, client.bottom]))
+}
+
+fn window_bounds(window: HWND) -> Result<Bounds, String> {
+    let (origin, size) = client_area(window)?;
+    crop_bounds(origin, size)
 }
 
 pub fn locate_minimap() -> Result<Region, String> {
     let _dpi = DpiGuard::enter()?;
     let window = game_window()?;
+    let (origin, size) = client_area(window)?;
+    let bounds = crop_bounds(origin, size)?;
+    let (big, minimap_marker, plan) = big_crop(origin, size, bounds);
     Ok(Region {
         window,
-        bounds: window_bounds(window)?,
+        bounds,
+        big,
+        minimap_marker,
+        plan,
     })
 }
 
@@ -143,6 +177,9 @@ fn intersects(a: Bounds, b: RECT) -> bool {
 struct Occlusion {
     game: HWND,
     crop: Bounds,
+    /// Our own windows (the compass sits on the player) don't count: they draw in
+    /// colours the big-map reader ignores.
+    skip_process: Option<u32>,
     reached_game: bool,
     covered: bool,
 }
@@ -151,6 +188,15 @@ unsafe extern "system" fn check_window(window: HWND, parameter: LPARAM) -> i32 {
     if window == check.game {
         check.reached_game = true;
         return 0;
+    }
+    if let Some(own) = check.skip_process {
+        let mut pid = 0;
+        unsafe {
+            GetWindowThreadProcessId(window, &mut pid);
+        }
+        if pid == own {
+            return 1;
+        }
     }
     let mut rect = RECT::default();
     if unsafe { IsWindowVisible(window) } != 0
@@ -164,13 +210,22 @@ unsafe extern "system" fn check_window(window: HWND, parameter: LPARAM) -> i32 {
     1
 }
 
+/// The minimap crop.
 pub fn capture(region: &Region) -> Result<Image, String> {
+    capture_crop(region, region.bounds, None)
+}
+
+/// The big-map crop, read while the minimap is hidden.
+pub fn capture_bigmap(region: &Region) -> Result<Image, String> {
+    capture_crop(region, region.big, Some(unsafe { GetCurrentProcessId() }))
+}
+
+fn capture_crop(region: &Region, bounds: Bounds, skip_process: Option<u32>) -> Result<Image, String> {
     let _dpi = DpiGuard::enter()?;
     if game_window()? != region.window {
         return Err("Game window changed; locating minimap again".into());
     }
-    let bounds = window_bounds(region.window)?;
-    if bounds != region.bounds {
+    if window_bounds(region.window)? != region.bounds {
         return Err("Game moved or resized; locating minimap again".into());
     }
     let desktop = unsafe {
@@ -191,6 +246,7 @@ pub fn capture(region: &Region) -> Result<Image, String> {
     let mut check = Occlusion {
         game: region.window,
         crop: bounds,
+        skip_process,
         reached_game: false,
         covered: false,
     };
@@ -216,7 +272,8 @@ pub fn capture(region: &Region) -> Result<Image, String> {
     let screen = Screen(screen);
     let image = read_crop(screen.0, bounds)?;
     // Discard pixels if focus/geometry changed during the blit.
-    if unsafe { GetForegroundWindow() } != region.window || window_bounds(region.window)? != bounds
+    if unsafe { GetForegroundWindow() } != region.window
+        || window_bounds(region.window)? != region.bounds
     {
         return Err("Game changed during capture; frame discarded".into());
     }
@@ -344,6 +401,19 @@ mod tests {
         assert!(crop_bounds([0, 0], [0, 0]).is_err());
         let rounded = crop_bounds([0, 0], [1008, 720]).unwrap();
         assert_eq!(rounded.x + rounded.width, 1008);
+    }
+    #[test]
+    fn big_map_crop_surrounds_the_player() {
+        // 3840x2160 client at a negative origin: the big map's marker at 1919, 1059.
+        let origin = [-3840, 0];
+        let minimap = crop_bounds(origin, [3840, 2160]).unwrap();
+        let (big, minimap_marker, plan) = big_crop(origin, [3840, 2160], minimap);
+        let marker = [big.x as f64 + plan.marker[0], big.y as f64 + plan.marker[1]];
+        assert!((marker[0] - (-3840.0 + 1918.8)).abs() < 0.1 && (marker[1] - 1059.0).abs() < 0.2, "{marker:?}");
+        assert_eq!((plan.frame.cols, plan.frame.rows), (300, 259));
+        assert!(big.width >= 600 && big.height >= 518);
+        // The minimap's player, inside its own crop, matches the big map frame's player cell.
+        assert_eq!(minimap_marker, plan.frame.player.map(|v| v as f64 * 2.0));
     }
     #[test]
     fn gdi_crop_reads_top_down_rgb_without_capturing_the_desktop() {

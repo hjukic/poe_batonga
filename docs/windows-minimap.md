@@ -29,6 +29,24 @@ explored geometry locally. Losing the current player
 observation hides guidance and clears the drawn minimap so stale arrows are not
 left visible.
 
+## Big map
+
+When the corner minimap is hidden by the big map (Tab), the adapter reads the big
+map around the player instead, as on Linux ([map reading, "Big map"](map-reading.md#big-map)):
+a second crop of the client area, about 637x555 px at 3840x2160, centred on where
+the big map draws the player (49.97%, 49.03% of the client area). It gets the same
+focus, geometry and desktop-bounds checks as the minimap crop. In the occlusion
+check, windows of this application are skipped for the big-map crop only: the
+compass window sits on the player, and its gold and gray needle is ignored by the
+big-map reader. Other windows over the crop still pause it.
+
+Not run on Windows: the code is compile-checked for `x86_64-pc-windows-gnu` (the
+module, with `bigmap.rs` and its tests), and the crop arithmetic has a unit test
+(`big_map_crop_surrounds_the_player`). The positions and scale were measured at
+3840x2160 on Linux; other client sizes use the same fractions. To check on Windows:
+open the big map, walk, and see the minimap state read "Reading big map"; if it stays
+"Minimap not visible", note the client size and whether the compass was showing.
+
 ## Limits and verification
 
 - Exclusive fullscreen, HDR/color changes, custom HUD/minimap placement and
