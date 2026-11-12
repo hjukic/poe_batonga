@@ -6,9 +6,16 @@
 //! instance (area + seed) under the app data folder, `layouts/<area>/<seed>.json`.
 //! A visit that cannot be related to earlier parts of the same instance (another
 //! entry, a teleport, tracking lost) starts a new part with its own coordinates.
+//!
+//! In zones with layout graphs the navigator (`nav.rs`) is fed every measured
+//! step and log anchor and gives the needle; it carries on across new parts. What
+//! it learnt is kept beside the recording, `layouts/<area>/<seed>.nav.json`.
 
 mod graph;
 pub mod guide;
+mod nav;
+#[cfg(test)]
+mod nav_sim;
 
 use crate::minimap::MinimapView;
 use crate::tracker::LogEvent;
@@ -29,8 +36,11 @@ const WIDE: i32 = 32;
 /// Consecutive unmatched frames before a new part is started.
 const LOST_LIMIT: u32 = 9;
 const SAVE_EVERY: Duration = Duration::from_secs(15);
-/// Zones the arrow is enabled for while it is being tuned.
-const GUIDED: [&str; 3] = ["G1_1", "G1_town", "G1_2"];
+/// A gap in placed frames longer than this (seconds) is a tracking loss for the navigator.
+const NAV_GAP: f64 = 2.0;
+/// A checklist step the log completes within this many seconds of a live NPC
+/// line puts the player at the step's target.
+const LOG_ANCHOR: Duration = Duration::from_secs(5);
 /// Minimap cells per game unit measured per area (poe2way terrain; the older
 /// `scales.json` held Qutm diagram scales and is no longer read).
 const SCALES_FILE: &str = "terrain-scales.json";
@@ -42,7 +52,7 @@ const MERGE_MIN_WALLS: usize = 400;
 const MERGE_MIN_PIECE: usize = 200;
 const MERGE_COARSE: i32 = 6;
 const MERGE_MATCH: f64 = 0.6;
-/// At most this many wall cells are used to score the arrow's hypotheses.
+/// At most this many wall cells are used to score the terrain arrow's hypotheses.
 const GUIDE_WALLS: usize = 3000;
 /// Size of the overview grid sent to the overlay.
 pub const VIEW_COLS: usize = 300;
@@ -130,10 +140,46 @@ struct Session {
     arrived_from: Option<String>,
     started: bool,
     file: Option<PathBuf>,
-    /// Layout recognised on an earlier piece of this instance (worked out once).
-    layout_hint: std::cell::OnceCell<Option<String>>,
+    /// The area id the player came from ("" = unknown or none).
+    came_from: String,
+    /// The belief over layout and position, in zones with layout graphs.
+    navigator: Option<nav::Navigator>,
+    /// The last placed position fed to the navigator, in the live part's
+    /// coordinates (None at the start of a part), and when it was placed.
+    fed: Option<(i32, i32)>,
+    fed_at: Option<Instant>,
+    /// The last live NPC line in this visit.
+    last_dialogue: Option<Instant>,
     /// The last arrow of this visit, kept while a new one cannot be worked out.
     last_guide: std::cell::RefCell<Option<guide::GuideView>>,
+}
+
+impl Session {
+    fn nav_file(&self) -> Option<PathBuf> {
+        Some(self.file.as_ref()?.with_extension("nav.json"))
+    }
+
+    /// Hands the navigator the move to `pos`; a gap or a new part is a loss first.
+    fn feed(&mut self, pos: (i32, i32)) {
+        let Some(nav) = self.navigator.as_mut() else { return };
+        let gap = self.fed_at.map(|t| t.elapsed().as_secs_f64());
+        match self.fed {
+            Some(prev) => {
+                if let Some(gap) = gap.filter(|&g| g > NAV_GAP) {
+                    nav.lost(gap);
+                }
+                nav.moved((pos.0 - prev.0) as f64, (pos.1 - prev.1) as f64);
+            }
+            // A new part: where it starts relative to the last one is unknown.
+            None => {
+                if let Some(gap) = gap {
+                    nav.lost(gap);
+                }
+            }
+        }
+        self.fed = Some(pos);
+        self.fed_at = Some(Instant::now());
+    }
 }
 
 struct State {
@@ -141,6 +187,8 @@ struct State {
     completed: HashMap<String, Vec<String>>,
     /// Open checklist targets per area, in checklist order.
     targets: HashMap<String, Vec<guide::NavTarget>>,
+    /// Every checklist target seen, per area (to find a step the log just completed).
+    known_targets: HashMap<String, Vec<guide::NavTarget>>,
     /// Measured minimap cells per game unit, per area.
     scales: HashMap<String, Vec<f64>>,
     dir: Option<PathBuf>,
@@ -183,6 +231,21 @@ pub struct LayoutView {
 
 fn now() -> u64 {
     SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// Writes JSON through a temporary file, so a crash never leaves half a file.
+fn write_json(path: &std::path::Path, value: &impl Serialize) {
+    let result = (|| -> std::io::Result<()> {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let tmp = path.with_extension("tmp");
+        std::fs::write(&tmp, serde_json::to_vec(value)?)?;
+        std::fs::rename(tmp, path)
+    })();
+    if let Err(error) = result {
+        eprintln!("Layout: could not save {}: {error}", path.display());
+    }
 }
 
 /// Finds how far the player moved: the shift that puts most frame walls on known walls.
@@ -347,6 +410,7 @@ impl Recorder {
             catalog: guide::Catalog::load(),
             completed: HashMap::new(),
             targets: HashMap::new(),
+            known_targets: HashMap::new(),
             scales,
             dir,
             session: None,
@@ -367,6 +431,12 @@ impl Recorder {
                     if live && session.started {
                         session.live.add_poi("left", area);
                     }
+                    // Leaving through an exit: the player stands at it (a re-entry of the same zone is not one).
+                    if live && *area != session.recording.area {
+                        if let Some(nav) = session.navigator.as_mut() {
+                            nav.seen(nav::Seen::Exit(area));
+                        }
+                    }
                 }
                 state.finish();
                 // A live arrival with no zone before it (e.g. a new character) still starts at the arrival point.
@@ -384,9 +454,26 @@ impl Recorder {
                     });
                 let arrived_from = state.previous_area.clone();
                 let file = state.path(area, *seed);
-                state.session = Some(Session { recording, live: Live::new(), arrived_from, started: false, file, layout_hint: Default::default(), last_guide: Default::default() });
+                let mut session = Session {
+                    recording,
+                    live: Live::new(),
+                    came_from: arrived_from.clone().unwrap_or_default(),
+                    arrived_from,
+                    started: false,
+                    file,
+                    navigator: None,
+                    fed: None,
+                    fed_at: None,
+                    last_dialogue: None,
+                    last_guide: Default::default(),
+                };
+                session.navigator = state.navigator(&session);
+                state.session = Some(session);
             }
             LogEvent::Dialogue { speaker, .. } if live => {
+                if let Some(session) = state.session.as_mut() {
+                    session.last_dialogue = Some(Instant::now());
+                }
                 if let Some(session) = state.session.as_mut().filter(|s| s.started) {
                     let known = session.live.part.pois.iter().any(|p| p.kind == "npc" && &p.label == speaker);
                     if !known {
@@ -435,6 +522,8 @@ impl Recorder {
         };
         match placed {
             Some(pos) => {
+                session.feed(pos);
+                let live = &mut session.live;
                 live.velocity = ((pos.0 - live.pos.0).clamp(-NEAR, NEAR), (pos.1 - live.pos.1).clamp(-NEAR, NEAR));
                 live.pos = pos;
                 live.lost_streak = 0;
@@ -460,8 +549,10 @@ impl Recorder {
                 live.lost_streak += 1;
                 if live.lost_streak >= LOST_LIMIT {
                     // Lost track (teleport, map overlay, big jump): keep what we have, start over.
+                    // The navigator carries on; the new part's coordinates are new.
                     let finished = std::mem::replace(&mut session.live, Live::new());
                     session.live.centre = finished.centre;
+                    session.fed = None;
                     if finished.part.matched > 0 {
                         session.recording.parts.push(finished.snapshot());
                     }
@@ -504,6 +595,10 @@ impl Recorder {
         let Ok(mut state) = self.0.lock() else { return };
         state.targets.clear();
         for (area, target) in targets {
+            let known = state.known_targets.entry(area.clone()).or_default();
+            if !known.contains(&target) {
+                known.push(target.clone());
+            }
             state.targets.entry(area).or_default().push(target);
         }
     }
@@ -511,10 +606,11 @@ impl Recorder {
     /// Replacing the snapshot also handles unticking/resetting a checklist.
     pub fn set_completed(&self, objectives: Vec<(String, String)>) -> Option<LayoutView> {
         let mut state = self.0.lock().ok()?;
-        state.completed.clear();
+        let before = std::mem::take(&mut state.completed);
         for (area, label) in objectives {
             state.completed.entry(area).or_default().push(label);
         }
+        state.anchor_log_completions(&before);
         state.view()
     }
 }
@@ -535,6 +631,9 @@ impl State {
 
     fn save(&self) {
         let Some(session) = &self.session else { return };
+        if let (Some(nav), Some(path)) = (&session.navigator, session.nav_file()) {
+            write_json(&path, &nav.memory());
+        }
         let mut parts = session.recording.parts.clone();
         if session.live.part.matched > 0 {
             parts.push(session.live.snapshot());
@@ -553,16 +652,56 @@ impl State {
             capture_px: r.capture_px,
             parts,
         };
-        let result = (|| -> std::io::Result<()> {
-            if let Some(dir) = path.parent() {
-                std::fs::create_dir_all(dir)?;
+        write_json(&path, &out);
+    }
+
+    /// A navigator for a new visit, in areas with layout graphs; it starts from
+    /// what an earlier visit of the same instance learnt.
+    fn navigator(&self, session: &Session) -> Option<nav::Navigator> {
+        let area = self.catalog.graph(&session.recording.area)?;
+        let memory: Option<nav::Memory> = session
+            .nav_file()
+            .and_then(|path| std::fs::read(path).ok())
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+        let arrival = match &session.arrived_from {
+            Some(from) => nav::Arrival::From(from),
+            None => nav::Arrival::Unknown,
+        };
+        let scale = self.scale(&session.recording.area).unwrap_or(graph::SCALE);
+        Some(nav::Navigator::new(&area, arrival, memory.as_ref(), scale, session.recording.seed.unwrap_or(0)))
+    }
+
+    /// Measured minimap cells per game unit: this area's median, else all areas'.
+    /// The minimap's zoom is probably the same everywhere.
+    fn scale(&self, area: &str) -> Option<f64> {
+        let median = |mut all: Vec<f64>| {
+            all.sort_by(f64::total_cmp);
+            all.get(all.len() / 2).copied()
+        };
+        self.scales
+            .get(area)
+            .and_then(|all| median(all.clone()))
+            .or_else(|| median(self.scales.values().flatten().copied().collect()))
+    }
+
+    /// A checklist step of this area that the log just completed (a live NPC line
+    /// a moment ago) puts the player at its target.
+    fn anchor_log_completions(&mut self, before: &HashMap<String, Vec<String>>) {
+        let Some(session) = self.session.as_mut() else { return };
+        if session.last_dialogue.is_none_or(|t| t.elapsed() > LOG_ANCHOR) {
+            return;
+        }
+        let area = session.recording.area.as_str();
+        let Some(nav) = session.navigator.as_mut() else { return };
+        let was = before.get(area).cloned().unwrap_or_default();
+        let known = self.known_targets.get(area).map(Vec::as_slice).unwrap_or_default();
+        for label in self.completed.get(area).into_iter().flatten().filter(|l| !was.contains(l)) {
+            let Some(target) = known.iter().find(|t| &t.label == label) else { continue };
+            if let Some(exit) = &target.exit {
+                nav.seen(nav::Seen::Exit(exit));
+            } else if let Some(tag) = &target.tag {
+                nav.seen(nav::Seen::Tag(tag));
             }
-            let tmp = path.with_extension("json.tmp");
-            std::fs::write(&tmp, serde_json::to_vec(&out)?)?;
-            std::fs::rename(tmp, &path)
-        })();
-        if let Err(error) = result {
-            eprintln!("Layout: could not save {}: {error}", path.display());
         }
     }
 
@@ -594,7 +733,7 @@ impl State {
     /// The arrow, kept on screen: when it cannot be worked out for a moment (tracking
     /// lost, a piece without enough to go on), the last one stays, marked unconfirmed.
     fn guide(&self, session: &Session) -> Option<guide::GuideView> {
-        if !GUIDED.contains(&session.recording.area.as_str()) {
+        if !self.catalog.guided(&session.recording.area) {
             return None;
         }
         match self.fresh_guide(session) {
@@ -612,6 +751,17 @@ impl State {
         if live.lost_streak > 0 {
             return None;
         }
+        let completed = self.completed.get(area).map(Vec::as_slice).unwrap_or_default();
+        let scale = self.scale(area);
+        if let Some(nav) = &session.navigator {
+            // The checklist's open targets, then the onward exit (zones without a
+            // checklist, or targets no layout has).
+            let mut targets = self.targets.get(area).cloned().unwrap_or_default();
+            if let Some(graph) = self.catalog.graph(area) {
+                targets.extend(graph::target(&graph, &session.came_from, completed));
+            }
+            return nav.guide(&targets).map(|view| guide::GuideView { measured: scale.is_some(), ..view });
+        }
         // Everything relative to the (first) arrival point, where the terrain match starts;
         // a piece without one (tracking lost, overlay restarted) is placed anywhere.
         let arrival = live.part.pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at);
@@ -624,52 +774,18 @@ impl State {
             let step = walls.len().div_ceil(GUIDE_WALLS);
             walls = walls.into_iter().step_by(step).collect();
         }
-        // The minimap's zoom is probably the same everywhere: without a measurement
-        // for this area, use the median of all areas.
-        let median = |mut all: Vec<f64>| {
-            all.sort_by(f64::total_cmp);
-            all.get(all.len() / 2).copied()
-        };
-        let scale = self
-            .scales
-            .get(area)
-            .and_then(|all| median(all.clone()))
-            .or_else(|| median(self.scales.values().flatten().copied().collect()));
-        let layout_hint = if arrival.is_some() {
-            None
-        } else {
-            session.layout_hint.get_or_init(|| self.recognised_layout(session, scale)).as_deref()
-        };
-        guide::guide(
+        guide::terrain(
             &self.catalog,
             &guide::Evidence {
                 area,
                 arrived_from,
                 walls: &walls,
-                trail: &live.part.trail.iter().map(|&[x, y]| (x - ax, y - ay)).collect::<Vec<_>>(),
                 anchored: arrival.is_some(),
-                layout_hint,
                 player: (live.pos.0 - ax, live.pos.1 - ay),
-                targets: self.targets.get(area).map(Vec::as_slice).unwrap_or_default(),
-                completed: self.completed.get(area).map(Vec::as_slice).unwrap_or_default(),
+                completed,
                 scale,
             },
         )
-    }
-
-    /// The layout an earlier piece of this instance (one with an arrival point) matches.
-    fn recognised_layout(&self, session: &Session, scale: Option<f64>) -> Option<String> {
-        let area = session.recording.area.as_str();
-        session.recording.parts.iter().filter_map(|part| {
-            let arrival = part.pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at)?;
-            let trail: Vec<(i32, i32)> = part.trail.iter().map(|&[x, y]| (x - arrival.x, y - arrival.y)).collect();
-            let player = *trail.last()?;
-            let view = guide::guide(&self.catalog, &guide::Evidence {
-                area, targets: &[], arrived_from: &arrival.label, walls: &[], trail: &trail, anchored: true, layout_hint: None,
-                player, completed: &[], scale,
-            })?;
-            (view.source != "unconfirmed" && !view.variant.is_empty()).then_some(view.variant)
-        }).next()
     }
 
     fn view(&self) -> Option<LayoutView> {
@@ -806,6 +922,64 @@ mod tests {
         assert_eq!(pois[0].kind, "start");
     }
 
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("poe-batonga-test-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    #[test]
+    fn the_navigator_is_fed_and_remembers_the_instance() {
+        let dir = scratch("nav");
+        let recorder = Recorder::new(Some(dir.clone()));
+        enter(&recorder, "G1_town");
+        enter(&recorder, "G1_2");
+        for step in 0..40 {
+            recorder.on_frame(&frame((step * 4, 0)), [300, 260]);
+        }
+        {
+            let state = recorder.0.lock().unwrap();
+            let nav = state.session.as_ref().unwrap().navigator.as_ref().expect("Clearfell has layout graphs");
+            let (walked, _) = nav.progress();
+            assert!(walked > 150.0, "{walked}");
+        }
+        // Leaving through the Mud Burrow exit is an anchor; the memory is saved beside the recording.
+        enter(&recorder, "G1_3");
+        let file = dir.join("G1_2").join("7.nav.json");
+        let memory: nav::Memory = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+        assert_eq!(memory.layouts.len(), 33);
+        assert!(memory.walked > 150.0);
+        // Back in the same instance: the navigator starts from what was learnt.
+        enter(&recorder, "G1_2");
+        let state = recorder.0.lock().unwrap();
+        let nav = state.session.as_ref().unwrap().navigator.as_ref().unwrap();
+        assert_eq!(nav.progress().0, memory.walked);
+        let top = memory.layouts.iter().max_by(|a, b| a.1.total_cmp(b.1)).unwrap().0;
+        assert!(nav.ranking().iter().take(3).any(|(id, _)| id == top), "{:?}", &nav.ranking()[..3]);
+        drop(state);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_step_the_log_completes_puts_the_player_at_its_target() {
+        let recorder = Recorder::new(None);
+        enter(&recorder, "G1_town");
+        enter(&recorder, "G1_2");
+        recorder.on_frame(&frame((0, 0)), [300, 260]);
+        let beira = guide::NavTarget { label: "Beira".into(), tag: Some("boss".into()), ..Default::default() };
+        recorder.set_targets(vec![("G1_2".into(), beira.clone())]);
+        let anchored = |r: &Recorder| r.0.lock().unwrap().session.as_ref().unwrap().navigator.as_ref().unwrap().progress().1;
+        // Ticked by hand (no NPC line just before): not an anchor.
+        recorder.set_completed(vec![("G1_2".into(), "Beira".into())]);
+        assert!(!anchored(&recorder));
+        recorder.set_completed(vec![]);
+        // Completed from the log: the player stands at a boss node.
+        recorder.on_log(&LogEvent::Dialogue { speaker: "Beira".into(), text: "…".into() }, true);
+        recorder.set_targets(vec![]);
+        recorder.set_completed(vec![("G1_2".into(), "Beira".into())]);
+        assert!(anchored(&recorder));
+    }
+
     #[test]
     fn completion_untick_and_tracking_loss_update_guidance() {
         let recorder = Recorder::new(None);
@@ -853,7 +1027,10 @@ fn join_real_recording() {
     live.walls = first.walls.iter().map(|&[x, y, n]| ((x, y), n as u32)).collect();
     live.part = Part { walls: vec![], ..first };
     let parts = recording.parts.len();
-    let mut session = Session { recording, live, arrived_from: None, started: true, file: None, layout_hint: Default::default(), last_guide: Default::default() };
+    let mut session = Session {
+        recording, live, arrived_from: None, came_from: String::new(), started: true, file: None, navigator: None,
+        fed: None, fed_at: None, last_dialogue: None, last_guide: Default::default(),
+    };
     let started = Instant::now();
     while merge_pieces(&mut session) {}
     let recorder = Recorder::new(None);

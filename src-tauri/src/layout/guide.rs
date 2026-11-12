@@ -361,16 +361,27 @@ const NEIGHBOURS: [(i32, i32, u32); 8] =
 
 pub struct Catalog {
     zones: HashMap<String, Zone>,
-    /// The game's layout graphs; used instead of `zones` where present.
-    graphs: HashMap<String, super::graph::Area>,
+    /// The game's layout graphs, built per area on first use; where an area has
+    /// them, the navigator gives its needle instead of `zones`.
+    graphs: super::graph::Graphs,
 }
 
 impl Catalog {
     pub fn load() -> Catalog {
         Catalog {
             zones: ZONES.iter().map(|&(id, json, svg)| (id.to_string(), Zone::load(json, svg))).collect(),
-            graphs: super::graph::load(),
+            graphs: Default::default(),
         }
+    }
+
+    /// The area's layout graphs, if it has any usable ones.
+    pub fn graph(&self, area: &str) -> Option<super::graph::Area> {
+        self.graphs.get(area)
+    }
+
+    /// Areas with a needle: those with layout graphs or poe2way terrain.
+    pub fn guided(&self, area: &str) -> bool {
+        self.zones.contains_key(area) || self.graph(area).is_some()
     }
 }
 
@@ -421,21 +432,16 @@ pub(super) fn area_order(id: &str) -> Vec<(u32, String)> {
     id.split('_').map(|part| (part.parse().unwrap_or(u32::MAX), part.to_string())).collect()
 }
 
-/// What we know about the current visit, in minimap cells relative to the arrival point.
+/// What we know about the current visit, in minimap cells relative to the arrival
+/// point (for poe2way's terrain; the layout graphs use the navigator).
 pub struct Evidence<'a> {
     pub area: &'a str,
-    /// Open checklist steps of this area that have a target, in checklist order.
-    pub targets: &'a [NavTarget],
     /// Area id the player came from; the arrival point is that zone's exit (or a waypoint).
     pub arrived_from: &'a str,
     pub walls: &'a [(i32, i32)],
-    /// The player's walked path since arrival, oldest first.
-    pub trail: &'a [(i32, i32)],
     /// Coordinates start at the arrival point. False when the recorded piece has
     /// none (tracking lost, or the overlay started mid-zone): then they start anywhere.
     pub anchored: bool,
-    /// Layout already recognised on an earlier piece of this instance.
-    pub layout_hint: Option<&'a str>,
     pub player: (i32, i32),
     /// Explicit objective completion from the checklist.
     pub completed: &'a [String],
@@ -568,15 +574,8 @@ fn fits(zone: &Zone, ev: &Evidence) -> Vec<Fit> {
     out
 }
 
-pub fn guide(catalog: &Catalog, ev: &Evidence) -> Option<GuideView> {
-    if let Some(area) = catalog.graphs.get(ev.area) {
-        return super::graph::guide(area, ev);
-    }
-    terrain(catalog, ev)
-}
-
 /// The arrow from poe2way's collected terrain (used where no layout graph helps).
-fn terrain(catalog: &Catalog, ev: &Evidence) -> Option<GuideView> {
+pub fn terrain(catalog: &Catalog, ev: &Evidence) -> Option<GuideView> {
     let zone = catalog.zones.get(ev.area)?;
     let (_, exits) = next_exit(zone, ev.arrived_from, ev.completed)?;
     let target = exits.first()?.label.clone();
@@ -660,7 +659,7 @@ pub fn measure_scale(catalog: &Catalog, area: &str, arrived_from: &str, walls: &
     if walls.len() < MIN_WALLS {
         return None;
     }
-    let ev = Evidence { area, targets: &[], arrived_from, walls, trail: &[], anchored: true, layout_hint: None, player: (0, 0), completed: &[], scale: None };
+    let ev = Evidence { area, arrived_from, walls, anchored: true, player: (0, 0), completed: &[], scale: None };
     let all = fits(zone, &ev);
     let best = all.first()?;
     // Another placement nearly as good at a different scale makes the scale unclear.
@@ -673,7 +672,7 @@ mod tests {
     use super::*;
 
     fn ev<'a>(area: &'a str, from: &'a str, walls: &'a [(i32, i32)]) -> Evidence<'a> {
-        Evidence { area, targets: &[], arrived_from: from, walls, trail: &[], anchored: true, layout_hint: None, player: (0, 0), completed: &[], scale: None }
+        Evidence { area, arrived_from: from, walls, anchored: true, player: (0, 0), completed: &[], scale: None }
     }
 
     /// Minimap walls a visit would record: the outline near the arrival point, as
@@ -719,6 +718,9 @@ mod tests {
         }
         assert!(catalog.zones.contains_key("G1_town"));
         assert!(!catalog.zones.contains_key("G1_1"));
+        // Guided: terrain (the encampment) or layout graphs (The Riverbank); not a zone with neither.
+        assert!(catalog.guided("G1_town") && catalog.guided("G1_1") && catalog.guided("G1_2"));
+        assert!(!catalog.guided("G9_nowhere"));
     }
 
     #[test]
@@ -819,8 +821,8 @@ mod tests {
     }
 }
 
-/// Runs the arrow on a real recording's first part:
-/// `LAYOUT_FILE=<json> FROM=G1_town cargo test --release guide_on_recording -- --ignored --nocapture`.
+/// Runs the terrain arrow on a real recording's parts (zones without layout graphs):
+/// `LAYOUT_FILE=<json> FROM=G1_2 cargo test --release guide_on_recording -- --ignored --nocapture`.
 #[cfg(test)]
 #[test]
 #[ignore]
@@ -835,13 +837,11 @@ fn guide_on_recording() {
         let walls: Vec<(i32, i32)> =
             part.walls.iter().filter(|w| w[2] >= 2).map(|w| (w[0] - ax, w[1] - ay)).collect();
         let player = part.trail.last().map_or((0, 0), |t| (t[0] - ax, t[1] - ay));
-        let trail: Vec<(i32, i32)> = part.trail.iter().map(|t| (t[0] - ax, t[1] - ay)).collect();
-        let hint = std::env::var("LAYOUT_HINT").ok();
         let ev = Evidence {
-            area: &recording.area, targets: &[], arrived_from: arrival.map_or("", |_| from.as_str()), walls: &walls, trail: &trail,
-            anchored: arrival.is_some(), layout_hint: hint.as_deref(), player, completed: &[], scale: None,
+            area: &recording.area, arrived_from: arrival.map_or("", |_| from.as_str()), walls: &walls,
+            anchored: arrival.is_some(), player, completed: &[], scale: None,
         };
-        eprintln!("{} walls, {} path points, player {:?}, arrival {}", walls.len(), trail.len(), player, arrival.is_some());
-        eprintln!("{:?}", guide(&catalog, &ev));
+        eprintln!("{} walls, player {:?}, arrival {}", walls.len(), player, arrival.is_some());
+        eprintln!("{:?}", terrain(&catalog, &ev));
     }
 }

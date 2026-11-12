@@ -244,29 +244,14 @@ the thresholds need checking on recorded Clearfell visits.
   narrower range rules that out. Either this instance is another layout than
   poe2way's or too little was explored; more Clearfell visits will tell.
 
-## Arrow on the game's layout graphs (2026-11-12)
+## Arrow on the game's layout graphs (2026-11-12, replaced the same night)
 
-The Riverbank and Clearfell now use the datamined layout graphs
-(`data/layouts/ggg/`, `src-tauri/src/layout/graph.rs`); Clearfell Encampment keeps
-poe2way's map.
-
-- **Placement:** the path walked since arrival (minimap cells, turned to world units
-  with `from_screen`) is laid on every layout of the zone, starting at the node of
-  the exit the player came through (else the zone's start node), with offsets up to
-  80 units and the scale 0.78 ±8%. Score: mean distance of the path from the
-  layout's corridors (distance field, 8-unit cells, capped at 150).
-- **Target:** the onward exit (lowest-numbered zone not just come from or ticked;
-  a town only when nothing else is left). In The Riverbank the exit is the Miller's
-  arena, so the target is "The Bloated Miller" until that step is ticked.
-- **Needle:** the route follows the corridors to the target and the needle points
-  120 units along it. "estimated" when the best layout's mean is at most 60 units
-  and it leads the best layout pointing more than 45° elsewhere by 20%; "rough"
-  (fainter) when the best mean is at most 80; before 150 units have been walked,
-  "rough" only if every layout points the same way.
-- **First real checks:** the Clearfell visit (seed 2693856399) fits
-  `ClearFell_W_S_N` (mean 42 units; runner-up `W_N_E` 50): rough needle toward Mud
-  Burrow. In Riverbank instance 2090944099 the arrow at the spot where the Miller's
-  fight began says the arena is 149 minimap cells away.
+The first graph arrow laid the path walked since arrival on every layout as one
+piece, from the arrival exit, and took the layout with the smallest mean distance
+to its corridors. It needed one unbroken path from the arrival point (the Clearfell
+visit is 17 unrelated parts), kept nothing across parts, re-entries or log events,
+and its evidence was weak (Clearfell: `ClearFell_W_S_N` mean 42 units, runner-up
+`W_N_E` 50). The navigator below replaces it.
 
 ### Needle always visible (2026-11-12, owner request)
 
@@ -458,3 +443,84 @@ corner's zone text give none.
   learns the real spot from the minimap. A full-size minimap screenshot would pin it.
 - Movement across the two views is tested on synthetic pixels only; the live check
   is in [the overlay test](overlay-test.md#big-map-reading).
+
+## The navigator (2026-11-12, night build)
+
+`src-tauri/src/layout/nav.rs`: one belief over (layout, position) per zone visit,
+updated with every measured step and log anchor, never reset by a tracking loss.
+Areas with layout graphs (`data/layouts/ggg/`, built per area on first entry) use
+it; Clearfell Encampment keeps poe2way's terrain arrow. The compass shows a needle
+in every area that has graphs or terrain.
+
+- **Belief:** per layout ~200 weighted particles (x, y in the file's units, a scale
+  error around 1) and a log evidence `E_k`. Layout posterior `p_k ∝ prior_k · exp(E_k)`.
+- **Start:** at the nodes of the exit the player came through (spread 40 units), else
+  the layout's start nodes, else along all corridors; 10% always along all corridors
+  (a waypoint or portal puts the player elsewhere than the exit the log names).
+- **Movement:** each frame's move (minimap cells, turned to world units, divided by
+  scale and the particle's scale error) moves the particles, with noise of 20% of
+  the distance. Every 15 units walked they are weighted by their distance `d` to the
+  nearest corridor: full weight within 60 units (the walkable width), a Gaussian of
+  60 beyond, over a floor of 0.1. `E_k` adds the log of the weighted mean weight;
+  particles are resampled when the effective sample size drops below half; when
+  nothing fits, 5% are redrawn along the corridors.
+- **Tracking lost:** `lost(seconds)` spreads the particles by what a player walks in
+  that time (60 units/s, at most 2,400): 80% walk on along their corridor (mostly the
+  way the player was heading, 25-100% of the reach, random branches), 20% anywhere
+  within reach near a corridor. After 20 s or more 30% are redrawn along all
+  corridors (waypoint, checkpoint, portal). The evidence stays.
+- **Log anchors:** `seen(Exit | Tag)` adds how well the particles agree with being
+  at a matching node (Gaussian of 80 units over a floor) to `E_k`, then places them
+  there (10% stay). A layout without such a node loses 7 nats. An anchor no layout
+  knows changes nothing. Fed by the recorder: leaving through an exit (the log's
+  zone change, not a re-entry of the same zone), and a checklist step with a target
+  completed by the log within 5 s of a live NPC line.
+- **Needle:** the target is the first open checklist target some layout has (exit
+  nodes, or nodes whose tag or keys match), then the onward exit by area order
+  (zones without a checklist). For every layout and particle: the route along the
+  corridors to the target (precomputed per corridor point: the point 120 units ahead
+  and the distance to go; a few graphs leave an exit unconnected, then straight to
+  it), its screen bearing as a unit vector. `V = Σ p_k Σ w_i u_i`; needle = direction
+  of `V`, `confidence = |V|`. "estimated" (gold) at `|V| ≥ 0.8` with 100 units walked
+  or an anchor seen, "rough" at 0.5, else "unconfirmed" (gray). `variant` names the
+  top layout once its probability is 0.5. A target no layout has gives no needle.
+- **Memory:** `layouts/<area>/<seed>.nav.json` beside the recording: the layout
+  posterior, the units walked and, for layouts above 1%, 32 particles with the time.
+  A re-entry of the instance starts from the posterior (mixed with 10% uniform); an
+  app restart inside the instance (no zone change, saved under 10 minutes ago)
+  resumes the particles as well.
+- **Dungeons (`.dgr`):** one file unit is `roomUnitSize − 1` world units (from the
+  room files, not checked in play; no dungeon has been recorded yet); their particles
+  get a scale prior from 1/2.5 to 2.5 so the direction still works. Not measured.
+
+### Simulation (`src-tauri/src/layout/nav_sim.rs`)
+
+A walker follows one layout's corridors from an arrival exit to a target: sideways
+wander (σ 35 units, changing over 120), a wrong turn at one junction in three
+(150-300 units out and back), start offset up to 40, fixed scale error up to ±6%,
+2-unit step noise, whole minimap cells, and tracking losses of 5-30 steps (one per
+~100 steps of 20 units; the Clearfell recording lost track every few minutes). Runs:
+every layout of G1_1 and G1_2, from each exit to each other exit (Riverbank: start ↔
+Miller exit), walks that the graph connects. `cargo test` runs one seed (196 runs);
+`cargo test --release nav_sim::tests::report -- --ignored --nocapture` three.
+
+| Case (1 seed, 196 runs) | Gold steps | Gold > 60° off | Worst layout | Within 45° at 60% | Top layout true for good |
+| --- | ---: | ---: | --- | ---: | --- |
+| Arrival known | 5.0% | 0.25% | 4.9% | 58% | 66% of runs, median 1,420 units |
+| No tracking losses | 9.2% | 0% | 0% | 72% | 77%, median 1,060 |
+| Arrival unknown | 0.3% | 0% | — | 13% | 31% |
+| 30 s loss from 40% | 0.2% | 0% | — | 3% | 34% |
+| Movement turned 90° (planted) | 4.0% | **64%** | 98% | 20% | 2% |
+
+- **Gate A (class check)** holds: at most 3% of gold needles more than 60° off and no
+  layout over 10%; the planted 90° turn fails it (`the_class_check_bites_on_turned_movement`).
+- **Gate B (85% within 45° at 60%) is not reachable on these graphs:** with the
+  arrival known, another layout still has corridors under the walk (entered at its
+  own exit of the same name, 80 units) until a median 59% of the walk (75th
+  percentile 75%, 90th 89%), and in 186 walks 109 rival layouts fit the whole walk
+  (league variants of the same layout, mostly). The test pins 50%.
+- A narrower likelihood (flat 40, Gaussian 30, floor 0.05) does better in the
+  simulation (67% / 83%) but picks a wrong Clearfell layout on the real recording:
+  real walks stray much further from the corridor lines than the simulated walker
+  (best layout, distance percentiles 25/50/75/90/95: Clearfell 14/38/63/91/115
+  units, Riverbank 9/26/67/120/150). The wide one follows the real data.

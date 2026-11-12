@@ -1,58 +1,42 @@
-//! The arrow from the game's own layout graphs (`data/layouts/ggg/`, datamined).
+//! The game's own layout graphs (`data/layouts/ggg/`, datamined).
 //!
 //! Each zone has a few possible layouts. A layout is a graph: fixed points (zone
-//! exits, boss arenas, …) joined by corridors, in world units (x east, y north).
-//! Walls are generated around the corridors per instance, so the player's walked
-//! path follows the corridors of the layout being played. The path recorded since
-//! arrival is laid on every layout (starting at the exit the player came through,
-//! give or take a little, at about the measured minimap scale); the layout whose
-//! corridors it follows best, clearly ahead of any layout pointing elsewhere, gives
-//! the arrow. The arrow points a short way along the corridors to the target exit.
+//! exits, boss arenas, …) joined by corridors, in world units for outdoor zones
+//! (x east, y north). Walls are generated around the corridors per instance, so
+//! the player walks along the corridors of the layout being played. This file
+//! loads the graphs (lazily, per area), measures how far a point is from the
+//! corridors and works out, for a target, which way the corridors lead to it.
+//! The navigator (`nav.rs`) decides which layout and where the player is.
 
-use super::guide::{area_order, from_screen, screen_bearing, to_screen, Evidence, GuideView};
+use super::guide::{area_order, NavTarget};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
-/// Areas whose arrow uses the layout graphs (the encampment keeps poe2way's map).
-const AREAS: [&str; 2] = ["G1_1", "G1_2"];
-
-/// World units per layout tile.
-const TILE: f64 = 23.0;
-/// Grid cell of the distance-to-corridor field, in world units.
+/// World units per file unit of a dungeon room grid ("dgr") without a
+/// `roomUnitSize` (with one: `roomUnitSize - 1`, derived from the room files, not
+/// checked in play). The navigator gives dungeon particles a wide scale prior.
+const DGR_UNIT: f64 = 8.0;
+/// Grid cell of the nearest-corridor field, in world units.
 const CELL: f64 = 8.0;
-/// Room around the layout's tiles in the field.
-const MARGIN: f64 = 150.0;
-/// Path points farther than this from any corridor all count the same.
-const FAR: f64 = 150.0;
+/// Room around the corridors in the field.
+const MARGIN: f64 = 200.0;
+/// Corridor distances are capped here; outside the field counts as this far.
+pub(super) const FAR: f64 = 150.0;
+/// Spacing of the points sampled along the corridors, in world units.
+const SPACING: f64 = 4.0;
 /// Minimap cells per world unit, measured on a Clearfell Encampment visit.
 pub const SCALE: f64 = 0.78;
-/// Scale factors tried around the measured scale.
-const SCALE_FACTORS: [f64; 3] = [0.92, 1.0, 1.08];
-/// The arrival point lies near, not on, the arrival exit's node: offsets tried (world units).
-const OFFSET: i32 = 80;
-const OFFSET_STEP: usize = 20;
-/// At most this many path points are scored.
-const PATH_POINTS: usize = 300;
-/// The player must have walked this far (world units) from arrival before a layout is chosen.
-const MIN_REACH: f64 = 150.0;
-/// Mean distance (world units) of the walked path from the best layout's corridors.
-const MAX_MEAN: f64 = 60.0;
-/// Up to this mean, an unconfirmed best layout still gives a rough needle.
-const ROUGH_MEAN: f64 = 80.0;
-/// The best layout must beat the best layout pointing elsewhere by this share.
-const MIN_CONFIDENCE: f32 = 0.2;
-/// Two directions closer than this count as agreeing.
-const SAME_WAY: f64 = 45.0;
-/// Without an arrival point: grid step (world units) and path points used.
-const LOOSE_STEP: f64 = 30.0;
-const LOOSE_POINTS: usize = 120;
-/// How far along the corridors the arrow looks (world units).
-const LOOK: f64 = 120.0;
+/// How far along the corridors the needle looks (world units).
+pub(super) const LOOK: f64 = 120.0;
 /// Bosses that wait at a zone exit: (area, exit area, boss) until the boss is ticked.
 const BOSS_AT_EXIT: [(&str, &str, &str); 1] = [("G1_1", "G1_town", "The Bloated Miller")];
 
+// The files also carry `areaId`, `name`, `act`, `level` (area) and `file`, `kind`
+// (layouts, edges); serde skips what is not read here.
 #[derive(Deserialize)]
 struct AreaFile {
+    #[serde(default)]
     connections: Vec<String>,
     #[serde(rename = "connectionNames", default)]
     connection_names: Vec<String>,
@@ -62,149 +46,291 @@ struct AreaFile {
 #[derive(Deserialize)]
 struct LayoutFile {
     id: String,
-    size: [f64; 2],
+    /// "tgr" (outdoor, world units) or "dgr" (dungeon room grid); absent = "tgr".
+    #[serde(default)]
+    format: Option<String>,
+    /// Dungeons: tiles per room cell.
+    #[serde(rename = "roomUnitSize", default)]
+    room_unit_size: Option<f64>,
     nodes: Vec<Node>,
     edges: Vec<EdgeFile>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
-struct Node {
-    x: f64,
-    y: f64,
-    exit: Option<String>,
+#[derive(Deserialize, Debug, Clone, Default)]
+pub(super) struct Node {
+    pub x: f64,
+    pub y: f64,
     #[serde(default)]
-    start: bool,
+    pub tag: Option<String>,
+    /// More names for the node (the game's keys), matched like `tag`.
+    #[serde(default)]
+    pub keys: Vec<String>,
+    #[serde(default)]
+    pub exit: Option<String>,
+    #[serde(default)]
+    pub start: bool,
+}
+
+impl Node {
+    pub fn has_tag(&self, tag: &str) -> bool {
+        self.tag.as_deref() == Some(tag) || self.keys.iter().any(|k| k == tag)
+    }
 }
 
 #[derive(Deserialize)]
 struct EdgeFile {
     a: usize,
     b: usize,
+    #[serde(default)]
     via: Vec<[f64; 2]>,
 }
 
-pub struct Area {
-    id: String,
-    names: HashMap<String, String>,
-    layouts: Vec<Layout>,
+/// A corridor: points from node `a` to node `b`, with the arc length at each point.
+pub(super) struct Edge {
+    pub a: usize,
+    pub b: usize,
+    pub points: Vec<(f64, f64)>,
+    along: Vec<f64>,
 }
 
-struct Layout {
-    id: String,
-    /// Width and height in world units.
-    extent: (f64, f64),
-    nodes: Vec<Node>,
-    /// Corridors: (node a, node b, points from a to b).
-    edges: Vec<(usize, usize, Vec<(f64, f64)>)>,
-    field: Field,
+impl Edge {
+    fn new(a: usize, b: usize, points: Vec<(f64, f64)>) -> Edge {
+        let mut along = vec![0.0];
+        for pair in points.windows(2) {
+            along.push(along.last().unwrap() + (pair[1].0 - pair[0].0).hypot(pair[1].1 - pair[0].1));
+        }
+        Edge { a, b, points, along }
+    }
+
+    pub fn length(&self) -> f64 {
+        *self.along.last().unwrap_or(&0.0)
+    }
+
+    /// The point `s` units along the corridor from `a`.
+    pub fn at(&self, s: f64) -> (f64, f64) {
+        let s = s.clamp(0.0, self.length());
+        let j = self.along.partition_point(|&t| t < s).clamp(1, self.points.len().max(2) - 1);
+        let (p, q) = (self.points[j - 1], self.points[j]);
+        let span = self.along[j] - self.along[j - 1];
+        let t = if span > 0.0 { (s - self.along[j - 1]) / span } else { 0.0 };
+        (p.0 + t * (q.0 - p.0), p.1 + t * (q.1 - p.1))
+    }
 }
 
-/// Distance from each grid cell to the nearest corridor, in world units.
+/// A point on a corridor.
+#[derive(Clone, Copy)]
+pub(super) struct Sample {
+    pub at: (f64, f64),
+    pub edge: u32,
+    /// Arc length from the edge's node `a`.
+    pub s: f32,
+}
+
+/// For every grid cell, the corridor sample nearest to its centre.
 struct Field {
     origin: (f64, f64),
+    /// Cell size in file units.
+    cell: f64,
     cols: usize,
     rows: usize,
-    dist: Vec<f32>,
+    near: Vec<u32>,
 }
 
 impl Field {
-    fn new(size: [f64; 2], edges: &[(usize, usize, Vec<(f64, f64)>)]) -> Field {
-        let origin = (-MARGIN, -MARGIN);
-        let cols = ((size[0] * TILE + 2.0 * MARGIN) / CELL).ceil() as usize;
-        let rows = ((size[1] * TILE + 2.0 * MARGIN) / CELL).ceil() as usize;
-        let mut dist = vec![f32::MAX; cols * rows];
-        for (_, _, points) in edges {
-            for pair in points.windows(2) {
-                let ((ax, ay), (bx, by)) = (pair[0], pair[1]);
-                let steps = ((bx - ax).hypot(by - ay) / (CELL / 2.0)).ceil().max(1.0) as usize;
-                for s in 0..=steps {
-                    let t = s as f64 / steps as f64;
-                    let col = ((ax + t * (bx - ax) - origin.0) / CELL).floor();
-                    let row = ((ay + t * (by - ay) - origin.1) / CELL).floor();
-                    if col >= 0.0 && row >= 0.0 && (col as usize) < cols && (row as usize) < rows {
-                        dist[row as usize * cols + col as usize] = 0.0;
-                    }
-                }
+    /// `unit`: world units per file unit.
+    fn new(lo: (f64, f64), hi: (f64, f64), samples: &[Sample], unit: f64) -> Field {
+        let (cell, margin) = (CELL / unit, MARGIN / unit);
+        let origin = (lo.0 - margin, lo.1 - margin);
+        let cols = ((hi.0 - lo.0 + 2.0 * margin) / cell).ceil() as usize + 1;
+        let rows = ((hi.1 - lo.1 + 2.0 * margin) / cell).ceil() as usize + 1;
+        let centre = |c: usize, r: usize| (origin.0 + (c as f64 + 0.5) * cell, origin.1 + (r as f64 + 0.5) * cell);
+        let gap = |cell: (f64, f64), j: u32| {
+            let p = samples[j as usize].at;
+            (cell.0 - p.0).hypot(cell.1 - p.1)
+        };
+        let mut near = vec![u32::MAX; cols * rows];
+        for (j, sample) in samples.iter().enumerate() {
+            let c = ((sample.at.0 - origin.0) / cell).floor() as usize;
+            let r = ((sample.at.1 - origin.1) / cell).floor() as usize;
+            let i = r * cols + c;
+            if near[i] == u32::MAX || gap(centre(c, r), j as u32) < gap(centre(c, r), near[i]) {
+                near[i] = j as u32;
             }
         }
-        // Two-pass chamfer distance.
-        let (straight, diagonal) = (CELL as f32, (CELL * std::f64::consts::SQRT_2) as f32);
-        let pass = |dist: &mut Vec<f32>, order: &mut dyn Iterator<Item = (usize, usize)>, back: bool| {
-            let sign: i64 = if back { 1 } else { -1 };
-            for (row, col) in order {
-                let i = row * cols + col;
-                let mut best = dist[i];
-                for (dr, dc, cost) in [(0, sign, straight), (sign, 0, straight), (sign, sign, diagonal), (sign, -sign, diagonal)] {
-                    let (r, c) = (row as i64 + dr, col as i64 + dc);
-                    if r >= 0 && c >= 0 && (r as usize) < rows && (c as usize) < cols {
-                        best = best.min(dist[r as usize * cols + c as usize] + cost);
+        // Two sweeps that hand each cell its neighbours' nearest sample when closer.
+        let mut sweep = |order: &mut dyn Iterator<Item = (usize, usize)>, from: [(i64, i64); 4]| {
+            for (r, c) in order {
+                let here = centre(c, r);
+                let mut best = near[r * cols + c];
+                let mut best_gap = if best == u32::MAX { f64::MAX } else { gap(here, best) };
+                for (dr, dc) in from {
+                    let (nr, nc) = (r as i64 + dr, c as i64 + dc);
+                    if nr < 0 || nc < 0 || nr as usize >= rows || nc as usize >= cols {
+                        continue;
+                    }
+                    let j = near[nr as usize * cols + nc as usize];
+                    if j != u32::MAX && gap(here, j) < best_gap {
+                        (best, best_gap) = (j, gap(here, j));
                     }
                 }
-                dist[i] = best;
+                near[r * cols + c] = best;
             }
         };
-        pass(&mut dist, &mut (0..rows).flat_map(|r| (0..cols).map(move |c| (r, c))), false);
-        pass(&mut dist, &mut (0..rows).rev().flat_map(|r| (0..cols).rev().map(move |c| (r, c))), true);
-        Field { origin, cols, rows, dist }
+        sweep(&mut (0..rows).flat_map(|r| (0..cols).map(move |c| (r, c))), [(0, -1), (-1, -1), (-1, 0), (-1, 1)]);
+        sweep(&mut (0..rows).rev().flat_map(|r| (0..cols).rev().map(move |c| (r, c))), [(0, 1), (1, 1), (1, 0), (1, -1)]);
+        Field { origin, cell, cols, rows, near }
     }
 
-    fn at(&self, (x, y): (f64, f64)) -> f64 {
-        let (col, row) = ((x - self.origin.0) / CELL, (y - self.origin.1) / CELL);
-        if col < 0.0 || row < 0.0 || col as usize >= self.cols || row as usize >= self.rows {
-            return FAR;
+    fn near(&self, (x, y): (f64, f64)) -> Option<usize> {
+        let (col, row) = ((x - self.origin.0) / self.cell, (y - self.origin.1) / self.cell);
+        if !(col >= 0.0 && row >= 0.0 && (col as usize) < self.cols && (row as usize) < self.rows) {
+            return None;
         }
-        (self.dist[row as usize * self.cols + col as usize] as f64).min(FAR)
+        let j = self.near[row as usize * self.cols + col as usize];
+        (j != u32::MAX).then_some(j as usize)
     }
 }
 
-pub fn load() -> HashMap<String, Area> {
-    crate::bundle::LAYOUTS
-        .iter()
-        .filter(|(id, _)| AREAS.contains(id))
-        .map(|&(id, json)| {
-            let file: AreaFile = serde_json::from_str(json).expect("bundled layout graphs are valid");
-            let names = file.connections.iter().cloned().zip(file.connection_names.iter().cloned()).collect();
-            let layouts = file
-                .topologies
-                .into_iter()
-                .map(|t| {
-                    let edges: Vec<(usize, usize, Vec<(f64, f64)>)> = t
-                        .edges
-                        .iter()
-                        .map(|e| {
-                            let mut points = vec![(t.nodes[e.a].x, t.nodes[e.a].y)];
-                            points.extend(e.via.iter().map(|p| (p[0], p[1])));
-                            points.push((t.nodes[e.b].x, t.nodes[e.b].y));
-                            (e.a, e.b, points)
-                        })
-                        .collect();
-                    let field = Field::new(t.size, &edges);
-                    Layout { id: t.id, extent: (t.size[0] * TILE, t.size[1] * TILE), nodes: t.nodes, edges, field }
-                })
-                .collect();
-            (id.to_string(), Area { id: id.to_string(), names, layouts })
-        })
-        .collect()
+/// A layout's points are in its file's units: world units for "tgr", room-grid
+/// units for "dgr". Distances it reports are in world units.
+pub(super) struct Layout {
+    pub id: String,
+    /// A dungeon room grid ("dgr"): its units are not world units.
+    pub dungeon: bool,
+    /// World units per file unit (a guess for dungeons).
+    pub unit: f64,
+    pub nodes: Vec<Node>,
+    pub edges: Vec<Edge>,
+    pub samples: Vec<Sample>,
+    field: Field,
 }
 
-fn length(points: &[(f64, f64)]) -> f64 {
-    points.windows(2).map(|p| (p[1].0 - p[0].0).hypot(p[1].1 - p[0].1)).sum()
+/// Which way the corridors lead to one target, for every corridor sample.
+pub(super) struct Guidance {
+    /// The point `LOOK` along the route from the sample (the goal itself when nearer).
+    pub ahead: Vec<(f32, f32)>,
+    /// Route length (world units) from the sample to the goal; the straight distance
+    /// when no corridor leads there, infinite without a goal.
+    pub togo: Vec<f32>,
 }
 
 impl Layout {
-    /// Corridor distance from every node to the nearest of `goals`.
-    fn distances(&self, goals: &[usize]) -> Vec<f64> {
-        let mut dist = vec![f64::MAX; self.nodes.len()];
+    fn new(file: LayoutFile) -> Option<Layout> {
+        let n = file.nodes.len();
+        if n < 2 {
+            return None;
+        }
+        let edges: Vec<Edge> = file
+            .edges
+            .iter()
+            .filter(|e| e.a < n && e.b < n && e.a != e.b)
+            .map(|e| {
+                let mut points = vec![(file.nodes[e.a].x, file.nodes[e.a].y)];
+                points.extend(e.via.iter().map(|p| (p[0], p[1])));
+                points.push((file.nodes[e.b].x, file.nodes[e.b].y));
+                Edge::new(e.a, e.b, points)
+            })
+            .collect();
+        if edges.is_empty() {
+            return None;
+        }
+        let dungeon = file.format.as_deref() == Some("dgr");
+        let unit = match (dungeon, file.room_unit_size) {
+            (false, _) => 1.0,
+            (true, Some(size)) => (size - 1.0).max(1.0),
+            (true, None) => DGR_UNIT,
+        };
+        let mut samples = Vec::new();
+        for (index, edge) in edges.iter().enumerate() {
+            let steps = (edge.length() * unit / SPACING).ceil().max(1.0) as usize;
+            for k in 0..=steps {
+                let s = edge.length() * k as f64 / steps as f64;
+                samples.push(Sample { at: edge.at(s), edge: index as u32, s: s as f32 });
+            }
+        }
+        let (mut lo, mut hi) = ((f64::MAX, f64::MAX), (f64::MIN, f64::MIN));
+        for s in &samples {
+            (lo, hi) = ((lo.0.min(s.at.0), lo.1.min(s.at.1)), (hi.0.max(s.at.0), hi.1.max(s.at.1)));
+        }
+        let field = Field::new(lo, hi, &samples, unit);
+        Some(Layout { id: file.id, dungeon, unit, nodes: file.nodes, edges, samples, field })
+    }
+
+    /// The nearest corridor sample and how far away it is (world units, capped at `FAR`).
+    pub fn corridor(&self, at: (f64, f64)) -> (f64, Option<usize>) {
+        let Some(j) = self.field.near(at) else { return (FAR, None) };
+        // The cell's sample is nearest to the cell's centre: its neighbours on the
+        // same corridor may be nearer to the point itself.
+        let gap = |k: usize| {
+            let p = self.samples[k].at;
+            (at.0 - p.0).hypot(at.1 - p.1)
+        };
+        let edge = self.samples[j].edge;
+        let (lo, hi) = (j.saturating_sub(3), (j + 3).min(self.samples.len() - 1));
+        let best = (lo..=hi).filter(|&k| self.samples[k].edge == edge).min_by(|&a, &b| gap(a).total_cmp(&gap(b))).unwrap_or(j);
+        ((gap(best) * self.unit).min(FAR), Some(best))
+    }
+
+    /// Walks `left` units along the corridors from sample `j` (forward = towards
+    /// the edge's node `b`), choosing a branch with `pick(count)` at every node and
+    /// turning back at dead ends. The point reached.
+    pub fn drift(&self, j: usize, forward: bool, mut left: f64, pick: &mut dyn FnMut(usize) -> usize) -> (f64, f64) {
+        let sample = self.samples[j];
+        let (mut edge, mut at, mut forward) = (sample.edge as usize, sample.s as f64, forward);
+        for _ in 0..64 {
+            let e = &self.edges[edge];
+            let room = if forward { e.length() - at } else { at };
+            if left <= room {
+                return e.at(if forward { at + left } else { at - left });
+            }
+            left -= room;
+            let node = if forward { e.b } else { e.a };
+            let next: Vec<usize> = (0..self.edges.len()).filter(|&i| i != edge && (self.edges[i].a == node || self.edges[i].b == node)).collect();
+            if next.is_empty() {
+                // A dead end: back the way it came.
+                (at, forward) = (if forward { e.length() } else { 0.0 }, !forward);
+                continue;
+            }
+            edge = next[pick(next.len()) % next.len()];
+            forward = self.edges[edge].a == node;
+            at = if forward { 0.0 } else { self.edges[edge].length() };
+        }
+        self.edges[edge].at(at)
+    }
+
+    /// The corridor's direction at sample `j` (towards node `b`), a unit vector.
+    pub fn tangent(&self, j: usize) -> (f64, f64) {
+        let sample = self.samples[j];
+        let e = &self.edges[sample.edge as usize];
+        let h = 2.0 / self.unit;
+        let (p, q) = (e.at(sample.s as f64 - h), e.at(sample.s as f64 + h));
+        let l = (q.0 - p.0).hypot(q.1 - p.1).max(1e-9);
+        ((q.0 - p.0) / l, (q.1 - p.1) / l)
+    }
+
+    /// The nodes a target stands for: those with its exit, else those with its tag.
+    pub fn goals(&self, target: &NavTarget) -> Vec<usize> {
+        let matches = |n: &Node| match (&target.exit, &target.tag) {
+            (Some(exit), _) => n.exit.as_deref() == Some(exit.as_str()),
+            (None, Some(tag)) => n.has_tag(tag),
+            (None, None) => false,
+        };
+        (0..self.nodes.len()).filter(|&i| matches(&self.nodes[i])).collect()
+    }
+
+    /// Corridor distance (file units) from every node to the nearest of `goals`.
+    pub fn distances(&self, goals: &[usize]) -> Vec<f64> {
+        let mut dist = vec![f64::INFINITY; self.nodes.len()];
         for &g in goals {
             dist[g] = 0.0;
         }
         // Few nodes: plain Bellman-Ford style relaxation.
         for _ in 0..self.nodes.len() {
             let mut changed = false;
-            for (a, b, points) in &self.edges {
-                let l = length(points);
-                for (u, v) in [(*a, *b), (*b, *a)] {
-                    if dist[v] < f64::MAX && dist[v] + l < dist[u] {
+            for e in &self.edges {
+                let l = e.length();
+                for (u, v) in [(e.a, e.b), (e.b, e.a)] {
+                    if dist[v] + l < dist[u] {
                         dist[u] = dist[v] + l;
                         changed = true;
                     }
@@ -217,82 +343,129 @@ impl Layout {
         dist
     }
 
-    /// The walking route from `from` to the nearest goal along the corridors, and its length.
-    fn route(&self, from: (f64, f64), goals: &[usize]) -> Option<(Vec<(f64, f64)>, f64)> {
-        let dist = self.distances(goals);
-        // Nearest corridor point.
-        let mut best: Option<(f64, usize, usize, (f64, f64))> = None;
-        for (e, (_, _, points)) in self.edges.iter().enumerate() {
-            for (j, pair) in points.windows(2).enumerate() {
-                let ((ax, ay), (bx, by)) = (pair[0], pair[1]);
-                let (dx, dy) = (bx - ax, by - ay);
-                let l2 = dx * dx + dy * dy;
-                let t = if l2 > 0.0 { (((from.0 - ax) * dx + (from.1 - ay) * dy) / l2).clamp(0.0, 1.0) } else { 0.0 };
-                let q = (ax + t * dx, ay + t * dy);
-                let d = (from.0 - q.0).hypot(from.1 - q.1);
-                if best.is_none_or(|b| d < b.0) {
-                    best = Some((d, e, j, q));
-                }
+    /// Walks `left` units from node `at` downhill towards the goal; the point reached.
+    fn walk_from_node(&self, dist: &[f64], mut at: usize, mut left: f64) -> (f64, f64) {
+        for _ in 0..=self.nodes.len() {
+            if dist[at] <= 0.0 {
+                break;
             }
-        }
-        let (_, e, j, q) = best?;
-        let (a, b, points) = &self.edges[e];
-        let mut towards_a: Vec<(f64, f64)> = vec![from, q];
-        towards_a.extend(points[..=j].iter().rev());
-        let mut towards_b: Vec<(f64, f64)> = vec![from, q];
-        towards_b.extend(points[j + 1..].iter());
-        let cost_a = length(&towards_a) + dist[*a];
-        let cost_b = length(&towards_b) + dist[*b];
-        let (mut path, mut at, total) =
-            if cost_a <= cost_b { (towards_a, *a, cost_a) } else { (towards_b, *b, cost_b) };
-        if total >= f64::MAX / 2.0 {
-            return None;
-        }
-        // Follow the corridors downhill to the goal.
-        while dist[at] > 0.0 {
             let next = self
                 .edges
                 .iter()
-                .filter_map(|(a, b, points)| {
-                    if *a == at {
-                        Some((*b, points.clone()))
-                    } else if *b == at {
-                        Some((*a, points.iter().rev().copied().collect()))
-                    } else {
-                        None
+                .filter(|e| e.a == at || e.b == at)
+                .min_by(|x, y| {
+                    let cost = |e: &Edge| e.length() + dist[if e.a == at { e.b } else { e.a }];
+                    cost(x).total_cmp(&cost(y))
+                });
+            let Some(e) = next else { break };
+            let forward = e.a == at;
+            if left <= e.length() {
+                return e.at(if forward { left } else { e.length() - left });
+            }
+            left -= e.length();
+            at = if forward { e.b } else { e.a };
+        }
+        (self.nodes[at].x, self.nodes[at].y)
+    }
+
+    /// Which way the corridors lead to `goals` from every corridor sample.
+    pub fn guidance(&self, goals: &[usize]) -> Guidance {
+        let dist = self.distances(goals);
+        let look = LOOK / self.unit;
+        let mut ahead = Vec::with_capacity(self.samples.len());
+        let mut togo = Vec::with_capacity(self.samples.len());
+        for sample in &self.samples {
+            let e = &self.edges[sample.edge as usize];
+            let s = sample.s as f64;
+            let (via_a, via_b) = (s + dist[e.a], e.length() - s + dist[e.b]);
+            let mut total = via_a.min(via_b);
+            let point = if !total.is_finite() {
+                // Not joined by corridors (a few graphs leave an exit apart): straight to the nearest goal.
+                let nearest = goals.iter().map(|&g| (self.nodes[g].x, self.nodes[g].y)).min_by(|p, q| {
+                    let d = |n: &(f64, f64)| (n.0 - sample.at.0).hypot(n.1 - sample.at.1);
+                    d(p).total_cmp(&d(q))
+                });
+                match nearest {
+                    Some(goal) => {
+                        total = (goal.0 - sample.at.0).hypot(goal.1 - sample.at.1);
+                        goal
                     }
-                })
-                .min_by(|x, y| (length(&x.1) + dist[x.0]).total_cmp(&(length(&y.1) + dist[y.0])))?;
-            path.extend(next.1.into_iter().skip(1));
-            at = next.0;
+                    None => sample.at,
+                }
+            } else if via_a <= via_b {
+                if s >= look { e.at(s - look) } else { self.walk_from_node(&dist, e.a, look - s) }
+            } else if e.length() - s >= look {
+                e.at(s + look)
+            } else {
+                self.walk_from_node(&dist, e.b, look - (e.length() - s))
+            };
+            ahead.push((point.0 as f32, point.1 as f32));
+            togo.push((total * self.unit) as f32);
         }
-        Some((path, total))
+        Guidance { ahead, togo }
     }
 }
 
-/// The point `look` along a path.
-fn ahead(path: &[(f64, f64)], look: f64) -> (f64, f64) {
-    let mut left = look;
-    for pair in path.windows(2) {
-        let l = (pair[1].0 - pair[0].0).hypot(pair[1].1 - pair[0].1);
-        if l >= left && l > 0.0 {
-            let t = left / l;
-            return (pair[0].0 + t * (pair[1].0 - pair[0].0), pair[0].1 + t * (pair[1].1 - pair[0].1));
-        }
-        left -= l;
-    }
-    *path.last().unwrap_or(&(0.0, 0.0))
+pub struct AreaData {
+    pub(super) id: String,
+    /// Exit area id → its name.
+    pub(super) names: HashMap<String, String>,
+    pub(super) layouts: Vec<Layout>,
 }
 
-/// The exit to head for: onward to the lowest-numbered zone not just come from or
-/// ticked; a town only when there is nothing else. Returns (exit area, label, kind).
-fn target(area: &Area, ev: &Evidence) -> Option<(String, String, String)> {
+/// One area's layout graphs; cheap to clone.
+#[derive(Clone)]
+pub struct Area(Arc<AreaData>);
+
+impl std::ops::Deref for Area {
+    type Target = AreaData;
+    fn deref(&self) -> &AreaData {
+        &self.0
+    }
+}
+
+impl Area {
+    /// The graphs of one bundled file; None when it has no usable layout.
+    pub(super) fn parse(id: &str, json: &str) -> Option<Area> {
+        let file: AreaFile = match serde_json::from_str(json) {
+            Ok(file) => file,
+            Err(error) => {
+                eprintln!("Layout graphs for {id} not read: {error}");
+                return None;
+            }
+        };
+        let names = file.connections.iter().cloned().zip(file.connection_names.iter().cloned()).collect();
+        let layouts: Vec<Layout> = file.topologies.into_iter().filter_map(Layout::new).collect();
+        (!layouts.is_empty()).then(|| Area(Arc::new(AreaData { id: id.to_string(), names, layouts })))
+    }
+}
+
+/// The bundled graphs, built on first use per area (distance fields take a moment).
+#[derive(Default)]
+pub struct Graphs(Mutex<HashMap<String, Option<Area>>>);
+
+impl Graphs {
+    pub fn get(&self, id: &str) -> Option<Area> {
+        let mut built = self.0.lock().ok()?;
+        built
+            .entry(id.to_string())
+            .or_insert_with(|| {
+                let (_, json) = crate::bundle::LAYOUTS.iter().find(|(stem, _)| *stem == id)?;
+                Area::parse(id, json)
+            })
+            .clone()
+    }
+}
+
+/// Without checklist targets: the onward exit, the lowest-numbered zone not just
+/// come from or ticked; a town only when there is nothing else.
+pub(super) fn target(area: &Area, arrived_from: &str, completed: &[String]) -> Option<NavTarget> {
     let done = |id: &str| {
         let name = area.names.get(id).map(String::as_str).unwrap_or(id);
-        ev.completed.iter().any(|c| c.eq_ignore_ascii_case(name))
+        completed.iter().any(|c| c.eq_ignore_ascii_case(name))
     };
     // Onward first; else the zone just left (e.g. back from town), else any exit.
-    let mut exits: Vec<&String> = area.names.keys().filter(|id| *id != ev.arrived_from && !done(id)).collect();
+    let mut exits: Vec<&String> = area.names.keys().filter(|id| *id != arrived_from && !done(id)).collect();
     if exits.is_empty() {
         exits = area.names.keys().filter(|id| !done(id)).collect();
     }
@@ -301,299 +474,133 @@ fn target(area: &Area, ev: &Evidence) -> Option<(String, String, String)> {
     }
     exits.sort_by_key(|id| (id.ends_with("_town"), area_order(id)));
     let exit = (*exits.first()?).clone();
-    let boss = BOSS_AT_EXIT.iter().find(|(a, e, b)| *a == area.id && *e == exit && !ev.completed.iter().any(|c| c == b));
-    Some(match boss {
-        Some((_, _, b)) => (exit, b.to_string(), "boss".into()),
-        None => (exit.clone(), area.names[&exit].clone(), "entrance".into()),
-    })
+    let boss = BOSS_AT_EXIT.iter().find(|(a, e, b)| *a == area.id && *e == exit && !completed.iter().any(|c| c == b));
+    let label = match boss {
+        Some((_, _, b)) => b.to_string(),
+        None => area.names[&exit].clone(),
+    };
+    Some(NavTarget { label, exit: Some(exit), tag: None, optional: false })
 }
 
-struct Placement {
-    layout: usize,
-    /// World position of the arrival point.
-    origin: (f64, f64),
-    scale: f64,
-    mean: f64,
-}
-
-/// Without an arrival point: every position on the recognised layout (or, if none,
-/// on every main layout) on a coarse grid. All placements, best first.
-fn loose_placements(area: &Area, ev: &Evidence, path: &[(f64, f64)], base: f64) -> Vec<Placement> {
-    let step = path.len().div_ceil(LOOSE_POINTS).max(1);
-    let path: Vec<(f64, f64)> = path.iter().step_by(step).copied().collect();
-    let hinted: Vec<usize> = (0..area.layouts.len()).filter(|&i| Some(area.layouts[i].id.as_str()) == ev.layout_hint).collect();
-    let layouts: Vec<usize> = if hinted.is_empty() {
-        (0..area.layouts.len()).filter(|&i| !area.layouts[i].id.ends_with("_League")).collect()
-    } else {
-        hinted
-    };
-    let mut out = Vec::new();
-    for index in layouts {
-        let layout = &area.layouts[index];
-        for factor in SCALE_FACTORS {
-            let scale = base * factor;
-            let rel: Vec<(f64, f64)> = path.iter().map(|&(x, y)| from_screen((x / scale, y / scale))).collect();
-            let mut y = 0.0;
-            while y <= layout.extent.1 {
-                let mut x = 0.0;
-                while x <= layout.extent.0 {
-                    let mean = rel.iter().map(|&(rx, ry)| layout.field.at((x + rx, y + ry))).sum::<f64>()
-                        / rel.len().max(1) as f64;
-                    out.push(Placement { layout: index, origin: (x, y), scale, mean });
-                    x += LOOSE_STEP;
-                }
-                y += LOOSE_STEP;
-            }
-        }
-    }
-    out.sort_by(|a, b| a.mean.total_cmp(&b.mean));
-    out.truncate(400);
-    out
-}
-
-/// Each layout's best placement of the walked path, best layout first.
-fn placements(area: &Area, ev: &Evidence, path: &[(f64, f64)], base: f64) -> Vec<Placement> {
-    if !ev.anchored {
-        return loose_placements(area, ev, path, base);
-    }
-    let mut out = Vec::new();
-    for (index, layout) in area.layouts.iter().enumerate() {
-        let mut anchors: Vec<(f64, f64)> = layout
-            .nodes
-            .iter()
-            .filter(|n| n.exit.as_deref() == Some(ev.arrived_from))
-            .map(|n| (n.x, n.y))
-            .collect();
-        if anchors.is_empty() {
-            anchors = layout.nodes.iter().filter(|n| n.start).map(|n| (n.x, n.y)).collect();
-        }
-        let mut best: Option<Placement> = None;
-        for factor in SCALE_FACTORS {
-            let scale = base * factor;
-            let rel: Vec<(f64, f64)> = path.iter().map(|&(x, y)| from_screen((x / scale, y / scale))).collect();
-            for &(ax, ay) in &anchors {
-                for dx in (-OFFSET..=OFFSET).step_by(OFFSET_STEP) {
-                    for dy in (-OFFSET..=OFFSET).step_by(OFFSET_STEP) {
-                        let origin = (ax + dx as f64, ay + dy as f64);
-                        let mean = rel.iter().map(|&(x, y)| layout.field.at((origin.0 + x, origin.1 + y))).sum::<f64>()
-                            / rel.len().max(1) as f64;
-                        if best.as_ref().is_none_or(|b| mean < b.mean) {
-                            best = Some(Placement { layout: index, origin, scale, mean });
-                        }
-                    }
-                }
-            }
-        }
-        out.extend(best);
-    }
-    out.sort_by(|a, b| a.mean.total_cmp(&b.mean));
-    out
-}
-
-pub fn guide(area: &Area, ev: &Evidence) -> Option<GuideView> {
-    let (exit, label, kind) = target(area, ev)?;
-    let mut view = GuideView {
-        variant: String::new(),
-        target_kind: kind,
-        target: label,
-        degrees: None,
-        source: "unconfirmed".into(),
-        distance: 0.0,
-        confidence: 0.0,
-        measured: ev.scale.is_some(),
-        turned: false,
-    };
-    let base = ev.scale.unwrap_or(SCALE);
-    let step = ev.trail.len().div_ceil(PATH_POINTS).max(1);
-    let mut path: Vec<(f64, f64)> = ev.trail.iter().step_by(step).map(|&(x, y)| (x as f64, y as f64)).collect();
-    path.push((ev.player.0 as f64, ev.player.1 as f64));
-    // How far the path spreads: from the arrival point, or across the piece without one.
-    let reach = if ev.anchored {
-        path.iter().map(|&(x, y)| x.hypot(y) / base).fold(0.0, f64::max)
-    } else {
-        let (mut lo, mut hi) = ((f64::MAX, f64::MAX), (f64::MIN, f64::MIN));
-        for &(x, y) in &path {
-            (lo, hi) = ((lo.0.min(x), lo.1.min(y)), (hi.0.max(x), hi.1.max(y)));
-        }
-        (hi.0 - lo.0).hypot(hi.1 - lo.1) / base
-    };
-    let all = placements(area, ev, &path, base);
-    // Bearing (screen degrees) and walking distance (minimap cells) under one placement.
-    let heading = |p: &Placement| -> Option<(f32, f64)> {
-        let layout = &area.layouts[p.layout];
-        let goals: Vec<usize> =
-            (0..layout.nodes.len()).filter(|&i| layout.nodes[i].exit.as_deref() == Some(exit.as_str())).collect();
-        let player = from_screen((ev.player.0 as f64 / p.scale, ev.player.1 as f64 / p.scale));
-        let at = (p.origin.0 + player.0, p.origin.1 + player.1);
-        let (route, total) = layout.route(at, &goals)?;
-        let (x, y) = ahead(&route, LOOK);
-        let (sx, sy) = to_screen((x - at.0, y - at.1));
-        Some((screen_bearing(sx, sy)?, total * p.scale))
-    };
-    if reach < MIN_REACH {
-        // Too little walked to tell layouts apart: a rough needle only if they all agree.
-        let headings: Vec<(f32, f64)> = all.iter().filter_map(&heading).collect();
-        if let Some(&(_, distance)) = headings.first() {
-            let (sx, sy) = headings.iter().fold((0.0, 0.0), |(sx, sy), (d, _)| {
-                let r = (*d as f64).to_radians();
-                (sx + r.cos(), sy + r.sin())
-            });
-            let mean = sy.atan2(sx).to_degrees() as f32;
-            view.distance = distance as f32;
-            if headings.len() == all.len() && headings.iter().all(|(d, _)| super::guide::angle_between(*d, mean) <= SAME_WAY) {
-                view.degrees = Some(mean);
-                view.source = "rough".into();
-            } else {
-                // A gray best guess: the direction most layouts agree on.
-                let support = |d: f32| headings.iter().filter(|(e, _)| super::guide::angle_between(*e, d) <= SAME_WAY).count();
-                view.degrees = headings.iter().map(|(d, _)| *d).max_by_key(|&d| support(d));
-            }
-        }
-        return Some(view);
-    }
-    let Some(best) = all.first() else { return Some(view) };
-    view.variant = area.layouts[best.layout].id.clone();
-    let Some((degrees, distance)) = heading(best) else { return Some(view) };
-    view.distance = distance as f32;
-    let rival = all
-        .iter()
-        .skip(1)
-        .find(|p| heading(p).is_none_or(|(d, _)| super::guide::angle_between(d, degrees) > SAME_WAY))
-        .map_or(f64::MAX, |p| p.mean);
-    view.confidence = (1.0 - best.mean / rival.max(1e-9)) as f32;
-    // Without an arrival point the placement is never more than rough.
-    if ev.anchored && best.mean <= MAX_MEAN && view.confidence >= MIN_CONFIDENCE {
-        view.degrees = Some(degrees);
-        view.source = "estimated".into();
-    } else if best.mean <= ROUGH_MEAN {
-        // Fits fairly well but without a clear lead: a fainter needle along it.
-        view.degrees = Some(degrees);
-        view.source = "rough".into();
-    } else {
-        // Layout not recognised: the best guess, shown gray ("unconfirmed").
-        view.degrees = Some(degrees);
-    }
-    Some(view)
+#[cfg(test)]
+pub(super) fn load(id: &str) -> Area {
+    Graphs::default().get(id).expect("bundled layout graphs")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn ev<'a>(area: &'a str, from: &'a str, trail: &'a [(i32, i32)], player: (i32, i32)) -> Evidence<'a> {
-        Evidence { area, targets: &[], arrived_from: from, walls: &[], trail, anchored: true, layout_hint: None, player, completed: &[], scale: None }
-    }
-
-    /// The minimap path of a walk along `layout`'s corridors from `start` through `via` nodes.
-    fn walk(layout: &Layout, start: (f64, f64), via: &[usize]) -> Vec<(i32, i32)> {
-        let mut points = vec![start];
-        for &n in via {
-            points.push((layout.nodes[n].x, layout.nodes[n].y));
-        }
-        let mut out = Vec::new();
-        for pair in points.windows(2) {
-            let steps = ((pair[1].0 - pair[0].0).hypot(pair[1].1 - pair[0].1) / 10.0).ceil() as usize;
-            for s in 0..=steps {
-                let t = s as f64 / steps.max(1) as f64;
-                let w = (pair[0].0 + t * (pair[1].0 - pair[0].0) - start.0, pair[0].1 + t * (pair[1].1 - pair[0].1) - start.1);
-                let (x, y) = to_screen(w);
-                out.push(((x * SCALE).round() as i32, (y * SCALE).round() as i32));
-            }
-        }
-        out
+    fn exit(id: &str) -> NavTarget {
+        NavTarget { label: id.into(), exit: Some(id.into()), ..Default::default() }
     }
 
     #[test]
     fn graphs_load_with_named_exits() {
-        let areas = load();
-        assert_eq!(areas["G1_1"].layouts.len(), 5);
-        assert_eq!(areas["G1_2"].layouts.len(), 33);
-        assert_eq!(areas["G1_2"].names["G1_3"], "Mud Burrow");
-        for layout in &areas["G1_2"].layouts {
-            let exits: Vec<_> = layout.nodes.iter().filter_map(|n| n.exit.as_deref()).collect();
-            assert!(exits.contains(&"G1_town") && exits.contains(&"G1_3") && exits.contains(&"G1_4"), "{}", layout.id);
+        assert_eq!(load("G1_1").layouts.len(), 5);
+        let clearfell = load("G1_2");
+        assert_eq!(clearfell.layouts.len(), 33);
+        assert_eq!(clearfell.names["G1_3"], "Mud Burrow");
+        for layout in &clearfell.layouts {
+            for id in ["G1_town", "G1_3", "G1_4"] {
+                assert!(!layout.goals(&exit(id)).is_empty(), "{} {id}", layout.id);
+            }
         }
+        // Tags stay on the nodes.
+        assert!(clearfell.layouts.iter().any(|l| l.nodes.iter().any(|n| n.has_tag("boss"))));
+        // The encampment's graph is a single node: no usable layout, its terrain map stays.
+        assert!(Graphs::default().get("G1_town").is_none());
+        assert!(Graphs::default().get("G9_none").is_none());
+    }
+
+    #[test]
+    fn new_optional_fields_are_accepted() {
+        let json = r#"{"areaId": "X", "name": "X", "act": 1, "level": 3, "connections": ["Y"], "connectionNames": ["Why"],
+            "topologies": [
+              {"id": "one", "file": "a.tgr", "format": "tgr", "size": [4, 4],
+               "nodes": [{"x": 0, "y": 0, "tag": "start", "keys": ["k"], "start": true}, {"x": 50, "y": 0, "exit": "Y"}],
+               "edges": [{"a": 0, "b": 1, "via": [], "kind": "road"}]},
+              {"id": "lonely", "size": [1, 1], "nodes": [{"x": 0, "y": 0}], "edges": []},
+              {"id": "room", "format": "dgr", "size": [3, 3], "roomUnitSize": 9,
+               "nodes": [{"x": 0, "y": 0}, {"x": 2, "y": 0}], "edges": [{"a": 0, "b": 1}]}]}"#;
+        let area = Area::parse("X", json).unwrap();
+        let ids: Vec<&str> = area.layouts.iter().map(|l| l.id.as_str()).collect();
+        assert_eq!(ids, ["one", "room"], "a layout with one node is skipped");
+        assert!(area.layouts[0].nodes[0].has_tag("k"));
+        assert!(!area.layouts[0].dungeon && area.layouts[1].dungeon);
+        assert_eq!((area.layouts[0].unit, area.layouts[1].unit), (1.0, 8.0));
+        // A broken file is skipped, not a crash.
+        assert!(Area::parse("X", "{").is_none());
+    }
+
+    #[test]
+    fn every_bundled_file_loads() {
+        let graphs = Graphs::default();
+        let mut usable = 0;
+        for (id, _) in crate::bundle::LAYOUTS {
+            if let Some(area) = graphs.get(id) {
+                usable += 1;
+                assert!(area.layouts.iter().all(|l| l.nodes.len() >= 2 && !l.samples.is_empty()), "{id}");
+            }
+        }
+        assert!(usable >= 3, "{usable} areas with usable graphs");
     }
 
     #[test]
     fn targets_follow_the_campaign() {
-        let areas = load();
-        let (exit, label, kind) = target(&areas["G1_1"], &ev("G1_1", "", &[], (0, 0))).unwrap();
-        assert_eq!((exit.as_str(), label.as_str(), kind.as_str()), ("G1_town", "The Bloated Miller", "boss"));
-        let done = ["The Bloated Miller".to_string()];
-        let e = Evidence { completed: &done, ..ev("G1_1", "", &[], (0, 0)) };
-        assert_eq!(target(&areas["G1_1"], &e).unwrap().1, "Clearfell Encampment");
-        assert_eq!(target(&areas["G1_2"], &ev("G1_2", "G1_town", &[], (0, 0))).unwrap().1, "Mud Burrow");
-        assert_eq!(target(&areas["G1_2"], &ev("G1_2", "G1_3", &[], (0, 0))).unwrap().1, "The Grelwood");
+        let label = |area: &str, from: &str, done: &[String]| target(&load(area), from, done).unwrap().label;
+        assert_eq!(label("G1_1", "", &[]), "The Bloated Miller");
+        assert_eq!(label("G1_1", "", &["The Bloated Miller".into()]), "Clearfell Encampment");
+        assert_eq!(label("G1_2", "G1_town", &[]), "Mud Burrow");
+        assert_eq!(label("G1_2", "G1_3", &[]), "The Grelwood");
+        assert_eq!(target(&load("G1_2"), "G1_3", &[]).unwrap().exit.as_deref(), Some("G1_4"));
         // Back in The Riverbank from the encampment: still a target.
-        assert!(target(&areas["G1_1"], &ev("G1_1", "G1_town", &[], (0, 0))).is_some());
+        assert!(target(&load("G1_1"), "G1_town", &[]).is_some());
     }
 
     #[test]
-    fn a_walk_along_one_layout_picks_it_and_points_along_its_corridors() {
-        let areas = load();
-        let area = &areas["G1_2"];
-        let index = area.layouts.iter().position(|l| l.id == "ClearFell_W_S_N").unwrap();
-        let layout = &area.layouts[index];
-        let town = layout.nodes.iter().position(|n| n.exit.as_deref() == Some("G1_town")).unwrap();
-        let start = (layout.nodes[town].x, layout.nodes[town].y);
-        // Walk two corridors away from the town exit.
-        let next: Vec<usize> = layout.edges.iter().filter_map(|(a, b, _)| {
-            if *a == town { Some(*b) } else if *b == town { Some(*a) } else { None }
-        }).collect();
-        let far = layout.edges.iter().find_map(|(a, b, _)| {
-            if *a == next[0] && *b != town { Some(*b) } else if *b == next[0] && *a != town { Some(*a) } else { None }
-        }).unwrap();
-        let trail = walk(layout, start, &[next[0], far]);
-        let player = *trail.last().unwrap();
-        let view = guide(area, &ev("G1_2", "G1_town", &trail, player)).unwrap();
-        assert!(view.variant.contains("W_S_N"), "{view:?}");
-        assert_eq!(view.target, "Mud Burrow");
-    }
-
-    #[test]
-    fn without_an_arrival_point_the_recognised_layout_still_places_the_walk() {
-        let areas = load();
-        let area = &areas["G1_2"];
-        let layout = area.layouts.iter().find(|l| l.id == "ClearFell_W_S_N").unwrap();
-        // A walk between two inner nodes, recorded from wherever tracking resumed.
-        let (a, b, _) = layout.edges.iter().find(|(a, b, p)| {
-            layout.nodes[*a].exit.is_none() && layout.nodes[*b].exit.is_none() && length(p) > 300.0
-        }).unwrap();
-        let start = (layout.nodes[*a].x, layout.nodes[*a].y);
-        let trail = walk(layout, start, &[*b]);
-        let player = *trail.last().unwrap();
-        let e = Evidence { anchored: false, layout_hint: Some("ClearFell_W_S_N"), ..ev("G1_2", "", &trail, player) };
-        let view = guide(area, &e).unwrap();
-        assert_eq!(view.variant, "ClearFell_W_S_N");
-        assert_eq!(view.target, "Mud Burrow");
-    }
-
-    #[test]
-    fn no_walk_yet_gives_only_a_gray_best_guess() {
-        let areas = load();
-        // Clearfell's layouts put Mud Burrow on every side: only a gray best guess yet.
-        let view = guide(&areas["G1_2"], &ev("G1_2", "G1_town", &[(0, 0), (5, 3)], (5, 3))).unwrap();
-        assert_eq!(view.target, "Mud Burrow");
-        assert_eq!(view.source, "unconfirmed");
-        assert!(view.degrees.is_some());
+    fn the_corridor_distance_is_euclidean() {
+        let area = load("G1_2");
+        let layout = &area.layouts[0];
+        let e = &layout.edges[0];
+        let mid = e.at(e.length() / 2.0);
+        assert!(layout.corridor(mid).0 < SPACING, "{:?}", layout.corridor(mid));
+        // Far outside the layout: as far as it gets.
+        assert_eq!(layout.corridor((-1e5, -1e5)).0, FAR);
+        // A brute-force check at random points near the corridors.
+        let mut seed = 7u64;
+        for _ in 0..200 {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let j = (seed >> 33) as usize % layout.samples.len();
+            let off = (((seed >> 20) & 0xff) as f64 - 128.0) * 0.6;
+            let p = (layout.samples[j].at.0 + off, layout.samples[j].at.1 - off * 0.7);
+            let exact = layout.samples.iter().map(|s| (s.at.0 - p.0).hypot(s.at.1 - p.1)).fold(f64::MAX, f64::min).min(FAR);
+            let (got, _) = layout.corridor(p);
+            assert!(got - exact < CELL / 2.0, "{got} vs {exact}");
+        }
     }
 
     #[test]
     fn the_route_bends_with_the_corridors() {
         // An L-shaped corridor: east, then north. Standing at the start, the route
-        // first goes east (screen up-right), not straight to the goal.
-        let nodes = vec![
-            Node { x: 0.0, y: 0.0, exit: None, start: true },
-            Node { x: 400.0, y: 0.0, exit: None, start: false },
-            Node { x: 400.0, y: 400.0, exit: Some("X".into()), start: false },
-        ];
-        let edges = vec![(0, 1, vec![(0.0, 0.0), (400.0, 0.0)]), (1, 2, vec![(400.0, 0.0), (400.0, 400.0)])];
-        let field = Field::new([20.0, 20.0], &edges);
-        let layout = Layout { id: "L".into(), extent: (460.0, 460.0), nodes, edges, field };
-        let (route, total) = layout.route((0.0, 0.0), &[2]).unwrap();
-        assert!((total - 800.0).abs() < 1e-6);
-        let (x, y) = ahead(&route, LOOK);
-        assert!((x - LOOK).abs() < 1e-6 && y.abs() < 1e-6);
+        // first goes east, not straight to the goal.
+        let json = r#"{"topologies": [{"id": "L", "size": [20, 20],
+            "nodes": [{"x": 0, "y": 0, "start": true}, {"x": 400, "y": 0}, {"x": 400, "y": 400, "exit": "X"}],
+            "edges": [{"a": 0, "b": 1, "via": []}, {"a": 1, "b": 2, "via": []}]}]}"#;
+        let area = Area::parse("L", json).unwrap();
+        let layout = &area.layouts[0];
+        let guidance = layout.guidance(&layout.goals(&exit("X")));
+        let (_, near) = layout.corridor((0.0, 0.0));
+        let j = near.unwrap();
+        assert!((guidance.togo[j] - 800.0).abs() < 1e-3, "{}", guidance.togo[j]);
+        let (x, y) = guidance.ahead[j];
+        assert!((x as f64 - LOOK).abs() < 1e-3 && y.abs() < 1e-3, "{x} {y}");
+        // Round the corner: 60 units before it, the point ahead is 60 units up the north arm.
+        let (_, near) = layout.corridor((340.0, 0.0));
+        let (x, y) = guidance.ahead[near.unwrap()];
+        assert!((x - 400.0).abs() < 1e-3 && (y - 60.0).abs() < 1.0, "{x} {y}");
+        // Near the goal the point ahead is the goal.
+        let (_, near) = layout.corridor((400.0, 380.0));
+        assert_eq!(guidance.ahead[near.unwrap()], (400.0, 400.0));
     }
 }
