@@ -20,8 +20,10 @@ const PARTICLES: usize = 200;
 /// Spread of the arrival guess around the arrival exit (world units).
 const SPREAD: f64 = 40.0;
 /// Share of particles drawn along all corridors at arrival (a waypoint or a
-/// portal puts the player elsewhere than the exit the log names).
+/// portal puts the player elsewhere than the exit the log names); more when
+/// coming from a town, where portals and waypoints are the usual way back.
 const STRAY: f64 = 0.1;
+const STRAY_TOWN: f64 = 0.3;
 /// World units walked between two weighings.
 const WEIGH_EVERY: f64 = 15.0;
 /// Closeness to a corridor: full weight within `FLAT` world units of its centre
@@ -59,9 +61,14 @@ const HEADING_LENGTH: f64 = 60.0;
 /// all corridors: the player may have used a waypoint, checkpoint or portal.
 const LONG_LOSS: f64 = 20.0;
 const REDRAW: f64 = 0.3;
-/// A log anchor: how close (world units) the particles must be to the node …
+/// A log anchor: how close (world units) the particles must be to the node (a
+/// tag is a boss arena's centre, the line may play at its entrance) …
 const ANCHOR_SIGMA: f64 = 80.0;
+const TAG_SIGMA: f64 = 150.0;
 const ANCHOR_FLOOR: f64 = 0.02;
+/// Leaving the zone: probably through the exit the log names, but a portal,
+/// waypoint or death leaves from anywhere; the evidence never drops below this.
+const LEFT_FLOOR: f64 = 0.3;
 /// … the log evidence a layout without such a node loses …
 const MISSING: f64 = -7.0;
 /// … and how far around the node the particles are placed.
@@ -96,10 +103,13 @@ pub enum Arrival<'a> {
 /// Log anchors: the player is at such a node now.
 #[derive(Clone, Copy, Debug)]
 pub enum Seen<'a> {
-    /// Leaving to this area id, or just arrived from it.
+    /// At the exit to this area id (a checklist step at it was completed by the log).
     Exit(&'a str),
     /// At a node with this tag (a boss arena, …).
     Tag(&'a str),
+    /// Left the zone to this area id: probably through its exit (soft: no particle
+    /// is moved, a layout without the exit loses nothing).
+    Left(&'a str),
 }
 
 /// What is worth keeping of a zone instance between visits.
@@ -334,6 +344,18 @@ impl Navigator {
         if goals.iter().all(Vec::is_empty) {
             return;
         }
+        if let Seen::Left(_) = seen {
+            self.touched();
+            for ((layout, bank), goals) in self.area.layouts.iter().zip(self.banks.iter_mut()).zip(&goals) {
+                if goals.is_empty() {
+                    continue;
+                }
+                let agree = agreement(layout, &bank.particles, goals, ANCHOR_SIGMA / layout.unit);
+                bank.evidence += (LEFT_FLOOR + (1.0 - LEFT_FLOOR) * agree).ln();
+            }
+            return;
+        }
+        let sigma_world = if matches!(seen, Seen::Tag(_)) { TAG_SIGMA } else { ANCHOR_SIGMA };
         self.anchored = true;
         self.since_weigh = 0.0;
         self.touched();
@@ -344,7 +366,7 @@ impl Navigator {
                 continue;
             }
             // How much of the belief sits at each matching node.
-            let sigma = ANCHOR_SIGMA / layout.unit;
+            let sigma = sigma_world / layout.unit;
             let mut mass = vec![0.0; goals.len()];
             let mut agree = 0.0;
             for p in &bank.particles {
@@ -584,10 +606,24 @@ fn on_corridor(layout: &Layout, rng: &mut Rng) -> Particle {
 fn anchor_nodes(layout: &Layout, seen: Seen) -> Vec<usize> {
     (0..layout.nodes.len())
         .filter(|&i| match seen {
-            Seen::Exit(area) => layout.nodes[i].exit.as_deref() == Some(area),
+            Seen::Exit(area) | Seen::Left(area) => layout.nodes[i].exit.as_deref() == Some(area),
             Seen::Tag(tag) => !tag.is_empty() && layout.nodes[i].has_tag(tag),
         })
         .collect()
+}
+
+/// The weighted share of particles near one of `nodes` (a Gaussian of `sigma`, file units).
+fn agreement(layout: &Layout, particles: &[Particle], nodes: &[usize], sigma: f64) -> f64 {
+    particles
+        .iter()
+        .map(|p| {
+            let best = nodes
+                .iter()
+                .map(|&n| (p.x - layout.nodes[n].x).powi(2) + (p.y - layout.nodes[n].y).powi(2))
+                .fold(f64::MAX, f64::min);
+            p.w * (-best / (2.0 * sigma * sigma)).exp()
+        })
+        .sum()
 }
 
 /// The first particles of a layout.
@@ -600,9 +636,13 @@ fn start(layout: &Layout, arrival: Arrival, rng: &mut Rng) -> Vec<Particle> {
         }
     }
     let spread = SPREAD / layout.unit;
+    let stray = match arrival {
+        Arrival::From(area) if area.ends_with("_town") || area.ends_with("_Town") => STRAY_TOWN,
+        _ => STRAY,
+    };
     (0..PARTICLES)
         .map(|_| {
-            if nodes.is_empty() || rng.uniform() < STRAY {
+            if nodes.is_empty() || rng.uniform() < stray {
                 return on_corridor(layout, rng);
             }
             let n = &layout.nodes[nodes[rng.below(nodes.len())]];
@@ -752,6 +792,22 @@ mod tests {
         let before = nav.ranking()[0].1;
         nav.seen(Seen::Tag("nothing"));
         assert_eq!(nav.ranking()[0].1, before);
+    }
+
+    #[test]
+    fn leaving_is_soft_evidence() {
+        let json = r#"{"connections": ["A", "B"], "topologies": [
+            {"id": "both", "nodes": [{"x": 0, "y": 0, "exit": "A"}, {"x": 600, "y": 0, "exit": "B"}], "edges": [{"a": 0, "b": 1}]},
+            {"id": "one", "nodes": [{"x": 0, "y": 0, "exit": "A"}, {"x": 600, "y": 0}], "edges": [{"a": 0, "b": 1}]}]}"#;
+        let area = Area::parse("T", json).unwrap();
+        let mut nav = Navigator::new(&area, Arrival::From("A"), None, SCALE, 3);
+        let before: Vec<(f64, f64)> = nav.banks[0].particles.iter().map(|p| (p.x, p.y)).collect();
+        nav.seen(Seen::Left("B"));
+        // Nothing moved, the layout without exit B lost nothing, and the far exit costs at most the floor.
+        assert_eq!(nav.banks[0].particles.iter().map(|p| (p.x, p.y)).collect::<Vec<_>>(), before);
+        assert_eq!(nav.banks[1].evidence, 0.0);
+        assert!(nav.banks[0].evidence >= LEFT_FLOOR.ln() - 1e-9);
+        assert!(!nav.progress().1, "leaving is not an anchor");
     }
 
     #[test]

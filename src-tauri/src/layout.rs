@@ -48,10 +48,6 @@ fn not_stale(view: guide::GuideView, fed_at: Option<Instant>) -> guide::GuideVie
     view
 }
 
-/// A checklist step completed this soon after a live NPC line was completed by
-/// the log (the tracker hands both over in the same batch; a hand tick comes
-/// later) and puts the player at the step's target.
-const LOG_ANCHOR: Duration = Duration::from_secs(1);
 /// Minimap cells per game unit measured per area (poe2way terrain; the older
 /// `scales.json` held Qutm diagram scales and is no longer read).
 const SCALES_FILE: &str = "terrain-scales.json";
@@ -165,8 +161,6 @@ struct Session {
     /// coordinates (None at the start of a part), and when it was placed.
     fed: Option<(i32, i32)>,
     fed_at: Option<Instant>,
-    /// The last live NPC line in this visit.
-    last_dialogue: Option<Instant>,
     /// The last arrow of this visit, kept while a new one cannot be worked out.
     last_guide: std::cell::RefCell<Option<guide::GuideView>>,
 }
@@ -201,7 +195,6 @@ struct State {
     #[allow(dead_code)]
     icons: Vec<crate::minimap::bigmap::Icon>,
     /// (area, label) of targets whose step the log completed.
-    #[allow(dead_code)]
     log_completed: std::collections::HashSet<(String, String)>,
     catalog: guide::Catalog,
     completed: HashMap<String, Vec<String>>,
@@ -459,10 +452,11 @@ impl Recorder {
                     if live && session.started {
                         session.live.add_poi("left", area);
                     }
-                    // Leaving through an exit: the player stands at it (a re-entry of the same zone is not one).
+                    // Leaving to another zone: probably through its exit, but a portal,
+                    // a waypoint or a death leave from anywhere: soft evidence only.
                     if live && *area != session.recording.area {
                         if let Some(nav) = session.navigator.as_mut() {
-                            nav.seen(nav::Seen::Exit(area));
+                            nav.seen(nav::Seen::Left(area));
                         }
                     }
                 }
@@ -492,16 +486,12 @@ impl Recorder {
                     navigator: None,
                     fed: None,
                     fed_at: None,
-                    last_dialogue: None,
                     last_guide: Default::default(),
                 };
                 session.navigator = state.navigator(&session);
                 state.session = Some(session);
             }
             LogEvent::Dialogue { speaker, .. } if live => {
-                if let Some(session) = state.session.as_mut() {
-                    session.last_dialogue = Some(Instant::now());
-                }
                 if let Some(session) = state.session.as_mut().filter(|s| s.started) {
                     let known = session.live.part.pois.iter().any(|p| p.kind == "npc" && &p.label == speaker);
                     if !known {
@@ -646,7 +636,7 @@ impl Recorder {
     }
 
     /// Targets whose step the log completed (not a hand tick), as (area, label). Call
-    /// before `set_completed`. Not used yet.
+    /// before `set_completed`: a newly completed one is an anchor for the navigator.
     pub fn set_log_completed(&self, done: Vec<(String, String)>) {
         if let Ok(mut state) = self.0.lock() {
             state.log_completed = done.into_iter().collect();
@@ -738,18 +728,16 @@ impl State {
             .or_else(|| median(self.scales.values().flatten().copied().collect()))
     }
 
-    /// A checklist step of this area that the log just completed (a live NPC line
-    /// a moment ago) puts the player at its target.
+    /// A checklist step of this area that the log just completed (the tracker
+    /// marks it so; a hand tick is not) puts the player at its target.
     fn anchor_log_completions(&mut self, before: &HashMap<String, Vec<String>>) {
         let Some(session) = self.session.as_mut() else { return };
-        if session.last_dialogue.is_none_or(|t| t.elapsed() > LOG_ANCHOR) {
-            return;
-        }
         let area = session.recording.area.as_str();
         let Some(nav) = session.navigator.as_mut() else { return };
         let was = before.get(area).cloned().unwrap_or_default();
         let known = self.known_targets.get(area).map(Vec::as_slice).unwrap_or_default();
-        for label in self.completed.get(area).into_iter().flatten().filter(|l| !was.contains(l)) {
+        let by_log = |l: &String| self.log_completed.contains(&(area.to_string(), l.clone()));
+        for label in self.completed.get(area).into_iter().flatten().filter(|l| !was.contains(l) && by_log(l)) {
             let Some(target) = known.iter().find(|t| &t.label == label) else { continue };
             if let Some(exit) = &target.exit {
                 nav.seen(nav::Seen::Exit(exit));
@@ -1086,13 +1074,15 @@ mod tests {
         let beira = guide::NavTarget { label: "Beira".into(), tag: Some("boss".into()), ..Default::default() };
         recorder.set_targets(vec![("G1_2".into(), beira.clone())]);
         let anchored = |r: &Recorder| r.0.lock().unwrap().session.as_ref().unwrap().navigator.as_ref().unwrap().progress().1;
-        // Ticked by hand (no NPC line just before): not an anchor.
+        // Ticked by hand half a second after an NPC line: not an anchor.
+        recorder.on_log(&LogEvent::Dialogue { speaker: "Beira".into(), text: "…".into() }, true);
+        recorder.set_log_completed(vec![]);
         recorder.set_completed(vec![("G1_2".into(), "Beira".into())]);
         assert!(!anchored(&recorder));
         recorder.set_completed(vec![]);
-        // Completed from the log: the player stands at a boss node.
-        recorder.on_log(&LogEvent::Dialogue { speaker: "Beira".into(), text: "…".into() }, true);
+        // Completed by the log (the tracker says so): the player stands at a boss node.
         recorder.set_targets(vec![]);
+        recorder.set_log_completed(vec![("G1_2".into(), "Beira".into())]);
         recorder.set_completed(vec![("G1_2".into(), "Beira".into())]);
         assert!(anchored(&recorder));
     }
@@ -1146,7 +1136,7 @@ fn join_real_recording() {
     let parts = recording.parts.len();
     let mut session = Session {
         recording, live, arrived_from: None, came_from: String::new(), started: true, file: None, navigator: None,
-        fed: None, fed_at: None, last_dialogue: None, last_guide: Default::default(),
+        fed: None, fed_at: None, last_guide: Default::default(),
     };
     let started = Instant::now();
     while merge_pieces(&mut session) {}
