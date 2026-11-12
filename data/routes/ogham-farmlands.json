@@ -1,0 +1,32 @@
+{
+  "formatVersion": 1,
+  "order": 130,
+  "zone": { "id": "G1_13_1", "name": "Ogham Farmlands", "level": 12 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "unas-lute",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_13_1", "label": "Una's Lute", "tag": "quest" },
+      "parts": [{ "text": "Una's Lute Box (house)" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand. Target: the one 'quest' node in all 32 layouts; the lute is this zone's only quest object."
+    },
+    {
+      "id": "crop-circle",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Rare dogs in crop circle" }, { "text": "Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-ogham-village",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_13_1", "label": "Ogham Village", "exit": "G1_13_2" },
+      "parts": [{ "text": "Enter Ogham Village" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_13_2" },
+      "evidence": "Zone-generation line for G1_13_2."
+    }
+  ]
+}

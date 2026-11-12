@@ -1,0 +1,16 @@
+{
+  "formatVersion": 1,
+  "order": 170,
+  "zone": { "id": "G1_10", "name": "Root Hollow", "level": 15 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-root-hollow-druid",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "The Rotten Druid", "style": "boss" }],
+      "trigger": null,
+      "evidence": "Not in the guide. WorldAreas: boss The Rotten Druid; opens after Count Geonor (RequiredFlags IronCountKilled). Tick by hand."
+    }
+  ]
+}

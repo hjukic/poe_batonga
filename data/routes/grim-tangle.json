@@ -1,0 +1,30 @@
+{
+  "formatVersion": 1,
+  "order": 70,
+  "zone": { "id": "G1_6", "name": "The Grim Tangle", "level": 6 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-grim-tangle",
+      "kind": "note",
+      "parts": [{ "text": "Caskets lead to the Cemetery", "style": "direction" }]
+    },
+    {
+      "id": "kill-ervig",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_6", "label": "Ervig", "tag": "boss" },
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Ervig", "style": "boss" }, { "text": "Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 8 layouts."
+    },
+    {
+      "id": "enter-cemetery",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_6", "label": "Cemetery of the Eternals", "exit": "G1_7" },
+      "parts": [{ "text": "Enter the Cemetery" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_7" },
+      "evidence": "Zone-generation line for G1_7."
+    }
+  ]
+}

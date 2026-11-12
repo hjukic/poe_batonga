@@ -1,0 +1,42 @@
+{
+  "formatVersion": 1,
+  "order": 120,
+  "zone": { "id": "G1_12", "name": "Freythorn", "level": 11 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-freythorn",
+      "kind": "note",
+      "parts": [{ "text": "Altar smoke leads to the small altars", "style": "direction" }]
+    },
+    {
+      "id": "ritual-altars",
+      "kind": "objective",
+      "parts": [{ "text": "Activate 3 Ritual Altars" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-king-in-the-mists",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "King in the Mists", "style": "boss" }, { "text": "+30 Spirit", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "ominous-altars",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Cleanse the Ominous Altars" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "freythorn-to-farmlands",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to Farmlands" }],
+      "trigger": null,
+      "evidence": "Ogham Farmlands was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

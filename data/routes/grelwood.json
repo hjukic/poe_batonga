@@ -1,0 +1,90 @@
+{
+  "formatVersion": 1,
+  "order": 50,
+  "zone": { "id": "G1_4", "name": "The Grelwood", "level": 4 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "grelwood-talk-una",
+      "kind": "objective",
+      "parts": [{ "text": "Find and talk to " }, { "text": "Una", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "grelwood-waypoint",
+      "kind": "objective",
+      "parts": [{ "text": "Take the waypoint" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "grelwood-grim-tangle-wp",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_4", "label": "The Grim Tangle", "exit": "G1_6" },
+      "parts": [{ "text": "Grim Tangle WP, return" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_6" },
+      "evidence": "Zone-generation line for G1_6."
+    },
+    {
+      "id": "grelwood-red-vale-wp",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_4", "label": "The Red Vale", "exit": "G1_5" },
+      "parts": [{ "text": "Red Vale WP, return" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_5" },
+      "evidence": "Zone-generation line for G1_5."
+    },
+    {
+      "id": "kill-gerung",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_4", "label": "Gerung", "tag": "bossman" },
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Gerung", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'bossman' node (arena teleports) in all 12 layouts."
+    },
+    {
+      "id": "kill-areagne",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_4", "label": "Areagne's hut", "tag": "witch_hut" },
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Areagne", "style": "boss" }, { "text": " at the hut" }, { "text": "Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'witch_hut' node in all 12 layouts."
+    },
+    {
+      "id": "directions-grelwood",
+      "kind": "note",
+      "parts": [{ "text": "Go upstream along the river to The Red Vale", "style": "direction" }]
+    },
+    {
+      "id": "enter-red-vale",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_4", "label": "The Red Vale", "exit": "G1_5" },
+      "parts": [{ "text": "Enter The Red Vale" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_5" },
+      "evidence": "Zone-generation line for G1_5. The waypoint detour above enters it first, so both tick then."
+    },
+    {
+      "id": "runic-seals",
+      "kind": "objective",
+      "parts": [{ "text": "Activate 3 Runic Seals" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "grelwood-una-seals",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Una", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "grelwood-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Clearfell Encampment was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

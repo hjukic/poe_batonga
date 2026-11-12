@@ -1,0 +1,52 @@
+{
+  "formatVersion": 1,
+  "order": 140,
+  "zone": { "id": "G1_13_2", "name": "Ogham Village", "level": 13 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-ogham-village",
+      "kind": "note",
+      "parts": [{ "text": "Cobble road leads to the smithing house", "style": "direction" }]
+    },
+    {
+      "id": "smithing-tools",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_13_2", "label": "Smithing house", "tag": "blacksmith" },
+      "parts": [{ "text": "Smithing Tools (house)" }, { "text": "Salvage Bench", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand. Target: the one 'blacksmith' node in all 12 layouts."
+    },
+    {
+      "id": "blacksmiths-chest",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_13_2", "label": "Smithing house", "tag": "blacksmith" },
+      "optional": true,
+      "parts": [{ "text": "Blacksmith's Chest" }, { "text": "Rune + Orb", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand. Target: the one 'blacksmith' node in all 12 layouts."
+    },
+    {
+      "id": "kill-executioner",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "The Executioner", "style": "boss" }, { "text": "Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "lever-leitis",
+      "kind": "objective",
+      "parts": [{ "text": "Pull lever, talk to " }, { "text": "Leitis", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-manor-ramparts",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_13_2", "label": "The Manor Ramparts", "exit": "G1_14" },
+      "parts": [{ "text": "Enter The Manor Ramparts" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_14" },
+      "evidence": "Zone-generation line for G1_14."
+    }
+  ]
+}

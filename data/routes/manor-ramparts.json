@@ -1,0 +1,25 @@
+{
+  "formatVersion": 1,
+  "order": 150,
+  "zone": { "id": "G1_14", "name": "The Manor Ramparts", "level": 14 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "gallows-secret",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_14", "label": "Gallows", "tag": "gallows" },
+      "optional": true,
+      "parts": [{ "text": "Rope on the hanging man" }, { "text": "Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand. Target: the one 'gallows' node in all 6 layouts."
+    },
+    {
+      "id": "enter-ogham-manor",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_14", "label": "Ogham Manor", "exit": "G1_15" },
+      "parts": [{ "text": "Enter Ogham Manor" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_15" },
+      "evidence": "Zone-generation line for G1_15."
+    }
+  ]
+}

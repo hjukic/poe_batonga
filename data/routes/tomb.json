@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "order": 100,
+  "zone": { "id": "G1_9", "name": "Tomb of the Consort", "level": 8 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-asinia",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Asinia", "style": "boss" }, { "text": "Key Piece", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "haunted-treasure",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Haunted Treasure secret" }, { "text": "Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "tomb-back",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_9", "label": "Cemetery", "exit": "G1_7" },
+      "parts": [{ "text": "Back to the Cemetery" }],
+      "trigger": null,
+      "evidence": "Cemetery of the Eternals was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

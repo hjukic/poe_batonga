@@ -1,0 +1,29 @@
+{
+  "formatVersion": 1,
+  "order": 60,
+  "zone": { "id": "G1_5", "name": "The Red Vale", "level": 5 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "obelisks-of-rust",
+      "kind": "objective",
+      "parts": [{ "text": "Find 3 Obelisks of Rust" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-rust-king",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "The Rust King", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "red-vale-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Clearfell Encampment was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

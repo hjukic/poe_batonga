@@ -1,0 +1,63 @@
+{
+  "formatVersion": 1,
+  "order": 80,
+  "zone": { "id": "G1_7", "name": "Cemetery of the Eternals", "level": 7 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "talk-lachlann",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Lachlann", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "ancient-ruins",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Sarcophagus by checkpoint" }, { "text": "Ring", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-mausoleum",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_7", "label": "Mausoleum of the Praetor", "exit": "G1_8" },
+      "parts": [{ "text": "Enter the Mausoleum" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_8" },
+      "evidence": "Zone-generation line for G1_8."
+    },
+    {
+      "id": "enter-tomb",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_7", "label": "Tomb of the Consort", "exit": "G1_9" },
+      "parts": [{ "text": "Enter the Tomb" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_9" },
+      "evidence": "Zone-generation line for G1_9."
+    },
+    {
+      "id": "memorial-gate",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_7", "label": "Memorial Gate", "tag": "arena_gate" },
+      "parts": [{ "text": "Open the Memorial Gate" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand. Target: the one 'arena_gate' node in all 12 layouts."
+    },
+    {
+      "id": "kill-lachlann",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_7", "label": "Lachlann", "tag": "arena" },
+      "parts": [{ "text": "Kill " }, { "text": "Lachlann", "style": "boss" }, { "text": ", loot Ring" }, { "text": "Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'arena' node in all 12 layouts."
+    },
+    {
+      "id": "enter-hunting-grounds",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_7", "label": "Hunting Grounds", "exit": "G1_11" },
+      "parts": [{ "text": "Enter Hunting Grounds" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_11" },
+      "evidence": "Zone-generation line for G1_11."
+    }
+  ]
+}

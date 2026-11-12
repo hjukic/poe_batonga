@@ -1,0 +1,72 @@
+{
+  "formatVersion": 1,
+  "order": 110,
+  "zone": { "id": "G1_11", "name": "Hunting Grounds", "level": 10 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "hunting-grounds-waypoint",
+      "kind": "objective",
+      "parts": [{ "text": "Take the waypoint" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "hunting-grounds-town",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to town" }],
+      "trigger": null,
+      "evidence": "Clearfell Encampment was entered before, so its zone line would tick this early. Tick by hand."
+    },
+    {
+      "id": "talk-delwyn",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Talk to " }, { "text": "Delwyn", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "directions-hunting-grounds",
+      "kind": "note",
+      "parts": [{ "text": "Blood trails lead to The Crowbell", "style": "direction" }]
+    },
+    {
+      "id": "kill-crowbell",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "The Crowbell", "style": "boss" }, { "text": "2 Skill Points", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "freythorn-wp",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_11", "label": "Freythorn", "exit": "G1_12" },
+      "parts": [{ "text": "Freythorn WP, return" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_12" },
+      "evidence": "Zone-generation line for G1_12."
+    },
+    {
+      "id": "farmlands-wp",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_11", "label": "Ogham Farmlands", "exit": "G1_13_1" },
+      "parts": [{ "text": "Farmlands WP, return" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_13_1" },
+      "evidence": "Zone-generation line for G1_13_1."
+    },
+    {
+      "id": "small-ritual",
+      "kind": "objective",
+      "parts": [{ "text": "Do the small ritual" }, { "text": "Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "hunting-grounds-to-freythorn",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to Freythorn" }],
+      "trigger": null,
+      "evidence": "Freythorn was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "formatVersion": 1,
+  "order": 160,
+  "zone": { "id": "G1_15", "name": "Ogham Manor", "level": 15 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-candlemass",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Candlemass", "style": "boss" }, { "text": "+20 Max Life", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "directions-ogham-manor",
+      "kind": "note",
+      "parts": [{ "text": "Each floor down: go the opposite way", "style": "direction" }]
+    },
+    {
+      "id": "kill-geonor",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Count Geonor", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "manor-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Clearfell Encampment was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

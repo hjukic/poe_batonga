@@ -14,7 +14,7 @@
     {
       "id": "directions-mud-burrow",
       "kind": "note",
-      "parts": [{ "text": "Burrow by the waypoint, Grelwood past the bridge", "style": "direction" }]
+      "parts": [{ "text": "Burrow by waypoint, Grelwood past the bridge", "style": "direction" }]
     },
     {
       "id": "enter-mud-burrow",
@@ -24,14 +24,6 @@
       "parts": [{ "text": "Enter Mud Burrow" }],
       "trigger": { "type": "zoneEntered", "area": "G1_3" },
       "evidence": "Zone-generation line for G1_3 (data/observations/campaign-zones.json)."
-    },
-    {
-      "id": "kill-devourer",
-      "kind": "objective",
-      "optional": true,
-      "parts": [{ "text": "Kill " }, { "text": "The Devourer", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
-      "trigger": null,
-      "evidence": "No kill line captured yet. Tick by hand."
     },
     {
       "id": "abandoned-stash",

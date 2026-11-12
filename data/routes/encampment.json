@@ -26,6 +26,98 @@
       "parts": [{ "text": "After The Devourer: " }, { "text": "Renly", "style": "npc" }, { "text": "Support Gem", "style": "reward" }],
       "trigger": null,
       "evidence": "No log line known yet. Tick by hand."
+    },
+    {
+      "id": "renly-runed-spikes",
+      "kind": "objective",
+      "parts": [{ "text": "Runed Spikes from " }, { "text": "Renly", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After The Red Vale. No log line known. Tick by hand."
+    },
+    {
+      "id": "town-to-grelwood",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to The Grelwood" }],
+      "trigger": null,
+      "evidence": "The Grelwood was entered before, so its zone line would tick this early. Tick by hand."
+    },
+    {
+      "id": "town-una-roots",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Una", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After the Runic Seals. No log line known. Tick by hand."
+    },
+    {
+      "id": "town-to-grim-tangle",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to Grim Tangle" }],
+      "trigger": null,
+      "evidence": "The Grim Tangle was entered before (waypoint detour), so its zone line would tick this early. Tick by hand."
+    },
+    {
+      "id": "town-talk-finn",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Finn", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After the Cemetery. No log line known. Tick by hand."
+    },
+    {
+      "id": "town-una-cemetery",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Una", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After the Cemetery. No log line known. Tick by hand."
+    },
+    {
+      "id": "town-hooded-one",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
+      "trigger": null,
+      "evidence": "He revives on this return; Identify opens. No log line known. Tick by hand."
+    },
+    {
+      "id": "town-to-hunting-grounds",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to Hunting Grounds" }],
+      "trigger": null,
+      "evidence": "Hunting Grounds was entered before, so its zone line would tick this early. Tick by hand."
+    },
+    {
+      "id": "finn-charm",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "After Ominous Altars: " }, { "text": "Finn", "style": "npc" }, { "text": "Charm", "style": "reward" }],
+      "trigger": null,
+      "evidence": "After Freythorn. No log line known. Tick by hand."
+    },
+    {
+      "id": "deliver-unas-lute",
+      "kind": "objective",
+      "parts": [{ "text": "Give the Lute to " }, { "text": "Una", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }],
+      "trigger": null,
+      "evidence": "After Ogham Farmlands. No log line known. Tick by hand."
+    },
+    {
+      "id": "town-talk-all",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to all NPCs" }],
+      "trigger": null,
+      "evidence": "After Count Geonor. No log line known. Tick by hand."
+    },
+    {
+      "id": "town-beasts-trail",
+      "kind": "objective",
+      "parts": [{ "text": "Hooded One", "style": "npc" }, { "text": ": Beast's Trail" }],
+      "trigger": null,
+      "evidence": "\"Follow the Beast's Trail\" ends Act 1. No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-vastiri-outskirts",
+      "kind": "objective",
+      "parts": [{ "text": "Enter Vastiri Outskirts" }],
+      "trigger": { "type": "zoneEntered", "area": "G2_1" },
+      "evidence": "Zone-generation line for G2_1 (Act 2, in the town's Connections). No compass target: it would point at Act 2 on every earlier town visit."
     }
   ]
 }

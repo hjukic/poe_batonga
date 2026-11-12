@@ -1,0 +1,32 @@
+{
+  "formatVersion": 1,
+  "order": 90,
+  "zone": { "id": "G1_8", "name": "Mausoleum of the Praetor", "level": 8 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-draven",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_8", "label": "Draven", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Draven", "style": "boss" }, { "text": "Key Piece", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 12 layouts."
+    },
+    {
+      "id": "forgotten-riches",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Forgotten Riches cache" }, { "text": "Gold + loot", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "mausoleum-back",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_8", "label": "Cemetery", "exit": "G1_7" },
+      "parts": [{ "text": "Back to the Cemetery" }],
+      "trigger": null,
+      "evidence": "Cemetery of the Eternals was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

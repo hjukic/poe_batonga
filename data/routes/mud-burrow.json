@@ -1,0 +1,25 @@
+{
+  "formatVersion": 1,
+  "order": 40,
+  "zone": { "id": "G1_3", "name": "Mud Burrow", "level": 3 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-devourer",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_3", "label": "The Devourer", "tag": "boss" },
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "The Devourer", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 4 layouts."
+    },
+    {
+      "id": "mud-burrow-back",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_3", "label": "Clearfell", "exit": "G1_2" },
+      "parts": [{ "text": "Back to Clearfell" }],
+      "trigger": null,
+      "evidence": "Clearfell was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}
