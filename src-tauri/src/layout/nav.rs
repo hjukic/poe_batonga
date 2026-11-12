@@ -183,6 +183,12 @@ const ABSURD_SLACK: f64 = 150.0;
 /// is also about the straight line it says nothing the map knows, so the needle is
 /// as without the map (the layouts' route then still counts).
 const RECORDED: f64 = 0.5;
+/// Gold only for a way at most this many times the straight line: a longer one
+/// leans on a door the recorder may have made (a gap, a grazed line) or on fog.
+/// The way back is exempt where it keeps to the walk (`WALKED_GOLD` of it within
+/// 15 cells of the trail): every door on it was walked through.
+const GOLD_RATIO: f64 = 1.5;
+const WALKED_GOLD: f64 = 0.8;
 
 /// What the last `guide_on` needle took from the recorded map (for the flight
 /// recorder): where it looked, in minimap cells from the player, and the share of
@@ -1210,8 +1216,9 @@ impl Navigator {
             let sure = if near && !against && (named || p_top >= GOLD_LAYOUT) { "estimated" } else { "rough" };
             if named && near { "estimated" } else { self.cap_source(sure, posterior) }
         };
-        // Mostly across fog: a guess, however the target is known.
-        let source = if source == "estimated" && way.recorded < RECORDED { "rough" } else { source };
+        // Mostly across fog, or a long way round: a guess, however the target is known.
+        let long = way.length > GOLD_RATIO * straight && !(arrival && way.walked >= WALKED_GOLD);
+        let source = if source == "estimated" && (way.recorded < RECORDED || long) { "rough" } else { source };
         let note = WayNote { ahead: (way.ahead.0 - from.0, way.ahead.1 - from.1), unrecorded: 1.0 - way.recorded };
         let view = GuideView {
             variant: if p_top >= SURE { self.area.layouts[top].id.clone() } else { String::new() },
@@ -2083,21 +2090,49 @@ mod tests {
         // Mud Burrow (a dungeon: inferred needles are never gold there).
         let area = graph::load("G1_3");
         let nav = Navigator::new(&area, Arrival::From("G1_2"), None, SCALE, 5);
-        // In at (0, 0), down 100, right 60, up 100 round a wall between; now 60
+        // In at (0, 0), down 100, right 30, up 100 round a wall between; now 30
         // cells from the arrival, the wall between.
-        let map = walls(line((30, -200), (30, 80)));
+        let map = walls(line((15, -200), (15, 70)));
         let mut trail: Vec<[i32; 2]> = (0..=10).map(|k| [0, 10 * k]).collect();
-        trail.extend((1..=6).map(|k| [10 * k, 100]));
-        trail.extend((1..=10).map(|k| [60, 100 - 10 * k]));
+        trail.extend((1..=3).map(|k| [10 * k, 100]));
+        trail.extend((1..=10).map(|k| [30, 100 - 10 * k]));
         let target = [exit("G1_2", "Clearfell")];
-        let view = nav.guide_on(&target, Some(&lent(&map, &trail, (60, 0), vec![("G1_2", (0, 0))]))).unwrap();
-        // Round the wall's end (35, 87), not across it: down and a little left.
-        assert!(angle_between(view.degrees.unwrap(), bearing(-25.0, 87.0)) < 10.0, "{view:?}");
-        assert!((175.0..200.0).contains(&view.distance), "{view:?}");
+        let view = nav.guide_on(&target, Some(&lent(&map, &trail, (30, 0), vec![("G1_2", (0, 0))]))).unwrap();
+        // Round the wall's end, not across it: down, along the walk. Five times the
+        // straight line, but every step of it by the walk: gold.
+        assert!(angle_between(view.degrees.unwrap(), bearing(-15.0, 78.0)) < 10.0, "{view:?}");
+        assert!((150.0..175.0).contains(&view.distance), "{view:?}");
         assert_eq!(view.source, "estimated");
         assert_eq!(view.target, "Clearfell");
         let inferred = nav.guide(&target).unwrap();
         assert_ne!(inferred.source, "estimated");
+        // A wider U (100 cells): the way cuts across ground the walk did not cover,
+        // twice the straight line: rough.
+        let map = walls(line((50, -200), (50, 80)));
+        let mut trail: Vec<[i32; 2]> = (0..=10).map(|k| [0, 10 * k]).collect();
+        trail.extend((1..=10).map(|k| [10 * k, 100]));
+        trail.extend((1..=10).map(|k| [100, 100 - 10 * k]));
+        let view = nav.guide_on(&target, Some(&lent(&map, &trail, (100, 0), vec![("G1_2", (0, 0))]))).unwrap();
+        println!("{view:?}");
+        assert!(angle_between(view.degrees.unwrap(), bearing(-45.0, 87.0)) < 10.0, "{view:?}");
+        assert_eq!(view.source, "rough");
+    }
+
+    #[test]
+    fn a_long_way_round_is_rough() {
+        // A recorded U-corridor: the named exit 64 cells across the block, the way
+        // round it more than twice that, every cell of it by a recorded wall.
+        let area = graph::load("G1_2");
+        let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 3);
+        named_icon(&mut nav, 64.0, 0.0, "The Grelwood");
+        let target = [exit("G1_4", "The Grelwood")];
+        let map = walls([outline(0, 0, 88, 74), outline(24, 0, 64, 50)].concat());
+        let view = nav.guide_on(&target, Some(&lent(&map, &[], (12, 10), vec![]))).unwrap();
+        let note = nav.last_way().unwrap();
+        println!("{view:?} {note:?}");
+        assert!(view.distance > 2.0 * 64.0 && note.unrecorded < 0.1, "{view:?} {note:?}");
+        assert!(angle_between(view.degrees.unwrap(), 90.0) < 15.0, "down the arm: {view:?}");
+        assert_eq!(view.source, "rough");
     }
 
     #[test]

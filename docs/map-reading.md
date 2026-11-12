@@ -818,6 +818,16 @@ an empty map). A way less than half over recorded ground is never gold. The navi
 reports what the last needle took from the map (`Navigator::last_way`: the look-ahead
 offset from the player and the share over unrecorded ground) for the flight recorder.
 
+**Long ways** (review B-5): gold only for a way at most 1.5 times the straight line; a
+longer one (up to the limit of 4) is rough. A long way leans on a door the recorder may
+have made (a gap, a line the walk grazed) or on fog. The way back is exempt where 80% of
+it lies within 15 cells of the walk: every door on it was walked through. The doorway
+case (1.96 times) is rough on purpose: its door is known only as a gap in one recorded
+line, the inference most likely to be wrong, and gold must stay rarely wrong; the needle
+still points at the door. Tests: `a_long_way_round_is_rough` (a recorded U-corridor,
+2.2 times), the way back round a wall (gold along a 30-cell U-walk, 5 times; rough
+across a 100-cell U where the way leaves the walk).
+
 Gold keeps the icon's conditions (named and read the same twice, not against a sure
 belief, within 200 cells; or unlabelled with one layout at 90%, measured areas only)
 but no longer needs the graph route to be about straight: the way is the route. The

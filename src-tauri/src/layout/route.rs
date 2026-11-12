@@ -100,7 +100,6 @@ pub struct Way {
     /// Share of its search cells within 15 minimap cells of recorded ground (a
     /// wall cell seen twice, or the walked trail), and of the walked trail alone.
     pub recorded: f64,
-    #[allow(dead_code)] // used by the way back's gold rule
     pub walked: f64,
 }
 
