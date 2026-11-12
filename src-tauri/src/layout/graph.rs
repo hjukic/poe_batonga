@@ -292,7 +292,14 @@ fn target(area: &Area, ev: &Evidence) -> Option<(String, String, String)> {
         let name = area.names.get(id).map(String::as_str).unwrap_or(id);
         ev.completed.iter().any(|c| c.eq_ignore_ascii_case(name))
     };
+    // Onward first; else the zone just left (e.g. back from town), else any exit.
     let mut exits: Vec<&String> = area.names.keys().filter(|id| *id != ev.arrived_from && !done(id)).collect();
+    if exits.is_empty() {
+        exits = area.names.keys().filter(|id| !done(id)).collect();
+    }
+    if exits.is_empty() {
+        exits = area.names.keys().collect();
+    }
     exits.sort_by_key(|id| (id.ends_with("_town"), area_order(id)));
     let exit = (*exits.first()?).clone();
     let boss = BOSS_AT_EXIT.iter().find(|(a, e, b)| *a == area.id && *e == exit && !ev.completed.iter().any(|c| c == b));
@@ -519,6 +526,8 @@ mod tests {
         assert_eq!(target(&areas["G1_1"], &e).unwrap().1, "Clearfell Encampment");
         assert_eq!(target(&areas["G1_2"], &ev("G1_2", "G1_town", &[], (0, 0))).unwrap().1, "Mud Burrow");
         assert_eq!(target(&areas["G1_2"], &ev("G1_2", "G1_3", &[], (0, 0))).unwrap().1, "The Grelwood");
+        // Back in The Riverbank from the encampment: still a target.
+        assert!(target(&areas["G1_1"], &ev("G1_1", "G1_town", &[], (0, 0))).is_some());
     }
 
     #[test]

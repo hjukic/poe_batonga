@@ -503,13 +503,18 @@ fn anchors(zone: &Zone, arrived_from: &str) -> Vec<(f64, f64)> {
 /// The next exit: onward to the lowest-numbered zone not just come from or done.
 fn next_exit<'z>(zone: &'z Zone, arrived_from: &str, completed: &[String]) -> Option<(String, Vec<&'z Object>)> {
     let done = |o: &Object| completed.iter().any(|c| c.eq_ignore_ascii_case(&o.label));
-    let next = zone
-        .objects
-        .iter()
-        .filter(|o| o.kind == "transition" && !done(o))
-        .filter_map(|o| o.destination.clone())
+    let destinations = |skip_done: bool| {
+        zone.objects
+            .iter()
+            .filter(move |o| o.kind == "transition" && !(skip_done && done(o)))
+            .filter_map(|o| o.destination.clone())
+    };
+    // Onward first; with nothing onward (e.g. back in town), the zone just left, then any exit.
+    let next = destinations(true)
         .filter(|d| d != arrived_from && !d.ends_with("_town"))
-        .min_by_key(|d| area_order(d))?;
+        .min_by_key(|d| area_order(d))
+        .or_else(|| destinations(true).filter(|d| !d.ends_with("_town")).min_by_key(|d| area_order(d)))
+        .or_else(|| destinations(false).min_by_key(|d| area_order(d)))?;
     let exits = zone.objects.iter().filter(|o| o.destination.as_deref() == Some(&next)).collect();
     Some((next, exits))
 }
@@ -720,7 +725,8 @@ mod tests {
         let (next, exits) = next_exit(town, "G1_1", &[]).unwrap();
         assert_eq!(next, "G1_2");
         assert!(exits.len() >= 2, "every Clearfell exit is a goal");
-        assert!(next_exit(town, "G1_2", &[]).is_none());
+        // Back from Clearfell there is nothing onward: Clearfell again.
+        assert_eq!(next_exit(town, "G1_2", &[]).unwrap().0, "G1_2");
     }
 
     #[test]

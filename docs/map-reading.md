@@ -275,4 +275,9 @@ is confirmed ("estimated"), fainter gold when it is likely ("rough") and gray wh
 it is not recognised ("unconfirmed": the best guess, before a walk the direction
 most layouts agree on), when there is no direction at all (the needle keeps its last
 direction) or when the minimap is not tracking the player.
+The needle no longer disappears within a guided zone: when no arrow can be worked out
+for a moment (minimap tracking lost, a recorded piece with too little to go on) the
+last one of the visit stays, gray. With nothing onward (back in the encampment from
+Clearfell, back in The Riverbank from the encampment) the target is the zone just
+left. It is hidden only in zones without route data and while the overlay is hidden.
 

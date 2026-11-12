@@ -132,6 +132,8 @@ struct Session {
     file: Option<PathBuf>,
     /// Layout recognised on an earlier piece of this instance (worked out once).
     layout_hint: std::cell::OnceCell<Option<String>>,
+    /// The last arrow of this visit, kept while a new one cannot be worked out.
+    last_guide: std::cell::RefCell<Option<guide::GuideView>>,
 }
 
 struct State {
@@ -379,7 +381,7 @@ impl Recorder {
                     });
                 let arrived_from = state.previous_area.clone();
                 let file = state.path(area, *seed);
-                state.session = Some(Session { recording, live: Live::new(), arrived_from, started: false, file, layout_hint: Default::default() });
+                state.session = Some(Session { recording, live: Live::new(), arrived_from, started: false, file, layout_hint: Default::default(), last_guide: Default::default() });
             }
             LogEvent::Dialogue { speaker, .. } if live => {
                 if let Some(session) = state.session.as_mut().filter(|s| s.started) {
@@ -577,11 +579,23 @@ impl State {
         }
     }
 
+    /// The arrow, kept on screen: when it cannot be worked out for a moment (tracking
+    /// lost, a piece without enough to go on), the last one stays, marked unconfirmed.
     fn guide(&self, session: &Session) -> Option<guide::GuideView> {
-        let area = session.recording.area.as_str();
-        if !GUIDED.contains(&area) {
+        if !GUIDED.contains(&session.recording.area.as_str()) {
             return None;
         }
+        match self.fresh_guide(session) {
+            Some(view) => {
+                *session.last_guide.borrow_mut() = Some(view.clone());
+                Some(view)
+            }
+            None => session.last_guide.borrow().clone().map(|view| guide::GuideView { source: "unconfirmed".into(), ..view }),
+        }
+    }
+
+    fn fresh_guide(&self, session: &Session) -> Option<guide::GuideView> {
+        let area = session.recording.area.as_str();
         let live = &session.live;
         if live.lost_streak > 0 {
             return None;
@@ -805,8 +819,11 @@ mod tests {
         let guide = recorder.set_completed(vec![]).unwrap().guide.unwrap();
         assert_eq!(guide.target, "Mud Burrow");
 
+        // Tracking lost: the last arrow stays, unconfirmed.
         recorder.0.lock().unwrap().session.as_mut().unwrap().live.lost_streak = 1;
-        assert!(recorder.view().unwrap().guide.is_none());
+        let guide = recorder.view().unwrap().guide.unwrap();
+        assert_eq!(guide.target, "Mud Burrow");
+        assert_eq!(guide.source, "unconfirmed");
     }
 }
 
@@ -823,7 +840,7 @@ fn join_real_recording() {
     live.walls = first.walls.iter().map(|&[x, y, n]| ((x, y), n as u32)).collect();
     live.part = Part { walls: vec![], ..first };
     let parts = recording.parts.len();
-    let mut session = Session { recording, live, arrived_from: None, started: true, file: None, layout_hint: Default::default() };
+    let mut session = Session { recording, live, arrived_from: None, started: true, file: None, layout_hint: Default::default(), last_guide: Default::default() };
     let started = Instant::now();
     while merge_pieces(&mut session) {}
     let recorder = Recorder::new(None);
