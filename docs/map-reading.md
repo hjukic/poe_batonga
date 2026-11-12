@@ -798,12 +798,19 @@ when (in this order):
 
 1. its exit icon is in view and the label (or 95% of the belief) says it is the
    target's, as for the needle at the icon;
-2. it was seen earlier in this part: a sighting's place on the dead-reckoned track is
+2. it is the exit the player came in by (the target's `exit` is the area the live
+   part's arrival came from): where the player appeared, when that was by the exit
+   (fix pass 1, review B-2). The recorder notes at the first placed frame how long
+   after the zone entry it came and which icons were by it. Not trusted: from a town,
+   more than 5 s after the entry (the player may have walked on), or a waypoint icon
+   within 15 cells (a waypoint journey). Sure (gold allowed) only with an exit icon
+   within 40 cells, unread or read as that zone; else rough. The point is gone with
+   the part (a new part has new coordinates). Tests:
+   `an_arrival_counts_as_the_exit_only_soon_and_without_a_waypoint`,
+   `an_arrival_is_the_exits_place_only_by_its_exit_and_soon_after_the_entry`;
+3. it was seen earlier in this part: a sighting's place on the dead-reckoned track is
    turned back into cells from the player (sightings end at every loss, and a new part
-   starts with one);
-3. it is the exit the player arrived through (the target's `exit` is the area of one
-   of the part's "arrived" points, earliest first): that point. Not from a town:
-   waypoints and portals put the player anywhere.
+   starts with one).
 
 Then the way there. If one is found and is at most 4 times the straight line (or 150
 cells more), the needle looks 40 cells along it and the distance shown is its length.
@@ -831,7 +838,7 @@ across a 100-cell U where the way leaves the walk).
 Gold keeps the icon's conditions (named and read the same twice, not against a sure
 belief, within 200 cells; or unlabelled with one layout at 90%, measured areas only)
 but no longer needs the graph route to be about straight: the way is the route. The
-way back to the arrival point is gold in every area, dungeons too: walked and recorded.
+way back to a sure arrival point is gold in every area, dungeons too: walked and recorded.
 Otherwise the needle is as before. The flight recorder marks such needles `way`; its
 replay has no walls and does not compare them (it counts them apart).
 

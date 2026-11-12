@@ -176,7 +176,28 @@ struct Session {
     last_guide: std::cell::RefCell<Option<guide::GuideView>>,
     /// The flight recorder: what the navigator is fed (with a folder only).
     obs: std::cell::RefCell<Option<obs::Log>>,
+    /// When the zone was entered, and what the first placed frame showed at the
+    /// arrival point (in the live part's coordinates; gone with the part).
+    entered: Instant,
+    came_in: Option<CameIn>,
 }
+
+/// The arrival point and what tells whether the player came in by the exit there.
+struct CameIn {
+    from: String,
+    at: (i32, i32),
+    /// Seconds from the zone entry to the first placed frame.
+    delay: f64,
+    /// A waypoint icon within `ARRIVAL_WAYPOINT` cells.
+    waypoint: bool,
+    /// Exit icons within `ARRIVAL_EXIT` cells: their labels (None = unread).
+    exits: Vec<Option<String>>,
+}
+
+/// Around the arrival point: a waypoint this close (cells) means the player may have
+/// come by it; an exit this close is the one come through.
+const ARRIVAL_WAYPOINT: f32 = 15.0;
+const ARRIVAL_EXIT: f32 = 40.0;
 
 /// The zone an exit icon's label names (as in the area's connectionNames), when the
 /// reader could read it: a named anchor. None is "some exit".
@@ -591,6 +612,8 @@ impl Recorder {
                     far_age: FAR_FRAMES,
                     last_guide: Default::default(),
                     obs: Default::default(),
+                    entered: Instant::now(),
+                    came_in: None,
                 };
                 if let Some((navigator, start)) = state.navigator(&session) {
                     session.navigator = Some(navigator);
@@ -673,7 +696,17 @@ impl Recorder {
                     session.started = true;
                     // Without a live zone change (app started mid-zone) the origin is unknown.
                     match session.arrived_from.take() {
-                        Some(from) => session.live.add_poi("arrived", &from),
+                        Some(from) => {
+                            session.live.add_poi("arrived", &from);
+                            let near = |i: &&crate::minimap::bigmap::Icon, kind: &str, d: f32| i.kind == kind && i.x.hypot(i.y) <= d;
+                            session.came_in = Some(CameIn {
+                                at: pos,
+                                delay: session.entered.elapsed().as_secs_f64(),
+                                waypoint: icons.iter().any(|i| near(&i, "waypoint", ARRIVAL_WAYPOINT)),
+                                exits: icons.iter().filter(|i| near(i, "exit", ARRIVAL_EXIT)).map(icon_label).collect(),
+                                from,
+                            });
+                        }
                         None => session.live.add_poi("start", ""),
                     }
                 }
@@ -689,6 +722,7 @@ impl Recorder {
                     session.live.frame_size = finished.frame_size;
                     session.fed = None;
                     session.far_icons.clear();
+                    session.came_in = None;
                     if finished.part.matched > 0 {
                         session.recording.parts.push(finished.snapshot());
                     }
@@ -970,12 +1004,16 @@ impl State {
                 targets.extend(graph::target(&graph, &session.came_from, completed));
             }
             // The part's recorded map, lent: the way to a target whose place on it is known.
-            let mut arrivals: Vec<&Poi> = live.part.pois.iter().filter(|p| p.kind == "arrived" && !p.label.is_empty()).collect();
-            arrivals.sort_by_key(|p| p.at);
             let place = nav::Place {
                 map: route::Map { walls: &live.walls, trail: &live.part.trail },
                 player: live.pos,
-                arrivals: arrivals.iter().map(|p| (p.label.as_str(), (p.x, p.y))).collect(),
+                came_in: session.came_in.as_ref().filter(|c| !c.from.is_empty()).map(|c| nav::CameIn {
+                    from: &c.from,
+                    at: c.at,
+                    delay: c.delay,
+                    waypoint: c.waypoint,
+                    exits: &c.exits,
+                }),
             };
             return nav
                 .guide_on(&targets, Some(&place))
@@ -1435,6 +1473,44 @@ mod tests {
     }
 
     #[test]
+    fn an_arrival_is_the_exits_place_only_by_its_exit_and_soon_after_the_entry() {
+        use crate::minimap::bigmap::Icon;
+        let back = guide::NavTarget { label: "Clearfell".into(), exit: Some("G1_2".into()), ..Default::default() };
+        // Into Mud Burrow from Clearfell; the first frame's icons; then 19 frames east.
+        let visit = |icons: Vec<Icon>, late: bool| {
+            let recorder = Recorder::new(None);
+            enter(&recorder, "G1_2");
+            enter(&recorder, "G1_3");
+            recorder.set_targets(vec![("G1_3".into(), back.clone())]);
+            if late {
+                let mut state = recorder.0.lock().unwrap();
+                state.session.as_mut().unwrap().entered = Instant::now().checked_sub(Duration::from_secs(20)).unwrap();
+            }
+            recorder.on_icons(&icons, false);
+            for step in 0..20 {
+                recorder.on_frame(&frame((step * 4, 0)), [300, 260]);
+            }
+            let view = recorder.view().unwrap().guide.unwrap();
+            let state = recorder.0.lock().unwrap();
+            let on_map = state.session.as_ref().unwrap().navigator.as_ref().unwrap().on_map();
+            (on_map, view)
+        };
+        let exit = Icon { kind: "exit", x: -6.0, y: 2.0, label: None };
+        let waypoint = Icon { kind: "waypoint", x: 5.0, y: -4.0, label: None };
+        let (on_map, view) = visit(vec![exit], false);
+        assert!(on_map && view.source == "estimated", "{view:?}");
+        // Back west along the corridor.
+        assert!(guide::angle_between(view.degrees.unwrap(), 180.0) < 20.0, "{view:?}");
+        // (Without the exit's icon, which would be a sighting of its own.)
+        let (on_map, view) = visit(vec![waypoint], false);
+        assert!(!on_map, "by a waypoint: {view:?}");
+        let (on_map, view) = visit(vec![], true);
+        assert!(!on_map, "20 s after the entry: {view:?}");
+        let (on_map, view) = visit(vec![], false);
+        assert!(on_map && view.source == "rough", "no exit icon by it: {view:?}");
+    }
+
+    #[test]
     fn completion_untick_and_tracking_loss_update_guidance() {
         let recorder = Recorder::new(None);
         // The Riverbank's arrow heads for the Miller first (unconfirmed before a walk).
@@ -1484,7 +1560,7 @@ fn join_real_recording() {
     let mut session = Session {
         recording, live, arrived_from: None, came_from: String::new(), started: true, file: None, navigator: None,
         fed: None, fed_at: None, far_icons: Vec::new(), far_age: FAR_FRAMES, last_guide: Default::default(),
-        obs: Default::default(),
+        obs: Default::default(), entered: Instant::now(), came_in: None,
     };
     let started = Instant::now();
     while merge_pieces(&mut session) {}
