@@ -26,6 +26,10 @@ const NEEDLE_TURN: f64 = 15.0;
 const KEEP_DAYS: u64 = 30;
 /// More than this waiting (a file that cannot be written) is dropped.
 const MAX_BUFFER: usize = 512 * 1024;
+/// The layout history beside the area folders.
+pub const HISTORY_FILE: &str = "layout-history.jsonl";
+/// The history takes a layout that carries this share of the belief.
+const HISTORY_SHARE: f64 = 0.9;
 /// Checkpoints and waypoints don't move: one seen within this many cells of where
 /// one of its kind was seen in this part is the same, and not written again.
 const MARK_SAME: f64 = 4.0;
@@ -267,20 +271,25 @@ pub struct Log {
     framed: bool,
     /// The frame of the last line written.
     last_f: u64,
+    /// The layout history, and the layouts it took from this visit.
+    history: Option<PathBuf>,
+    recorded: Vec<String>,
+    area: String,
+    seed: Option<u64>,
 }
 
 impl Log {
-    /// The log of a visit beginning now.
-    pub fn new(path: PathBuf, start: &Start, t: u64) -> Self {
-        Self::with(Out::File(path), start, t)
+    /// The log of a visit beginning now; `history`: the layout history file.
+    pub fn new(path: PathBuf, history: Option<PathBuf>, start: &Start, t: u64) -> Self {
+        Self::with(Out::File(path), history, start, t)
     }
 
     #[cfg(test)]
     pub fn memory(start: &Start, t: u64) -> Self {
-        Self::with(Out::Memory(String::new()), start, t)
+        Self::with(Out::Memory(String::new()), None, start, t)
     }
 
-    fn with(out: Out, start: &Start, t: u64) -> Self {
+    fn with(out: Out, history: Option<PathBuf>, start: &Start, t: u64) -> Self {
         let mut log = Log {
             out,
             buf: String::new(),
@@ -296,6 +305,10 @@ impl Log {
             last_needle: None,
             framed: false,
             last_f: 0,
+            history,
+            recorded: Vec::new(),
+            area: start.area.clone(),
+            seed: start.seed,
         };
         log.write(
             t,
@@ -472,6 +485,17 @@ impl Log {
         }
     }
 
+    /// Adds the visit's layout to the layout history when the named exits fixed it:
+    /// the top layout at 0.9 or more, and the best of the named fit. Once per layout.
+    pub fn history(&mut self, t: u64, memory: &nav::Memory) {
+        let Some(path) = self.history.clone() else { return };
+        if let Some(line) = history_line(memory, &self.recorded) {
+            let line = HistoryLine { t, area: self.area.clone(), seed: self.seed, version: app_version().to_string(), ..line };
+            self.recorded.push(line.layout.clone());
+            append_line(&path, &line);
+        }
+    }
+
     #[cfg(test)]
     pub fn text(&mut self) -> String {
         self.flush(self.flushed_at);
@@ -497,6 +521,54 @@ fn changed(last: &Entry, now: &Entry) -> bool {
             t0 != t1 || s0 != s1 || v0 != v1 || k0 != k1 || turned
         }
         _ => true,
+    }
+}
+
+/// One line of `layout-history.jsonl`.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct HistoryLine {
+    pub t: u64,
+    pub area: String,
+    pub seed: Option<u64>,
+    pub layout: String,
+    /// The layout's share of the belief, and of the named fit alone.
+    pub share: f64,
+    pub named: f64,
+    /// "named": the named exits alone give it 0.9; "named+belief": they favour it
+    /// most, and with what else was seen it carries 0.9.
+    pub by: String,
+    pub version: String,
+}
+
+fn history_line(memory: &nav::Memory, recorded: &[String]) -> Option<HistoryLine> {
+    let (top, &share) = memory.layouts.iter().max_by(|a, b| a.1.total_cmp(b.1))?;
+    // No named fit yet: every layout's is 0 (log).
+    if share < HISTORY_SHARE || memory.named.values().all(|&v| v == 0.0) || recorded.contains(top) {
+        return None;
+    }
+    let best = memory.named.values().copied().fold(f64::MIN, f64::max);
+    let own = memory.named.get(top).copied().unwrap_or(f64::MIN);
+    if own < best - 1e-9 {
+        return None;
+    }
+    let sum: f64 = memory.named.values().map(|v| (v - best).exp()).sum();
+    let named = (own - best).exp() / sum;
+    let by = if named >= HISTORY_SHARE { "named" } else { "named+belief" };
+    Some(HistoryLine { layout: top.clone(), share, named, by: by.into(), ..Default::default() })
+}
+
+fn append_line(path: &Path, value: &impl Serialize) {
+    let result = (|| -> std::io::Result<()> {
+        use std::io::Write;
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let mut text = serde_json::to_string(value)?;
+        text.push('\n');
+        std::fs::OpenOptions::new().create(true).append(true).open(path)?.write_all(text.as_bytes())
+    })();
+    if let Err(error) = result {
+        eprintln!("Layout: could not write {}: {error}", path.display());
     }
 }
 
@@ -1209,6 +1281,35 @@ mod tests {
         // 10°, then 30° (20° from 10°), gold, and 5 s later the same again.
         assert_eq!(needles, [900, 2700, 3600, 9000], "{text}");
         assert_eq!(text.matches(r#""k":"targets""#).count(), 1);
+    }
+
+    #[test]
+    fn the_history_takes_a_layout_the_named_exits_fixed_once() {
+        let dir = std::env::temp_dir().join(format!("poe-batonga-test-history-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let history = dir.join(HISTORY_FILE);
+        let mut log = Log::new(dir.join("G1_2").join("11.obs.jsonl"), Some(history.clone()), &start("G1_2", "G1_town"), T0);
+        let mut memory = nav::Memory {
+            layouts: [("A".to_string(), 0.95), ("B".to_string(), 0.05)].into(),
+            named: [("A".to_string(), 0.0), ("B".to_string(), 0.0)].into(),
+            ..Default::default()
+        };
+        // Sure, but not from named exits: nothing.
+        log.history(T0, &memory);
+        assert!(!history.exists());
+        memory.named = [("A".to_string(), -0.1), ("B".to_string(), -6.0)].into();
+        log.history(T0 + 1, &memory);
+        log.history(T0 + 2, &memory);
+        let text = std::fs::read_to_string(&history).unwrap();
+        assert_eq!(text.lines().count(), 1, "{text}");
+        let line: HistoryLine = serde_json::from_str(text.trim()).unwrap();
+        assert_eq!((line.area.as_str(), line.seed, line.layout.as_str(), line.by.as_str()), ("G1_2", Some(11), "A", "named"));
+        assert!(line.share == 0.95 && line.named > 0.99);
+        // The named fit favours another layout than the belief's top: not fixed by names.
+        memory.layouts = [("A".to_string(), 0.05), ("B".to_string(), 0.95)].into();
+        log.history(T0 + 3, &memory);
+        assert_eq!(std::fs::read_to_string(&history).unwrap().lines().count(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

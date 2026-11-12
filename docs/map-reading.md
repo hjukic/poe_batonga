@@ -821,3 +821,13 @@ simulator's walker on `ClearFell_W_S_N`, exits named on every third frame);
 `the_flight_recorder_logs_what_the_navigator_is_fed` runs the recorder itself and
 replays its file. In the simulation the last steps count as wrong: the walker ends
 at the exit's graph node, its icon lies up to 100 units off.
+
+### Layout history
+
+When the named exits fix a visit's layout (the top layout at 0.9 or more and the
+best of the navigator's named fit), checked at every save of the memory (15 s), one
+line goes to `layouts/layout-history.jsonl`, once per visit and layout: `t`, `area`,
+`seed`, `layout`, `share`, `named` (its share of the named fit alone), `by`
+(`named`: the names alone give 0.9; `named+belief`: they favour it, and with the
+rest it reaches 0.9), `version`. It is for testing later whether the layout is a
+function of the seed.

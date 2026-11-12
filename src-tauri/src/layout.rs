@@ -593,7 +593,8 @@ impl Recorder {
                 };
                 if let Some((navigator, start)) = state.navigator(&session) {
                     session.navigator = Some(navigator);
-                    *session.obs.get_mut() = session.obs_file().map(|path| obs::Log::new(path, &start, obs::now_ms()));
+                    let history = state.dir.as_ref().map(|d| d.join(obs::HISTORY_FILE));
+                    *session.obs.get_mut() = session.obs_file().map(|path| obs::Log::new(path, history, &start, obs::now_ms()));
                 }
                 state.session = Some(session);
             }
@@ -793,7 +794,11 @@ impl State {
         // Only a navigator that got data has something new to keep (a log catch-up
         // replays old zone entries without any).
         if let (Some(nav), Some(path)) = (session.navigator.as_ref().filter(|n| n.changed()), session.nav_file()) {
-            write_json(&path, &nav.memory());
+            let memory = nav.memory();
+            write_json(&path, &memory);
+            if let Some(log) = session.obs.borrow_mut().as_mut() {
+                log.history(obs::now_ms(), &memory);
+            }
         }
         let mut parts = session.recording.parts.clone();
         if session.live.part.matched > 0 {
@@ -1334,6 +1339,8 @@ mod tests {
         enter(&recorder, "G1_3");
         let text = std::fs::read_to_string(dir.join("G1_2").join("7.obs.jsonl")).unwrap();
         assert_eq!(text.matches("\"k\":\"start\"").count(), 2);
+        // One exit read by name fixes no layout: no layout history.
+        assert!(!dir.join(obs::HISTORY_FILE).exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
