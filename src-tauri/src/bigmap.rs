@@ -504,16 +504,47 @@ const SPRITE_PX: usize = 32;
 /// sprite on real icons (`sprite_scores_on_the_screenshot`, `live_capture`): `Entrance` 0.48
 /// (the exit icon 18-19 x 26-27 px, the sprite's opaque box 39 x 56; 0.46-0.50 score within
 /// 0.01), `Checkpoint` 0.52-0.54, `Waypoint` 0.52 (Clearfell), the Bloated Miller's own icon
-/// 0.52-0.53 (the Riverbank, his first line): bosses' own icons are tried at 0.53. Skulls,
-/// portals and the rest, not seen on a real screen yet, at both.
+/// 0.52-0.53 (the Riverbank, his first line; his grey icon too). Every icon but the exit
+/// seen on a real screen is drawn at 0.52-0.53, so skulls, portals and the rest (not seen
+/// yet) are tried there too: an assumption.
 fn sprite_scales(sprite: &Sprite) -> &'static [f64] {
     match sprite.kind {
         "exit" => &[0.48],
-        "checkpoint" | "waypoint" => &[0.53],
-        _ if sprite.pair.is_some() => &[0.53],
-        _ => &[0.48, 0.53],
+        _ => &[0.53],
     }
 }
+
+/// Per sprite, the share of its core pixels in the colour classes that make candidate
+/// groups (the cross's orange, warm, pale), so a group is compared only with sprites it
+/// could be.
+fn sprite_classes() -> &'static [[f32; 3]] {
+    static CLASSES: std::sync::OnceLock<Vec<[f32; 3]>> = std::sync::OnceLock::new();
+    CLASSES.get_or_init(|| {
+        sprites()
+            .iter()
+            .map(|s| {
+                let mut count = [0f32; 3];
+                let mut n = 0f32;
+                for p in s.rgba.chunks_exact(4).filter(|p| p[3] >= 230) {
+                    n += 1.0;
+                    let class = icon_kind(p[0], p[1], p[2]);
+                    let class = if class == NONE { hint_kind(p[0], p[1], p[2]) } else { class };
+                    match class {
+                        0 => count[0] += 1.0,
+                        WARM => count[1] += 1.0,
+                        PALE => count[2] += 1.0,
+                        _ => {}
+                    }
+                }
+                count.map(|c| c / n.max(1.0))
+            })
+            .collect()
+    })
+}
+
+/// A sprite is tried at a colour group when at least this share of its core is in the
+/// group's main class.
+const CLASS_SHARE: f32 = 0.1;
 
 /// One icon sprite of the game.
 pub struct Sprite {
@@ -593,8 +624,12 @@ thread_local! {
     static ICON_HINTS_T: std::cell::RefCell<Vec<(String, [f32; 2])>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// Sets the area the reader is in (the recorder's zone entry); None: no boss pairs.
+/// Sets the area the reader is in (the recorder's zone entry); None: no boss pairs. The
+/// templates of the last area's pairs are dropped.
 pub fn set_icon_area(area: Option<&str>) {
+    if let Ok(mut cache) = TEMPLATES.lock() {
+        *cache = None;
+    }
     #[cfg(not(test))]
     if let Ok(mut current) = ICON_AREA.lock() {
         *current = area.map(String::from);
@@ -642,10 +677,10 @@ struct Template {
     h: usize,
     /// The sprite's centre in template pixels (continuous; pixel `i` spans i..i+1).
     centre: [f64; 2],
-    /// Colour and coverage per pixel (drawing a sprite in tests uses them).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// Colour and coverage per pixel (drawing a sprite in tests uses them; not kept else).
+    #[cfg(test)]
     rgb: Vec<[f32; 3]>,
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     alpha: Vec<f32>,
     /// The core: template pixel indices, their offsets in an image row of `stride_px`
     /// pixels (set by `for_width`), and their colours.
@@ -710,7 +745,10 @@ impl Template {
         }
         let core: Vec<u32> = (0..w * h).filter(|&i| alpha[i] >= CORE).map(|i| i as u32).collect();
         let core_rgb = core.iter().map(|&i| rgb[i as usize]).collect();
-        Template { w, h, centre, rgb, alpha, core, offsets: Vec::new(), core_rgb }
+        #[cfg(test)]
+        return Template { w, h, centre, rgb, alpha, core, offsets: Vec::new(), core_rgb };
+        #[cfg(not(test))]
+        Template { w, h, centre, core, offsets: Vec::new(), core_rgb }
     }
 
     /// The template with its core's offsets for images `width` pixels wide.
@@ -898,12 +936,21 @@ fn best_match(image: &Image, at: [f64; 2], index: usize, size: f64, scale: f64, 
 /// real pixels scores 0.95-1.0.
 const ACCEPT: f64 = 0.72;
 const LEAD: f64 = 0.15;
+/// The lead a pair's icon needs over its own twin: the Miller alive scored 0.78 against his
+/// grey icon's 0.58, his grey icon after the kill 0.85 against the live one's 0.77 (the
+/// Riverbank, 4 minutes after his last line).
+const TWIN_LEAD: f64 = 0.04;
 /// A colour-found checkpoint or waypoint must look like its own sprite this much to be
-/// kept (and is named by it). Real ones: checkpoints 0.55-0.66 (Clearfell, the Riverbank),
-/// the waypoint 0.67; the false ones the scene made on the Riverbank captures (water foam,
-/// a spell's glow): checkpoints at most 0.06, waypoints at most 0.39. An exit keeps its
-/// kind whatever it scores (none false seen) and is named from this value.
+/// kept (and is named by it). Real checkpoints 0.55-0.67 (Clearfell, the Riverbank, the
+/// owner's 19 captures); scene ones up to 0.48 (the glow of the waypoint stone in Clearfell
+/// Encampment, `samples/bigmap-1794483509.ppm`). The real waypoint 0.65-0.68, scene ones
+/// at most 0.39 (water foam, a spell's glow). An exit keeps its kind whatever it scores
+/// (none false seen) and is named from `OWN`.
 const OWN: f64 = 0.47;
+const OWN_CHECKPOINT: f64 = 0.55;
+/// An exit whose own sprite scores this much is one: no other sprite is tried (it could
+/// not lead by `LEAD`).
+const SURE_EXIT: f64 = 0.9;
 /// A sprite whose mean colour differs this much (0-1) from the pixels under it where the
 /// search starts is not searched further: at its best place it could not reach `ACCEPT`
 /// (3 x 0.15 of colour alone; the real exits differ by 0.001-0.004 at their place, the thin waypoint ring up to 0.1 where its search starts).
@@ -918,7 +965,10 @@ const HINT_REACH: f64 = 10.0;
 /// The side of a drawn icon (px at 2160 px): 32 stored px at 0.96.
 const ICON_SIDE: f64 = 30.0;
 /// Candidate places tried per frame, at most (largest colour groups first).
-const MAX_CANDIDATES: usize = 16;
+const MAX_CANDIDATES: usize = 8;
+/// Where the character stands, px at 2160 px height: half its width, and from how far
+/// above the cross to how far above it (the owner's captures: about 250 px tall).
+const CHARACTER: [f64; 3] = [50.0, 300.0, 15.0];
 
 /// `among`, each at its kind's scales and best place near `at`, best first.
 fn rank(image: &Image, at: [f64; 2], among: &[usize], size: f64, reach: i64) -> Vec<(usize, Match, [f64; 2])> {
@@ -949,9 +999,13 @@ fn rank(image: &Image, at: [f64; 2], among: &[usize], size: f64, reach: i64) -> 
 /// The best of a ranking when it is sure: at least `ACCEPT`, `LEAD` ahead of other kinds.
 fn verdict(ranked: &[(usize, Match, [f64; 2])]) -> Option<(usize, Match, [f64; 2])> {
     let &(best, m, c) = ranked.first()?;
-    let kind = sprites()[best].kind;
-    let other = ranked.iter().find(|(i, _, _)| sprites()[*i].kind != kind).map_or(f64::NEG_INFINITY, |(_, m, _)| m.value());
-    (m.value() >= ACCEPT && m.value() - other >= LEAD).then_some((best, m, c))
+    let s = &sprites()[best];
+    // A pair's live and grey icons differ only in colour: its twin is weighed apart.
+    let twin = |i: usize| i != best && s.pair.is_some() && sprites()[i].pair == s.pair;
+    let value = |found: Option<&(usize, Match, [f64; 2])>| found.map_or(f64::NEG_INFINITY, |(_, m, _)| m.value());
+    let other = value(ranked.iter().find(|(i, _, _)| sprites()[*i].kind != s.kind && !twin(*i)));
+    let twin = value(ranked.iter().find(|(i, _, _)| twin(*i)));
+    (m.value() >= ACCEPT && m.value() - other >= LEAD && m.value() - twin >= TWIN_LEAD).then_some((best, m, c))
 }
 
 /// Names icons by their sprites. Each icon colour found is compared with the sprites:
@@ -970,22 +1024,31 @@ fn identify(image: &Image, icons: &mut Vec<(Icon, [f64; 2])>, found: &[(u8, Blob
     let group_reach = (GROUP_REACH * window).round().max(1.0) as i64;
     let side = ICON_SIDE * window;
     // Colour-found icons: checked, relabelled when another kind is clearly it; a checkpoint
-    // or waypoint that does not look like one is dropped (scene pixels: foam, glow).
+    // or waypoint that does not look like one is dropped (scene pixels: foam, glow). Its own
+    // kind's sprites first: a sure exit and a dropped checkpoint or waypoint need no more.
     let mut drop = vec![false; icons.len()];
     for (n, (icon, at)) in icons.iter_mut().enumerate() {
+        let own_sprites: Vec<usize> = generic_sprites().iter().copied().filter(|&i| sprites()[i].kind == icon.kind).collect();
+        let own = rank(image, *at, &own_sprites, window, reach).first().map(|&(i, m, _)| (i, m.value()));
+        let least = match icon.kind {
+            "checkpoint" => OWN_CHECKPOINT,
+            _ => OWN,
+        };
+        let name = own.filter(|&(_, v)| v >= least).map(|(i, _)| sprites()[i].id.as_str());
+        if icon.kind == "exit" && own.is_some_and(|(_, v)| v >= SURE_EXIT) {
+            icon.sprite = name;
+            continue;
+        }
+        if icon.kind != "exit" && name.is_none() {
+            drop[n] = true;
+            continue;
+        }
         let ranked = rank(image, *at, &among, window, reach);
-        let own = ranked.iter().find(|(i, _, _)| sprites()[*i].kind == icon.kind);
         match verdict(&ranked) {
-            Some((i, _, c)) if sprites()[i].kind != icon.kind => {
-                let kind = sprites()[i].kind;
-                if !matches!(kind, "exit" | "checkpoint" | "waypoint") {
-                    (icon.kind, icon.sprite, *at) = (kind, Some(sprites()[i].id.as_str()), c);
-                }
+            Some((i, _, c)) if sprites()[i].kind != icon.kind && !matches!(sprites()[i].kind, "exit" | "checkpoint" | "waypoint") => {
+                (icon.kind, icon.sprite, *at) = (sprites()[i].kind, Some(sprites()[i].id.as_str()), c);
             }
-            _ => {
-                icon.sprite = own.filter(|(_, m, _)| m.value() >= OWN).map(|(i, _, _)| sprites()[*i].id.as_str());
-                drop[n] = icon.sprite.is_none() && matches!(icon.kind, "checkpoint" | "waypoint");
-            }
+            _ => icon.sprite = name,
         }
     }
     let mut n = 0;
@@ -994,38 +1057,64 @@ fn identify(image: &Image, icons: &mut Vec<(Icon, [f64; 2])>, found: &[(u8, Blob
         !drop[n - 1]
     });
     let px = |v: f64| (v - 0.5) * stride as f64 + 0.5;
+    // The player's character stands above the cross: its pale hair and clothes are no
+    // icon (a grey boss sprite reached 0.71 on its hair, the review's scan).
+    let on_character = |at: [f64; 2]| {
+        (at[0] - centre[0]).abs() <= CHARACTER[0] * window && (-CHARACTER[1] * window..=-CHARACTER[2] * window).contains(&(at[1] - centre[1]))
+    };
     let taken = |at: [f64; 2], icons: &[(Icon, [f64; 2])]| {
-        (at[0] - centre[0]).hypot(at[1] - centre[1]) < 0.5 * side || icons.iter().any(|(_, p)| (p[0] - at[0]).hypot(p[1] - at[1]) < 0.6 * side)
+        (at[0] - centre[0]).hypot(at[1] - centre[1]) < 0.5 * side
+            || on_character(at)
+            || icons.iter().any(|(_, p)| (p[0] - at[0]).hypot(p[1] - at[1]) < 0.6 * side)
     };
     // (place, sprites, how far to search)
     let mut places: Vec<([f64; 2], Vec<usize>, i64)> = Vec::new();
     // Colour groups: orange that made no exit, warm, pale; joined within half an icon.
     let least = 0.08 * side * side / (stride * stride) as f64;
-    let mut groups: Vec<(f64, f64, f64, [usize; 4])> = Vec::new();
+    // (samples, sums of x and y, box, samples per class: orange, warm, pale)
+    let mut groups: Vec<(f64, f64, f64, [usize; 4], [f64; 3])> = Vec::new();
     for (class, blob) in found {
         let fits = |a: usize, b: usize| ((b - a + 1) * stride) as f64 <= 1.5 * side;
         if !matches!(*class, 0 | PALE | WARM) || blob.n < 3 || !fits(blob.x0, blob.x1) || !fits(blob.y0, blob.y1) {
             continue;
         }
+        let slot = match *class {
+            0 => 0,
+            WARM => 1,
+            _ => 2,
+        };
         let at = [blob.sx / blob.n as f64, blob.sy / blob.n as f64];
-        let near = groups.iter_mut().find(|(n, sx, sy, _)| ((sx / n - at[0]).hypot(sy / n - at[1])) * stride as f64 <= 0.5 * side);
+        let near = groups.iter_mut().find(|(n, sx, sy, _, _)| ((sx / n - at[0]).hypot(sy / n - at[1])) * stride as f64 <= 0.5 * side);
         match near {
             Some(g) => {
                 (g.0, g.1, g.2) = (g.0 + blob.n as f64, g.1 + blob.sx, g.2 + blob.sy);
                 g.3 = [g.3[0].min(blob.x0), g.3[1].min(blob.y0), g.3[2].max(blob.x1), g.3[3].max(blob.y1)];
+                g.4[slot] += blob.n as f64;
             }
-            None => groups.push((blob.n as f64, blob.sx, blob.sy, [blob.x0, blob.y0, blob.x1, blob.y1])),
+            None => {
+                let mut classes = [0.0; 3];
+                classes[slot] = blob.n as f64;
+                groups.push((blob.n as f64, blob.sx, blob.sy, [blob.x0, blob.y0, blob.x1, blob.y1], classes));
+            }
         }
     }
-    groups.retain(|(n, _, _, b)| *n >= least && ((b[2] - b[0] + 1).max(b[3] - b[1] + 1) * stride) as f64 <= 1.6 * side);
+    groups.retain(|(n, _, _, b, _)| *n >= least && ((b[2] - b[0] + 1).max(b[3] - b[1] + 1) * stride) as f64 <= 1.6 * side);
     groups.sort_by(|a, b| b.0.total_cmp(&a.0));
-    for (n, sx, sy, _) in groups {
+    for (n, sx, sy, _, classes) in groups {
         let at = [px(sx / n), px(sy / n)];
-        if !taken(at, icons) {
-            places.push((at, among.clone(), group_reach));
+        if taken(at, icons) {
+            continue;
+        }
+        // Only sprites that have the group's main colour.
+        let main = (0..3).max_by(|&a, &b| classes[a].total_cmp(&classes[b])).unwrap_or(2);
+        let set: Vec<usize> = among.iter().copied().filter(|&i| sprite_classes()[i][main] >= CLASS_SHARE).collect();
+        if !set.is_empty() {
+            places.push((at, set, group_reach));
+        }
+        if places.len() >= MAX_CANDIDATES {
+            break;
         }
     }
-    places.truncate(MAX_CANDIDATES);
     // Below a label line no icon owns: a boss's place name (only with boss pairs here).
     let actives: Vec<usize> = area.iter().copied().filter(|&i| sprites()[i].kind == "boss").collect();
     if !actives.is_empty() {
@@ -1502,11 +1591,12 @@ mod tests {
     fn an_orange_skull_was_an_exit_and_is_a_boss() {
         // I2: drawn onto real map pixels at 0.52 (the scale checkpoints and the waypoint
         // are drawn at), the colour reader took the orange skull for an exit on every second
-        // pixel (the whole-window scans); at 0.48 it saw nothing there.
+        // pixel (the whole-window scans); at 0.48 it saw nothing there. Named at 0.52-0.54,
+        // the scale every icon but the exit was seen drawn at (it is tried at 0.53).
         set_icon_area(None);
         let mut taken = 0;
         for at in PLACES {
-            for (scale, stride) in [(0.48, 1), (0.48, 2), (0.52, 1), (0.52, 2)] {
+            for (scale, stride) in [(0.52, 1), (0.52, 2), (0.54, 1), (0.54, 2)] {
                 let mut image = fixture("bigmap-player.ppm");
                 draw(&mut image, "UniqueMonsterAlive", at, scale);
                 let old = without_matching(|| read_near(&image, PLAYER, at, stride));
@@ -1521,14 +1611,19 @@ mod tests {
     fn skulls_and_a_portal_are_named_and_no_exit_checkpoint_or_waypoint() {
         set_icon_area(None);
         // A yellow skull is a rare; both grey skulls are one picture: "dead". A town portal
-        // (blue) was a checkpoint, from 0.52 also a waypoint.
+        // (blue) was a checkpoint, from 0.52 also a waypoint: now it is neither (a checkpoint or
+        // waypoint must look like its sprite), and named a portal or not at all.
         let cases = [("RareMonsterAlive", "rare"), ("UniqueMonsterDead", "dead"), ("RareMonsterDead", "dead"), ("Portal", "portal")];
         for (id, kind) in cases {
             for at in PLACES {
-                for (scale, stride) in [(0.48, 2), (0.52, 1), (0.52, 2)] {
+                for (scale, stride) in [(0.52, 1), (0.52, 2), (0.54, 2)] {
                     let mut image = fixture("bigmap-player.ppm");
                     draw(&mut image, id, at, scale);
                     let near = read_near(&image, PLAYER, at, stride);
+                    if id == "Portal" {
+                        assert!(near.iter().all(|i| i.0 == "portal"), "{id} at {at:?}, {scale}, every {stride} px: {near:?}");
+                        continue;
+                    }
                     assert_eq!(near.len(), 1, "{id} at {at:?}, {scale}, every {stride} px: {near:?}");
                     assert_eq!(near[0].0, kind, "{id} at {at:?}, {scale}, every {stride} px: {near:?}");
                 }
@@ -1638,6 +1733,51 @@ mod tests {
             assert_eq!(read("bigmap-riverbank-glow.ppm", stride, false).len(), 2);
             assert!(read("bigmap-riverbank-glow.ppm", stride, true).is_empty());
         }
+        set_icon_area(None);
+    }
+
+    #[test]
+    fn the_waypoint_stones_glow_is_no_checkpoint() {
+        // Clearfell Encampment (`samples/bigmap-1794483509.ppm`, crop at 560, 1000): the glow
+        // of the waypoint's stone in the world scored 0.478 against the checkpoint sprite;
+        // real checkpoints score 0.55-0.67.
+        set_icon_area(Some("G1_town"));
+        let image = fixture("bigmap-encampment-stone.ppm");
+        for stride in [1, 2] {
+            let old = without_matching(|| icons_in(&image, [0.0, 0.0], SCALE, 1.0, stride, &[], false));
+            assert!(old.iter().any(|i| i.kind == "checkpoint"), "{old:?}");
+            let new = icons_in(&image, [0.0, 0.0], SCALE, 1.0, stride, &[], false);
+            assert!(new.iter().all(|i| i.kind != "checkpoint" && i.kind != "waypoint"), "every {stride} px: {new:?}");
+        }
+        set_icon_area(None);
+    }
+
+    #[test]
+    fn the_millers_grey_icon_after_the_kill_is_found_where_he_was() {
+        // The Riverbank 4 minutes after the Miller's last line (`samples/bigmap-1794482737.ppm`,
+        // crop at 440, 470): his icon grey and without its place name, below-left of the cross.
+        let image = fixture("bigmap-miller-dead.ppm");
+        let cross = marker_near(&image, [203.0, 91.0], 16.0).unwrap();
+        let grey = [157.5, 147.0];
+        set_icon_area(Some("G1_1"));
+        let near = |icons: Vec<Icon>| -> Vec<(&'static str, Option<&'static str>)> {
+            icons.into_iter().filter(|i| (cross[0] + i.x as f64 * 2.0 - grey[0]).hypot(cross[1] + i.y as f64 * 2.0 - grey[1]) < 15.0).map(|i| (i.kind, i.sprite)).collect()
+        };
+        // Without a hint nothing points the matcher there (dark, no label).
+        set_icon_hints(vec![]);
+        assert!(near(icons_in(&image, cross, SCALE, 1.0, 2, &[], false)).is_empty());
+        // Where the recorder saw his live icon, 3 cells off: his grey twin.
+        let hint = [((grey[0] - cross[0]) / 2.0 + 3.0) as f32, ((grey[1] - cross[1]) / 2.0 - 2.0) as f32];
+        set_icon_hints(vec![("Miller".into(), hint)]);
+        for stride in [1, 2] {
+            assert_eq!(near(icons_in(&image, cross, SCALE, 1.0, stride, &[], false)), [("boss-dead", Some("MillerInactive"))], "every {stride} px");
+        }
+        // How it scores: the grey twin 0.85, the live one 0.77 (`TWIN_LEAD` 0.04).
+        let all: Vec<usize> = (0..sprites().len()).collect();
+        let ranked = rank(&image, grey, &all, 1.0, 4);
+        println!("{:?}", ranked.iter().take(3).map(|(i, m, _)| (sprites()[*i].id.as_str(), (m.value() * 1000.0).round() / 1000.0)).collect::<Vec<_>>());
+        assert_eq!(sprites()[ranked[0].0].id, "MillerInactive");
+        set_icon_hints(vec![]);
         set_icon_area(None);
     }
 
@@ -1849,6 +1989,49 @@ mod tests {
         println!("{} line cells, {} scene cells", line.len(), scene.len());
         let json = serde_json::json!({"source": std::env::var("LIVE_SHOT").unwrap().rsplit('/').next(), "player": [300, 259], "line": line, "scene": scene});
         std::fs::write(std::env::var("LIVE_JSON").unwrap(), serde_json::to_string(&json).unwrap()).unwrap();
+    }
+
+    /// Every capture in `SAMPLES` (the app's `samples/` folder; read-only) read with the boss
+    /// pairs of `LIVE_AREA` (or none): the icons named, the highest boss/dead/rare score at
+    /// any place tried (all 108 sprites), and the time with and without the matcher:
+    /// `SAMPLES=… cargo test --release scan_samples -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn scan_samples() {
+        let dir = std::env::var("SAMPLES").unwrap();
+        let mut files: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|f| f.path()).filter(|p| p.extension().is_some_and(|e| e == "ppm")).collect();
+        files.sort();
+        let all: Vec<usize> = (0..sprites().len()).collect();
+        for path in files {
+            let image = parse_ppm(&std::fs::read(&path).unwrap()).unwrap();
+            set_icon_area(std::env::var("LIVE_AREA").ok().as_deref());
+            // The cross: where the reader expects it (big-map area, or the corner minimap).
+            let guess = if image.width == 1286 { [643.0, 561.0] } else { [image.width as f64 - 44.0, 284.0] };
+            let centre = marker_near(&image, guess, 40.0).unwrap_or(guess);
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            for stride in [1, 2] {
+                TRIED.with(|t| t.borrow_mut().clear());
+                let time = |f: &dyn Fn() -> usize| (0..4).map(|_| { let t = std::time::Instant::now(); f(); t.elapsed() }).min().unwrap();
+                let icons = icons_in(&image, centre, SCALE, 1.0, stride, &[], false);
+                let tried = TRIED.with(|t| t.take());
+                let on = time(&|| icons_in(&image, centre, SCALE, 1.0, stride, &[], false).len());
+                let off = without_matching(|| time(&|| icons_in(&image, centre, SCALE, 1.0, stride, &[], false).len()));
+                let list: Vec<String> = icons.iter().map(|i| format!("{} {} ({:.0},{:.0})", i.kind, i.sprite.unwrap_or("-"), centre[0] + i.x as f64 * 2.0, centre[1] + i.y as f64 * 2.0)).collect();
+                let mut worst = (0.0f64, String::new());
+                if stride == 2 {
+                    for (at, reach) in &tried {
+                        for (i, m, _) in rank(&image, *at, &all, 1.0, *reach) {
+                            let named = icons.iter().any(|n| n.sprite == Some(sprites()[i].id.as_str()));
+                            if matches!(sprites()[i].kind, "boss" | "boss-dead" | "dead" | "rare") && !named && m.value() > worst.0 {
+                                worst = (m.value(), format!("{} at {:.0},{:.0}", sprites()[i].id, at[0], at[1]));
+                            }
+                        }
+                    }
+                }
+                println!("{name} every {stride}: {:.1} ms off, {:.1} ms on, {} places; {}{}", off.as_secs_f64() * 1e3, on.as_secs_f64() * 1e3, tried.len(), list.join(", "),
+                    if stride == 2 { format!("; worst other boss/dead/rare {:.3} {}", worst.0, worst.1) } else { String::new() });
+            }
+        }
     }
 
     /// I2, measured: what today's colour reader made of icons it was not built for, drawn
