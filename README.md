@@ -73,10 +73,6 @@ and outstanding gameplay verification.
 `npm run build` validates the frontend; `npm run desktop:build` builds the native
 executable. Native/game behavior requires the manual checks above.
 
-The separate [offline map experiment](docs/map-reading.md) runs with
-`npm run vision:test` and `npm run vision:experiment`. Its real-image results are
-not sufficient for game navigation; it is not connected to the overlay.
-
 ## Project documents
 
 - [Plan](PLAN.md): ordered work and completion criteria.

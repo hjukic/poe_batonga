@@ -3,14 +3,14 @@
 //
 //   node scripts/render-layouts.mjs [layouts folder] [output folder]
 //
-// Defaults: the app's layouts folder on Linux, and experiments/layouts/output
-// (git-ignored; recordings come from gameplay and stay local).
+// Defaults: the app's layouts folder on Linux, and ~/.cache/poe-batonga/layouts
+// (recordings come from gameplay and stay local).
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 
 const input = process.argv[2] ?? join(homedir(), '.local/share/com.poebatonga.overlaytest/layouts');
-const output = process.argv[3] ?? 'experiments/layouts/output';
+const output = process.argv[3] ?? join(homedir(), '.cache/poe-batonga/layouts');
 const COLORS = { arrived: '#3fa34d', start: '#3fa34d', left: '#2a8fb0', npc: '#c99a06' };
 const escape = (text) => String(text).replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -46,8 +46,10 @@ let count = 0;
 for (const area of readdirSync(input)) {
   const folder = join(input, area);
   if (!statSync(folder).isDirectory()) continue;
-  for (const file of readdirSync(folder).filter((f) => f.endsWith('.json'))) {
+  // Recordings only: not the navigator's memory beside them (`.nav.json`).
+  for (const file of readdirSync(folder).filter((f) => f.endsWith('.json') && !f.endsWith('.nav.json'))) {
     const recording = JSON.parse(readFileSync(join(folder, file), 'utf8'));
+    if (!Array.isArray(recording.parts)) continue;
     recording.parts.forEach((part, index) => {
       const name = `${area}-${basename(file, '.json')}-part${index + 1}.svg`;
       writeFileSync(join(output, name), render(recording, part, index));

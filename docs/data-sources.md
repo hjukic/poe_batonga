@@ -33,9 +33,9 @@ contains 97 campaign area IDs collected from 3,072,602 local log lines spanning
 record counts; no character names, chat or full log lines. An empty name list
 means no nearby scene-name observation was paired.
 
-```sh
-node scripts/collect-zone-observations.mjs "/path/to/logs/Client.txt" data/observations/campaign-zones.json
-```
+They were collected once (2026-11-11) by a script since removed (git history:
+`scripts/collect-zone-observations.mjs`); zone ids, names and levels now come from the game's
+own tables.
 
 Do not hard-code observed area levels: patches/variants may change them. Unknown
 IDs should display the ID. See [log findings](log-findings.md).
