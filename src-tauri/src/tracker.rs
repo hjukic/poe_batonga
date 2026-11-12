@@ -504,6 +504,10 @@ mod tests {
             speaker: "The Bloated Miller".into(), text: "Fight starts".into(),
         });
         assert!(!progress.completed.contains_key("kill-bloated-miller"));
+        apply(&route, &mut progress, "now", &LogEvent::Dialogue {
+            speaker: "Mortimer".into(), text: "You there! Please, aid us!".into(),
+        });
+        assert!(!progress.completed.contains_key("kill-bloated-miller"));
         toggle(&route, &mut progress, "kill-bloated-miller").unwrap();
         let step = route.steps.iter().find(|s| s.id == "kill-bloated-miller").unwrap();
         let target = step.navigation_target.as_ref().unwrap();
@@ -547,6 +551,23 @@ mod tests {
         assert!(!progress.completed.contains_key("talk-wounded-man"));
         feed(&mut progress, &[line("INFO", "Wounded Man: Reach... Clearfell... Find the Miller...")]);
         assert_eq!(progress.completed["talk-wounded-man"].source, "log");
+    }
+
+    #[test]
+    fn mortimer_thanking_you_completes_the_miller() {
+        let mut progress = Progress::default();
+        feed(
+            &mut progress,
+            &[
+                line("DEBUG", r#"Generating level 1 area "G1_1" with seed 1"#),
+                line("INFO", "Mortimer: You there! Please, aid us!"),
+                line("INFO", "The Bloated Miller: Saw you in half!"),
+                line("INFO", "The Bloated Miller: Die!"),
+            ],
+        );
+        assert!(!progress.completed.contains_key("kill-bloated-miller"));
+        feed(&mut progress, &[line("INFO", "Mortimer: Well done! Please come inside.")]);
+        assert_eq!(progress.completed["kill-bloated-miller"].source, "log");
     }
 
     #[test]

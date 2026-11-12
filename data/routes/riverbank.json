@@ -24,8 +24,13 @@
       "navigationTarget": { "area": "G1_1", "label": "The Bloated Miller" },
       "kind": "objective",
       "parts": [{ "text": "Kill " }, { "text": "The Bloated Miller", "style": "boss" }],
-      "trigger": null,
-      "evidence": "No verified log line yet; stays unknown until one is captured. Can be ticked by hand."
+      "trigger": {
+        "type": "npcLine",
+        "area": "G1_1",
+        "speaker": "Mortimer",
+        "text": "Well done! Please come inside."
+      },
+      "evidence": "Mortimer says this after the Miller dies (live log 2026-11-12 01:09:14). It was absent after two fights that ended in death (23:39, 00:06); the Miller's own lines only mean the fight started."
     },
     {
       "id": "enter-clearfell-encampment",
