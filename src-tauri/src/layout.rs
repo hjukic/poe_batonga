@@ -337,6 +337,13 @@ pub(crate) fn boss_candidates<'b>(icon: &crate::minimap::bigmap::Icon, area: &st
     }
 }
 
+/// The frame's checkpoint icons for the navigator (cells from the player): soft evidence
+/// of a landmark (`Navigator::checkpoints`); a colour-found one is kept only when it looks
+/// like its sprite (I9).
+fn checkpoint_list(icons: &[crate::minimap::bigmap::Icon]) -> Vec<(f64, f64)> {
+    icons.iter().filter(|i| i.kind == "checkpoint").map(|i| (i.x as f64, i.y as f64)).collect()
+}
+
 /// The places of `boss_candidates`, each once.
 fn boss_places(icon: &crate::minimap::bigmap::Icon, area: &str, bosses: &[Boss]) -> Vec<nav::BossAt> {
     let mut places: Vec<nav::BossAt> = Vec::new();
@@ -507,6 +514,7 @@ impl Session {
         }
         let list = exit_list(icons, whole, pos, size, &mut self.far_icons, &mut self.far_age, &self.recording.area, bosses);
         nav.icons(&list);
+        nav.checkpoints(&checkpoint_list(icons), &list);
     }
 
     fn obs_file(&self) -> Option<PathBuf> {

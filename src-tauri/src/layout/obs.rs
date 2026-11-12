@@ -900,6 +900,8 @@ pub(super) mod replay {
         nav: Navigator,
         scale: f64,
         bosses: Vec<super::super::Boss>,
+        /// An icons line came for the frame being closed (its checkpoints are fed once).
+        fresh: bool,
         targets: Vec<NavTarget>,
         raw: Vec<Icon>,
         whole: bool,
@@ -954,6 +956,7 @@ pub(super) mod replay {
                 nav,
                 scale,
                 bosses: bosses.clone(),
+                fresh: false,
                 targets: Vec::new(),
                 raw: Vec::new(),
                 whole: false,
@@ -1011,6 +1014,11 @@ pub(super) mod replay {
         fn close(&mut self) {
             let list = super::super::exit_list(&self.raw, self.whole, self.pos, self.size, &mut self.far, &mut self.far_age, &self.visit.area, &self.bosses);
             self.nav.icons(&list);
+            // Checkpoints are written once per part (they don't move): fed on that frame only,
+            // as the app's later frames saw the same checkpoint again, which counts once.
+            if std::mem::take(&mut self.fresh) {
+                self.nav.checkpoints(&super::super::checkpoint_list(&self.raw), &list);
+            }
             self.whole = false;
             self.visit.frames += 1;
             let scan = std::mem::take(&mut self.scan);
@@ -1110,6 +1118,7 @@ pub(super) mod replay {
                 }
                 Entry::Icons { whole, size, icons, .. } => {
                     self.raw = icons.iter().map(LoggedIcon::icon).collect();
+                    self.fresh = true;
                     self.whole = *whole;
                     self.scan = *whole;
                     if let Some([c, r]) = size {

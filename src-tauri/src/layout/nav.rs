@@ -242,6 +242,29 @@ pub(super) const MEMORY_VERSION: u32 = 1;
 
 /// Icons this close (world units) on the dead-reckoned track are one exit.
 const SIGHT_MATCH: f64 = 40.0;
+/// A checkpoint icon is a sighting of some landmark node (`landmark`), soft: on the one
+/// instance whose layout is known (Clearfell 2693856399, `ClearFell_W_E_N`) the three
+/// checkpoints lie 42, 50 and 94 cells (54-121 units) from the nearest landmark (Mud
+/// Burrow's and the Grelwood's exits, the campsite) …
+const CHECKPOINT_TOL: f64 = 120.0;
+/// … it does not say which landmark, and some landmarks have none: a layout without one
+/// near keeps this much, and a checkpoint counts half …
+const CHECKPOINT_FLOOR: f64 = 0.3;
+const CHECKPOINT_WEIGHT: f64 = 0.5;
+/// … and next to an exit icon of the same frame (minimap cells) it adds nothing: the exit
+/// counted already (Clearfell: 28 and 42 cells from their exits' icons).
+const CHECKPOINT_BY_EXIT: f64 = 60.0;
+/// Node tags that name a corridor's shape, not a place: a node with none of these (or an
+/// exit) is a landmark. The most common tags of all the graphs' nodes, sorted by hand.
+const PLAIN: [&str; 24] = [
+    "", "end", "block", "Block", "source", "sink", "connection", "join", "endcap", "deadend", "fill", "fill2", "blank", "cc",
+    "Hallcc", "dune_edge", "water_source", "water_sink", "source_slash", "sink_slash", "source_slow", "windowend", "nobridge", "blockage",
+];
+
+/// A node a checkpoint may stand by: an exit, or a node whose tag names a place.
+pub(super) fn landmark(node: &super::graph::Node) -> bool {
+    node.exit.is_some() || !PLAIN.contains(&node.tag.as_deref().unwrap_or(""))
+}
 /// A boss's icon stands where the boss is, in its arena: a tagged node is the arena's
 /// centre (as for a log anchor at a tag, `TAG_SIGMA`); at an exit, as an exit icon.
 const BOSS_TOL: f64 = 150.0;
@@ -378,6 +401,8 @@ struct Bank {
     /// What bosses' icons added to the icon evidence (log): in the posterior, not in the
     /// share gold needs (`BOSS_GOLD`), not kept in the memory.
     boss: f64,
+    /// What checkpoint icons added (log): in the posterior, never in gold's share.
+    checkpoints: f64,
     particles: Vec<Particle>,
 }
 
@@ -462,6 +487,8 @@ pub struct Navigator {
     icons_now: Vec<(ExitIcon, bool)>,
     /// Exits seen since the last loss, by their place (world units on `track`).
     sightings: Vec<Sighting>,
+    /// Checkpoints seen since the last loss, by their place (world units on `track`).
+    checkpoints_seen: Vec<(f64, f64)>,
     /// Where the player is by dead reckoning since the last loss (world units,
     /// nominal scale): gives each icon a place, so one sighting counts once.
     track: (f64, f64),
@@ -568,7 +595,7 @@ impl Navigator {
                     (m.anchors.get(&layout.id).copied().unwrap_or(best - path_cap(n)) - best).clamp(-path_cap(n), 0.0)
                 });
                 let named = evidence.map_or(0.0, |m| m.named.get(&layout.id).copied().unwrap_or(0.0));
-                let mut bank = Bank { prior, path, evidence: anchors, named, boss: 0.0, particles };
+                let mut bank = Bank { prior, path, evidence: anchors, named, boss: 0.0, checkpoints: 0.0, particles };
                 normalise(&mut bank.particles);
                 bank
             })
@@ -591,6 +618,7 @@ impl Navigator {
             trusted: MEASURED.contains(&area.id.as_str()),
             icons_now: Vec::new(),
             sightings: Vec::new(),
+            checkpoints_seen: Vec::new(),
             track: (0.0, 0.0),
             icon_walked: 0.0,
             jumps: 0,
@@ -893,6 +921,48 @@ impl Navigator {
         }
     }
 
+    /// The frame's checkpoint icons (minimap cells from the player), with the exit icons it
+    /// handed to `icons`: soft evidence for the layouts whose landmarks they lie by. A new
+    /// checkpoint (none seen within `SIGHT_MATCH` on the track since the last loss) not
+    /// next to an exit icon weighs each layout by how much of its belief puts it within
+    /// `CHECKPOINT_TOL` of a landmark (floor `CHECKPOINT_FLOOR`, counted at
+    /// `CHECKPOINT_WEIGHT`). Never an anchor, never in gold's share, no particle moved.
+    pub fn checkpoints(&mut self, points: &[(f64, f64)], exits: &[ExitIcon]) {
+        self.apply();
+        for &(dx, dy) in points {
+            if exits.iter().any(|e| e.boss.is_empty() && (e.dx - dx).hypot(e.dy - dy) <= CHECKPOINT_BY_EXIT) {
+                continue;
+            }
+            let (wx, wy) = super::guide::from_screen((dx / self.scale, dy / self.scale));
+            let at = (self.track.0 + wx, self.track.1 + wy);
+            if let Some(seen) = self.checkpoints_seen.iter_mut().find(|s| (s.0 - at.0).hypot(s.1 - at.1) <= SIGHT_MATCH) {
+                *seen = ((seen.0 + at.0) / 2.0, (seen.1 + at.1) / 2.0);
+                continue;
+            }
+            self.checkpoints_seen.push(at);
+            self.touched();
+            let scale = self.scale;
+            for (layout, bank) in self.area.layouts.iter().zip(self.banks.iter_mut()) {
+                let marks: Vec<(f64, f64)> = layout.nodes.iter().filter(|n| landmark(n)).map(|n| (n.x, n.y)).collect();
+                if marks.is_empty() {
+                    continue;
+                }
+                let tol = CHECKPOINT_TOL / layout.unit;
+                let agree: f64 = bank
+                    .particles
+                    .iter()
+                    .map(|p| {
+                        let (x, y) = super::guide::from_screen((dx / (scale * p.s), dy / (scale * p.s)));
+                        let q = (p.x + x / layout.unit, p.y + y / layout.unit);
+                        let d2 = marks.iter().map(|m| (q.0 - m.0).powi(2) + (q.1 - m.1).powi(2)).fold(f64::INFINITY, f64::min);
+                        p.w * (CHECKPOINT_FLOOR + (1.0 - CHECKPOINT_FLOOR) * (-d2 / (2.0 * tol * tol)).exp())
+                    })
+                    .sum();
+                bank.checkpoints += CHECKPOINT_WEIGHT * agree.max(CHECKPOINT_FLOOR).ln();
+            }
+        }
+    }
+
     /// The area ids an exit label names: every area whose name it is (two areas may
     /// share a name), else the label itself.
     fn exit_ids<'s>(&'s self, label: &'s str) -> Vec<&'s str> {
@@ -1015,6 +1085,7 @@ impl Navigator {
         // Icons in hand are stale, and their places on the track mean nothing now.
         self.icons_now.clear();
         self.sightings.clear();
+        self.checkpoints_seen.clear();
         *self.way.get_mut() = None;
         self.since_weigh = 0.0;
         let reach = (WALK_SPEED * seconds.max(0.0)).min(MAX_REACH);
@@ -1165,17 +1236,18 @@ impl Navigator {
 
     /// Layout probabilities, in layout order.
     fn posterior(&self) -> Vec<f64> {
-        self.posterior_with(true)
+        self.posterior_with(true, true)
     }
 
-    /// The layout share gold needs: without what bosses' icons added (`BOSS_GOLD`).
+    /// The layout share gold needs: without what bosses' icons (`BOSS_GOLD`) and
+    /// checkpoints added.
     fn gold_posterior(&self) -> Vec<f64> {
-        self.posterior_with(self.tuning.boss_gold)
+        self.posterior_with(self.tuning.boss_gold, false)
     }
 
-    fn posterior_with(&self, bosses: bool) -> Vec<f64> {
-        let boss = |b: &Bank| if bosses { b.boss } else { 0.0 };
-        let logs: Vec<f64> = self.banks.iter().map(|b| b.prior + b.path + b.evidence + b.named + boss(b)).collect();
+    fn posterior_with(&self, bosses: bool, checkpoints: bool) -> Vec<f64> {
+        let soft = |b: &Bank| if bosses { b.boss } else { 0.0 } + if checkpoints { b.checkpoints } else { 0.0 };
+        let logs: Vec<f64> = self.banks.iter().map(|b| b.prior + b.path + b.evidence + b.named + soft(b)).collect();
         let top = logs.iter().copied().fold(f64::MIN, f64::max);
         let raw: Vec<f64> = logs.iter().map(|l| (l - top).exp()).collect();
         let sum: f64 = raw.iter().sum();
@@ -2187,6 +2259,64 @@ mod tests {
         let icon = boss_icon_of(&area, "ClearFell_W_E_N", at);
         let view = nav.guide(&target).unwrap();
         assert!(super::super::guide::angle_between(view.degrees.unwrap(), screen_bearing(icon.dx, icon.dy).unwrap()) < 30.0, "{view:?}");
+    }
+
+    /// Clearfell 2693856399 (`ClearFell_W_E_N`), measured on the big-map screenshot: the
+    /// middle checkpoint seen from where the player came in, as cells on screen.
+    fn middle_checkpoint_from_the_town(area: &Area) -> (f64, f64) {
+        let l = area.layouts.iter().find(|l| l.id == "ClearFell_W_E_N").unwrap();
+        let node = |exit: &str| l.nodes.iter().find(|n| n.exit.as_deref() == Some(exit)).unwrap();
+        let to_file = |dx: f64, dy: f64| {
+            let (x, y) = super::super::guide::from_screen((dx / SCALE, dy / SCALE));
+            (x / l.unit, y / l.unit)
+        };
+        // The player: the Grelwood's exit icon at (-136, 83) cells (its node stands for it);
+        // the middle checkpoint at (228.5, 199.5) cells from the player.
+        let (ex, ey) = to_file(-136.0, 83.0);
+        let player = (node("G1_4").x - ex, node("G1_4").y - ey);
+        let (cx, cy) = to_file(228.5, 199.5);
+        let checkpoint = (player.0 + cx, player.1 + cy);
+        let town = node("G1_town");
+        let (sx, sy) = super::super::guide::to_screen(((checkpoint.0 - town.x) * l.unit, (checkpoint.1 - town.y) * l.unit));
+        (sx * SCALE, sy * SCALE)
+    }
+
+    #[test]
+    fn a_checkpoint_is_soft_evidence_of_a_landmark() {
+        let area = graph::load("G1_2");
+        let k = area.layouts.iter().position(|l| l.id == "ClearFell_W_E_N").unwrap();
+        let l = &area.layouts[k];
+        // Which nodes count: exits and named places, not corridor shapes.
+        let marks: Vec<String> = l.nodes.iter().filter(|n| landmark(n)).map(|n| n.exit.clone().or(n.tag.clone()).unwrap_or_default()).collect();
+        assert_eq!(marks, ["G1_town", "bridge_small", "bridge_small", "boss", "G1_4", "campsite", "G1_3"]);
+        // Arrived from the encampment, the middle checkpoint in view: the true layout gains,
+        // or at least loses nothing.
+        let seen = middle_checkpoint_from_the_town(&area);
+        let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 4);
+        let before = nav.posterior()[k];
+        let particles: Vec<(f64, f64, f64)> = nav.banks[k].particles.iter().map(|p| (p.x, p.y, p.w)).collect();
+        nav.checkpoints(&[seen], &[]);
+        let after = nav.posterior()[k];
+        println!("ClearFell_W_E_N {before:.4} -> {after:.4} (checkpoint at {:.0}, {:.0} cells); top {:?}", seen.0, seen.1, &nav.ranking()[..3]);
+        assert!(after >= 0.99 * before, "{before} -> {after}");
+        // Never an anchor, never in gold's share, no particle moved.
+        assert!(!nav.progress().1);
+        assert_eq!(nav.gold_posterior()[k], before);
+        assert_eq!(nav.banks[k].particles.iter().map(|p| (p.x, p.y, p.w)).collect::<Vec<_>>(), particles);
+        // The same checkpoint again counts once.
+        nav.checkpoints(&[seen], &[]);
+        assert_eq!(nav.posterior()[k], after);
+        // Next to an exit icon of the same frame it adds nothing.
+        let mut by_exit = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 4);
+        let exit = ExitIcon { dx: seen.0 + 30.0, dy: seen.1 - 20.0, to: None, boss: vec![] };
+        by_exit.checkpoints(&[seen], std::slice::from_ref(&exit));
+        assert_eq!(by_exit.posterior()[k], before);
+        // Where no layout has a landmark (far outside every graph) it changes little.
+        let mut lost = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 4);
+        let all_before = lost.posterior();
+        lost.checkpoints(&[(9000.0, 9000.0)], &[]);
+        let change = lost.posterior().iter().zip(&all_before).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
+        assert!(change < 1e-6, "{change}");
     }
 
     /// The owner's live case (N7): Clearfell 2693856399, app restarted (arrival

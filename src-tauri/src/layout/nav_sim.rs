@@ -73,6 +73,10 @@ const ICON_NOISE: f64 = 2.0;
 const FALSE_ICON: f64 = 0.01;
 /// A boss's icon stands this far (world units) from its node at most: it is in its arena.
 const BOSS_OFFSET: f64 = 100.0;
+/// Checkpoints: one by each landmark node with this chance, this far from it (world
+/// units; Clearfell's three: 54-121 units from their landmarks).
+const CHECKPOINT_SHARE: f64 = 0.5;
+const CHECKPOINT_OFFSET: (f64, f64) = (50.0, 120.0);
 
 pub(super) struct Rng(u64);
 
@@ -113,7 +117,7 @@ pub(super) enum Event {
     /// ahead after it; the share of the walk done; world units walked so far; how
     /// far (world units) the walker stands from the nearest corridor; the exit
     /// icons in view (cells from the player).
-    Moved { dx: f64, dy: f64, truth: Option<f32>, done: f64, walked: f64, off: f64, icons: Vec<ExitIcon> },
+    Moved { dx: f64, dy: f64, truth: Option<f32>, done: f64, walked: f64, off: f64, icons: Vec<ExitIcon>, checkpoints: Vec<(f64, f64)> },
     /// Tracking lost for this many seconds.
     Lost(f64),
 }
@@ -325,11 +329,13 @@ pub(super) struct Options {
     /// (`run` sets them from `boss_icons` and the area).
     pub bosses: Vec<BossAt>,
     pub boss_icons: bool,
+    /// Checkpoints by half the landmark nodes, seen like exit icons.
+    pub checkpoints: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { turn: 0.0, losses: true, long_loss: None, wrong: 0.3, tuning: Tuning::default(), view: None, labels: false, bosses: vec![], boss_icons: false }
+        Options { turn: 0.0, losses: true, long_loss: None, wrong: 0.3, tuning: Tuning::default(), view: None, labels: false, bosses: vec![], boss_icons: false, checkpoints: false }
     }
 }
 
@@ -385,6 +391,20 @@ pub(super) fn walk(layout: &Layout, from: usize, goals: &[usize], seed: u64, opt
             })
         })
         .collect();
+    let checkpoints: Vec<(f64, f64)> = if options.checkpoints {
+        layout
+            .nodes
+            .iter()
+            .filter(|n| super::nav::landmark(n))
+            .filter_map(|n| {
+                let keep = rng.uniform() < CHECKPOINT_SHARE;
+                let (r, a) = (rng.range(CHECKPOINT_OFFSET.0, CHECKPOINT_OFFSET.1), std::f64::consts::TAU * rng.uniform());
+                keep.then(|| (n.x + r * a.cos(), n.y + r * a.sin()))
+            })
+            .collect()
+    } else {
+        vec![]
+    };
     let boss_at = (!boss_nodes.is_empty()).then(|| {
         let n = boss_nodes[rng.below(boss_nodes.len())];
         let (r, a) = (BOSS_OFFSET * rng.uniform().sqrt(), std::f64::consts::TAU * rng.uniform());
@@ -469,7 +489,18 @@ pub(super) fn walk(layout: &Layout, from: usize, goals: &[usize], seed: u64, opt
                 icons.push(ExitIcon { dx: rng.range(-vx, vx), dy: rng.range(-vy, vy), to: None, boss: vec![] });
             }
         }
-        events.push(Event::Moved { dx, dy, truth, done: i as f64 / line.len() as f64, walked, off, icons });
+        let mut seen_checkpoints = Vec::new();
+        if let Some(view) = options.view {
+            let (vx, vy) = (VIEW.0 * view, VIEW.1 * view);
+            for &(x, y) in &checkpoints {
+                let (sx, sy) = to_screen((x - at.0, y - at.1));
+                let (cx, cy) = (sx * scale + rng.gauss() * ICON_NOISE, sy * scale + rng.gauss() * ICON_NOISE);
+                if cx.abs() <= vx && cy.abs() <= vy && rng.uniform() >= ICON_MISS {
+                    seen_checkpoints.push((cx * cos - cy * sin, cx * sin + cy * cos));
+                }
+            }
+        }
+        events.push(Event::Moved { dx, dy, truth, done: i as f64 / line.len() as f64, walked, off, icons, checkpoints: seen_checkpoints });
     }
     Some(events)
 }
@@ -519,10 +550,11 @@ pub(super) fn run(area: &Area, k: usize, from: &str, told: bool, wrong: bool, ta
     for event in events {
         match event {
             Event::Lost(seconds) => nav.lost(seconds),
-            Event::Moved { dx, dy, truth, done, walked, off, icons } => {
+            Event::Moved { dx, dy, truth, done, walked, off, icons, checkpoints } => {
                 nav.moved(dx, dy);
                 if options.view.is_some() {
                     nav.icons(&icons);
+                    nav.checkpoints(&checkpoints, &icons);
                 }
                 out.offsets.push(off);
                 let view = nav.guide(&targets);
@@ -812,6 +844,36 @@ mod tests {
         let (minimap, wide) = (&checks[0].1, &checks[1].1);
         assert!(wide.off_share() <= 0.04, "{wide:?}");
         assert!(minimap.gold_off <= 2, "{minimap:?}");
+    }
+
+    #[test]
+    fn what_checkpoints_add() {
+        // The same walks with and without checkpoints by half the landmark nodes (50-120
+        // units off them), unlabelled exit icons, the minimap's view and the wide one.
+        let views = [1.0, 2.0];
+        let checks: Vec<(Check, Check)> = std::thread::scope(|scope| {
+            let handles: Vec<_> = views
+                .iter()
+                .map(|&view| {
+                    scope.spawn(move || {
+                        let without = all(1, true, &Options { view: Some(view), ..Default::default() }).0;
+                        let with = all(1, true, &Options { view: Some(view), checkpoints: true, ..Default::default() }).0;
+                        (without, with)
+                    })
+                })
+                .collect();
+            handles.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        for (view, (without, with)) in views.iter().zip(&checks) {
+            print(&format!("view {view}, exit icons"), without);
+            print(&format!("view {view}, exit icons and checkpoints"), with);
+        }
+        for (view, (without, with)) in views.iter().zip(&checks) {
+            // Never gold on their own: no more wrong gold than without them.
+            assert!(with.gold_off <= without.gold_off, "{view}: {with:?}");
+            // Pinned as measured (one seed): see docs/map-reading.md, "Checkpoints".
+            assert!(with.coverage >= without.coverage - 0.04, "{view}: {} against {}", with.coverage, without.coverage);
+        }
     }
 
     /// `what_boss_icons_add` at three seeds (or SEEDS), also in the wide view, and with the

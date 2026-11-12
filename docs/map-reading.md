@@ -1362,3 +1362,45 @@ what lies on the character moving with the player; 20 frames of 4 x 1 cells,
 The line cells not kept were seen only from places less than 24 cells apart (at the view's edge as the
 walk ended); a longer walk keeps them. Measured on real cell shapes, but the walk is built, not recorded:
 the next real visit's recording is where to check it.
+
+## Checkpoints as soft evidence (third build, I8)
+
+A checkpoint icon is a sighting of *some* landmark node of the layout (`Navigator::checkpoints`).
+
+- **Landmarks**: exit nodes, and nodes whose tag names a place rather than a corridor's shape: every tag but
+  `""`, `end`, `block`, `source`, `sink`, `connection`, `join`, `endcap`, `deadend`, `fill`, `blank`, `cc`,
+  `dune_edge`, `water_source`/`_sink` and the like (`PLAIN`, the most common tags of all graphs sorted by
+  hand). Bosses' places are tagged (`boss`, `arena`), so they count. In `ClearFell_W_E_N`: the three exits,
+  two bridges, the boss node and the campsite.
+- **Why**: on the one instance whose layout is known (Clearfell 2693856399 = `ClearFell_W_E_N`) the three
+  checkpoints lie 50 cells from `exit_woods`, 42 from `mud_entrance` and 94 from `campsite` (next
+  `bridge_small` at 111); the waypoint 61 from `mud_entrance`.
+- **Weight**: each layout by how much of its belief puts the checkpoint within 120 units (94 cells) of a
+  landmark: floor 0.3, counted half (`CHECKPOINT_TOL`, `_FLOOR`, `_WEIGHT`). A checkpoint once per sighting
+  (40 units on the track, until a loss); one within 60 cells of an exit icon of the same frame adds nothing
+  (the exit counted; Clearfell's: 28 and 42 cells). Never an anchor, never in gold's share (`Bank::checkpoints`
+  is left out of `gold_posterior`), no particle moved. Only checkpoints that look like their sprite reach it
+  (I9).
+- **Flight recorder**: checkpoints were already written once per part; the replay feeds them on the frame of
+  their line only (the app sees them on every frame, which counts once). Old logs replay as before, with their
+  checkpoints now fed too.
+
+Tests (`a_checkpoint_is_soft_evidence_of_a_landmark`): arrived from the encampment, Clearfell's middle
+checkpoint in view (from the screenshot's measured places) lifts `ClearFell_W_E_N` from 0.030 to 0.041, the
+top layout; seen again it adds nothing; by an exit icon nothing; far from every landmark of every layout the
+posterior does not move.
+
+Simulation (`what_checkpoints_add`, one seed; checkpoints by half the landmark nodes, 50–120 units off,
+seen like exit icons):
+
+| View | Checkpoints | Within 45° at 60% | Top layout true for good | Gold steps | Gold > 60° off |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Minimap | no | 37.3% | 34% | 12 | 0 |
+| Minimap | yes | 34.2% | 38% | 2 | 0 |
+| Wide | no | 52.8% | 50% | 173 | 1 |
+| Wide | yes | 51.3% | 55% | 205 | 1 |
+
+They help the layout (+4–5 points) and add no wrong gold, but the needle at 60% is no better (−1.5 to −3
+points at one seed): a checkpoint says "some landmark", and a wrong one shifts the belief as much as a right
+one helps. The owner's only zone with checkpoints today is the Riverbank, which has one exit and no layout
+fixed by names: the rule is not checked on a real visit yet.
