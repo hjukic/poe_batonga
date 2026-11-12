@@ -457,15 +457,23 @@ impl Session {
     /// The frame's icons with the named kinds that colour does not make (a boss's icon, a
     /// grey one, a skull) kept only once read at the same map place (`SAME_ICON` cells, the
     /// same sprite) in two frames: an icon stays where it is, the scene a sprite was matched
-    /// on does not. Exits, checkpoints and waypoints pass as read.
+    /// on does not. A boss pair's grey icon counts only frames without a live icon of its
+    /// pair (the dead rule wants it grey and alone). Exits, checkpoints and waypoints pass
+    /// as read.
     fn confirm_named(&mut self, icons: &[crate::minimap::bigmap::Icon], pos: (i32, i32)) -> Vec<crate::minimap::bigmap::Icon> {
         self.frame_no += 1;
         let frame = self.frame_no;
         self.named_seen.retain(|n| frame - n.last <= NAMED_FRAMES);
+        let sprites = crate::minimap::bigmap::sprites();
+        let pair_of = |icon: &crate::minimap::bigmap::Icon| icon.sprite.and_then(|id| sprites.iter().find(|s| s.id == id)).and_then(|s| s.pair.clone());
+        let live: Vec<String> = icons.iter().filter(|i| i.kind == "boss").filter_map(pair_of).collect();
         let mut out = Vec::with_capacity(icons.len());
         for icon in icons {
             if matches!(icon.kind, "exit" | "checkpoint" | "waypoint") {
                 out.push(icon.clone());
+                continue;
+            }
+            if icon.kind == "boss-dead" && pair_of(icon).is_some_and(|p| live.contains(&p)) {
                 continue;
             }
             let at = (pos.0 as f32 + icon.x, pos.1 as f32 + icon.y);
@@ -1919,8 +1927,19 @@ mod tests {
         assert!(recorder.dead_bosses().is_empty());
         walk(4..6, &|x| vec![icon("boss-dead", Some("MillerInactive"), live(x).0 + 1.0, live(x).1), icon("boss", Some("MillerActive"), live(x).0, live(x).1)]);
         assert!(recorder.dead_bosses().is_empty());
-        // Then grey and alone at his place, two frames: dead.
-        walk(6..8, &|x| vec![icon("boss-dead", Some("MillerInactive"), live(x).0 + 1.0, live(x).1 - 1.0)]);
+        // Frames 4 and 5 (grey beside the live icon) did not count; frame 6, grey and alone,
+        // is the second such frame after frame 3: dead.
+        walk(6..7, &|x| vec![icon("boss-dead", Some("MillerInactive"), live(x).0 + 1.0, live(x).1 - 1.0)]);
+        assert_eq!(recorder.dead_bosses(), ["The Bloated Miller"]);
+        // The recheck's case, from fresh: one grey frame beside the live icon, then one grey
+        // frame alone: nobody.
+        enter(&recorder, "G1_1");
+        walk(0..3, &|x| vec![icon("boss", Some("MillerActive"), live(x).0, live(x).1)]);
+        walk(3..4, &|x| vec![icon("boss-dead", Some("MillerInactive"), live(x).0, live(x).1), icon("boss", Some("MillerActive"), live(x).0 + 2.0, live(x).1)]);
+        walk(4..5, &|x| vec![icon("boss-dead", Some("MillerInactive"), live(x).0, live(x).1)]);
+        assert!(recorder.dead_bosses().is_empty());
+        // A second grey frame alone: dead.
+        walk(5..6, &|x| vec![icon("boss-dead", Some("MillerInactive"), live(x).0, live(x).1)]);
         assert_eq!(recorder.dead_bosses(), ["The Bloated Miller"]);
         // The Grim Tangle (one boss): a grey twin never seen alive names nobody.
         enter(&recorder, "G1_6");

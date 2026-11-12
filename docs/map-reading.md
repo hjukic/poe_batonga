@@ -1505,3 +1505,12 @@ without a name after the kill.
 layout against another is capped at 1.5 nats (`CHECKPOINT_CAP`), at most 6 count in a visit
 (`CHECKPOINT_MOST`), and one the belief puts within 150 units of a counted one is that one again, also after a
 tracking loss (`CHECKPOINT_SAME`). Fed 50 checkpoints, 6 count and no layout's odds move by more than 1.5.
+
+**Fix pass 2 (the recheck).** Thresholds from all 24 of the owner's captures and the Clearfell screenshot: a
+waypoint must score its sprite 0.55 like a checkpoint (real 0.653–0.680 on 15 captures; a hen on a blue rune
+circle 0.496, fixture `bigmap-hen-rune.ppm`), and an **exit** must score `Entrance` 0.83 (real 0.930–0.948 on
+17 captures, 0.95 on Clearfell, 0.94–0.96 drawn with the player's cross on them; lit rock 0.73 and 0.62,
+`bigmap-lit-rock.ppm`; a brazier behind a label 0.05, `minimap-brazier.ppm`). An orange blob that does not
+look like an exit and is no other icon is dropped. Real labels sit above the icon and did not lower a real
+exit's score; a label drawn over six of its rows would (0.72), not seen on a screen. The dead rule counts a
+grey twin's frame only when no live icon of its pair is read in it.
