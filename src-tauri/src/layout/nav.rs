@@ -2257,7 +2257,7 @@ mod tests {
         let view = nav.guide_on(&target, Some(&lent(&corridor, &trail, (0, 0), None))).unwrap();
         let note = nav.last_way().unwrap();
         println!("{view:?} {note:?}");
-        assert!(note.unrecorded < 0.2, "{note:?}");
+        assert!(note.unrecorded < RECORDED, "{note:?}");
         assert!(angle_between(view.degrees.unwrap(), -90.0) > 5.0, "round the pillar: {view:?}");
         assert_eq!(view.source, "estimated");
     }

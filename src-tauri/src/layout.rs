@@ -1252,7 +1252,16 @@ mod tests {
         let grelwood = Icon { kind: "exit", x: -136.0, y: 83.0, label: Some("The Grelwood".into()) };
         recorder.on_icons(&[grelwood], true);
         recorder.on_frame(&frame((4, 0)), [300, 260]);
-        let needle = |r: &Recorder| r.0.lock().unwrap().view().unwrap().guide.unwrap();
+        // The navigator's needle without the recorded map: whether the icon reached
+        // it. (The app's needle follows the way round the corridor's recorded wall
+        // to the icon: `route.rs` and `nav.rs` test that.)
+        let needle = |r: &Recorder| {
+            let state = r.0.lock().unwrap();
+            assert_eq!(state.view().unwrap().guide.unwrap().target, "The Grelwood");
+            let session = state.session.as_ref().unwrap();
+            let target = guide::NavTarget { label: "The Grelwood".into(), exit: Some("G1_4".into()), ..Default::default() };
+            session.navigator.as_ref().unwrap().guide(&[target]).unwrap()
+        };
         let view = needle(&recorder);
         assert!(guide::angle_between(view.degrees.unwrap(), guide::screen_bearing(-136.0, 83.0).unwrap()) < 15.0, "{view:?}");
         // The next frame lists only icons inside the frame: the far one is kept, moved with the player.
