@@ -297,6 +297,12 @@ export function importArea(area, topologies, worldAreas, src) {
           keys: node.keys,
         };
       });
+      // Act 4's islands (Shrike Island, Plunder's Point, Brinerot Cove) have no entranceN: the way
+      // out is the boat at the landing, keyed "teleport1" (Ngakanu's landing has both "entrance1"
+      // and "teleport1", leading to Kingsmarch). With one connection and no other exit, it is that.
+      if (connections.length === 1 && !outNodes.some((n) => n.exit)) {
+        for (const n of outNodes) if (n.keys.includes('teleport1')) n.exit = connections[0];
+      }
       // .dgr only: a grid cell (23 grid units) is a room of RoomUnitSize tiles; rooms share their border tile.
       const master = ex.graph.master;
       const extra = format === 'dgr' ? { roomUnitSize: master ? roomUnitSize(src.text(master)) : null } : {};

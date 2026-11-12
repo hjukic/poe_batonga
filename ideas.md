@@ -2,12 +2,13 @@
 
 ## Datamine zone layouts from the game files
 
-**Done for every campaign zone (2026-11-12):** 101 areas, 581 layout graphs (`.tgr` and
+**Done for every campaign zone (2026-11-12):** 101 areas, 584 layout graphs (`.tgr` and
 `.dgr`), refreshed by `scripts/update-layouts.sh` after each patch; see
 [data sources](docs/data-sources.md#game-layout-graphs-datamined). Still open:
 
-- expand sub-graphs (`graph` nodes): eight areas' layouts are only placeholders for them
-  (Freythorn, Ogham Manor, Dreadnought, …), so they have no exits yet;
+- sub-graphs are expanded (2026-11-12); still guessed: the turn of `(any)`/`(best)`
+  placements and the scale of sub-graphs on another grid (Freythorn, Halani Gates);
+  stairs and teleports between the parts (matching `uniqueA0` keys) are not edges yet;
 - check the `.dgr` scale (one grid unit ≈ `roomUnitSize − 1` world units, derived from
   the room files) on a recorded dungeon, e.g. Mud Burrow;
 - use the `.dgr` areas in the app (`AREAS` in `graph.rs` lists only G1_1 and G1_2);

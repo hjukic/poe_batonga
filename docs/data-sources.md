@@ -117,8 +117,8 @@ with at least one topology; not `…_WorldMap`, map areas, hideouts, or areas na
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 1 | 17 | 213 | 59 | 154 | 40 | 627 KiB | G1_15 Ogham Manor (its one connection is the way back, marked as start) |
 | 2 | 20 | 126 | 8 | 118 | 32 | 394 KiB | |
-| 3 | 20 | 134 | 0 | 134 | 22 | 497 KiB | G3_town, G3_15 |
-| 4 | 22 | 82 | 0 | 82 | 0 | 229 KiB | G4_7, G4_13, G4_14 |
+| 3 | 20 | 134 | 0 | 134 | 22 | 497 KiB | G3_town (exits inside the fixed town rooms), G3_15 (no connections) |
+| 4 | 22 | 82 | 0 | 82 | 0 | 229 KiB | |
 | 6 (interludes) | 22 | 29 | 2 | 27 | 3 | 76 KiB | |
 | **All** | **101** | **584** | **69** | **515** | **97** | **1.8 MiB** | |
 
@@ -211,6 +211,14 @@ on layouts with sub-graphs `expanded: true`, `parts`, `guessedTurns`, maybe `alt
     Peaks now have exits. Ogham Manor's floors are placed but its only connection (the
     Ramparts) is the start. The Ziggurat Encampment is two one-node town rooms whose exits are
     inside the fixed rooms (like Clearfell Encampment).
+- **Areas left without exits** (the test names them): Ogham Manor (above); the Ziggurat
+  Encampment (above); the Library of Kamasa (`G3_15`): its `Connections` is empty, no area
+  connects to it, so its `entrance1` names nothing.
+- **Act 4's islands** (Shrike Island, Plunder's Point, Brinerot Cove) have no `entranceN`:
+  the way back to Kingsmarch is the boat at the landing, keyed `teleport1` (Ngakanu's
+  landing carries both `entrance1` and `teleport1`). When a layout has no exit and the
+  area one connection, nodes keyed `teleport1` lead to it. Other `teleportN` keys are
+  teleports inside a zone (arenas, stairs, interiors) and stay without `exit`.
 - A node often carries several `entranceN` keys (144 nodes; Ardura Caravan's single
   town node has 26): `exit` holds only the first; `keys` has them all.
 - Three exits lead out of the campaign data (Grelwood and Infested Barrens to

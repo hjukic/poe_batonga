@@ -58,16 +58,20 @@ test('every Act 1 area has at least one layout', () => {
   for (const id of act1) assert.ok(areas.get(id)?.topologies.length > 0, `${id}: no layouts`);
 });
 
-// Act 1 layouts without an exit node, and why.
+// Areas whose layouts have no exit node, and why.
 const NO_EXIT = {
   // Its only connection is the way back to the Ramparts; the graphs mark that spot only as the start.
   G1_15: 'only connection is the way back, marked as start',
+  // Two one-node town rooms (present and past); the exits are inside the fixed rooms.
+  G3_town: 'town: exits inside the fixed rooms',
+  // No connections in WorldAreas and no area leads to it; its "entrance1" names nothing.
+  G3_15: 'no connections in the table',
 };
 
-test('every Act 1 layout has an exit (or is a named exception)', () => {
+test('every layout of every area has an exit (or is a named exception)', () => {
   for (const [id, area] of areas) {
-    if (area.act !== 1) continue;
     for (const t of area.topologies) {
+      if (NO_EXIT[id] && id === 'G3_town') continue;
       if (NO_EXIT[id]) assert.ok(t.nodes.some((n) => n.start), `${id} ${t.id}: no start either`);
       else assert.ok(t.nodes.some((n) => n.exit), `${id} ${t.id}: no exit`);
     }
@@ -86,6 +90,15 @@ test('no layout keeps a sub-graph placeholder; expanded layouts say so', () => {
   // Ogham Manor: 16 layouts × 2 basements × 2 middle floors would be 64, over the cap: first files kept.
   assert.equal(areas.get('G1_15').topologies.length, 16);
   assert.ok(areas.get('G1_15').topologies.every((t) => t.alternatives?.length === 2));
+});
+
+test("Act 4's islands: the boat at the landing leads back to Kingsmarch", () => {
+  for (const id of ['G4_7', 'G4_13', 'G4_14']) {
+    for (const t of areas.get(id).topologies) {
+      const exits = t.nodes.filter((n) => n.exit);
+      assert.ok(exits.length > 0 && exits.every((n) => n.exit === 'G4_town' && n.keys.includes('teleport1')), `${id} ${t.id}`);
+    }
+  }
 });
 
 test('Clearfell and the Riverbank keep their layout counts', () => {
