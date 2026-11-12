@@ -1060,6 +1060,7 @@ impl Recorder {
         match event {
             LogEvent::ZoneEntered { area, level, seed } => {
                 let left = state.session.as_ref().map(|s| s.recording.area.clone());
+                let respawn = live && left.as_deref() == Some(area.as_str());
                 if let Some(session) = state.session.as_mut() {
                     if live && session.started {
                         session.live.add_poi("left", area);
@@ -1109,8 +1110,12 @@ impl Recorder {
                 // looked for first where they came in by the same exit before.
                 let mut recording = recording;
                 let largest = (0..recording.parts.len()).max_by_key(|&i| recording.parts[i].walls.len());
+                // Not after a death: the zone is generated again where it was left (a respawn at a
+                // checkpoint), and found on the old map from anywhere the map went on about 100
+                // cells off (the owner's Clearfell, 2026-11-12). A new part starts; the old one
+                // is joined when the walls line up (`merge_pieces`).
                 let live = match largest {
-                    Some(i) if recording.parts[i].walls.len() >= MERGE_MIN_WALLS => {
+                    Some(i) if !respawn && recording.parts[i].walls.len() >= MERGE_MIN_WALLS => {
                         let part = recording.parts.remove(i);
                         let from = arrived_from.as_deref();
                         let hint = part.pois.iter().filter(|p| p.kind == "arrived" && Some(p.label.as_str()) == from).map(|p| (p.x, p.y)).last();
@@ -1805,6 +1810,39 @@ mod tests {
     }
 
     #[test]
+    fn a_respawn_in_the_zone_starts_a_new_part() {
+        let dir = scratch("respawn");
+        let recorder = Recorder::new(Some(dir.clone()));
+        enter(&recorder, "G1_town");
+        enter(&recorder, "G1_2");
+        for step in 0..40 {
+            recorder.on_frame(&frame((step * 4, 0)), [300, 260]);
+        }
+        // Slain and generated again: the same area entered from itself.
+        enter(&recorder, "G1_2");
+        let state = recorder.0.lock().unwrap();
+        let session = state.session.as_ref().unwrap();
+        assert!(session.live.walls.is_empty(), "a new part");
+        assert!(!session.live.unplaced);
+        assert_eq!(session.recording.parts.len(), 1, "the old map waits to be joined");
+        drop(state);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_guessed_boss_pair_stands_for_no_boss() {
+        use crate::minimap::bigmap::Icon;
+        let beira = [Boss { name: "Beira".into(), exit: None, tag: Some("boss".into()) }];
+        let crone = |kind: &'static str, sprite: &'static str| Icon { kind, x: 0.0, y: 0.0, label: None, sprite: Some(sprite) };
+        // Clearfell's "Crone" pair: no boss named, tied by guess, the place "Frostblood Ritual".
+        assert!(boss_candidates(&crone("boss", "CroneActive"), "G1_2", &beira).is_empty());
+        assert!(boss_candidates(&crone("boss-dead", "CroneInactive"), "G1_2", &beira).is_empty());
+        // A pair the data ties to its boss still counts: the Miller's own.
+        let miller = [Boss { name: "The Bloated Miller".into(), exit: Some("G1_town".into()), tag: None }];
+        assert_eq!(boss_candidates(&crone("boss", "MillerActive"), "G1_1", &miller).len(), 1);
+    }
+
+    #[test]
     fn walls_seen_again_a_cell_off_add_nothing() {
         let rel: Vec<(i32, i32)> = (0..40).map(|x| (x, 5)).collect();
         let mut live = Live::new();
@@ -2190,8 +2228,9 @@ mod tests {
         assert_eq!(names(&icon("boss", Some("MillerActive"), 0.0, 0.0), "G1_1", &miller), ["The Bloated Miller"]);
         assert!(names(&icon("boss", Some("MillerActive"), 0.0, 0.0), "G1_2", &[boss("Beira", None, None)]).is_empty());
         assert_eq!(names(&icon("boss-dead", Some("GargoyleInactive"), 0.0, 0.0), "G1_15", &manor), ["Candlemass"]);
-        // An unnamed pair (the Count's, read by hand as Count Geonor): either of the zone's.
-        assert_eq!(names(&icon("boss", Some("CountActive"), 0.0, 0.0), "G1_15", &manor), ["Candlemass", "Count Geonor"]);
+        // An unnamed pair tied to its area by guess alone (the Count's): no boss, as the
+        // Crone pair in Clearfell turned out to be the league's ritual altar.
+        assert!(names(&icon("boss", Some("CountActive"), 0.0, 0.0), "G1_15", &manor).is_empty());
     }
 
     #[test]

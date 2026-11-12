@@ -581,6 +581,10 @@ pub fn sprites() -> &'static [Sprite] {
             boss: Option<String>,
             #[serde(default = "yes")]
             checklist: bool,
+            /// How the pair was tied to its area and boss ("id", "name", "monster", "place",
+            /// "assumed").
+            #[serde(default)]
+            how: Option<String>,
         }
         fn yes() -> bool {
             true
@@ -599,7 +603,12 @@ pub fn sprites() -> &'static [Sprite] {
             .filter_map(|(i, e)| {
                 let kind = *KINDS.iter().find(|k| **k == e.kind)?;
                 let rgba = SPRITE_PIXELS.get(i * bytes..(i + 1) * bytes)?;
-                Some(Sprite { id: e.id, kind, pair: e.pair, area: e.area, boss: e.boss, checklist: e.checklist, rgba })
+                // A pair that names no boss and was tied to its area by guess alone stands for
+                // no checklist boss: Clearfell's "Crone" pair carries the place "Frostblood
+                // Ritual", the league's altar, and would have ticked "Kill Beira" (review, 2026-11-12).
+                let guessed = e.boss.is_none() && e.how.as_deref().is_none_or(|how| how == "assumed");
+                let checklist = e.checklist && !(e.pair.is_some() && guessed);
+                Some(Sprite { id: e.id, kind, pair: e.pair, area: e.area, boss: e.boss, checklist, rgba })
             })
             .collect()
     })
