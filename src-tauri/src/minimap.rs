@@ -31,13 +31,14 @@ const REGION_H: f64 = 0.24;
 pub const CELL: usize = 2;
 /// Wall pixels a cell needs, so single stray pixels are ignored.
 const CELL_MIN: u32 = 2;
-const WALLS_MIN: u32 = 40;
+/// How fast the learnt spot of the minimap's cross follows new frames.
+const LEARN_RATE: f64 = 0.2;
 
 #[derive(Clone, Serialize, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MinimapView {
     pub enabled: bool,
-    /// Walls or the player marker were found in the last frame.
+    /// A map (minimap or big map) with its player marker was read in the last frame.
     pub visible: bool,
     pub message: String,
     /// Grid size in cells; `walls` lists occupied cells as [column, row].
@@ -76,17 +77,20 @@ fn is_marker(r: u8, g: u8, b: u8) -> bool {
 
 /// Reads a minimap capture: its wall cells, and the player cross near `marker` (pixels, the
 /// spot where the minimap draws it) within `radius`. Orange elsewhere (an exit icon, fire)
-/// does not move the player.
+/// does not move the player. Without the cross this is not a minimap (with the big map
+/// open the corner shows big-map lines): not visible.
 pub fn analyse(image: &Image, marker: [f64; 2], radius: f64) -> MinimapView {
     let cols = image.width.div_ceil(CELL);
     let rows = image.height.div_ceil(CELL);
+    let player = bigmap::marker_near(image, marker, radius).map(|p| p.map(|v| (v / CELL as f64) as f32));
+    if player.is_none() {
+        return MinimapView { cols, rows, ..MinimapView::status(true, "Minimap not visible") };
+    }
     let mut cells = vec![0u32; cols * rows];
-    let mut wall_count = 0u32;
     for y in 0..image.height {
         for x in 0..image.width {
             let i = (y * image.width + x) * 3;
             if is_wall(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]) {
-                wall_count += 1;
                 cells[(y / CELL) * cols + x / CELL] += 1;
             }
         }
@@ -97,14 +101,7 @@ pub fn analyse(image: &Image, marker: [f64; 2], radius: f64) -> MinimapView {
         .filter(|(_, &n)| n >= CELL_MIN)
         .map(|(i, _)| [(i % cols) as u16, (i / cols) as u16])
         .collect();
-    let player = bigmap::marker_near(image, marker, radius).map(|p| p.map(|v| (v / CELL as f64) as f32));
-    let visible = wall_count >= WALLS_MIN || player.is_some();
-    let message = match (visible, player.is_some()) {
-        (false, _) => "Minimap not visible",
-        (true, false) => "Reading minimap, player marker not found",
-        (true, true) => "Reading minimap",
-    };
-    MinimapView { enabled: true, visible, message: message.into(), cols, rows, walls, player }
+    MinimapView { enabled: true, visible: true, message: "Reading minimap".into(), cols, rows, walls, player }
 }
 
 /// Parses binary PPM (P6, 8-bit), which is what `grim -t ppm` writes.
@@ -318,41 +315,77 @@ fn capture_bigmap(_region: &CaptureRegion) -> Result<Image, String> {
     Err("Minimap reading supports Windows and Linux/Hyprland".into())
 }
 
-/// One frame from whichever map is showing: the corner minimap while it is drawn, else the
-/// big map (Tab), which hides the minimap; else the minimap's "not visible". Returns the
-/// frame, the capture size the recorder stores (minimap pixels) and the map icons around
-/// the player.
-fn read(region: &CaptureRegion) -> Result<(MinimapView, [usize; 2], Vec<bigmap::Icon>), String> {
-    let image = capture(region)?;
-    choose(&image, region.minimap_marker, &region.plan, || capture_bigmap(region))
+/// One reading: the frame for the recorder, the capture size it stores (minimap pixels)
+/// and the map icons around the player.
+struct Reading {
+    view: MinimapView,
+    capture_px: [usize; 2],
+    icons: Vec<bigmap::Icon>,
 }
 
-fn choose(
-    minimap: &Image,
-    minimap_marker: [f64; 2],
-    plan: &bigmap::Plan,
-    bigmap: impl FnOnce() -> Result<Image, String>,
-) -> Result<(MinimapView, [usize; 2], Vec<bigmap::Icon>), String> {
-    let view = analyse(minimap, minimap_marker, plan.radius * 1.5);
-    let size = [minimap.width, minimap.height];
-    let minimap_icons = |view: &MinimapView| {
-        let centre = view.player.map_or(minimap_marker, |p| p.map(|v| v as f64 * CELL as f64));
-        bigmap::icons(minimap, centre, 1.0, bigmap::size(plan))
-    };
-    // The player marker where the minimap draws it: the minimap is showing. Without it,
-    // map lines in the corner may be the big map's, so the big map is checked first.
-    if view.player.is_some() {
-        let icons = minimap_icons(&view);
-        return Ok((view, size, icons));
-    }
-    if let Ok(image) = bigmap() {
-        let (big, icons) = bigmap::read(&image, plan);
-        if big.visible {
-            return Ok((big, plan.frame.capture_px(), icons));
+/// What the reader keeps from frame to frame.
+#[derive(Default)]
+struct Memory {
+    /// Where accepted minimap frames had their player cross (minimap-capture pixels,
+    /// averaged), and the estimate it was learnt from: a new estimate (the window moved or
+    /// was resized) starts over.
+    minimap_marker: Option<([f64; 2], [f64; 2])>,
+}
+
+impl Memory {
+    /// Where the minimap's cross is expected: where it was seen, else the estimate.
+    fn minimap_marker(&self, estimate: [f64; 2]) -> [f64; 2] {
+        match self.minimap_marker {
+            Some((at, from)) if from == estimate => at,
+            _ => estimate,
         }
     }
-    let icons = if view.visible { minimap_icons(&view) } else { vec![] };
-    Ok((view, size, icons))
+
+    /// An accepted minimap frame had its cross at `seen`; the spot stays within `limit`
+    /// pixels of the estimate.
+    fn learn(&mut self, estimate: [f64; 2], seen: [f64; 2], limit: f64) {
+        let at = match self.minimap_marker {
+            Some((at, from)) if from == estimate => [0, 1].map(|i| at[i] + (seen[i] - at[i]) * LEARN_RATE),
+            _ => seen,
+        };
+        let (dx, dy) = (at[0] - estimate[0], at[1] - estimate[1]);
+        let far = dx.hypot(dy) / limit;
+        let at = if far > 1.0 { [estimate[0] + dx / far, estimate[1] + dy / far] } else { at };
+        self.minimap_marker = Some((at, estimate));
+    }
+}
+
+/// One frame from whichever map is showing: the corner minimap while it shows its player
+/// cross, else the big map (Tab), which hides the minimap; else not visible.
+fn read(memory: &mut Memory, region: &CaptureRegion) -> Result<Reading, String> {
+    let image = capture(region)?;
+    choose(memory, &image, region.minimap_marker, &region.plan, || capture_bigmap(region))
+}
+
+/// The corner counts as the minimap only with its cross where the minimap's cross was
+/// last seen (`estimate` until one is seen); corner lines without it are the big map's.
+fn choose(
+    memory: &mut Memory,
+    minimap: &Image,
+    estimate: [f64; 2],
+    plan: &bigmap::Plan,
+    bigmap: impl FnOnce() -> Result<Image, String>,
+) -> Result<Reading, String> {
+    let search = plan.radius * bigmap::LEARN_LIMIT;
+    let view = analyse(minimap, memory.minimap_marker(estimate), search);
+    if let Some(seen) = view.player {
+        let seen = seen.map(|v| v as f64 * CELL as f64);
+        memory.learn(estimate, seen, search);
+        let icons = bigmap::icons(minimap, seen, 1.0, bigmap::size(plan));
+        return Ok(Reading { view, capture_px: [minimap.width, minimap.height], icons });
+    }
+    if let Ok(image) = bigmap() {
+        let (view, icons) = bigmap::read(&image, plan);
+        if view.visible {
+            return Ok(Reading { view, capture_px: plan.frame.capture_px(), icons });
+        }
+    }
+    Ok(Reading { view, capture_px: [minimap.width, minimap.height], icons: vec![] })
 }
 
 pub struct Minimap {
@@ -374,6 +407,7 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
     let last_icons = minimap.icons.clone();
     std::thread::spawn(move || {
         let mut region: Option<(Result<CaptureRegion, String>, Instant)> = None;
+        let mut memory = Memory::default();
         loop {
             let started = Instant::now();
             let view = {
@@ -383,8 +417,8 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
                 match &region {
                     None => MinimapView::status(true, "Starting"),
                     Some((Err(error), _)) => MinimapView::status(true, error),
-                    Some((Ok(area), _)) => match read(area) {
-                        Ok((view, capture_px, icons)) => {
+                    Some((Ok(area), _)) => match read(&mut memory, area) {
+                        Ok(Reading { view, capture_px, icons }) => {
                             if let Ok(mut last) = last_icons.lock() {
                                 *last = icons;
                             }
@@ -484,9 +518,9 @@ mod tests {
     fn live_minimap() {
         let region = locate_minimap().unwrap();
         let started = Instant::now();
-        let (view, capture_px, icons) = read(&region).unwrap();
+        let Reading { view, capture_px, icons } = read(&mut Memory::default(), &region).unwrap();
         println!(
-            "regions {} / {}: {capture_px:?} px in {:?}; {}; {} wall cells of {}x{}; player {:?}; icons {icons:?}",
+            "regions {} / {}: {capture_px:?} px in {:?}; {}; {} wall cells of {}x{}; player {:?} (estimate {:?}); icons {icons:?}",
             region.minimap,
             region.bigmap,
             started.elapsed(),
@@ -494,7 +528,8 @@ mod tests {
             view.walls.len(),
             view.cols,
             view.rows,
-            view.player
+            view.player,
+            region.minimap_marker.map(|v| v / CELL as f64),
         );
         let mut art = vec![vec![' '; view.cols]; view.rows];
         for [c, r] in &view.walls {
@@ -518,6 +553,7 @@ mod tests {
         let region = locate_minimap().unwrap();
         let recorder = Recorder::new(None);
         recorder.on_log(&LogEvent::ZoneEntered { area: "live-test".into(), level: 0, seed: None }, false);
+        let mut memory = Memory::default();
         let (mut minimap, mut big, mut analysis, mut record) = (vec![], vec![], vec![], vec![]);
         let mut message = String::new();
         for _ in 0..20 {
@@ -528,10 +564,10 @@ mod tests {
             let image_big = capture_bigmap(&region).unwrap();
             big.push(t.elapsed());
             let t = Instant::now();
-            let (view, size, _) = choose(&image, region.minimap_marker, &region.plan, || Ok(image_big)).unwrap();
+            let Reading { view, capture_px, .. } = choose(&mut memory, &image, region.minimap_marker, &region.plan, || Ok(image_big)).unwrap();
             analysis.push(t.elapsed());
             let t = Instant::now();
-            recorder.on_frame(&view, size);
+            recorder.on_frame(&view, capture_px);
             record.push(t.elapsed());
             message = format!("{}, {} walls", view.message, view.walls.len());
         }
@@ -557,11 +593,12 @@ mod tests {
         let recorder = Recorder::new(Some(out.into()));
         recorder.on_log(&LogEvent::ZoneEntered { area, level: 0, seed: Some(seconds) }, false);
         let started = Instant::now();
+        let mut memory = Memory::default();
         let (mut frames, mut slowest) = (0, Duration::ZERO);
         while started.elapsed() < Duration::from_secs(seconds) {
             let t = Instant::now();
             let Ok(region) = locate_minimap() else { continue };
-            let Ok((view, capture_px, _)) = read(&region) else { continue };
+            let Ok(Reading { view, capture_px, .. }) = read(&mut memory, &region) else { continue };
             recorder.on_frame(&view, capture_px);
             frames += 1;
             slowest = slowest.max(t.elapsed());
@@ -595,8 +632,8 @@ mod tests {
     #[test]
     fn minimap_wins_while_it_shows_its_player() {
         let (_, plan) = big_map();
-        let (view, size, _) = choose(&minimap(), [60.5, 50.5], &plan, || panic!("big map read")).unwrap();
-        assert_eq!((view.message.as_str(), size), ("Reading minimap", [120, 100]));
+        let reading = choose(&mut Memory::default(), &minimap(), [60.5, 50.5], &plan, || panic!("big map read")).unwrap();
+        assert_eq!((reading.view.message.as_str(), reading.capture_px), ("Reading minimap", [120, 100]));
     }
 
     #[test]
@@ -604,7 +641,7 @@ mod tests {
         // The corner while the big map is open: zone name and league text, no minimap.
         let corner = fixture("corner-bigmap-open.ppm");
         let (big, plan) = big_map();
-        let (view, size, icons) = choose(&corner, [100.0, 80.0], &plan, || Ok(big)).unwrap();
+        let Reading { view, capture_px: size, icons } = choose(&mut Memory::default(), &corner, [100.0, 80.0], &plan, || Ok(big)).unwrap();
         assert_eq!(view.message, "Reading big map");
         // The Grelwood exit and its checkpoint, in cells from the player.
         let icons: Vec<_> = icons.iter().map(|i| (i.kind, i.x.round() as i32, i.y.round() as i32)).collect();
@@ -614,18 +651,44 @@ mod tests {
         assert!(view.walls.len() > 500);
     }
 
+    /// Map lines in the corner, as the big map draws them there: no cross.
+    fn corner_lines(size: [usize; 2]) -> Image {
+        image(size[0], size[1], |x, y| if y % 15 < 2 || x % 23 < 2 { [91, 91, 121] } else { [14, 16, 22] })
+    }
+
     #[test]
-    fn minimap_without_its_player_still_counts_when_there_is_no_big_map() {
-        // Walls but no player cross (as today: still read), and the big map shows nothing.
-        let walls_only = image(120, 100, |_, y| if y == 20 || y == 21 { [91, 91, 121] } else { [10, 14, 20] });
+    fn corner_lines_without_the_cross_are_not_a_minimap() {
         let (_, plan) = big_map();
+        assert!(analyse(&corner_lines([120, 100]), [60.5, 50.5], 24.0).walls.is_empty());
+        // The big map not readable (capture failed, or only scene): not visible.
+        let reading = choose(&mut Memory::default(), &corner_lines([120, 100]), [60.5, 50.5], &plan, || Err("grim failed".into())).unwrap();
+        assert!(!reading.view.visible && reading.view.walls.is_empty());
         let scene = fixture("bigmap-scene.ppm");
-        let (view, _, _) = choose(&walls_only, [60.5, 50.5], &plan, || Ok(scene)).unwrap();
-        assert_eq!(view.message, "Reading minimap, player marker not found");
-        // Neither map: the minimap's "not visible", also when the big map can't be captured.
-        let dark = image(120, 100, |_, _| [12, 13, 18]);
-        let (view, _, _) = choose(&dark, [60.5, 50.5], &plan, || Err("grim failed".into())).unwrap();
-        assert_eq!(view.message, "Minimap not visible");
+        let reading = choose(&mut Memory::default(), &corner_lines([120, 100]), [60.5, 50.5], &plan, || Ok(scene)).unwrap();
+        assert!(!reading.view.visible && reading.view.walls.is_empty());
+        // An exit icon (or fire) in the corner is no cross.
+        let mut with_exit = corner_lines([120, 100]);
+        for y in 41..61 {
+            for x in 52..70 {
+                with_exit.pixels[(y * 120 + x) * 3..][..3].copy_from_slice(&[205, 96, 38]);
+            }
+        }
+        let reading = choose(&mut Memory::default(), &with_exit, [60.5, 50.5], &plan, || Err("grim failed".into())).unwrap();
+        assert!(!reading.view.visible && reading.view.player.is_none());
+    }
+
+    #[test]
+    fn the_cross_is_looked_for_where_it_was_last_seen() {
+        let (_, plan) = big_map();
+        let mut memory = Memory::default();
+        // Expected at (75, 50), seen at (60, 50): learnt.
+        let reading = choose(&mut memory, &minimap(), [75.5, 50.5], &plan, || panic!("big map read")).unwrap();
+        assert_eq!(reading.view.player, Some([30.25, 25.25]));
+        assert_eq!(memory.minimap_marker([75.5, 50.5]), [60.5, 50.5]);
+        // A new estimate (the window moved) starts over; the spot stays near the estimate.
+        assert_eq!(memory.minimap_marker([80.0, 50.0]), [80.0, 50.0]);
+        memory.learn([0.0, 0.0], [100.0, 0.0], 24.0);
+        assert_eq!(memory.minimap_marker([0.0, 0.0]), [24.0, 0.0]);
     }
 
     #[test]
@@ -710,15 +773,17 @@ mod tests {
         let mini_marker = (minimap_marker[0] as i32, minimap_marker[1] as i32);
         let big_marker = (plan.marker[0] as i32, plan.marker[1] as i32);
         let (start, mut pos) = ((60, 80), (60, 80));
+        let mut memory = Memory::default();
         let mut seen = vec![];
         for step in 0..90 {
             pos = (60 + step * 2, 80 + (step as f32 / 9.0).sin() as i32 * 6 + step / 3);
             let big_open = (30..60).contains(&step);
-            let corner = if big_open { image(600, 518, |_, _| [14, 16, 22]) } else { screen(600, 518, pos, mini_marker) };
+            // With the big map open the corner shows big-map lines, which must not be read.
+            let corner = if big_open { corner_lines([600, 518]) } else { screen(600, 518, pos, mini_marker) };
             let big = screen(big_size[0], big_size[1], pos, big_marker);
-            let (view, size, _) = choose(&corner, minimap_marker, plan, || Ok(big)).unwrap();
-            seen.push(if view.message == "Reading big map" { "big" } else { "minimap" });
-            recorder.on_frame(&view, size);
+            let reading = choose(&mut memory, &corner, minimap_marker, plan, || Ok(big)).unwrap();
+            seen.push(if reading.view.message == "Reading big map" { "big" } else { "minimap" });
+            recorder.on_frame(&reading.view, reading.capture_px);
         }
         let json = serde_json::to_value(recorder.view().unwrap()).unwrap();
         (json, seen, (pos.0 - start.0, pos.1 - start.1))

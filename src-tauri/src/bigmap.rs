@@ -90,6 +90,10 @@ pub fn area(window_px: [f64; 2], frame: &Frame) -> ([f64; 4], [f64; 2]) {
     ([x0, y0, x1 - x0, y1 - y0], [marker[0] - x0, marker[1] - y0])
 }
 
+/// The minimap's cross is looked for within this many marker radii of where it was last
+/// seen, and that spot stays within as many radii of the estimate.
+pub const LEARN_LIMIT: f64 = 1.5;
+
 pub fn radius(window_px: [f64; 2]) -> f64 {
     MARKER_RADIUS * window_px[1] / 2160.0
 }

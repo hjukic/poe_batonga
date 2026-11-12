@@ -336,13 +336,16 @@ recording and one movement track continue across both views.
 
 `src-tauri/src/bigmap.rs`; the choice per frame is `choose` in `minimap.rs`.
 
-1. Capture the minimap corner. If the minimap is read (walls or marker, as before)
-   and its player marker is where the minimap draws it, use the minimap.
-2. Else capture the big map around the player (a 638x556 px area). If its marker is
-   found within 16 px of where the big map draws it and at least 40 wall cells
-   remain, use the big map: message "Reading big map".
-3. Else the minimap's own reading ("Minimap not visible", or a minimap whose marker
-   was not found, as before).
+1. Capture the minimap corner. It counts as the minimap only with its player cross
+   where the minimap's cross was last seen (24 px around it; the estimate until one
+   is seen; the spot follows accepted minimap frames). Then use the minimap.
+2. Else capture the big map around the player. If its cross is found within 16 px of
+   where the big map draws it and its lines pass the checks below, use the big map:
+   message "Reading big map".
+3. Else not visible. With the big map open the corner shows big-map lines, which
+   earlier went to the recorder as a minimap whenever the big map was not read (the
+   same way the window-border strip did); a corner without its cross is never a
+   minimap now.
 
 A big-map frame is built the way a minimap frame is: lavender pixels by the
 minimap's test, 2 px cells at the minimap's scale (`SCALE` 1.0; another value
