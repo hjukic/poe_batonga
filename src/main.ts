@@ -306,9 +306,9 @@ let minimapTracking = false;
 function renderMinimap(view: MinimapView) {
   minimapTracking = view.enabled && view.visible && view.player !== null;
   minimapBox.hidden = !view.enabled;
-  if (!minimapTracking) {
-    minimapCanvas.getContext('2d')?.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
-  }
+  // The preview is the map recorded so far: a frame without the player (a fight, the map
+  // closed) leaves it as it is. Cleared here, it blinked: wiped up to 8 times a second and
+  // drawn again with the next full view (the owner, 2026-11-12).
 }
 
 const POI_COLORS: Record<string, string> = { arrived: '#7fd18b', start: '#7fd18b', left: '#8edce8', npc: '#f2d36b' };
