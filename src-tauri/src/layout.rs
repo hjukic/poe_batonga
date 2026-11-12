@@ -18,7 +18,6 @@ mod nav;
 #[cfg(test)]
 mod nav_sim;
 mod obs;
-mod route;
 
 use crate::minimap::MinimapView;
 use crate::tracker::LogEvent;
@@ -120,7 +119,7 @@ struct Live {
     /// Wall cells and how often seen: all of them place frames (`register`).
     walls: HashMap<(i32, i32), u32>,
     /// Big-map wall cells not yet seen from two player positions `HOLD_MOVE` apart, with
-    /// the first: left out of the recording, the overview and the map's ways …
+    /// the first: left out of the recording and the overview …
     held: HashMap<(i32, i32), (i32, i32)>,
     /// … which take these: every cell not held, with how often seen.
     kept: HashMap<(i32, i32), u32>,
@@ -1082,8 +1081,8 @@ impl Recorder {
                 // From a zone that is no neighbour (no exit leads there): the zone's start, not
                 // that zone's exit. A new character's spawn in the Riverbank was recorded as
                 // "arrived from G1_2", the old character's last zone (the owner's run of
-                // 2026-11-12); the navigator already started at the start node, the recording,
-                // the flight recorder and the scale measure took the exit's name.
+                // 2026-11-12); the navigator already started at the start node, the recording
+                // and the flight recorder took the exit's name.
                 let arrived_from = state.previous_area.clone().map(|from| {
                     let neighbour = from.is_empty() || state.graphs.get(area).is_none_or(|g| g.names.contains_key(&from));
                     if neighbour { from } else { String::new() }
@@ -1531,20 +1530,7 @@ impl State {
         };
         if let (Some(view), Some(log)) = (&view, session.obs.borrow_mut().as_mut()) {
             let stale = session.fed_at.is_none_or(|t| t.elapsed() > STALE);
-            // A needle through the recorded map: where it looked and how much fog the way crossed.
-            let way = session.navigator.as_ref().and_then(|n| n.last_way()).filter(|_| !kept).map(|w| obs::Way {
-                ahead: Some([w.ahead.0 as f32, w.ahead.1 as f32]),
-                fog: Some(w.unrecorded as f32),
-            });
-            // A way ahead in shadow: what the map would have shown in its place.
-            let shadow = session.navigator.as_ref().and_then(|n| n.last_shadow()).filter(|_| !kept).map(|h| obs::Shadow {
-                degrees: h.degrees,
-                length: h.length,
-                ahead: [h.ahead.0 as f32, h.ahead.1 as f32],
-                fog: h.unrecorded as f32,
-                gold: h.gold,
-            });
-            log.needle(obs::now_ms(), &self.nav_targets(session), view, kept, stale, way, shadow);
+            log.needle(obs::now_ms(), &self.nav_targets(session), view, kept, stale);
         }
         view
     }
@@ -1581,21 +1567,7 @@ impl State {
             if let Some(graph) = self.graphs.get(area) {
                 targets.extend(graph::target(&graph, &session.came_from, completed));
             }
-            // The part's recorded map, lent: the way to a target whose place on it is known.
-            let place = nav::Place {
-                map: route::Map { walls: &live.kept, trail: &live.part.trail },
-                player: live.pos,
-                came_in: session.came_in.as_ref().filter(|c| !c.from.is_empty()).map(|c| nav::CameIn {
-                    from: &c.from,
-                    at: c.at,
-                    delay: c.delay,
-                    waypoint: c.waypoint,
-                    exits: &c.exits,
-                }),
-            };
-            return nav
-                .guide_on(&targets, Some(&place))
-                .map(|view| not_stale(view, session.fed_at));
+            return nav.guide(&targets).map(|view| not_stale(view, session.fed_at));
         }
         // No layout graphs here (a town): the exit the map shows by name is where to go.
         let first = self.targets.get(area).and_then(|targets| targets.first());
@@ -1948,9 +1920,7 @@ mod tests {
         let grelwood = Icon { kind: "exit", x: -136.0, y: 83.0, label: Some("The Grelwood".into()), sprite: None };
         recorder.on_icons(&[grelwood], true);
         recorder.on_frame(&frame((4, 0)), [300, 260]);
-        // The navigator's needle without the recorded map: whether the icon reached
-        // it. (The app's needle follows the way round the corridor's recorded wall
-        // to the icon: `route.rs` and `nav.rs` test that.)
+        // The navigator's needle: whether the icon reached it.
         let needle = |r: &Recorder| {
             let state = r.0.lock().unwrap();
             assert_eq!(state.view().unwrap().guide.unwrap().target, "The Grelwood");
@@ -2493,11 +2463,6 @@ mod tests {
         eprint!("{}", obs::replay::report(v));
         assert_eq!(v.frames, 46);
         assert!(v.logged > 0 && v.agree == v.logged, "{} of {}: {:?}", v.agree, v.logged, v.differ);
-        // The first needles would follow the recorded corridor round to the far exit:
-        // ways ahead run in shadow, so the needle shown is the one without the map (the
-        // replay gives it), and the map's way goes on the line as `shadow`, scored apart.
-        assert!(!nav::MAP_AHEAD_LIVE);
-        assert!(text.contains("\"shadow\":{") && !text.contains("\"way\":true") && v.mapped == 0, "{text}");
         assert_eq!(v.left.as_ref().unwrap().0, "G1_4");
         // A later visit of the same instance appends; its navigator starts from the
         // instance's memory, which the start line holds: the replay agrees again.
@@ -2565,44 +2530,6 @@ mod tests {
             t.iter().sum::<f64>() / t.len() as f64
         };
         eprintln!("per frame (on_icons, on_frame, view): with the flight recorder {:.0} µs, without {:.0} µs; {times:?}", mean(true), mean(false));
-    }
-
-    #[test]
-    fn an_arrival_is_the_exits_place_only_by_its_exit_and_soon_after_the_entry() {
-        use crate::minimap::bigmap::Icon;
-        let back = guide::NavTarget { label: "Clearfell".into(), exit: Some("G1_2".into()), ..Default::default() };
-        // Into Mud Burrow from Clearfell; the first frame's icons; then 19 frames east.
-        let visit = |icons: Vec<Icon>, late: bool| {
-            let recorder = Recorder::new(None);
-            enter(&recorder, "G1_2");
-            enter(&recorder, "G1_3");
-            recorder.set_targets(vec![("G1_3".into(), back.clone())]);
-            if late {
-                let mut state = recorder.0.lock().unwrap();
-                state.session.as_mut().unwrap().entered = Instant::now().checked_sub(Duration::from_secs(20)).unwrap();
-            }
-            recorder.on_icons(&icons, false);
-            for step in 0..20 {
-                recorder.on_frame(&frame((step * 4, 0)), [300, 260]);
-            }
-            let view = recorder.view().unwrap().guide.unwrap();
-            let state = recorder.0.lock().unwrap();
-            let on_map = state.session.as_ref().unwrap().navigator.as_ref().unwrap().on_map();
-            (on_map, view)
-        };
-        let exit = Icon { kind: "exit", x: -6.0, y: 2.0, label: None, sprite: None };
-        let waypoint = Icon { kind: "waypoint", x: 5.0, y: -4.0, label: None, sprite: None };
-        let (on_map, view) = visit(vec![exit], false);
-        assert!(on_map && view.source == "estimated", "{view:?}");
-        // Back west along the corridor.
-        assert!(guide::angle_between(view.degrees.unwrap(), 180.0) < 20.0, "{view:?}");
-        // (Without the exit's icon, which would be a sighting of its own.)
-        let (on_map, view) = visit(vec![waypoint], false);
-        assert!(!on_map, "by a waypoint: {view:?}");
-        let (on_map, view) = visit(vec![], true);
-        assert!(!on_map, "20 s after the entry: {view:?}");
-        let (on_map, view) = visit(vec![], false);
-        assert!(on_map && view.source == "rough", "no exit icon by it: {view:?}");
     }
 
     #[test]

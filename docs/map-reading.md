@@ -634,7 +634,7 @@ them).
   in `named` (one scan counts once); a pair that does not fit costs ln(1e-4). This
   overrides whatever was believed before: the owner's Clearfell ends at `W_E_N`.
 - **Remembered exits:** where an icon put an exit is kept per layout (within 100
-  units of the node, blended) and used only for the way to a target icon, never as
+  units of the node, blended) and used only for the route from a target icon, never as
   evidence: learnt under each layout's own belief, it had made every layout agree
   with its own past sightings (the v0.1.41 regression).
 - **Two unlabelled icons are not enough** in Clearfell: with three exits a layout has
@@ -765,213 +765,16 @@ truth.
   `Riverbed_4` at most 0.54 (0.93 before), where a batch fit of its long part
   prefers `Riverbed_6`; there is no truth for these instances.
 
-### The way through the recorded map (2026-11-12, day build)
+### The way through the recorded map (removed in v0.1.74)
 
-`src-tauri/src/layout/route.rs`; used by `Navigator::guide_on`. The recorder lends the
-navigator the live part's walls and trail and the player's cell at each needle
-(`nav::Place`, borrowed, about once a second); nothing is copied per frame.
-
-**The search.** From the player's cell to the target's, the shortest way that crosses
-no recorded wall, on a grid of 3x3 minimap cells:
-
-- A search cell is a wall when it holds a cell seen at least twice (`n >= 2`) and its
-  3x3 search cells hold at least 3 such cells: lines always do; specks of one or two
-  cells, and cells seen once, never do. A wall closes its 8 neighbours too, so a line
-  is about 9 minimap cells thick.
-- Gaps (closed room round the target, one gap facing the player, three grid offsets):
-  every gap of 1-8 cells is closed, every opening of 11 or more is open, 9-10 depend on
-  where the grid falls. The grid lies on multiples of 3 cells (fix pass 1, review B-3),
-  so the same walls give the same doors on every call: before, its origin moved with
-  the search box, and a 9-cell gap opened and shut as the player walked
-  (`the_same_walls_give_the_same_doors_wherever_the_player_stands`). A closed diamond of one-cell diagonal lines does not leak
-  (moves never pass a closed cell diagonally).
-- Cells the player walked through are open whatever was drawn there (trail steps up to
-  30 cells; longer ones are jumps). The recordings need it: within a cell of a recorded
-  wall lie 16% of the walked line of Clearfell's part 0, 8-46% in other parts of the
-  owner's recordings (Riverbank 8-31%; Clearfell parts 12 and 16 0%). That is the
-  recording, not the ground: the big-map screenshot shows these outlines as obstacles
-  the player walks round. Likely cause: the minimap's player cell was estimated badly
-  before the cross was found by its blob (see "Big map").
-  A line opens only where the walk crossed it (fix pass 1, review B-4): the walk went
-  into closed cells from open ground and came out on open ground that open ground does
-  not join to where it went in within 30 cells. A walk that dips into a line and comes
-  back out on the same side, or stays inside its band (running beside it with drift),
-  opens nothing: before, its chords punched one-cell doors into lines the player only
-  grazed (`a_trail_that_runs_beside_a_wall_opens_no_door`: a walk 4 cells off a line,
-  wobbling 4 cells over it twice; the way goes round the line's end). A cost on opened
-  cells instead (the review's other fix) pulled the way back off the walk on the real
-  map (within 20 cells of it: 0.78 against 0.90).
-- A player in a closed cell (next to a line) starts from the open cells within 3
-  search cells reached without crossing a wall cell; a target in one (an exit drawn
-  on a cliff line, a point on a line drawn twice) is reached from either side (that
-  found a way for one more of the 44 real pairs below).
-- Fog, where nothing is recorded, costs what open ground costs: an unrecorded area may
-  be open ground nobody has seen, and on the minimap open ground and fog look the
-  same. The alternative, a higher cost away from where the player has been, was not
-  built: it bends a way across fog towards the trail, where straight is the best guess.
-- The search box is the box round player and target, widened by 0.75 times their
-  distance (at least 150, at most 600 cells), cut to the recorded map's box widened by
-  60 cells (fix pass 1, review B-7; it was 6, so a wall ending at the edge of what was
-  seen could not be gone round). It gives up after 60,000 search cells, and a grid of
-  more than 1.5 million search cells (a target some 3,700 cells off: a wrong merge, a
-  bad sighting) is not built at all.
-  No way found (target walled in, or past the bound): `None`, and the needle is what
-  it was before.
-- The result: the way's corners (cut by line of sight over up to 64 cells), its
-  length, its cells, and where the needle looks: the farthest point of the way within
-  40 cells that the player sees in a straight line (review B-9). The point 40 cells
-  along, past a corner, made the needle cut the jamb: a door 13 cells off with the way
-  turning down behind it gave 64° against the corner's 4°; now 9°
-  (`the_needle_looks_at_the_corner_not_through_the_jamb`).
-- Hysteresis: the cells of the last way to the same target (and their neighbours)
-  cost 90%, so the needle keeps its way unless another is clearly shorter (an island
-  between: a step that makes the other side 3% shorter keeps the way, 15% switches).
-  A loss forgets the way.
-
-| Synthetic map (tests in `route.rs`) | Result |
-| --- | --- |
-| Wall between, 20-cell doorway 70 cells to the side | needle −28° (doorway −30°, straight −90°), 157 cells (straight 80) |
-| U-shaped corridor, target in the other arm 64 cells away | needle down the arm (86°), 243 cells |
-| Target in fog 192 cells away | straight: same length and bearing |
-| Specks (1 cell in 200) and a whole line seen once across the way | straight: 200 for 200 |
-| A walked trail across a closed room's wall | in along the trail; a 120-cell jump opens nothing |
-
-**Time** (release; the app's crate builds at opt-level 2): a map of 40,000 wall cells
-(room outlines over 1,600x1,600 cells): a target 330 cells off 0.4 ms (815 search cells
-expanded, a grid of 40,000), 2,150 cells across 4.7 ms (41,000 of 329,000), a walled-in
-target 5.5 ms (gives up at 60,000). The tests pin the expanded counts and the grid
-size, and times at about ten times the release ones (the test profile is opt-level 1). On Clearfell's
-part 0 (21,500 walls seen twice) a `guide_on` call with a named icon 300 cells off:
-median 0.5 ms, slowest 2.0 ms (25 places along the trail; 0.31 and 1.8 before fix pass 1). It runs on the recorder's
-lock about once a second.
-
-**Real walls** (`clearfell-part0-map.txt`, Clearfell 2693856399 part 0: walls and
-trail, 52 KB). 44 pairs of trail points 40 points apart along stretches without a jump
-(300-500 cells walked):
-
-- To a target ahead (the walls and the trail up to the player only): a way for 38 of
-  44 (41 before lines opened only where the walk crossed them; for the others the walk
-  crossed recorded lines, or ran inside their band); 9 of the 38 go through a line the
-  walk crossed. The straight lines cross 404 unwalked wall cells, the ways none; median
-  way 1.09 times the straight line. Where the player walked across a recorded line
-  (above) the way goes round it, so on this recording it can be longer than the walk.
-- Going back (the trail recorded): a way for 43 of 44, 86% of it within 20 cells of the
-  trail (median), half the walked length (the walk wanders; the way cuts across open
-  ground); 20 of the 43 go through a line the walk crossed.
-- **Where the player went** (fix pass 1, review B-8;
-  `on_real_walls_the_needle_points_where_the_player_went`): the same pairs with the map
-  cut to what the recorder had then (the walls within the minimap's view of the walk so
-  far, the walk so far), the needle's bearing against the walk's next 5 trail points
-  (40-60 cells). A way for 37 of 44; 2 are about straight across fog (no map needle); of
-  the 35 map needles 16 are within 45° of where the player went, against 21 for the
-  straight line to the target on the same pairs. Gold-eligible ones (half by recorded
-  ground, at most 1.5 times the straight line): 14 of 29, straight 18. Where the walk's
-  next stretch crosses a recorded line (drift; 15 pairs) 5 against 8, elsewhere 11 of 20
-  against 13. So on this recording the map does not beat the straight line: the drift
-  puts lines where the player walked, and the way goes round them. The test pins 40%
-  for both. The proxy is rough (the walk wanders: the straight line itself agrees only
-  60%); a recording made after the cross fix (Clearfell parts 12 and 16 have no walk on
-  a line) or the owner's play should decide whether the map's gold stays.
-- Gaps: of 30 lines (groups of 20 or more cells seen twice), 8 have a gap of 1-8 cells
-  to another line (widths 1, 1, 1, 3, 3, 5, 5, 6), which the raw grid would leak
-  through; all 8 are closed. Two more have a narrowest gap of 9-11 cells, left open.
-
-**Shadow mode for ways ahead** (fix pass 2, the chair's decision). On the only real
-recording the map needle matched where the player went less often than the straight
-line (16 against 21 of 35; gold-eligible 14 against 18 of 29; "Where the player went"
-above). The recording is old and its walls drift, so that does not condemn the way,
-but it does not support showing it. So for a target placed from an icon in view or a
-sighting (a way ahead) the way is still worked out, but the needle shown is exactly
-what `guide_on` gives without the map (as on v0.1.46). What the map would have shown
-goes to the flight recorder on that needle line, as `shadow` (its bearing, length,
-look-ahead, share over unrecorded ground, would-be gold), and the replay scores it
-against the exit taken in a third row, "map (shadow)" (see "Replay"). One constant,
-`nav::MAP_AHEAD_LIVE` (false), switches ways ahead on; the tests of their live
-behaviour switch it on for themselves (`Navigator::map_ahead_live`), and
-`ways_ahead_run_in_shadow` pins the default. The way back to a trusted arrival stays
-live: it rests on ground the player walked, not on inferred doors.
-
-**What would switch ways ahead on** (proposed): over at least five real visits scored
-against the exit taken (recorded after the cross fix), the shadow within 45° at least
-as often as the needle shown on the same frames, and the would-be gold shadow wrong
-(more than 45° off) on at most 3% of its frames. The replay's last line gives both
-numbers over all visits.
-
-**The needle** (`guide_on`). The target's place in the part's coordinates is known
-when (in this order):
-
-1. its exit icon is in view and the label (or 95% of the belief) says it is the
-   target's, as for the needle at the icon;
-2. it is the exit the player came in by (the target's `exit` is the area the live
-   part's arrival came from): where the player appeared, when that was by the exit
-   (fix pass 1, review B-2). The recorder notes at the first placed frame how long
-   after the zone entry it came and which icons were by it. Not trusted: from a town,
-   more than 5 s after the entry (the player may have walked on), or a waypoint icon
-   within 15 cells (a waypoint journey). Sure (gold allowed) only with an exit icon
-   within 40 cells, unread or read as that zone; else rough. The point is gone with
-   the part (a new part has new coordinates). Tests:
-   `an_arrival_counts_as_the_exit_only_soon_and_without_a_waypoint`,
-   `an_arrival_is_the_exits_place_only_by_its_exit_and_soon_after_the_entry`;
-3. it was seen earlier in this part: a sighting's place on the dead-reckoned track is
-   turned back into cells from the player (sightings end at every loss, and a new part
-   starts with one). Not after a placement jump (a frame placed more than 20 cells from
-   the last: a wide re-find, which may be a wrong match and would leave the sighting
-   off against the walls by as much; fix pass 1, review B-6). It still counts as
-   evidence (`a_placement_jump_ends_the_sighting_as_a_target_on_the_map`).
-
-Then the way there. If one is found and is at most 4 times the straight line (or 150
-cells more), the needle looks 40 cells along it and the distance shown is its length.
-
-**Recorded ground** (fix pass 1, review B-1): a way's search cells count as recorded
-within 15 cells of a wall cell seen twice or of the walked trail. A way that is about
-the straight line (no corner a search cell off it, at most 5% longer) and lies less
-than half over recorded ground is not taken: across fog the map knows nothing, and the
-layouts' route (which may say "round the river") stays the needle, as without a map
-(`a_straight_way_across_unrecorded_ground_leaves_the_layout_needle`: a U-shaped layout,
-an empty map). A way less than half over recorded ground is never gold. The navigator
-reports what the last needle took from the map (`Navigator::last_way`: the look-ahead
-offset from the player and the share over unrecorded ground) for the flight recorder.
-
-**Long ways** (review B-5): gold only for a way at most 1.5 times the straight line; a
-longer one (up to the limit of 4) is rough. A long way leans on a door the recorder may
-have made (a gap, a line the walk grazed) or on fog. The way back is exempt where 80% of
-it lies within 15 cells of the walk: every door on it was walked through. The doorway
-case (1.96 times) is rough on purpose: its door is known only as a gap in one recorded
-line, the inference most likely to be wrong, and gold must stay rarely wrong; the needle
-still points at the door. Tests: `a_long_way_round_is_rough` (a recorded U-corridor,
-2.2 times), the way back round a wall (gold along a 30-cell U-walk, 5 times; rough
-across a 100-cell U where the way leaves the walk).
-
-Gold keeps the icon's conditions (named and read the same twice, not against a sure
-belief, within 200 cells; or unlabelled with one layout at 90%, measured areas only)
-but no longer needs the graph route to be about straight: the way is the route. The
-way back to a sure arrival point is gold in every area, dungeons too: walked and recorded.
-Otherwise the needle is as before. The flight recorder marks such needles `way`; its
-replay has no walls and does not compare them (it counts them apart).
-
-Before and after, the wall-between case (`a_named_icon_behind_a_wall_is_reached_through_the_doorway`):
-The Grelwood's icon 80 cells up, read twice, a wall across halfway with a 20-cell
-doorway 70 cells to the right. Before: −87° (the layout's corridors from where the icon
-puts the player: through the wall), rough, 80 cells. After: −28°, at the doorway (−30°),
-157 cells; rough since fix pass 1 (no walk recorded, so most of the way lies over
-unrecorded ground). Walked 30 cells right with the icon out of view: −45° to the
-doorway, from the sighting. In a recorded corridor with a pillar ahead (way 88% over
-recorded ground) the needle goes round the pillar, gold.
-
-**Simulation.** The walker's world has no walls, so the 4-9% of gold needles more than 60°
-off the walkable route (above) cannot be checked against this there. It would need a
-walled world per layout: the corridors drawn as outlines at a walkable width (60-120
-units, the recorded distances) with islands and side pockets, exits off the corridor
-ends as in play; the walker's own trail; the walls the minimap would show within its
-view around each step, with the recorder's faults (registration drift of a few cells,
-one-cell gaps, specks, the trail over a line now and then); and the truth as the shortest
-way through that world, not the graph. Then Gate A's "gold off" with and without the map.
-
-**Limits.** The way trusts the recording: a misplaced line (16% of Clearfell part 0's
-walk lies on one) makes it go round an obstacle that is not there, or not where drawn.
-How often that misleads a gold needle on today's recordings needs the owner's play: a
-named exit behind a wall or river, the needle checked against the walk. The arrival
-point is where the player appeared, a few cells from the exit icon.
+A shortest way across the recorded walls (`route.rs`) bent the needle round walls to a
+target whose place on the map was known (an icon in view, a sighting, the exit the player
+came in by). Measured on the only real recording (Clearfell 2693856399, part 0, 44 pairs of
+trail points): the map's needle was within 45° of where the player went next 16 times of 35
+against 21 for the straight line (gold-eligible 14 of 29 against 18). The recorded lines
+drift where the player walked, so the way went round obstacles that were not there. Ways
+ahead ran in shadow from then on; the code went with the parked arrow. The compass shows
+the navigator's own needle.
 
 ## Flight recorder (2026-11-12, day build)
 
@@ -999,7 +802,7 @@ counts, so the replay can hand the navigator every `icons` call the app made.
 | `icons` | `whole` (absent = false), `size` (frame cells, when it changed), `icons`: `kind` (absent = exit), `x`, `y`, `label` | when the exits differ from the last written, on every whole-window scan with an exit or while far exits are kept, for a checkpoint or waypoint not yet written in this part |
 | `seen` | `exit` or `tag`, `left` | each log anchor |
 | `targets` | `targets` (`label`, `exit`, `tag`, `optional`) | when the list asked for changes |
-| `needle` | `target`, `degrees`, `source`, `confidence`, `variant`, `distance`; `kept` (tracking lost, the last needle stayed), `stale` (no frame for 2 s), `way` (it followed a way through the recorded map); on `way` lines `ahead` (the look-ahead point from the player, cells) and `fog` (share of the way over unrecorded ground); with ways ahead in shadow, `shadow`: what the map's way would have shown (`degrees`, `length`, `ahead`, `fog`, `gold` when it would have been gold) | when source, target or variant change or it turns more than 15° (the shadow too: it comes, goes, turns more than 15° or changes gold), else every 5 s while frames come |
+| `needle` | `target`, `degrees`, `source`, `confidence`, `variant`, `distance`; `kept` (tracking lost, the last needle stayed), `stale` (no frame for 2 s). Files before v0.1.74 may hold `way`, `ahead`, `fog` and `shadow` (the way through the recorded map): not read | when source, target or variant change or it turns more than 15°, else every 5 s while frames come |
 | `end` | | when the zone is left |
 | `gap` | `f` (always written) | before the next line after a failed write: the lines between are lost |
 
@@ -1054,10 +857,9 @@ visit it prints:
    truth layout (3 exits read by name): ClearFell_W_S_N 1.00; the replay's last top agrees
    left through G1_3 at (771, -515); its labelled icon was there
    needle within 45° of the exit taken (last part):
-     shown by the app: gold 100% of 5, rough 98% of 63 (0 through the recorded map); right for good after 14 s, 710 cells (910 units); 0 to another target
+     shown by the app: gold 100% of 5, rough 98% of 63; right for good after 14 s, 710 cells (910 units); 0 to another target
      replayed, no map, every frame: gold 100% of 6, rough 98% of 62; right for good after 14 s, 687 cells (881 units); 1 to another target
-     map (shadow), the way ahead the app did not show: no samples; never right for good
-   app's needles: 13 logged, 13 agree with the current code; 0 through the recorded map (not replayed)
+   app's needles: 13 logged, 13 agree with the current code
 ```
 
 - **top layout**: each time the replay's top layout changed, seconds from the start
@@ -1081,14 +883,8 @@ visit it prints:
   target are counted apart. **Right for good**: the first such frame after which
   every one was within 45°, seconds and cells walked from the start. Two rows:
   **shown by the app**, the needle the player saw on each frame (the last `needle`
-  line, `kept` and `way` ones included; how many went through the recorded map);
-  **replayed**, the current code's needle without the recorded map (the log holds
-  no walls); and **map (shadow)**, with ways ahead in shadow, what the map's way
-  would have shown on each frame (the last needle line's `shadow`), by would-be gold
-  and rough: this is how ways ahead are judged on real visits before they are shown
-  (`the_map_in_shadow_is_scored_apart`).
-- **app's needles**: the `needle` lines (not `kept`, not `way`: the log holds no
-  walls, so a needle through the recorded map is counted apart) against what the current code
+  line, `kept` ones included); **replayed**, the current code's needle.
+- **app's needles**: the `needle` lines (not `kept`) against what the current code
   gives at the same point (same target, source, layout, within 5°; a `stale` gold
   counts as gray). A visit that started from a memory the file does not hold (files
   before v0.1.48) is left out of the agreement and counted apart. With unchanged code they agree; a difference on old visits shows
@@ -1096,8 +892,7 @@ visit it prints:
   pointing at an icon and along the route has hysteresis, and the app asked about
   once a second where the replay asks every frame.
 - A last line: visits, how many have a truth and an exit, the needle's shares over
-  all visits, shown, replayed and map (shadow), and the agreement
-  (`needles_through_the_map_are_scored_as_shown`).
+  all visits, shown and replayed, and the agreement.
 
 The synthetic visit above is `a_simulated_visit_replays_as_it_was_fed` (the
 simulator's walker on `ClearFell_W_S_N`, exits named on every third frame);
@@ -1269,12 +1064,11 @@ What parts them is movement: a map line stays on its map cell while the player w
 several times faster, and the character (and any panel) moves with the player. So the recorder now
 **holds a big-map wall cell back until it was seen from two player positions 24 cells apart** (either axis;
 more than the character is tall in cells). Held cells still place frames (registration uses every cell),
-but they are left out of the recording, the overview, the map's ways and the scale measure (`Live::kept`).
+but they are left out of the recording and the overview (`Live::kept`).
 Corner-minimap cells are kept at once, as before: the fault was not seen there. Joining pieces
 (`locate_piece`) looks for a saved piece (kept cells only) on the live map (every cell), so it works as
 before; a joined piece's cells are kept. At a zone's start with the big map open nothing is kept until the
-player has walked 24 cells: the way back to the arrival has no walls to follow until then (it is a straight
-line over unrecorded ground, never gold).
+player has walked 24 cells.
 
 A walk built from each capture's own cells (lines fixed on the map, the scene scrolling 5 times as fast,
 what lies on the character moving with the player; 20 frames of 4 x 1 cells,
