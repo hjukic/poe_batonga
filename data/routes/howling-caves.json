@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "order": 1040,
+  "zone": { "id": "P3_4", "name": "Howling Caves", "level": 55 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-yeti",
+      "kind": "objective",
+      "navigationTarget": { "area": "P3_4", "label": "The Abominable Yeti", "tag": "bossman" },
+      "parts": [{ "text": "Kill " }, { "text": "the Yeti", "style": "boss" }, { "text": "Icy Tusks", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'bossman' node in its only layout."
+    },
+    {
+      "id": "caves-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "The Glade was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

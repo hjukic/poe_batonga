@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "order": 1020,
+  "zone": { "id": "P3_2", "name": "Kriar Village", "level": 54 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "directions-kriar-village",
+      "kind": "note",
+      "parts": [{ "text": "Two roving wisps show the way", "style": "direction" }]
+    },
+    {
+      "id": "kill-lythara",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Lythara", "style": "boss" }, { "text": "+40 Spirit", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "enter-glacial-tarn",
+      "kind": "objective",
+      "navigationTarget": { "area": "P3_2", "label": "Glacial Tarn", "exit": "P3_3" },
+      "parts": [{ "text": "Enter Glacial Tarn" }],
+      "trigger": { "type": "zoneEntered", "area": "P3_3" },
+      "evidence": "Zone-generation line for P3_3."
+    }
+  ]
+}

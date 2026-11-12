@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "order": 1070,
+  "zone": { "id": "P3_7", "name": "The Cuachic Vault", "level": 56 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "sealed-vaults",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Sealed Vaults: Soul Cores" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-zolin-zelina",
+      "kind": "objective",
+      "navigationTarget": { "area": "P3_7", "label": "Zolin & Zelina", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Zolin & Zelina", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in its only layout."
+    },
+    {
+      "id": "vault-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "The Glade was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

@@ -165,6 +165,20 @@
       "parts": [{ "text": "Travel to Khari Bazaar" }],
       "trigger": { "type": "zoneEntered", "area": "P2_Town" },
       "evidence": "Zone-generation line for P2_Town. Interlude 5.2, by The Hooded One."
+    },
+    {
+      "id": "travel-the-glade",
+      "kind": "objective",
+      "parts": [{ "text": "Travel to The Glade" }],
+      "trigger": { "type": "zoneEntered", "area": "P3_Town" },
+      "evidence": "Zone-generation line for P3_Town. Interlude 5.3, by The Hooded One."
+    },
+    {
+      "id": "interludes-done-hooded-one",
+      "kind": "objective",
+      "parts": [{ "text": "All 3 done: " }, { "text": "The Hooded One", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }],
+      "trigger": null,
+      "evidence": "After all three interludes. No log line known. Tick by hand."
     }
   ]
 }

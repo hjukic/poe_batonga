@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "order": 1010,
+  "zone": { "id": "P3_1", "name": "Ashen Forest", "level": 54 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "ancient-monument",
+      "kind": "objective",
+      "parts": [{ "text": "Find the Ancient Monument" }, { "text": "Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-kriar-village",
+      "kind": "objective",
+      "navigationTarget": { "area": "P3_1", "label": "Kriar Village", "exit": "P3_2" },
+      "parts": [{ "text": "Enter Kriar Village" }],
+      "trigger": { "type": "zoneEntered", "area": "P3_2" },
+      "evidence": "Zone-generation line for P3_2."
+    }
+  ]
+}

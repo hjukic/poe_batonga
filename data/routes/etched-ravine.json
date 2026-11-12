@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "order": 1060,
+  "zone": { "id": "P3_6", "name": "Etched Ravine", "level": 56 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_interludes_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-stormgore",
+      "kind": "objective",
+      "navigationTarget": { "area": "P3_6", "label": "Stormgore", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Stormgore", "style": "boss" }, { "text": " (far end)" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in its only layout."
+    },
+    {
+      "id": "enter-cuachic-vault",
+      "kind": "objective",
+      "navigationTarget": { "area": "P3_6", "label": "The Cuachic Vault", "exit": "P3_7" },
+      "parts": [{ "text": "Enter The Cuachic Vault" }],
+      "trigger": { "type": "zoneEntered", "area": "P3_7" },
+      "evidence": "Zone-generation line for P3_7."
+    }
+  ]
+}
