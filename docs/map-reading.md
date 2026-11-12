@@ -718,6 +718,56 @@ truth.
   `Riverbed_4` at most 0.54 (0.93 before), where a batch fit of its long part
   prefers `Riverbed_6`; there is no truth for these instances.
 
+### The way through the recorded map (2026-11-12, day build)
+
+`src-tauri/src/layout/route.rs`.
+
+**The search.** From the player's cell to the target's, the shortest way that crosses
+no recorded wall, on a grid of 3x3 minimap cells:
+
+- A search cell is a wall when it holds a cell seen at least twice (`n >= 2`) and its
+  3x3 search cells hold at least 3 such cells: lines always do; specks of one or two
+  cells, and cells seen once, never do. A wall closes its 8 neighbours too, so a line
+  is about 9 minimap cells thick.
+- Gaps (closed room round the target, one gap facing the player, three grid offsets):
+  every gap of 1-8 cells is closed, every opening of 11 or more is open, 9-10 depend on
+  where the grid falls. A closed diamond of one-cell diagonal lines does not leak
+  (moves never pass a closed cell diagonally).
+- Cells the player walked through are open whatever was drawn there (trail steps up to
+  30 cells; longer ones are jumps). The recordings need it: within a cell of a recorded
+  wall lie 16% of the walked line of Clearfell's part 0, 8-46% in other parts of the
+  owner's recordings (Riverbank 8-31%; Clearfell parts 12 and 16 0%). That is the
+  recording, not the ground: the big-map screenshot shows these outlines as obstacles
+  the player walks round. Likely cause: the minimap's player cell was estimated badly
+  before the cross was found by its blob (see "Big map").
+- Fog, where nothing is recorded, costs what open ground costs: an unrecorded area may
+  be open ground nobody has seen, and on the minimap open ground and fog look the
+  same. The alternative, a higher cost away from where the player has been, was not
+  built: it bends a way across fog towards the trail, where straight is the best guess.
+- The search box is the box round player and target, widened by 0.75 times their
+  distance (at least 150, at most 600 cells), cut to the recorded map's box: nothing
+  beyond what is recorded needs going round. It gives up after 60,000 search cells.
+  No way found (target walled in, or past the bound): `None`, and the needle is what
+  it was before.
+- The result: the way's corners (cut by line of sight over up to 64 cells), its
+  length, its cells, and the point 40 minimap cells along it, where the needle looks.
+- Hysteresis: the cells of the last way to the same target (and their neighbours)
+  cost 90%, so the needle keeps its way unless another is clearly shorter (an island
+  between: a step that makes the other side 3% shorter keeps the way, 15% switches).
+  A loss forgets the way.
+
+| Synthetic map (tests in `route.rs`) | Result |
+| --- | --- |
+| Wall between, 20-cell doorway 70 cells to the side | needle −28° (doorway −30°, straight −90°), 157 cells (straight 80) |
+| U-shaped corridor, target in the other arm 64 cells away | needle down the arm (86°), 243 cells |
+| Target in fog 192 cells away | straight: same length and bearing |
+| Specks (1 cell in 200) and a whole line seen once across the way | straight: 200 for 200 |
+| A walked trail across a closed room's wall | in along the trail; a 120-cell jump opens nothing |
+
+**Time** (release; the app's crate builds at opt-level 2): a map of 40,000 wall cells
+(room outlines over 1,600x1,600 cells): a target 330 cells off 0.4 ms (815 search cells),
+2,150 cells across 3.9 ms (41,000), a walled-in target 5.5 ms (gives up). It runs on the recorder's
+lock about once a second.
 
 ## Flight recorder (2026-11-12, day build)
 

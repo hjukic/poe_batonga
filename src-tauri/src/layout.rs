@@ -18,6 +18,8 @@ mod nav;
 #[cfg(test)]
 mod nav_sim;
 mod obs;
+#[cfg(test)]
+mod route;
 
 use crate::minimap::MinimapView;
 use crate::tracker::LogEvent;
