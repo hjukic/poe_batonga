@@ -191,6 +191,9 @@ struct Session {
     /// this part's coordinates, and how many frames ago that scan was.
     far_icons: Vec<(f32, f32, Option<String>)>,
     far_age: u32,
+    /// Exits the map showed by name during this part: (x, y) in the part's cells and
+    /// the zone they lead to. An exit does not move: seen once, its place is known.
+    named_exits: Vec<(f32, f32, String)>,
     /// The last arrow of this visit, kept while a new one cannot be worked out.
     last_guide: std::cell::RefCell<Option<guide::GuideView>>,
     /// The flight recorder: what the navigator is fed (with a folder only).
@@ -267,6 +270,37 @@ fn exit_list(
         }
     }
     list
+}
+
+/// Remembers the frame's exit icons that were read by name, at their place in the part.
+fn note_named_exits(named: &mut Vec<(f32, f32, String)>, icons: &[crate::minimap::bigmap::Icon], pos: (i32, i32)) {
+    for icon in icons.iter().filter(|i| i.kind == "exit") {
+        let Some(to) = icon_label(icon) else { continue };
+        let at = (pos.0 as f32 + icon.x, pos.1 as f32 + icon.y);
+        match named.iter_mut().find(|(_, _, name)| *name == to) {
+            Some(known) => (known.0, known.1) = at,
+            None => named.push((at.0, at.1, to)),
+        }
+    }
+}
+
+/// The needle straight to `target`'s exit when the map has shown that exit by name:
+/// sure, as the icon is the exit. For zones the navigator does not cover.
+fn named_exit_guide(target: &guide::NavTarget, named: &[(f32, f32, String)], pos: (i32, i32)) -> Option<guide::GuideView> {
+    target.exit.as_ref()?;
+    let (x, y, _) = named.iter().find(|(_, _, name)| name.eq_ignore_ascii_case(&target.label))?;
+    let (dx, dy) = (x - pos.0 as f32, y - pos.1 as f32);
+    Some(guide::GuideView {
+        variant: "named exit".into(),
+        target_kind: "entrance".into(),
+        target: target.label.clone(),
+        degrees: Some(dy.atan2(dx).to_degrees()),
+        source: "estimated".into(),
+        distance: dx.hypot(dy),
+        confidence: 1.0,
+        measured: true,
+        turned: false,
+    })
 }
 
 impl Session {
@@ -634,6 +668,7 @@ impl Recorder {
                     fed_at: None,
                     far_icons: Vec::new(),
                     far_age: FAR_FRAMES,
+                    named_exits: Vec::new(),
                     last_guide: Default::default(),
                     obs: Default::default(),
                     bosses_heard: Vec::new(),
@@ -726,6 +761,7 @@ impl Recorder {
             Some(pos) => {
                 session.feed(pos);
                 session.feed_icons(&icons, whole, pos, (frame.cols, frame.rows));
+                note_named_exits(&mut session.named_exits, &icons, pos);
                 let live = &mut session.live;
                 live.velocity = ((pos.0 - live.pos.0).clamp(-NEAR, NEAR), (pos.1 - live.pos.1).clamp(-NEAR, NEAR));
                 live.pos = pos;
@@ -768,6 +804,7 @@ impl Recorder {
                     session.live.frame_size = finished.frame_size;
                     session.fed = None;
                     session.far_icons.clear();
+                    session.named_exits.clear();
                     session.came_in = None;
                     if finished.part.matched > 0 {
                         session.recording.parts.push(finished.snapshot());
@@ -1086,6 +1123,11 @@ impl State {
                 .guide_on(&targets, Some(&place))
                 .map(|view| not_stale(guide::GuideView { measured: scale.is_some(), ..view }, session.fed_at));
         }
+        // No layout graphs here (a town): the exit the map shows by name is where to go.
+        let first = self.targets.get(area).and_then(|targets| targets.first());
+        if let Some(view) = first.and_then(|target| named_exit_guide(target, &session.named_exits, live.pos)) {
+            return Some(view);
+        }
         // Everything relative to the (first) arrival point, where the terrain match starts;
         // a piece without one (tracking lost, overlay restarted) is placed anywhere.
         let arrival = live.part.pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at);
@@ -1165,6 +1207,29 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_exit_the_map_named_leads_the_needle_where_no_layout_is_known() {
+        use crate::minimap::bigmap::Icon;
+        let exit = |x: f32, y: f32, label: Option<&str>| Icon { kind: "exit", x, y, label: label.map(String::from) };
+        let mut named = Vec::new();
+        // Seen from (100, 50): Clearfell's exit 30 cells right and 40 up; an unnamed exit and a checkpoint.
+        let icons = [exit(30.0, -40.0, Some("Clearfell")), exit(-80.0, 5.0, None), Icon { kind: "checkpoint", x: 1.0, y: 1.0, label: None }];
+        note_named_exits(&mut named, &icons, (100, 50));
+        assert_eq!(named, vec![(130.0, 10.0, "Clearfell".to_string())]);
+        let target = |label: &str, exit: Option<&str>| guide::NavTarget { label: label.into(), exit: exit.map(String::from), tag: None, optional: false };
+        // From elsewhere on the same map the needle points at the remembered place, sure.
+        let view = named_exit_guide(&target("Clearfell", Some("G1_2")), &named, (130, 110)).unwrap();
+        assert_eq!((view.source.as_str(), view.target.as_str()), ("estimated", "Clearfell"));
+        assert!((view.degrees.unwrap() + 90.0).abs() < 0.01, "straight up: {:?}", view.degrees);
+        assert_eq!(view.distance, 100.0);
+        // Another exit, or a target that is no exit: nothing to go by.
+        assert!(named_exit_guide(&target("The Grelwood", Some("G1_4")), &named, (0, 0)).is_none());
+        assert!(named_exit_guide(&target("Clearfell", None), &named, (0, 0)).is_none());
+        // Seen again: the newer place replaces the older.
+        note_named_exits(&mut named, &[exit(0.0, 0.0, Some("Clearfell"))], (128, 12));
+        assert_eq!(named, vec![(128.0, 12.0, "Clearfell".to_string())]);
+    }
 
     /// A wiggly corridor, as wall cells in world coordinates.
     fn world() -> Vec<(i32, i32)> {
@@ -1666,7 +1731,8 @@ fn join_real_recording() {
     let parts = recording.parts.len();
     let mut session = Session {
         recording, live, arrived_from: None, came_from: String::new(), started: true, file: None, navigator: None,
-        fed: None, fed_at: None, far_icons: Vec::new(), far_age: FAR_FRAMES, last_guide: Default::default(),
+        fed: None, fed_at: None, far_icons: Vec::new(), far_age: FAR_FRAMES, named_exits: Vec::new(),
+        last_guide: Default::default(),
         obs: Default::default(), entered: Instant::now(), came_in: None,
         bosses_heard: Vec::new(),
     };
