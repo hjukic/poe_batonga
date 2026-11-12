@@ -362,7 +362,8 @@ function renderPicture(picture: LayoutPicture | undefined) {
 }
 
 function renderLayout(view: LayoutView | null) {
-  setGuideTarget(view?.guide?.target || null);
+  // With the compass parked the bright arrow marks the first open step, not its target.
+  setGuideTarget(compassEnabled.checked ? view?.guide?.target || null : null);
   if (view?.light) return;
   renderPicture(view?.layout);
   const context = minimapCanvas.getContext('2d');
