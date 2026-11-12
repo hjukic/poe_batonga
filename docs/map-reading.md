@@ -854,7 +854,7 @@ counts, so the replay can hand the navigator every `icons` call the app made.
 
 | `k` | fields | written |
 |---|---|---|
-| `start` | `area`, `seed`, `from` (arrival area id, `""` = a live arrival from no zone, `null` = unknown), `scale`, `version` (package.json's), `memory`, `resumed` | at the zone change |
+| `start` | `area`, `seed`, `from` (arrival area id, `""` = a live arrival from no zone, `null` = unknown), `scale`, `version` (package.json's), `memory`, `resumed`; with a memory `remembered` (the instance's `.nav.json` as the navigator took it, about 6 KB) and `age` (its age in seconds) | at the zone change |
 | `move` | `dx`, `dy` (cells, as passed to `Navigator::moved`) | every non-zero move |
 | `lost` | `seconds` | first frame of a new part |
 | `icons` | `whole` (absent = false), `size` (frame cells, when it changed), `icons`: `kind` (absent = exit), `x`, `y`, `label` | when the exits differ from the last written, on every whole-window scan with an exit or while far exits are kept, for a checkpoint or waypoint not yet written in this part |
@@ -893,8 +893,9 @@ recorder against 808 without (`obs_cost`, noise ±25 µs).
 ### Replay
 
 `OBS=<file or folder> cargo test --release replay_obs -- --ignored --nocapture`
-replays every `.obs.jsonl` (folders recursively): each `start` makes a fresh
-`Navigator` (no memory), then every line goes to it as the app gave it (`moved`,
+replays every `.obs.jsonl` (folders recursively): each `start` makes a `Navigator`
+as the app did (from the `remembered` memory at its `age`, so a resumed position is
+resumed again), then every line goes to it as the app gave it (`moved`,
 `lost`, the frame's exits through the recorder's own `exit_list` with its far
 icons, `seen`); the needle is asked with the logged targets after every frame. Per
 visit it prints:
@@ -934,7 +935,8 @@ visit it prints:
 - **app's needles**: the `needle` lines (not `kept`, not `way`: the log holds no
   walls, so a needle through the recorded map is counted apart) against what the current code
   gives at the same point (same target, source, layout, within 5°; a `stale` gold
-  counts as gray). With unchanged code they agree; a difference on old visits shows
+  counts as gray). A visit that started from a memory the file does not hold (files
+  before v0.1.48) is left out of the agreement and counted apart. With unchanged code they agree; a difference on old visits shows
   a change of the navigator. The one other cause: the needle's switch between
   pointing at an icon and along the route has hysteresis, and the app asked about
   once a second where the replay asks every frame.

@@ -848,7 +848,8 @@ impl State {
             seed: session.recording.seed,
             from: session.arrived_from.clone(),
             scale,
-            memory: kept.is_some(),
+            memory: kept.cloned(),
+            age: kept.map(|m| now().saturating_sub(m.at)),
             resumed,
         };
         Some((nav::Navigator::new(&area, arrival, memory.as_ref(), scale, session.recording.seed.unwrap_or(0)), start))
@@ -1326,6 +1327,16 @@ mod tests {
         }
     }
 
+    /// Frames walking on, the needle to Mud Burrow (no icon of it: the layouts' needle).
+    fn to_mud_burrow(recorder: &Recorder, steps: std::ops::Range<i32>) {
+        recorder.set_targets(vec![("G1_2".into(), guide::NavTarget { label: "Mud Burrow".into(), exit: Some("G1_3".into()), ..Default::default() })]);
+        for step in steps {
+            recorder.on_icons(&[], false);
+            recorder.on_frame(&frame((step * 4, 0)), [300, 260]);
+            recorder.view();
+        }
+    }
+
     #[test]
     fn the_flight_recorder_logs_what_the_navigator_is_fed() {
         let dir = scratch("obs");
@@ -1355,11 +1366,41 @@ mod tests {
         // and not replayed (the log holds no walls).
         assert!(text.contains("\"way\":true") && v.mapped > 0, "{}", v.mapped);
         assert_eq!(v.left.as_ref().unwrap().0, "G1_4");
-        // A later visit of the same instance appends.
+        // A later visit of the same instance appends; its navigator starts from the
+        // instance's memory, which the start line holds: the replay agrees again.
         obs_visit(&recorder, 3);
+        to_mud_burrow(&recorder, 3..9);
+        enter(&recorder, "G1_3");
+        // And the app started mid-zone (the log's history): the position is resumed.
+        recorder.on_log(&LogEvent::ZoneEntered { area: "G1_2".into(), level: 1, seed: Some(7) }, false);
+        recorder.set_targets(vec![("G1_2".into(), guide::NavTarget { label: "Mud Burrow".into(), exit: Some("G1_3".into()), ..Default::default() })]);
+        to_mud_burrow(&recorder, 9..15);
         enter(&recorder, "G1_3");
         let text = std::fs::read_to_string(dir.join("G1_2").join("7.obs.jsonl")).unwrap();
-        assert_eq!(text.matches("\"k\":\"start\"").count(), 2);
+        assert_eq!(text.matches("\"k\":\"start\"").count(), 3);
+        let with = obs::replay::replay(&text, &graph::Graphs::default());
+        for (v, resumed) in with[1..].iter().zip([false, true]) {
+            eprint!("{}", obs::replay::report(v));
+            assert!(v.memory && v.memory_replayed && v.resumed == resumed, "{v:?}");
+            assert!(v.logged > 0 && v.agree == v.logged, "{} of {}: {:?}", v.agree, v.logged, v.differ);
+        }
+        // Without the memory in the file (as before v0.1.48) the visit is left out of the agreement.
+        let old: String = text
+            .lines()
+            .map(|l| {
+                let mut line: obs::Line = serde_json::from_str(l).unwrap();
+                if let obs::Entry::Start { remembered, age, .. } = &mut line.entry {
+                    (*remembered, *age) = (None, None);
+                }
+                serde_json::to_string(&line).unwrap() + "\n"
+            })
+            .collect();
+        let visits = obs::replay::replay(&old, &graph::Graphs::default());
+        assert!(visits[1].memory && !visits[1].memory_replayed);
+        // The memory matters: from it the learnt layout starts ahead (0.13 against 0.04).
+        assert!(with[1].belief[0].2 > 2.0 * visits[1].belief[0].2, "{:?} {:?}", with[1].belief, visits[1].belief);
+        let line = obs::replay::summary(1, &visits);
+        assert!(line.contains("2 visit(s) from a memory not in the file left out"), "{line}");
         // One exit read by name fixes no layout: no layout history.
         assert!(!dir.join(obs::HISTORY_FILE).exists());
         let _ = std::fs::remove_dir_all(&dir);

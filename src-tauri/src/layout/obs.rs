@@ -169,15 +169,34 @@ pub struct Start {
     /// The arrival's area id ("" = a live arrival from no zone); None: unknown.
     pub from: Option<String>,
     pub scale: f64,
-    /// A memory of the instance was read, and its position resumed.
-    pub memory: bool,
+    /// The memory of the instance it started from (as `Navigator::new` takes it), how
+    /// old it was then (seconds), and whether its position was resumed.
+    pub memory: Option<nav::Memory>,
+    pub age: Option<u64>,
     pub resumed: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "k", rename_all = "lowercase")]
 pub enum Entry {
-    Start { area: String, seed: Option<u64>, from: Option<String>, scale: f64, version: String, memory: bool, resumed: bool },
+    /// `memory`: the navigator started from the instance's memory, written in full in
+    /// `remembered` with its `age` (seconds) so the replay starts from it too (files
+    /// before v0.1.48 have only the flag).
+    Start {
+        area: String,
+        seed: Option<u64>,
+        from: Option<String>,
+        scale: f64,
+        version: String,
+        memory: bool,
+        resumed: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        age: Option<u64>,
+        /// A `nav::Memory` (kept as JSON: the line's flattened form cannot read its
+        /// number-keyed maps directly).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remembered: Option<serde_json::Value>,
+    },
     /// `Navigator::moved`, minimap cells (zero moves are not written).
     Move {
         #[serde(default, skip_serializing_if = "is_zero")]
@@ -337,7 +356,9 @@ impl Log {
                 from: start.from.clone(),
                 scale: start.scale,
                 version: app_version().to_string(),
-                memory: start.memory,
+                memory: start.memory.is_some(),
+                age: start.age,
+                remembered: start.memory.as_ref().and_then(|m| serde_json::to_value(m).ok()),
                 resumed: start.resumed,
             },
         );
@@ -695,6 +716,9 @@ pub(super) mod replay {
         pub from: Option<String>,
         pub version: String,
         pub memory: bool,
+        /// The memory was in the file and the replay started from it; a visit that
+        /// read one and has not is left out of the agreement.
+        pub memory_replayed: bool,
         pub resumed: bool,
         pub start: u64,
         pub end: u64,
@@ -756,12 +780,19 @@ pub(super) mod replay {
 
     impl Run {
         fn new(area: Area, start: &Line) -> Run {
-            let Entry::Start { area: id, seed, from, scale, version, memory, resumed } = &start.entry else { unreachable!() };
+            let Entry::Start { area: id, seed, from, scale, version, memory, resumed, age, remembered } = &start.entry else {
+                unreachable!()
+            };
             let arrival = match from {
                 Some(f) => Arrival::From(f),
                 None => Arrival::Unknown,
             };
-            let nav = Navigator::new(&area, arrival, None, *scale, seed.unwrap_or(0));
+            // The memory as old as it was then: `Navigator::new` resumes by its age.
+            let remembered = remembered
+                .clone()
+                .and_then(|m| serde_json::from_value::<nav::Memory>(m).ok())
+                .map(|m| nav::Memory { at: (now_ms() / 1000).saturating_sub(age.unwrap_or(u64::MAX)), ..m });
+            let nav = Navigator::new(&area, arrival, remembered.as_ref(), *scale, seed.unwrap_or(0));
             // As the navigator takes it.
             let scale = if scale.is_finite() && (0.4..=1.6).contains(scale) { *scale } else { graph::SCALE };
             Run {
@@ -791,6 +822,7 @@ pub(super) mod replay {
                     from: from.clone(),
                     version: version.clone(),
                     memory: *memory,
+                    memory_replayed: remembered.is_some(),
                     resumed: *resumed,
                     start: start.t,
                     end: start.t,
@@ -1115,7 +1147,11 @@ pub(super) mod replay {
             v.from.as_deref().map_or("unknown", |f| if f.is_empty() { "no zone" } else { f }),
             v.version,
             v.scale,
-            if v.memory { ", memory read (replayed without)" } else { "" },
+            match (v.memory, v.memory_replayed) {
+                (true, true) => ", from the instance's memory",
+                (true, false) => ", from a memory not in the file (needles not compared)",
+                _ => "",
+            },
             if v.resumed { ", resumed" } else { "" },
             v.frames,
             v.parts,
@@ -1180,11 +1216,14 @@ pub(super) mod replay {
             shown.add(&v.shown);
             replayed.add(&v.replayed);
         }
-        let (logged, agree): (usize, usize) = played.iter().fold((0, 0), |a, v| (a.0 + v.logged, a.1 + v.agree));
+        // A visit whose navigator started from a memory the file does not hold cannot agree.
+        let comparable: Vec<&&Visit> = played.iter().filter(|v| !v.memory || v.memory_replayed).collect();
+        let (logged, agree): (usize, usize) = comparable.iter().fold((0, 0), |a, v| (a.0 + v.logged, a.1 + v.agree));
+        let blind = played.len() - comparable.len();
         format!(
             "replay: {files} file(s), {} visit(s) replayed ({} skipped), {truths} with a layout truth, {exits} with the exit taken, \
              {unscored} unscored exit(s) (no exit icon where they left); \
-             needle within 45°, shown: {} ({} through the map); replayed: {}; app's needles agree {} ({agree} of {logged})",
+             needle within 45°, shown: {} ({} through the map); replayed: {}; app's needles agree {} ({agree} of {logged}; {blind} visit(s) from a memory not in the file left out)",
             played.len(),
             visits.len() - played.len(),
             shown.shares(),
@@ -1206,7 +1245,7 @@ mod tests {
     const T0: u64 = 1_762_945_000_000;
 
     fn start(area: &str, from: &str) -> Start {
-        Start { area: area.into(), seed: Some(11), from: Some(from.into()), scale: SCALE, memory: false, resumed: false }
+        Start { area: area.into(), seed: Some(11), from: Some(from.into()), scale: SCALE, memory: None, age: None, resumed: false }
     }
 
     /// A simulated Clearfell visit written as the app writes it: the walker's moves and
