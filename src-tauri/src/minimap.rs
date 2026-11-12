@@ -1169,8 +1169,10 @@ mod tests {
 
     #[test]
     fn the_panel_is_left_out_where_it_really_is() {
-        // The checklist panel dragged over the map: its orange boss name reads as an exit
-        // unless the panel's rectangle (from `panel_rect`) is skipped.
+        // The checklist panel dragged over the map: orange in it of an exit icon's size
+        // and shape (an icon, a bold heading) reads as exits unless the panel's rectangle
+        // (from `panel_rect`) is skipped. (Text letters alone are too small: exit blobs
+        // are not joined.)
         let window = [3840.0, 2160.0];
         let layout = big_layout(window, [3240.0, 0.0], [600, 518]);
         let scan = scan_layout(window, [0.0, 0.0], [3840, 2160], &layout);
@@ -1181,9 +1183,9 @@ mod tests {
                 whole.pixels[(y * 3840 + x) * 3..][..3].copy_from_slice(&[16, 15, 18]);
             }
         }
-        for letter in 0..8 {
-            for y in 1500..1514 {
-                for x in 2400 + letter * 10..2407 + letter * 10 {
+        for blob in 0..3 {
+            for y in 1500..1526 {
+                for x in 2400 + blob * 60..2418 + blob * 60 {
                     whole.pixels[(y * 3840 + x) * 3..][..3].copy_from_slice(&[206, 120, 50]);
                 }
             }
@@ -1195,8 +1197,8 @@ mod tests {
             let reading = choose(&mut Memory::default(), Ok(image(600, 518, |_, _| [14, 16, 22])), [316.0, 284.0], &plan, Some(&|| scan.clone()), |_| Ok(whole.clone())).unwrap();
             reading.icons.iter().filter(|i| i.kind == "exit").count()
         };
-        // Fixed place only: the moved panel's word reads as more "exits" (three here).
-        assert!(read_with_skip(scan.skip[0]) > 2);
+        // Fixed place only: the moved panel's three blobs read as more "exits".
+        assert_eq!(read_with_skip(scan.skip[0]), 5);
         // Its real place (a 640x200 px panel there) left out: the two real exits.
         assert_eq!(read_with_skip([2380, 1480, 3020, 1680]), 2);
     }

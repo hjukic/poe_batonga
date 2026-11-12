@@ -349,7 +349,32 @@ pub struct Icon {
 /// neutral grey and don't pass.
 const ICONS: [(&str, u32); 3] = [("exit", 150), ("checkpoint", 60), ("waypoint", 80)];
 /// Parts of one icon (a checkpoint's crystal and base) are joined within this many pixels.
+/// Not exits: an exit icon is one blob (Clearfell, both exits, at every pixel and every
+/// second: 359-373 px, 18-19 x 26-27 px, 73-77% of its box filled), and joining would let
+/// the player's cross (orange too) and fire or loot text next to it add up to one.
 const ICON_JOIN: f64 = 20.0;
+/// An exit blob is at most this many times the least exit size (the icon with the cross
+/// on it is 431 px; lava, fire or a lit area are larger), its box between these widths
+/// per height (the icon 0.67-0.77, with the cross beside it about 1.1; a line of loot
+/// text is wider), and at least this share of its box filled (the icon 0.70-0.81 at
+/// every second pixel; text and fire edges are thin).
+const EXIT_MAX: f64 = 6.0;
+const EXIT_ASPECT: [f64; 2] = [0.4, 1.3];
+const EXIT_FILL: f64 = 0.45;
+
+/// Whether an orange blob is shaped like an exit icon; `least` is the least size and
+/// `cross` the player cross's size (both in samples), counted off when the blob covers
+/// the player `at` (in samples): the cross itself never makes an exit grow to one.
+fn exit_shaped(blob: &Blob, least: f64, cross: f64, at: [f64; 2]) -> bool {
+    let (w, h) = ((blob.x1 - blob.x0 + 1) as f64, (blob.y1 - blob.y0 + 1) as f64);
+    let covers = |v: f64, lo: usize, hi: usize| v >= lo as f64 - 1.0 && v <= hi as f64 + 2.0;
+    let on_player = covers(at[0], blob.x0, blob.x1) && covers(at[1], blob.y0, blob.y1);
+    let n = blob.n as f64 - if on_player { cross } else { 0.0 };
+    n >= least
+        && (blob.n as f64) <= EXIT_MAX * least
+        && (EXIT_ASPECT[0]..=EXIT_ASPECT[1]).contains(&(w / h))
+        && blob.n as f64 >= EXIT_FILL * w * h
+}
 
 /// The icon kind of a pixel, an index into `ICONS`, or `NONE`.
 fn icon_kind(r: u8, g: u8, b: u8) -> u8 {
@@ -394,17 +419,24 @@ pub fn icons_in(image: &Image, centre: [f64; 2], scale: f64, size: f64, stride: 
     }
     let size = size / stride as f64;
     let found = blobs(&mut kinds, w, h);
+    // The player in samples.
+    let player = centre.map(|c| (c - 0.5) / stride as f64 + 0.5);
     let mut icons = Vec::new();
     for (kind, &(name, least)) in ICONS.iter().enumerate() {
-        // Join blobs of this kind whose centres are close, largest first.
-        let mut parts: Vec<(u32, f64, f64)> =
-            found.iter().filter(|(k, _)| *k as usize == kind).map(|(_, b)| (b.n, b.sx, b.sy)).collect();
+        let exit_least = least as f64 * size * size;
+        let shaped = |blob: &Blob| name != "exit" || exit_shaped(blob, exit_least, CROSS_PX * size * size, player);
+        // Join blobs of this kind whose centres are close, largest first (exits: none).
+        let mut parts: Vec<(u32, f64, f64)> = found
+            .iter()
+            .filter(|(k, b)| *k as usize == kind && shaped(b))
+            .map(|(_, b)| (b.n, b.sx, b.sy))
+            .collect();
         parts.sort_by(|a, b| b.0.cmp(&a.0));
         let mut joined: Vec<(u32, f64, f64)> = Vec::new();
         for (n, sx, sy) in parts {
             let at = [sx / n as f64, sy / n as f64];
             let near = joined.iter_mut().find(|(m, jx, jy)| {
-                (jx / *m as f64 - at[0]).hypot(jy / *m as f64 - at[1]) < ICON_JOIN * size
+                name != "exit" && (jx / *m as f64 - at[0]).hypot(jy / *m as f64 - at[1]) < ICON_JOIN * size
             });
             match near {
                 Some(group) => *group = (group.0 + n, group.1 + sx, group.2 + sy),
@@ -687,6 +719,53 @@ mod tests {
         let mut exit = fixture("bigmap-scene.ppm");
         paint(&mut exit, [205, 96, 38], |x, y| (120..138).contains(&x) && (70..90).contains(&y));
         assert!(marker_near(&exit, [128.0, 80.0], 16.0).is_none());
+    }
+
+    #[test]
+    fn the_cross_never_becomes_or_joins_an_exit() {
+        // The cross spans 295-305 x 56-65 px; only the real icons are found, at every
+        // pixel (the corner minimap) and every second (the big map).
+        let real = [("checkpoint", -97, 102), ("exit", -136, 83)];
+        let found = |image: &Image, stride: usize| -> Vec<(&str, i32, i32)> {
+            let mut found: Vec<_> = icons_in(image, [300.5, 60.7], SCALE, 1.0, stride, &[], false)
+                .into_iter()
+                .map(|i| (i.kind, i.x.round() as i32, i.y.round() as i32))
+                .collect();
+            found.sort();
+            found
+        };
+        let orange = [230, 110, 30];
+        let cases: [(&str, Box<dyn Fn(usize, usize) -> bool>); 5] = [
+            // 100 px of orange (fire, an ember trail), its centre 12 px right of the cross's.
+            ("100 px 12 px away", Box::new(|x, y| (308..318).contains(&x) && (56..66).contains(&y))),
+            // The same right under the player's feet, touching the cross.
+            ("100 px touching", Box::new(|x, y| (295..305).contains(&x) && (66..76).contains(&y))),
+            // Three such patches around the cross: each alone is too small.
+            ("three patches", Box::new(|x, y| {
+                ((317..327).contains(&x) && (56..66).contains(&y))
+                    || ((273..283).contains(&x) && (56..66).contains(&y))
+                    || ((295..305).contains(&x) && (78..88).contains(&y))
+            })),
+            // A line of orange loot text (exit-sized in pixels, 80 x 6 px) by the player.
+            ("loot text", Box::new(|x, y| (310..390).contains(&x) && (70..76).contains(&y) && x % 7 != 0)),
+            // A lava pool (40 x 40 px) next to the player.
+            ("lava", Box::new(|x, y| (320..360).contains(&x) && (80..120).contains(&y))),
+        ];
+        for (what, inside) in cases {
+            let mut image = fixture("bigmap-player.ppm");
+            paint(&mut image, orange, inside);
+            for stride in [1, 2] {
+                assert_eq!(found(&image, stride), real, "{what}, every {stride} px");
+            }
+        }
+        // A real exit stays one with the cross on it.
+        let mut image = fixture("bigmap-scene.ppm");
+        paint(&mut image, [205, 96, 38], |x, y| (120..138).contains(&x) && (70..96).contains(&y) && (x + y) % 4 != 0);
+        paint(&mut image, orange, |x, y| (132..143).contains(&x) && (80..90).contains(&y));
+        for stride in [1, 2] {
+            let exits: Vec<_> = icons_in(&image, [137.5, 85.0], SCALE, 1.0, stride, &[], false);
+            assert_eq!(exits.len(), 1, "{exits:?}");
+        }
     }
 
     #[test]
