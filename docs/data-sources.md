@@ -56,11 +56,9 @@ node scripts/render-terrain.mjs                   # pictures in experiments/layo
 We start with the first three zones (The Riverbank, Clearfell Encampment,
 Clearfell) and add more once navigation works there; other area IDs can be
 passed to the script. `render-terrain.mjs` draws each zone north-up and turned
-45° (`.game.svg`) to the in-game map orientation. The turn matched a Clearfell
-layout diagram by eye (encampment exit at the bottom, waypoint and Mud Burrow
-top-left, The Grelwood right); it is not yet checked against live gameplay. The
-arrow also tries rotated and mirrored placements, so a wrong turn shows up as
-`turned` rather than a wrong arrow. The arrow (`src-tauri/src/layout/guide.rs`)
+45° with y up (`.game.svg`), as the in-game map shows it. That turn was fitted on
+a recorded Clearfell Encampment visit: 90% of its minimap walls lie on poe2way's
+outline at 0.78 minimap cells per game unit. The arrow (`src-tauri/src/layout/guide.rs`)
 bundles these files; see [map reading](map-reading.md#poe2way-terrain-arrow-2026-11-12).
 
 Per area there is `<areaId>.json` and `<areaId>.svg` (extra variants as

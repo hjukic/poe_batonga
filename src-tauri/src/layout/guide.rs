@@ -30,10 +30,11 @@ const ZONES: [(&str, &str, &str); 2] = [
 const CELL: f64 = 6.0;
 /// Recorded walls this many cells from the outline still count as on it.
 const NEAR_WALL: i32 = 2;
-/// Minimap cells per game unit to try when no visit has been measured yet.
-const SCALE_MIN: f64 = 0.2;
-const SCALE_MAX: f64 = 5.0;
-const SCALE_STEP: f64 = 1.08;
+/// Minimap cells per game unit to try when no visit has been measured yet. The
+/// encampment visit measured 0.80; the minimap zoom is probably the same everywhere.
+const SCALE_MIN: f64 = 0.55;
+const SCALE_MAX: f64 = 1.3;
+const SCALE_STEP: f64 = 1.04;
 /// Fewer recorded walls than this say too little about the layout.
 const MIN_WALLS: usize = 150;
 /// At most this many recorded walls are scored per hypothesis.
@@ -94,10 +95,12 @@ pub struct Zone {
     wall_sum: Vec<u32>,
 }
 
-/// The in-game map turns the world grid by 45°: screen = rotate(-45°) of (x, y).
+/// The in-game map shows the world grid turned 45° with its y axis pointing up:
+/// screen = ((x - y), -(x + y)) / √2. Fitted on a recorded Clearfell Encampment
+/// visit (2026-11-12, 2,744 walls, 87% on the outline at 0.80 cells per unit).
 fn to_screen((x, y): (f64, f64)) -> (f64, f64) {
     let c = std::f64::consts::FRAC_1_SQRT_2;
-    (c * (x + y), c * (y - x))
+    (c * (x - y), -c * (x + y))
 }
 
 /// Outline rings from an SVG path made of M/L/Z commands.
@@ -358,16 +361,27 @@ impl Catalog {
     }
 }
 
-/// Rotations and mirrors as 2x2 matrices [a, b, c, d]: (x, y) -> (ax + by, cx + dy).
-const TURNS: [[f64; 4]; 8] = [
+const H: f64 = std::f64::consts::FRAC_1_SQRT_2;
+/// Turns in 45° steps, then the same mirrored, as 2x2 matrices [a, b, c, d]:
+/// (x, y) -> (ax + by, cx + dy). The 45° steps also cover a wrong guess about the
+/// in-game map's turn (`to_screen`).
+const TURNS: [[f64; 4]; 16] = [
     [1.0, 0.0, 0.0, 1.0],
+    [H, -H, H, H],
     [0.0, -1.0, 1.0, 0.0],
+    [-H, -H, H, -H],
     [-1.0, 0.0, 0.0, -1.0],
+    [-H, H, -H, -H],
     [0.0, 1.0, -1.0, 0.0],
+    [H, H, -H, H],
     [-1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, -1.0],
-    [0.0, 1.0, 1.0, 0.0],
+    [-H, -H, -H, H],
     [0.0, -1.0, -1.0, 0.0],
+    [H, -H, -H, -H],
+    [1.0, 0.0, 0.0, -1.0],
+    [H, H, H, -H],
+    [0.0, 1.0, 1.0, 0.0],
+    [-H, H, H, H],
 ];
 
 fn turn(t: &[f64; 4], (x, y): (f64, f64)) -> (f64, f64) {
@@ -446,7 +460,8 @@ impl Fit {
     }
 }
 
-/// Where the player can have arrived: the exits to the zone they came from, else waypoints.
+/// Where the player can have arrived: the exits to the zone they came from; else
+/// exits whose destination poe2way does not know, and waypoints.
 fn anchors(zone: &Zone, arrived_from: &str) -> Vec<(f64, f64)> {
     let exits: Vec<(f64, f64)> = zone
         .objects
@@ -457,7 +472,11 @@ fn anchors(zone: &Zone, arrived_from: &str) -> Vec<(f64, f64)> {
     if !exits.is_empty() {
         return exits;
     }
-    zone.objects.iter().filter(|o| o.kind == "waypoint").map(|o| o.at).collect()
+    zone.objects
+        .iter()
+        .filter(|o| o.kind == "waypoint" || (o.kind == "transition" && o.destination.is_none()))
+        .map(|o| o.at)
+        .collect()
 }
 
 /// The next exit: onward to the lowest-numbered zone not just come from or done.
@@ -679,7 +698,7 @@ mod tests {
     fn a_mirrored_instance_is_recognised() {
         let catalog = Catalog::load();
         let zone = &catalog.zones["G1_2"];
-        let fit = Fit { anchor: town_exit(zone), turn: 4, scale: 0.8, score: 0.0 };
+        let fit = Fit { anchor: town_exit(zone), turn: 8, scale: 0.8, score: 0.0 };
         let walls = recorded_walls(zone, &fit, 450.0);
         let view = guide(&catalog, &ev("G1_2", "G1_town", &walls)).unwrap();
         assert_eq!(view.source, "estimated", "{view:?}");
@@ -726,5 +745,31 @@ mod tests {
     fn area_ids_sort_by_number() {
         assert!(area_order("G1_3") < area_order("G1_11"));
         assert!(area_order("G1_2") < area_order("G1_3"));
+    }
+}
+
+/// Runs the arrow on a real recording's first part:
+/// `LAYOUT_FILE=<json> FROM=G1_town cargo test --release guide_on_recording -- --ignored --nocapture`.
+#[cfg(test)]
+#[test]
+#[ignore]
+fn guide_on_recording() {
+    let path = std::env::var("LAYOUT_FILE").expect("set LAYOUT_FILE");
+    let from = std::env::var("FROM").unwrap_or_default();
+    let recording: super::Recording = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    let catalog = Catalog::load();
+    for part in &recording.parts {
+        let Some(arrival) = part.pois.iter().find(|p| p.kind == "arrived") else { continue };
+        let walls: Vec<(i32, i32)> =
+            part.walls.iter().filter(|w| w[2] >= 2).map(|w| (w[0] - arrival.x, w[1] - arrival.y)).collect();
+        let player = part.trail.last().map_or((0, 0), |t| (t[0] - arrival.x, t[1] - arrival.y));
+        let ev = Evidence { area: &recording.area, arrived_from: &from, walls: &walls, player, completed: &[], scale: None };
+        let zone = &catalog.zones[recording.area.as_str()];
+        let all = fits(zone, &ev);
+        eprintln!("{} walls, player {:?}", walls.len(), player);
+        for f in all.iter().take(10) {
+            eprintln!("  turn {} scale {:.3} score {:.3} anchor {:?}", f.turn, f.scale, f.score, f.anchor);
+        }
+        eprintln!("{:?}", guide(&catalog, &ev));
     }
 }

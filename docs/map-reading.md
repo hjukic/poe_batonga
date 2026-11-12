@@ -212,9 +212,9 @@ no terrain there and shows no arrow.
 - **Target:** the onward exit: the lowest-numbered destination that is not the zone
   just left, a town or ticked as done (Clearfell from the encampment: Mud Burrow,
   then The Grelwood). Several exits to the same zone are all goals.
-- **Placement:** the visit starts at the exit to the zone it came from (or a
-  waypoint). Every placement (arrival exit x 8 rotations/mirrors x scale 0.2-5
-  minimap cells per game unit) is scored by how many recorded walls lie within two
+- **Placement:** the visit starts at the exit to the zone it came from (else an
+  exit with unknown destination, or a waypoint). Every placement (arrival exit x
+  8 turns in 45° steps x mirror x scale 0.55-1.3 minimap cells per game unit) is scored by how many recorded walls lie within two
   6-unit cells of the outline, above the share chance would give for the area they
   cover. Squeezing walls into a narrow corridor therefore scores nothing.
 - **Arrow:** shown only with at least 150 recorded walls, a best score of 0.5 and a
@@ -227,4 +227,16 @@ no terrain there and shows no arrow.
 Tests use walls generated from the outline itself (unturned and mirrored), a grid
 that matches nothing, and a U-shaped corridor. Real minimap walls are noisier;
 the thresholds need checking on recorded Clearfell visits.
+
+### First real checks (2026-11-12)
+
+- **Clearfell Encampment** (fixed layout), 2,744 recorded walls arriving from The
+  Riverbank: 90% on the outline at 0.78 cells per unit with no extra turn, once the
+  base turn was corrected to `((x - y), -(x + y)) / √2` (world y points up; the
+  first guess lacked the flip). This fixes the scale range.
+- **Clearfell** instance seed 2693856399, ~2,800 walls near the encampment exit:
+  best 40%, no clear lead, so no arrow. With the wide scale range (0.2-5) it had
+  "matched" at 3.2 by squeezing all walls into the narrow tail by the exit; the
+  narrower range rules that out. Either this instance is another layout than
+  poe2way's or too little was explored; more Clearfell visits will tell.
 

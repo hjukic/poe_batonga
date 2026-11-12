@@ -34,9 +34,10 @@ function label(o) {
   return o.label ?? o.kind;
 }
 
-// The in-game map shows the world grid turned 45°: screen = rotate(-45°) of (x, y).
+// The in-game map shows the world grid turned 45° with y pointing up (fitted on a
+// recorded encampment visit; see src-tauri/src/layout/guide.rs `to_screen`).
 const C = Math.SQRT1_2;
-const toGame = ([x, y]) => [C * (x + y), C * (y - x)];
+const toGame = ([x, y]) => [C * (x - y), -C * (x + y)];
 
 function render(id, game) {
   const zone = JSON.parse(readFileSync(join(dataDir, `${id}.json`), 'utf8'));
@@ -51,7 +52,8 @@ function render(id, game) {
   const y0 = Math.min(...corners.map((c) => c[1])) - pad;
   const w = Math.max(...corners.map((c) => c[0])) - x0 + pad;
   const h = Math.max(...corners.map((c) => c[1])) - y0 + pad + 40 * u;
-  const transform = game ? ' transform="rotate(-45)"' : '';
+  // SVG matrix(a b c d e f): x' = a x + c y, y' = b x + d y.
+  const transform = game ? ` transform="matrix(${C} ${-C} ${-C} ${-C} 0 0)"` : '';
 
   const marks = zone.objects
     .slice()
