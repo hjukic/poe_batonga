@@ -943,11 +943,12 @@ const TWIN_LEAD: f64 = 0.04;
 /// A colour-found checkpoint or waypoint must look like its own sprite this much to be
 /// kept (and is named by it). Real checkpoints 0.55-0.67 (Clearfell, the Riverbank, the
 /// owner's 19 captures); scene ones up to 0.48 (the glow of the waypoint stone in Clearfell
-/// Encampment, `samples/bigmap-1794483509.ppm`). The real waypoint 0.65-0.68, scene ones
-/// at most 0.39 (water foam, a spell's glow). An exit keeps its kind whatever it scores
-/// (none false seen) and is named from `OWN`.
+/// Encampment, `samples/bigmap-1794483509.ppm`). The real waypoint 0.65-0.68 (14 captures),
+/// scene ones up to 0.496 (a hen on a blue rune circle, `samples/bigmap-1794486221.ppm`).
+/// An exit keeps its kind whatever it scores (none false seen) and is named from `OWN`.
 const OWN: f64 = 0.47;
 const OWN_CHECKPOINT: f64 = 0.55;
+const OWN_WAYPOINT: f64 = 0.55;
 /// An exit whose own sprite scores this much is one: no other sprite is tried (it could
 /// not lead by `LEAD`).
 const SURE_EXIT: f64 = 0.9;
@@ -1032,6 +1033,7 @@ fn identify(image: &Image, icons: &mut Vec<(Icon, [f64; 2])>, found: &[(u8, Blob
         let own = rank(image, *at, &own_sprites, window, reach).first().map(|&(i, m, _)| (i, m.value()));
         let least = match icon.kind {
             "checkpoint" => OWN_CHECKPOINT,
+            "waypoint" => OWN_WAYPOINT,
             _ => OWN,
         };
         let name = own.filter(|&(_, v)| v >= least).map(|(i, _)| sprites()[i].id.as_str());
@@ -1753,6 +1755,22 @@ mod tests {
     }
 
     #[test]
+    fn a_hen_on_a_rune_circle_is_no_waypoint() {
+        // Clearfell Encampment (`samples/bigmap-1794486221.ppm`, crop at 0, 960): a hen on a
+        // blue rune circle at (73, 85) scored 0.496 against the waypoint sprite; real
+        // waypoints 0.65-0.68.
+        set_icon_area(Some("G1_town"));
+        let image = fixture("bigmap-hen-rune.ppm");
+        for stride in [1, 2] {
+            let old = without_matching(|| icons_in(&image, [0.0, 0.0], SCALE, 1.0, stride, &[], false));
+            assert!(old.iter().any(|i| i.kind == "waypoint"), "{old:?}");
+            let new = icons_in(&image, [0.0, 0.0], SCALE, 1.0, stride, &[], false);
+            assert!(new.iter().all(|i| i.kind != "waypoint"), "every {stride} px: {new:?}");
+        }
+        set_icon_area(None);
+    }
+
+    #[test]
     fn the_millers_grey_icon_after_the_kill_is_found_where_he_was() {
         // The Riverbank 4 minutes after the Miller's last line (`samples/bigmap-1794482737.ppm`,
         // crop at 440, 470): his icon grey and without its place name, below-left of the cross.
@@ -2016,6 +2034,21 @@ mod tests {
                 let tried = TRIED.with(|t| t.take());
                 let on = time(&|| icons_in(&image, centre, SCALE, 1.0, stride, &[], false).len());
                 let off = without_matching(|| time(&|| icons_in(&image, centre, SCALE, 1.0, stride, &[], false).len()));
+                // Every colour-found exit and waypoint with its own sprite's score.
+                let own_score = |kind: &str, at: [f64; 2]| {
+                    let own: Vec<usize> = generic_sprites().iter().copied().filter(|&i| sprites()[i].kind == kind).collect();
+                    rank(&image, at, &own, 1.0, 4).first().map_or(f64::NAN, |(_, m, _)| m.value())
+                };
+                let old = without_matching(|| icons_in(&image, centre, SCALE, 1.0, stride, &[], false));
+                let scored: Vec<String> = old
+                    .iter()
+                    .filter(|i| matches!(i.kind, "exit" | "waypoint"))
+                    .map(|i| {
+                        let at = [centre[0] + i.x as f64 * 2.0, centre[1] + i.y as f64 * 2.0];
+                        format!("{} ({:.0},{:.0}) {:.3}", i.kind, at[0], at[1], own_score(i.kind, at))
+                    })
+                    .collect();
+                println!("  own scores, every {stride}: {}", scored.join(", "));
                 let list: Vec<String> = icons.iter().map(|i| format!("{} {} ({:.0},{:.0})", i.kind, i.sprite.unwrap_or("-"), centre[0] + i.x as f64 * 2.0, centre[1] + i.y as f64 * 2.0)).collect();
                 let mut worst = (0.0f64, String::new());
                 if stride == 2 {
@@ -2031,6 +2064,32 @@ mod tests {
                 println!("{name} every {stride}: {:.1} ms off, {:.1} ms on, {} places; {}{}", off.as_secs_f64() * 1e3, on.as_secs_f64() * 1e3, tried.len(), list.join(", "),
                     if stride == 2 { format!("; worst other boss/dead/rare {:.3} {}", worst.0, worst.1) } else { String::new() });
             }
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn exit_scores_under_cross_and_label() {
+        let entrance = [sprite_index("Entrance")];
+        for (what, dx, dy) in [("clean", 99.0, 99.0), ("cross on its centre", 0.0, 0.0), ("cross at its top", 0.0, -9.0), ("cross at its side", 8.0, 2.0), ("cross at its foot", 0.0, 12.0)] {
+            let mut image = fixture("bigmap-scene.ppm");
+            let at = [128.0, 80.0];
+            draw(&mut image, "Entrance", at, 0.48);
+            let (cx, cy) = (at[0] + dx, at[1] + dy);
+            paint(&mut image, [230, 110, 30], |x, y| (x as f64 - cx).abs() + (y as f64 - cy).abs() <= 5.0);
+            let m = rank(&image, at, &entrance, 1.0, 4)[0].1.value();
+            println!("{what}: {m:.3}");
+        }
+        for rows in [3, 6, 9] {
+            let mut image = fixture("bigmap-scene.ppm");
+            let at = [128.0, 80.0];
+            draw(&mut image, "Entrance", at, 0.48);
+            // Label text (pale letters) over the icon's top rows.
+            paint(&mut image, [200, 200, 200], |x, y| (115..141).contains(&x) && (67..67 + rows).contains(&y) && x % 4 != 0);
+            println!("label over {rows} rows: {:.3}", rank(&image, at, &entrance, 1.0, 4)[0].1.value());
+        }
+        for (name, at) in [("bigmap-player.ppm", [28.5, 226.5]), ("bigmap-icons.ppm", [206.0, 65.0])] {
+            println!("{name}: {:.3}", rank(&fixture(name), at, &entrance, 1.0, 4)[0].1.value());
         }
     }
 
