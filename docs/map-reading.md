@@ -862,6 +862,15 @@ counts, so the replay can hand the navigator every `icons` call the app made.
 | `targets` | `targets` (`label`, `exit`, `tag`, `optional`) | when the list asked for changes |
 | `needle` | `target`, `degrees`, `source`, `confidence`, `variant`, `distance`; `kept` (tracking lost, the last needle stayed), `stale` (no frame for 2 s), `way` (it followed a way through the recorded map); on `way` lines `ahead` (the look-ahead point from the player, cells) and `fog` (share of the way over unrecorded ground), absent until the navigator gives them | when source, target or variant change or it turns more than 15°, else every 5 s while frames come |
 | `end` | | when the zone is left |
+| `gap` | `f` (always written) | before the next line after a failed write: the lines between are lost |
+
+A write that fails (full disk, the folder not makeable) loses its lines; the next
+write starts with a newline (a torn line ends there), the `start` line again if it
+never reached the file, and a `gap` line that names its frame, so the lines after it
+number theirs right. The replay marks such a visit **incomplete**, also when a line
+it cannot read is followed by more of the visit, and leaves it out of the totals
+(`a_failed_write_leaves_a_gap_and_the_visit_is_incomplete`,
+`a_torn_middle_line_keeps_the_lines_after_it`).
 
 Exits are written exactly as handed over (the navigator's input); checkpoints and
 waypoints, which the navigator does not use and which don't move, only the first time

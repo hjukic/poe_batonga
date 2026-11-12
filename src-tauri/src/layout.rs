@@ -1387,6 +1387,7 @@ mod tests {
         // Without the memory in the file (as before v0.1.48) the visit is left out of the agreement.
         let old: String = text
             .lines()
+            .filter(|l| !l.is_empty())
             .map(|l| {
                 let mut line: obs::Line = serde_json::from_str(l).unwrap();
                 if let obs::Entry::Start { remembered, age, .. } = &mut line.entry {

@@ -62,15 +62,19 @@ impl Entry {
     fn frame(&mut self) -> Option<(&mut u64, bool)> {
         match self {
             Entry::Move { f, .. } | Entry::Lost { f, .. } => Some((f, true)),
-            Entry::Icons { f, .. } | Entry::Seen { f, .. } | Entry::Targets { f, .. } | Entry::Needle { f, .. } | Entry::End { f } => {
-                Some((f, false))
-            }
+            Entry::Icons { f, .. }
+            | Entry::Seen { f, .. }
+            | Entry::Targets { f, .. }
+            | Entry::Needle { f, .. }
+            | Entry::End { f }
+            | Entry::Gap { f } => Some((f, false)),
             Entry::Start { .. } => None,
         }
     }
 
     /// Its frame left out where it follows from the last line's (`last`), or filled in.
     pub fn implied(&mut self, last: &mut u64, writing: bool) {
+        let gap = matches!(self, Entry::Gap { .. });
         let Some((f, starts)) = self.frame() else {
             *last = 0;
             return;
@@ -78,9 +82,11 @@ impl Entry {
         let implied = if starts { *last + 1 } else { *last };
         if writing {
             *last = *f;
-            if *f == implied {
+            if *f == implied && !gap {
                 *f = 0;
             }
+        } else if gap {
+            *last = *f;
         } else {
             if *f == 0 {
                 *f = implied;
@@ -270,6 +276,10 @@ pub enum Entry {
         #[serde(default, skip_serializing_if = "is_zero")]
         f: u64,
     },
+    /// Lines were lost here (a write failed): the visit is incomplete. Its `f` (the
+    /// last frame before the next line) is always written, so the lines after it
+    /// number their frames right.
+    Gap { f: u64 },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -295,6 +305,13 @@ pub struct Log {
     active: bool,
     flushed_at: u64,
     failed: bool,
+    /// Lines were dropped (a failed write): the next line is preceded by a `gap`.
+    gap: bool,
+    /// The file may not end in a newline (not written yet by this log, or a write
+    /// failed half-way): the next write starts with one.
+    newline: bool,
+    /// The start line, until it is in the file (a failed first write drops it).
+    start: Option<String>,
     frame: u64,
     /// The player's place in this part (cells, from the moves), and the checkpoints
     /// and waypoints written in it.
@@ -334,6 +351,9 @@ impl Log {
             active: false,
             flushed_at: t,
             failed: false,
+            gap: false,
+            newline: true,
+            start: None,
             frame: 0,
             pos: (0, 0),
             marks: Vec::new(),
@@ -348,7 +368,7 @@ impl Log {
             area: start.area.clone(),
             seed: start.seed,
         };
-        log.write(
+        log.write_line(
             t,
             Entry::Start {
                 area: start.area.clone(),
@@ -362,10 +382,24 @@ impl Log {
                 resumed: start.resumed,
             },
         );
+        log.start = Some(log.buf.clone());
         log
     }
 
-    fn write(&mut self, t: u64, mut entry: Entry) {
+    fn write(&mut self, t: u64, entry: Entry) {
+        if self.gap {
+            // The frame before this line: a frame's own line names its frame itself.
+            let f = match &entry {
+                Entry::Move { .. } | Entry::Lost { .. } | Entry::Icons { .. } => self.frame.saturating_sub(1),
+                _ => self.frame,
+            };
+            self.gap = false;
+            self.write_line(t, Entry::Gap { f });
+        }
+        self.write_line(t, entry);
+    }
+
+    fn write_line(&mut self, t: u64, mut entry: Entry) {
         if self.buf.len() > MAX_BUFFER {
             return;
         }
@@ -384,26 +418,48 @@ impl Log {
         if self.buf.is_empty() {
             return;
         }
-        match &mut self.out {
+        // A newline first where the file may end in a torn line; the start line again
+        // when it never reached the file.
+        let mut text = String::new();
+        if self.newline {
+            text.push('\n');
+        }
+        if let Some(start) = self.start.as_ref().filter(|start| !self.buf.starts_with(start.as_str())) {
+            text.push_str(start);
+        }
+        text.push_str(&self.buf);
+        self.buf.clear();
+        let written = match &mut self.out {
             Out::File(path) => {
                 let result = (|| -> std::io::Result<()> {
                     use std::io::Write;
                     if let Some(dir) = path.parent() {
                         std::fs::create_dir_all(dir)?;
                     }
-                    std::fs::OpenOptions::new().create(true).append(true).open(&*path)?.write_all(self.buf.as_bytes())
+                    std::fs::OpenOptions::new().create(true).append(true).open(&*path)?.write_all(text.as_bytes())
                 })();
-                if let Err(error) = result {
+                if let Err(error) = &result {
                     if !self.failed {
                         eprintln!("Layout: could not write {}: {error}", path.display());
                     }
                     self.failed = true;
                 }
+                result.is_ok()
             }
             #[cfg(test)]
-            Out::Memory(text) => text.push_str(&self.buf),
+            Out::Memory(out) => {
+                out.push_str(&text);
+                true
+            }
+        };
+        if written {
+            self.newline = false;
+            self.start = None;
+        } else {
+            // The lines are lost: the next one says so.
+            self.gap = true;
+            self.newline = true;
         }
-        self.buf.clear();
     }
 
     /// A placed frame begins (before its move): returns its number.
@@ -747,6 +803,8 @@ pub(super) mod replay {
         /// The app's needles that followed a way through the recorded map (not compared).
         pub mapped: usize,
         pub differ: Vec<String>,
+        /// Lines were lost (a failed or torn write): not in the totals.
+        pub incomplete: bool,
         /// Why the visit was not replayed.
         pub skipped: Option<String>,
     }
@@ -913,7 +971,9 @@ pub(super) mod replay {
                         self.open = Some(*f);
                     }
                 }
-                Entry::Seen { f, .. } | Entry::Targets { f, .. } | Entry::Needle { f, .. } | Entry::End { f } => self.advance_to(*f),
+                Entry::Seen { f, .. } | Entry::Targets { f, .. } | Entry::Needle { f, .. } | Entry::End { f } | Entry::Gap { f } => {
+                    self.advance_to(*f)
+                }
                 Entry::Start { .. } => {}
             }
             match &line.entry {
@@ -988,6 +1048,7 @@ pub(super) mod replay {
                     }
                 }
                 Entry::End { .. } => self.visit.ended = true,
+                Entry::Gap { .. } => self.visit.incomplete = true,
                 Entry::Start { .. } => {}
             }
         }
@@ -1111,9 +1172,19 @@ pub(super) mod replay {
         let mut out = Vec::new();
         let mut run: Option<Run> = None;
         let mut last_f = 0;
+        // A line that could not be read (torn by a crash or a full disk) is skipped;
+        // when the visit goes on after it, lines are missing.
+        let mut torn = false;
         for raw in text.lines().filter(|l| !l.trim().is_empty()) {
-            // A torn last line (the app closed while writing) is skipped.
-            let Ok(mut line) = serde_json::from_str::<Line>(raw) else { continue };
+            let Ok(mut line) = serde_json::from_str::<Line>(raw) else {
+                torn = true;
+                continue;
+            };
+            if std::mem::take(&mut torn) && !matches!(line.entry, Entry::Start { .. }) {
+                if let Some(run) = run.as_mut() {
+                    run.visit.incomplete = true;
+                }
+            }
             line.entry.implied(&mut last_f, false);
             if let Entry::Start { area, .. } = &line.entry {
                 out.extend(run.take().map(Run::finish));
@@ -1160,6 +1231,9 @@ pub(super) mod replay {
             units,
             if v.ended { "" } else { ", no end line" },
         );
+        if v.incomplete {
+            out += "   incomplete: lines were lost (a failed or torn write); not in the totals\n";
+        }
         let belief: Vec<String> = v.belief.iter().map(|(t, id, p)| format!("{:.0}s {id} {p:.2}", *t as f64 / 1000.0)).collect();
         out += &format!("   top layout: {}\n", if belief.is_empty() { "-".into() } else { belief.join(" → ") });
         let last_top = v.belief.last().map(|b| b.1.clone());
@@ -1207,7 +1281,8 @@ pub(super) mod replay {
 
     /// One line over all visits.
     pub fn summary(files: usize, visits: &[Visit]) -> String {
-        let played: Vec<&Visit> = visits.iter().filter(|v| v.skipped.is_none()).collect();
+        let incomplete = visits.iter().filter(|v| v.skipped.is_none() && v.incomplete).count();
+        let played: Vec<&Visit> = visits.iter().filter(|v| v.skipped.is_none() && !v.incomplete).collect();
         let truths = played.iter().filter(|v| v.truth.as_ref().is_some_and(|t| t.1 >= FIXED)).count();
         let exits = played.iter().filter(|v| v.left.is_some() && !v.unscored).count();
         let unscored = played.iter().filter(|v| v.unscored).count();
@@ -1221,11 +1296,11 @@ pub(super) mod replay {
         let (logged, agree): (usize, usize) = comparable.iter().fold((0, 0), |a, v| (a.0 + v.logged, a.1 + v.agree));
         let blind = played.len() - comparable.len();
         format!(
-            "replay: {files} file(s), {} visit(s) replayed ({} skipped), {truths} with a layout truth, {exits} with the exit taken, \
+            "replay: {files} file(s), {} visit(s) replayed ({} skipped, {incomplete} incomplete), {truths} with a layout truth, {exits} with the exit taken, \
              {unscored} unscored exit(s) (no exit icon where they left); \
              needle within 45°, shown: {} ({} through the map); replayed: {}; app's needles agree {} ({agree} of {logged}; {blind} visit(s) from a memory not in the file left out)",
             played.len(),
-            visits.len() - played.len(),
+            visits.len() - played.len() - incomplete,
             shown.shares(),
             shown.way,
             replayed.shares(),
@@ -1333,7 +1408,7 @@ mod tests {
             std::fs::write(path, &text).unwrap();
         }
         let kinds: std::collections::BTreeSet<String> =
-            text.lines().map(|l| serde_json::from_str::<Line>(l).unwrap()).map(|l| format!("{:?}", l.entry).split([' ', '{']).next().unwrap().to_string()).collect();
+            text.lines().filter(|l| !l.is_empty()).map(|l| serde_json::from_str::<Line>(l).unwrap()).map(|l| format!("{:?}", l.entry).split([' ', '{']).next().unwrap().to_string()).collect();
         assert_eq!(kinds.into_iter().collect::<Vec<_>>(), ["End", "Icons", "Move", "Needle", "Seen", "Start", "Targets"]);
         let visits = replay(&text, &Graphs::default());
         assert_eq!(visits.len(), 1);
@@ -1456,6 +1531,7 @@ mod tests {
         let mut last = 0;
         let lines: Vec<Line> = text
             .lines()
+            .filter(|l| !l.is_empty())
             .map(|l| {
                 let mut line: Line = serde_json::from_str(l).unwrap();
                 line.entry.implied(&mut last, false);
@@ -1464,19 +1540,71 @@ mod tests {
             .collect();
         assert_eq!(lines.len(), 7, "{text}");
         assert!(matches!(lines[1].entry, Entry::Move { f: 1, .. }) && matches!(lines[2].entry, Entry::Icons { f: 1, .. }));
-        assert!(text.lines().nth(1).unwrap().starts_with(r#"{"t":1762945000002,"k":"move","dx":3,"dy":-2}"#), "{text}");
+        assert!(text.lines().nth(2).unwrap().starts_with(r#"{"t":1762945000002,"k":"move","dx":3,"dy":-2}"#), "{text}");
         let Entry::Icons { icons, size, whole, .. } = &lines[2].entry else { panic!() };
         assert_eq!((icons[0].x, icons[0].label.as_deref(), *size, *whole), (-136.23457, Some("The Grelwood"), Some([300, 260]), true));
         let Entry::Icons { size, f, .. } = &lines[3].entry else { panic!() };
         assert_eq!((*size, *f), (None, 3));
         // The icons of the move's frame leave their frame out.
-        assert!(!text.lines().nth(2).unwrap().contains(r#""f":"#), "{text}");
+        assert!(!text.lines().nth(3).unwrap().contains(r#""f":"#), "{text}");
         let Entry::Start { version, .. } = &lines[0].entry else { panic!() };
         assert_eq!(version, app_version());
         assert!(!app_version().starts_with("0.1.0"));
         // A line cut short by a crash does not stop the replay.
         let torn = format!("{text}{{\"t\":1,\"k\":\"mo");
-        assert_eq!(replay(&torn, &Graphs::default())[0].frames, 3);
+        let v = &replay(&torn, &Graphs::default())[0];
+        // Cut at the end: nothing after it is missing.
+        assert!(v.frames == 3 && !v.incomplete);
+        // The file begins with a newline: a torn line left by an earlier crash ends there.
+        assert!(text.starts_with("\n{"), "{text}");
+    }
+
+    /// The first writes fail (the area's folder cannot be made), the later ones work.
+    #[test]
+    fn a_failed_write_leaves_a_gap_and_the_visit_is_incomplete() {
+        let dir = std::env::temp_dir().join(format!("poe-batonga-test-gap-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let blocker = dir.join("G1_2");
+        std::fs::write(&blocker, "a file where the folder should be").unwrap();
+        let path = dir.join("G1_2").join("11.obs.jsonl");
+        let mut log = Log::new(path.clone(), None, &start("G1_2", "G1_town"), T0);
+        let mut t = T0;
+        for step in 0..20 {
+            if step == 10 {
+                std::fs::remove_file(&blocker).unwrap();
+            }
+            t += 333;
+            log.frame();
+            log.moved(t, 3, 1);
+            log.icons(t, &[], false, (300, 260), false);
+        }
+        log.seen(t, Seen::Left("G1_3"));
+        log.end(t + 100);
+        let text = std::fs::read_to_string(&path).unwrap();
+        // The start line is written again, then the gap with its frame: the lines after
+        // it number theirs from there.
+        assert!(text.starts_with("\n{\"t\":1762945000000,\"k\":\"start\""), "{text}");
+        assert!(text.lines().any(|l| l.contains("\"k\":\"gap\",\"f\":")), "{text}");
+        let visits = replay(&text, &Graphs::default());
+        let v = &visits[0];
+        eprint!("{}", report(v));
+        // Every frame is counted, also those whose lines were lost.
+        assert!(v.incomplete && v.ended && v.frames == 20, "{v:?}");
+        assert!(summary(1, &visits).contains("(0 skipped, 1 incomplete)"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A line torn in the middle of a file (a full disk) loses that line only.
+    #[test]
+    fn a_torn_middle_line_keeps_the_lines_after_it() {
+        let (text, _, _) = simulated(false, 8.0);
+        let lines: Vec<&str> = text.lines().collect();
+        let k = lines.len() / 2;
+        let torn: String = lines.iter().enumerate().map(|(i, l)| if i == k { format!("{}\n", &l[..l.len() / 2]) } else { format!("{l}\n") }).collect();
+        let v = &replay(&torn, &Graphs::default())[0];
+        assert!(v.incomplete && v.ended && v.left.is_some(), "{v:?}");
+        assert!(!replay(&text, &Graphs::default())[0].incomplete);
     }
 
     #[test]
