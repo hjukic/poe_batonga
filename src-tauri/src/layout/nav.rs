@@ -138,6 +138,11 @@ const ICON_FLOOR: f64 = 0.05;
 const ICON_BASE: f64 = 0.005;
 /// Named exits that do not fit a layout at all cost it this much (the fit's floor).
 const NAMED_BASE: f64 = 1e-4;
+/// How much larger or smaller than `graph::SCALE` a zone's map may be drawn, for two exits
+/// read by name: the Grelwood's lie 1.38 times as far apart as Clearfell's scale says (the
+/// owner's visit, 2026-11-12). Fitted per pair within this range: wider, a pair of
+/// Clearfell's exits fitted a wrong layout at 1.74 as well as the right one at 1.0.
+const PAIR_SCALE: (f64, f64) = (0.75, 1.5);
 /// Named exits that the best layout fits only this loosely (the pair's miss, world
 /// units) say the graphs do not describe this instance well enough to steer by: the
 /// needle is then "unconfirmed". The one instance whose layout is known fit within 132
@@ -183,7 +188,7 @@ const ICON_CONFIRM: f64 = 0.5;
 const ICON_SURE: f64 = 0.95;
 
 /// The memory format; older files are ignored.
-pub(super) const MEMORY_VERSION: u32 = 2;
+pub(super) const MEMORY_VERSION: u32 = 3;
 
 /// Icons this close (world units) on the dead-reckoned track are one exit.
 const SIGHT_MATCH: f64 = 40.0;
@@ -492,6 +497,13 @@ impl Navigator {
                 bank
             })
             .collect();
+        // A named pair fitted before (this visit before a death or a restart): the layout
+        // stays drawn. A new navigator after a death waited for two exits read again, and
+        // the picture went from "2 possible" to "5 possible" (the owner's Grelwood, 2026-11-12).
+        let kept_named = evidence
+            .map(|m| m.named.values().copied().fold(f64::MIN, f64::max))
+            .filter(|_| evidence.is_some_and(|m| m.named.values().any(|&v| v != 0.0)));
+        let one_pair = (-(NAMED_LOOSE * NAMED_LOOSE) / (4.0 * ICON_TOL * ICON_TOL)).exp();
         let mut nav = Navigator {
             area: area.clone(),
             scale,
@@ -510,8 +522,8 @@ impl Navigator {
             trusted: MEASURED.contains(&area.id.as_str()),
             icons_now: Vec::new(),
             sightings: Vec::new(),
-            named_loose: false,
-            named_pair: false,
+            named_loose: kept_named.is_some_and(|best| best.exp() < one_pair),
+            named_pair: kept_named.is_some(),
             named_live: false,
             checkpoints_counted: Vec::new(),
             track: (0.0, 0.0),
@@ -686,7 +698,10 @@ impl Navigator {
                             }
                             let (p, q) = (at(n1), at(n2));
                             let got = ((q.0 - p.0) * layout.unit, (q.1 - p.1) * layout.unit);
-                            let d2 = (got.0 - want.0).powi(2) + (got.1 - want.1).powi(2);
+                            // The zone's own scale: the one that lays the pair best, within range.
+                            let gg = got.0 * got.0 + got.1 * got.1;
+                            let k = if gg > 0.0 { ((got.0 * want.0 + got.1 * want.1) / gg).clamp(PAIR_SCALE.0, PAIR_SCALE.1) } else { 1.0 };
+                            let d2 = (k * got.0 - want.0).powi(2) + (k * got.1 - want.1).powi(2);
                             best = best.max((-d2 / (4.0 * ICON_TOL * ICON_TOL)).exp());
                         }
                     }
@@ -2107,6 +2122,47 @@ mod tests {
         // A later frame with only remembered exits does not undo it.
         nav.icons(&[ExitIcon { remembered: true, ..mud.clone() }, ExitIcon { remembered: true, ..grelwood.clone() }, town]);
         assert_eq!(nav.picture().unwrap().id, "ClearFell_W_E_N");
+    }
+
+    #[test]
+    fn the_grelwood_drawn_larger_than_clearfell_is_still_recognised() {
+        let area = graph::load("G1_4");
+        // The owner's Grelwood (2026-11-12): the Red Vale's exit 115 cells right of and
+        // 990 above Clearfell's, both read by name.
+        let frame = [
+            ExitIcon { dx: 30.0, dy: -60.0, to: Some("The Red Vale".into()), remembered: false },
+            ExitIcon { dx: 30.0 - 115.0, dy: -60.0 + 990.0, to: Some("Clearfell".into()), remembered: true },
+        ];
+        let mut nav = Navigator::new(&area, Arrival::From("G1_2"), None, SCALE, 2155839560);
+        nav.icons(&frame);
+        let ranking = nav.ranking();
+        assert_eq!(ranking[0].0, "OldForest_W_N", "{:?}", &ranking[..4]);
+        assert!(ranking[0].1 > 0.9, "{:?}", &ranking[..4]);
+        let picture = nav.picture().unwrap();
+        assert!(picture.known && picture.id == "OldForest_W_N", "{picture:?}");
+    }
+
+    #[test]
+    fn a_named_pair_stays_drawn_after_a_death() {
+        let area = graph::load("G1_4");
+        let frame = [
+            ExitIcon { dx: 30.0, dy: -60.0, to: Some("The Red Vale".into()), remembered: false },
+            ExitIcon { dx: 30.0 - 115.0, dy: -60.0 + 990.0, to: Some("Clearfell".into()), remembered: true },
+        ];
+        let mut nav = Navigator::new(&area, Arrival::From("G1_2"), None, SCALE, 1);
+        for _ in 0..20 {
+            nav.moved(10.0, -12.0);
+        }
+        nav.icons(&frame);
+        let memory = nav.memory();
+        // Slain: a new part, a new navigator from the memory, no exit read yet.
+        let again = Navigator::new(&area, Arrival::Unknown, Some(&memory), SCALE, 2);
+        let picture = again.picture().unwrap();
+        assert!(picture.known && picture.id == "OldForest_W_N", "{picture:?}");
+        // No pair before: nothing drawn from the memory alone.
+        let fresh = Navigator::new(&area, Arrival::From("G1_2"), None, SCALE, 3);
+        let none = Navigator::new(&area, Arrival::Unknown, Some(&fresh.memory()), SCALE, 4);
+        assert!(!none.picture().unwrap().known);
     }
 
     #[test]
