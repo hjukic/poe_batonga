@@ -83,8 +83,8 @@
       "id": "grelwood-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": null,
-      "evidence": "Clearfell Encampment was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G1_town", "after": "grelwood-una-seals" },
+      "evidence": "Zone-generation line for G1_town, counted only once grelwood-una-seals is done: the zone was entered before."
     }
   ]
 }

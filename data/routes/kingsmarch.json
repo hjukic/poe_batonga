@@ -99,8 +99,8 @@
       "id": "kingsmarch-to-journeys-end",
       "kind": "objective",
       "parts": [{ "text": "Waypoint to Journey's End" }],
-      "trigger": null,
-      "evidence": "Journey's End was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G4_2_2", "after": "enter-journeys-end" },
+      "evidence": "Zone-generation line for G4_2_2, counted only once enter-journeys-end is done: the zone was entered before."
     },
     {
       "id": "kingsmarch-tujen-reward",

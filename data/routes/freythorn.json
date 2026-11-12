@@ -35,8 +35,8 @@
       "id": "freythorn-to-farmlands",
       "kind": "objective",
       "parts": [{ "text": "Waypoint to Farmlands" }],
-      "trigger": null,
-      "evidence": "Ogham Farmlands was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G1_13_1", "after": "farmlands-wp" },
+      "evidence": "Zone-generation line for G1_13_1, counted only once farmlands-wp is done: the zone was entered before."
     }
   ]
 }

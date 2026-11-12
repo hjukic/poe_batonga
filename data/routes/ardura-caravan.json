@@ -184,8 +184,8 @@
       "id": "caravan-to-trial",
       "kind": "objective",
       "parts": [{ "text": "Waypoint to the Trial" }],
-      "trigger": null,
-      "evidence": "Trial of the Sekhemas was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G2_13", "after": "enter-spires-of-deshar" },
+      "evidence": "Zone-generation line for G2_13, counted only once enter-spires-of-deshar is done: the zone was entered before."
     },
     {
       "id": "travel-dreadnought",

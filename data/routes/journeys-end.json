@@ -30,8 +30,8 @@
       "id": "journeys-end-to-town",
       "kind": "objective",
       "parts": [{ "text": "Waypoint to town" }],
-      "trigger": null,
-      "evidence": "Kingsmarch was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G4_town", "after": "enter-journeys-end" },
+      "evidence": "Zone-generation line for G4_town, counted only once enter-journeys-end is done: the zone was entered before."
     },
     {
       "id": "journeys-end-freya-spikes",
@@ -51,8 +51,8 @@
       "id": "journeys-end-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": null,
-      "evidence": "Kingsmarch was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G4_town", "after": "kingsmarch-to-journeys-end" },
+      "evidence": "Zone-generation line for G4_town, counted only once kingsmarch-to-journeys-end is done: the zone was entered before."
     }
   ]
 }

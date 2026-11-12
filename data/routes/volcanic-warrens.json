@@ -24,8 +24,8 @@
       "id": "warrens-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": null,
-      "evidence": "Kingsmarch was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G4_town", "after": "enter-volcanic-warrens" },
+      "evidence": "Zone-generation line for G4_town, counted only once enter-volcanic-warrens is done: the zone was entered before."
     }
   ]
 }

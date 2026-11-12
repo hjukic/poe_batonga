@@ -32,8 +32,8 @@
       "id": "drowned-to-molten-vault",
       "kind": "objective",
       "parts": [{ "text": "Waypoint to Molten Vault" }],
-      "trigger": null,
-      "evidence": "The Molten Vault was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G3_9", "after": "molten-vault-wp" },
+      "evidence": "Zone-generation line for G3_9, counted only once molten-vault-wp is done: the zone was entered before."
     }
   ]
 }

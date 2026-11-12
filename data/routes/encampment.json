@@ -38,8 +38,8 @@
       "id": "town-to-grelwood",
       "kind": "objective",
       "parts": [{ "text": "Waypoint to The Grelwood" }],
-      "trigger": null,
-      "evidence": "The Grelwood was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G1_4", "after": "renly-runed-spikes" },
+      "evidence": "Zone-generation line for G1_4, counted only once renly-runed-spikes is done: the zone was entered before."
     },
     {
       "id": "town-una-roots",
@@ -52,8 +52,8 @@
       "id": "town-to-grim-tangle",
       "kind": "objective",
       "parts": [{ "text": "Waypoint to Grim Tangle" }],
-      "trigger": null,
-      "evidence": "The Grim Tangle was entered before (waypoint detour), so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G1_6", "after": "enter-red-vale" },
+      "evidence": "Zone-generation line for G1_6, counted only once enter-red-vale is done: the zone was entered before."
     },
     {
       "id": "town-talk-finn",
@@ -80,8 +80,8 @@
       "id": "town-to-hunting-grounds",
       "kind": "objective",
       "parts": [{ "text": "Waypoint to Hunting Grounds" }],
-      "trigger": null,
-      "evidence": "Hunting Grounds was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G1_11", "after": "enter-hunting-grounds" },
+      "evidence": "Zone-generation line for G1_11, counted only once enter-hunting-grounds is done: the zone was entered before."
     },
     {
       "id": "finn-charm",

@@ -23,8 +23,8 @@
       "id": "glade-to-glacial-tarn",
       "kind": "objective",
       "parts": [{ "text": "Waypoint to Glacial Tarn" }],
-      "trigger": null,
-      "evidence": "Glacial Tarn was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "P3_3", "after": "enter-howling-caves" },
+      "evidence": "Zone-generation line for P3_3, counted only once enter-howling-caves is done: the zone was entered before."
     }
   ]
 }

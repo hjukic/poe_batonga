@@ -16,8 +16,8 @@
       "kind": "objective",
       "navigationTarget": { "area": "P1_2", "label": "Scorched Farmlands", "exit": "P1_1" },
       "parts": [{ "text": "Back to Scorched Farmlands" }],
-      "trigger": null,
-      "evidence": "Scorched Farmlands was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "P1_1", "after": "enter-stones-of-serle" },
+      "evidence": "Zone-generation line for P1_1, counted only once enter-stones-of-serle is done: the zone was entered before."
     }
   ]
 }

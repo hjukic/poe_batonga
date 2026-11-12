@@ -16,8 +16,8 @@
       "id": "molten-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": null,
-      "evidence": "Ziggurat Encampment was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G3_town", "after": "kill-mektul" },
+      "evidence": "Zone-generation line for G3_town, counted only once kill-mektul is done: the zone was entered before."
     }
   ]
 }

@@ -25,8 +25,8 @@
       "kind": "objective",
       "navigationTarget": { "area": "G1_8", "label": "Cemetery", "exit": "G1_7" },
       "parts": [{ "text": "Back to the Cemetery" }],
-      "trigger": null,
-      "evidence": "Cemetery of the Eternals was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G1_7", "after": "enter-mausoleum" },
+      "evidence": "Zone-generation line for G1_7, counted only once enter-mausoleum is done: the zone was entered before."
     }
   ]
 }

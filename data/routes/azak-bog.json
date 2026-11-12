@@ -29,8 +29,8 @@
       "id": "bog-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": null,
-      "evidence": "Ziggurat Encampment was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G3_town", "after": "enter-azak-bog" },
+      "evidence": "Zone-generation line for G3_town, counted only once enter-azak-bog is done: the zone was entered before."
     }
   ]
 }

@@ -51,8 +51,8 @@
       "id": "buried-shrines-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": null,
-      "evidence": "The Ardura Caravan was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G2_town", "after": "enter-buried-shrines" },
+      "evidence": "Zone-generation line for G2_town, counted only once enter-buried-shrines is done: the zone was entered before."
     }
   ]
 }

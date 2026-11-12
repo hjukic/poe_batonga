@@ -28,8 +28,8 @@
       "kind": "objective",
       "navigationTarget": { "area": "G3_12", "label": "Ziggurat Encampment", "exit": "G3_town" },
       "parts": [{ "text": "Back to town" }],
-      "trigger": null,
-      "evidence": "Ziggurat Encampment was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G3_town", "after": "enter-temple-of-kopec" },
+      "evidence": "Zone-generation line for G3_town, counted only once enter-temple-of-kopec is done: the zone was entered before."
     }
   ]
 }

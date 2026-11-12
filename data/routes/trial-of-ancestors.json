@@ -15,8 +15,8 @@
       "id": "ancestors-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": null,
-      "evidence": "Kingsmarch was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G4_town", "after": "enter-trial-of-ancestors" },
+      "evidence": "Zone-generation line for G4_town, counted only once enter-trial-of-ancestors is done: the zone was entered before."
     }
   ]
 }

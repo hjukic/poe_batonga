@@ -16,8 +16,8 @@
       "kind": "objective",
       "navigationTarget": { "area": "G2_3a", "label": "The Ardura Caravan", "exit": "G2_town" },
       "parts": [{ "text": "Back to the caravan" }],
-      "trigger": null,
-      "evidence": "The Ardura Caravan was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G2_town", "after": "travel-halani-gates-first" },
+      "evidence": "Zone-generation line for G2_town, counted only once travel-halani-gates-first is done: the zone was entered before."
     }
   ]
 }

@@ -18,8 +18,8 @@
       "kind": "objective",
       "navigationTarget": { "area": "G1_3", "label": "Clearfell", "exit": "G1_2" },
       "parts": [{ "text": "Back to Clearfell" }],
-      "trigger": null,
-      "evidence": "Clearfell was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G1_2", "after": "enter-mud-burrow" },
+      "evidence": "Zone-generation line for G1_2, counted only once enter-mud-burrow is done: the zone was entered before."
     }
   ]
 }

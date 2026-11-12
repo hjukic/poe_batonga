@@ -23,8 +23,8 @@
       "id": "chambers-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": null,
-      "evidence": "Ziggurat Encampment was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G3_town", "after": "enter-black-chambers" },
+      "evidence": "Zone-generation line for G3_town, counted only once enter-black-chambers is done: the zone was entered before."
     }
   ]
 }

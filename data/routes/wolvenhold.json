@@ -16,8 +16,8 @@
       "kind": "objective",
       "navigationTarget": { "area": "P1_5", "label": "Holten", "exit": "P1_4" },
       "parts": [{ "text": "Back to Holten" }],
-      "trigger": null,
-      "evidence": "Holten was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "P1_4", "after": "enter-wolvenhold" },
+      "evidence": "Zone-generation line for P1_4, counted only once enter-wolvenhold is done: the zone was entered before."
     }
   ]
 }

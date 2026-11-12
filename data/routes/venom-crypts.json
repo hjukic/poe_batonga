@@ -30,8 +30,8 @@
       "id": "crypts-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": null,
-      "evidence": "Ziggurat Encampment was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G3_town", "after": "enter-venom-crypts" },
+      "evidence": "Zone-generation line for G3_town, counted only once enter-venom-crypts is done: the zone was entered before."
     }
   ]
 }

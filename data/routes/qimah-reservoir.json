@@ -40,8 +40,8 @@
       "id": "reservoir-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": null,
-      "evidence": "The Khari Bazaar was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "P2_Town", "after": "enter-qimah-reservoir" },
+      "evidence": "Zone-generation line for P2_Town, counted only once enter-qimah-reservoir is done: the zone was entered before."
     }
   ]
 }

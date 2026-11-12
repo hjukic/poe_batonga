@@ -20,8 +20,8 @@
       "id": "estate-portal-town",
       "kind": "objective",
       "parts": [{ "text": "Portal to town" }],
-      "trigger": null,
-      "evidence": "The Refuge was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "P1_Town", "after": "enter-holten-estate" },
+      "evidence": "Zone-generation line for P1_Town, counted only once enter-holten-estate is done: the zone was entered before."
     }
   ]
 }

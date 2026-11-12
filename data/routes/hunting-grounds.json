@@ -15,8 +15,8 @@
       "id": "hunting-grounds-town",
       "kind": "objective",
       "parts": [{ "text": "Waypoint to town" }],
-      "trigger": null,
-      "evidence": "Clearfell Encampment was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G1_town", "after": "enter-hunting-grounds" },
+      "evidence": "Zone-generation line for G1_town, counted only once enter-hunting-grounds is done: the zone was entered before."
     },
     {
       "id": "talk-delwyn",
@@ -65,8 +65,8 @@
       "id": "hunting-grounds-to-freythorn",
       "kind": "objective",
       "parts": [{ "text": "Waypoint to Freythorn" }],
-      "trigger": null,
-      "evidence": "Freythorn was entered before, so its zone line would tick this early. Tick by hand."
+      "trigger": { "type": "zoneEntered", "area": "G1_12", "after": "freythorn-wp" },
+      "evidence": "Zone-generation line for G1_12, counted only once freythorn-wp is done: the zone was entered before."
     }
   ]
 }
