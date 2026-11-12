@@ -47,15 +47,17 @@ pub const SCAN_EVERY: u32 = 8;
 /// the game window (x0, y0, x1, y1; measured at 3840x2160): this app's checklist panel
 /// at its default place (first: replaced by where the panel really is, when known), the
 /// zone and quest text top right, the life orb and flasks, the mana orb and skills, and
-/// the bottom bar.
+/// the experience bar. Between the orbs the map shows to the bottom: an exit there
+/// ("Clearfell Encampment", the owner's Clearfell, 2026-11-12) was left out by a skipped
+/// bottom band before.
 /// Room left around this app's panel, in logical pixels (its shadow, rounding).
 const PANEL_MARGIN: f64 = 8.0;
 const PANELS: [[f64; 4]; 5] = [
     [0.0, 0.0, 0.19, 0.40],
     [0.79, 0.0, 1.0, 0.46],
-    [0.0, 0.78, 0.32, 1.0],
-    [0.72, 0.78, 1.0, 1.0],
-    [0.0, 0.92, 1.0, 1.0],
+    [0.0, 0.79, 0.31, 1.0],
+    [0.70, 0.79, 1.0, 1.0],
+    [0.0, 0.975, 1.0, 1.0],
 ];
 #[cfg(target_os = "linux")]
 const GRIM_TIMEOUT: Duration = Duration::from_secs(2);

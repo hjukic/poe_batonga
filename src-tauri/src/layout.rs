@@ -524,6 +524,19 @@ fn note_named_exits(named: &mut Vec<(f32, f32, String)>, icons: &[crate::minimap
     }
 }
 
+/// Exits read by name earlier in this part (`Session::named_exits`, the part's cells) that
+/// this frame does not show, as icons from the player at `pos`.
+fn remembered_exits(named: &[(f32, f32, String)], icons: &[crate::minimap::bigmap::Icon], pos: (i32, i32)) -> Vec<crate::minimap::bigmap::Icon> {
+    named
+        .iter()
+        .map(|(x, y, name)| (x - pos.0 as f32, y - pos.1 as f32, name))
+        .filter(|&(dx, dy, name)| {
+            !icons.iter().any(|i| i.kind == "exit" && (i.label.as_ref() == Some(name) || (i.x - dx).hypot(i.y - dy) <= 20.0))
+        })
+        .map(|(x, y, name)| crate::minimap::bigmap::Icon { kind: "exit", x, y, label: Some(name.clone()), sprite: None })
+        .collect()
+}
+
 /// The tag of a target that is the zone's waypoint icon (`tracker::NavigationTarget::icon`).
 const WAYPOINT_TARGET: &str = "icon:waypoint";
 
@@ -713,6 +726,9 @@ impl Session {
         // The exit the player came in by is a named exit at a known place of this map:
         // with another exit read by name it fixes the layout as two named icons do.
         icons.extend(arrival_icon(self.came_in.as_ref(), &icons, pos));
+        // So is every exit read by name earlier in this part: a visit is one map, so two
+        // exits seen minutes apart are a pair as much as two seen in one frame.
+        icons.extend(remembered_exits(&self.named_exits, &icons, pos));
         let icons = icons.as_slice();
         self.see_bosses(icons, pos, bosses);
         let checkpoints = self.new_checkpoints(icons, pos);
@@ -1806,6 +1822,11 @@ mod tests {
         ] {
             assert!(arrival_icon(Some(&bad), &mud, (400, -610)).is_none());
         }
+        // Exits named earlier come back as icons, unless the frame shows them.
+        let named = vec![(130.0, 10.0, "Clearfell".to_string()), (-50.0, 40.0, "Mud Burrow".to_string())];
+        let again = remembered_exits(&named, &[exit(30.0, -40.0, None)], (100, 50));
+        assert_eq!(again.len(), 1, "the Clearfell exit is in view, unread");
+        assert_eq!((again[0].x, again[0].y, again[0].label.as_deref()), (-150.0, -10.0, Some("Mud Burrow")));
         // A step that leads to the waypoint: its icon, once seen.
         let waypoint = guide::NavTarget { label: "Waypoint".into(), exit: None, tag: Some(WAYPOINT_TARGET.into()), optional: false };
         assert!(is_icon_target(&waypoint) && !is_icon_target(&target("Clearfell", Some("G1_2"))));
@@ -2039,14 +2060,46 @@ mod tests {
         recorder.on_icons(&[margin], false);
         recorder.on_frame(&frame((8, 0)), [300, 260]);
         assert_eq!(recorder.0.lock().unwrap().session.as_ref().unwrap().far_icons.len(), 1);
-        // A scan that sees no far exit clears them.
+        // A scan that sees no far exit keeps only what the visit's map knows by name: the
+        // Grelwood's exit, read earlier, stays at its place; nothing else does.
         recorder.on_icons(&[], true);
         recorder.on_frame(&frame((8, 0)), [300, 260]);
-        assert!(recorder.0.lock().unwrap().session.as_ref().unwrap().far_icons.is_empty());
-        // So the frames after it hand over no old far icon.
+        let kept = |r: &Recorder| r.0.lock().unwrap().session.as_ref().unwrap().far_icons.clone();
+        let far = kept(&recorder);
+        assert_eq!(far.len(), 1);
+        assert_eq!(far[0].2.as_deref(), Some("The Grelwood"));
+        assert_eq!((far[0].0, far[0].1), (-136.0 + 4.0, 83.0), "where it was read, on the visit's map");
         recorder.on_icons(&[], false);
         recorder.on_frame(&frame((12, 0)), [300, 260]);
-        assert!(recorder.0.lock().unwrap().session.as_ref().unwrap().far_icons.is_empty());
+        assert_eq!(kept(&recorder).len(), 1);
+    }
+
+    /// The owner's Clearfell of 2026-11-12 night (seed 2693856399, layout ClearFell_W_E_N):
+    /// the Grelwood's exit 959 cells left of and 28 above the Mud Burrow's. Read one at a
+    /// time, minutes apart, they still pick the layout.
+    #[test]
+    fn two_exits_read_at_different_times_pick_the_layout() {
+        use crate::minimap::bigmap::Icon;
+        let recorder = Recorder::new(None);
+        recorder.on_log(&LogEvent::ZoneEntered { area: "G1_2".into(), level: 2, seed: Some(2693856399) }, false);
+        recorder.on_frame(&frame((0, 0)), [300, 260]);
+        let grelwood = Icon { kind: "exit", x: -136.0, y: 83.0, label: Some("The Grelwood".into()), sprite: None };
+        recorder.on_icons(&[grelwood], true);
+        recorder.on_frame(&frame((0, 0)), [300, 260]);
+        // Walk on with no exit in view, then the Mud Burrow's exit is read.
+        for step in 1..=10 {
+            recorder.on_icons(&[], step % 8 == 0);
+            recorder.on_frame(&frame((step * 4, 0)), [300, 260]);
+        }
+        let mud = Icon { kind: "exit", x: 823.0 - 40.0, y: 111.0, label: Some("Mud Burrow".into()), sprite: None };
+        for _ in 0..3 {
+            recorder.on_icons(&[mud.clone()], true);
+            recorder.on_frame(&frame((40, 0)), [300, 260]);
+        }
+        let state = recorder.0.lock().unwrap();
+        let picture = state.session.as_ref().unwrap().navigator.as_ref().unwrap().picture().unwrap();
+        assert!(picture.known, "{picture:?}");
+        assert_eq!(picture.id, "ClearFell_W_E_N");
     }
 
     #[test]

@@ -25,6 +25,8 @@ const SEARCH: [f64; 2] = [6.0, 4.0];
 /// labels: the right name 0.954-0.996, leading by 0.17-0.22; with another zone's names
 /// the best wrong one reached 0.850, leading by 0.08.
 pub const MIN_SCORE: f64 = 0.90;
+/// A label cut off by the image's edge is read when at least this share of it is on screen.
+const SHOWN_MOST: f64 = 0.6;
 pub const MIN_LEAD: f64 = 0.10;
 /// What an exit's label must not be: these labels belong to other icons nearby.
 const OTHERS: [&str; 2] = ["Checkpoint", "Waypoint"];
@@ -165,15 +167,27 @@ pub fn scores(image: &Image, icon: [f64; 2], size: f64, names: &[String]) -> Vec
                 for dy in -sy..=sy {
                     for dx in -sx..=sx {
                         let (x0, y0) = (left + dx, top + dy);
-                        let mut near = 0.0;
+                        // A label cut off by the image's edge is scored on its part on screen,
+                        // when that is most of it.
+                        let (mut near, mut shown) = (0.0, 0.0);
                         for y in 0..mask.h {
                             for x in 0..mask.w {
-                                if mask.on[y * mask.w + x] && at(&grown, x0 + x as i64, y0 + y as i64) {
+                                if !mask.on[y * mask.w + x] {
+                                    continue;
+                                }
+                                let (gx, gy) = (ax as i64 + x0 + x as i64, ay as i64 + y0 + y as i64);
+                                if gx >= 0 && gy >= 0 && (gx as usize) < image.width && (gy as usize) < image.height {
+                                    shown += 1.0;
+                                }
+                                if at(&grown, x0 + x as i64, y0 + y as i64) {
                                     near += 1.0;
                                 }
                             }
                         }
-                        let recall = near / drawn;
+                        if shown < SHOWN_MOST * drawn {
+                            continue;
+                        }
+                        let recall = near / shown;
                         // Text beside the name's box on its rows counts against it: a short
                         // name must not fit inside a longer label ("Mud Burrow" scored 0.83
                         // on "Clearfell Encampment", the owner's minimap, 2026-11-12).
@@ -366,6 +380,27 @@ mod tests {
                 assert!(OTHERS.contains(&scored[0].0.as_str()), "{scored:?}");
             }
         }
+    }
+
+    #[test]
+    fn a_label_cut_by_the_edge_is_read_when_most_of_it_shows() {
+        let grelwood = fixture("labels-grelwood.ppm");
+        let icon = icons(&grelwood, "exit")[0];
+        // The image starts `cut` pixels right of the icon's centre (the label is about 110 px).
+        let left_of = |cut: f64| {
+            let x0 = (icon[0] + cut) as usize;
+            let width = grelwood.width - x0;
+            let pixels = (0..grelwood.height).flat_map(|y| grelwood.pixels[(y * grelwood.width + x0) * 3..(y * grelwood.width + grelwood.width) * 3].to_vec()).collect();
+            (Image { width, height: grelwood.height, pixels }, [icon[0] - x0 as f64, icon[1]])
+        };
+        let (image, at) = left_of(-30.0);
+        let (read, scored) = read_with(&image, at, &clearfell());
+        println!("a quarter cut off: {scored:.3?}");
+        assert_eq!(read.as_deref(), Some("The Grelwood"));
+        let (image, at) = left_of(15.0);
+        let (read, scored) = read_with(&image, at, &clearfell());
+        println!("more than half cut off: {scored:.3?}");
+        assert_eq!(read, None);
     }
 
     #[test]
