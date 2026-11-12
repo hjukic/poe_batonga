@@ -1,6 +1,9 @@
 //! Restart with the newest version: pull the repository the app was built from,
 //! rebuild it, and run the new build in place of this one. The running overlay
 //! stays usable while it builds; a failed step leaves it running and says why.
+//!
+//! Under `npm run desktop` (a debug build) `tauri dev` already rebuilds and restarts
+//! on every change, so the button only pulls and then nudges it to restart.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -92,13 +95,35 @@ fn relaunch(app: &AppHandle, binary: &Path) -> Result<(), String> {
     }
 }
 
+/// `tauri dev`: pull, then touch a source file so its watcher rebuilds and restarts the app.
+fn dev_restart(app: &AppHandle) -> Result<(), String> {
+    let root = repo();
+    emit(app, "Pulling the latest version…", None);
+    run(&root, "git", &["pull", "--ff-only", "--no-rebase"])?;
+    emit(app, "Rebuilding (dev mode)…", None);
+    app.state::<crate::layout::Recorder>().save_now();
+    if let Ok(inner) = app.state::<crate::tracker::Tracker>().0.lock() {
+        inner.save();
+    }
+    let main = root.join("src-tauri/src/main.rs");
+    std::fs::File::options()
+        .append(true)
+        .open(&main)
+        .and_then(|file| file.set_modified(std::time::SystemTime::now()))
+        .map_err(|e| format!("Could not touch {}: {e}", main.display()))
+}
+
 #[tauri::command]
 pub fn restart_latest(app: AppHandle) -> Result<(), String> {
     if BUSY.swap(true, Ordering::SeqCst) {
         return Err("Already updating".into());
     }
     std::thread::spawn(move || {
-        let result = update(&app).and_then(|binary| relaunch(&app, &binary));
+        let result = if cfg!(debug_assertions) {
+            dev_restart(&app)
+        } else {
+            update(&app).and_then(|binary| relaunch(&app, &binary))
+        };
         if let Err(error) = result {
             eprintln!("Restart: {error}");
             emit(&app, "", Some(error));

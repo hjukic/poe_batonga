@@ -88,8 +88,6 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     </div>
     <div class="minimap" id="minimap" hidden>
       <canvas id="minimap-canvas" width="300" height="260"></canvas>
-      <p id="minimap-message"></p>
-      <p id="layout-message"></p>
     </div>
     <div class="version" title="App version: goes up with every update">v${__APP_VERSION__}</div>
   </section>
@@ -178,7 +176,6 @@ let minimapTracking = false;
 function renderMinimap(view: MinimapView) {
   minimapTracking = view.enabled && view.visible && view.player !== null;
   minimapBox.hidden = !view.enabled;
-  $('#minimap-message').textContent = view.message;
   if (!minimapTracking) {
     renderGuide(null);
     minimapCanvas.getContext('2d')?.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
@@ -211,9 +208,6 @@ function renderLayout(view: LayoutView | null) {
   const context = minimapCanvas.getContext('2d');
   if (!context) return;
   context.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
-  $('#layout-message').textContent = view
-    ? `Recording ${view.area}${view.part > 1 ? ` (part ${view.part})` : ''}: ${view.matched}/${view.frames} frames placed`
-    : '';
   renderGuide(view?.guide ?? null);
   if (!view) return;
   const scale = Math.min(minimapCanvas.width / view.cols, minimapCanvas.height / view.rows);
