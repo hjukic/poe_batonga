@@ -9,6 +9,7 @@
 //! centre of the game window.
 
 use super::{is_marker, is_wall, Image, MinimapView, CELL, CELL_MIN};
+use serde::Serialize;
 
 /// Big-map pixels per minimap pixel. Fit of the big map's walls onto recorded minimap
 /// walls of the same place: 1.00 (0.995-1.005 score the same), no turn.
@@ -107,11 +108,13 @@ pub fn marker_near(image: &Image, at: [f64; 2], radius: f64) -> Option<[f64; 2]>
 /// Reads a big-map capture into a frame in minimap units: the walls around the player,
 /// resampled by `SCALE`, with the player at `plan.frame.player`. Visible only when both
 /// the player marker and enough wall lines are found.
-pub fn analyse(image: &Image, plan: &Plan) -> MinimapView {
+/// Also returns the map icons around the player while the big map is read.
+pub fn read(image: &Image, plan: &Plan) -> (MinimapView, Vec<Icon>) {
     let found = marker_near(image, plan.marker, plan.radius);
-    let walls = walls_in(image, found.unwrap_or(plan.marker), &plan.frame, SCALE);
+    let centre = found.unwrap_or(plan.marker);
+    let walls = walls_in(image, centre, &plan.frame, SCALE);
     let visible = found.is_some() && walls.len() >= WALLS_MIN;
-    MinimapView {
+    let view = MinimapView {
         enabled: true,
         visible,
         message: if visible { "Reading big map" } else { "Big map not visible" }.into(),
@@ -119,7 +122,14 @@ pub fn analyse(image: &Image, plan: &Plan) -> MinimapView {
         rows: plan.frame.rows,
         walls: if visible { walls } else { vec![] },
         player: visible.then_some(plan.frame.player),
-    }
+    };
+    let icons = if visible { icons(image, centre, SCALE, size(plan)) } else { vec![] };
+    (view, icons)
+}
+
+/// The game window's height relative to 2160 px, from a plan.
+pub fn size(plan: &Plan) -> f64 {
+    plan.radius / MARKER_RADIUS
 }
 
 /// Wall cells of `frame`, with the image pixel `centre` (the player) on the frame's player
@@ -151,6 +161,95 @@ fn walls_in(image: &Image, centre: [f64; 2], frame: &Frame, scale: f64) -> Vec<[
     let need = ((CELL_MIN as f64 * scale * scale).round() as u32).max(1);
     let occupied: Vec<bool> = counts.iter().map(|&n| n >= need).collect();
     lines(&occupied, cols, rows)
+}
+
+/// A map icon, in minimap cells from the player (x right, y down).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Icon {
+    /// "exit" (orange zone exit), "checkpoint" or "waypoint".
+    pub kind: &'static str,
+    pub x: f32,
+    pub y: f32,
+}
+
+/// Icon colours and least size in pixels at 2160 px height, measured on the big map
+/// (Clearfell, 2026-11-12). Exits: orange, the player cross's colour, 359-373 px (the
+/// cross is 58). Checkpoints: a cyan crystal over a cyan base (about 100,170,220),
+/// 145-185 px together. Waypoint: a pale blue ring (about 170,180,225); labels are
+/// neutral grey and don't pass.
+const ICONS: [(&str, u32); 3] = [("exit", 150), ("checkpoint", 60), ("waypoint", 80)];
+/// Parts of one icon (a checkpoint's crystal and base) are joined within this many pixels.
+const ICON_JOIN: f64 = 20.0;
+
+fn icon_kind(r: u8, g: u8, b: u8) -> Option<usize> {
+    let (ri, gi, bi) = (r as i32, g as i32, b as i32);
+    if is_marker(r, g, b) {
+        Some(0)
+    } else if bi > 180 && gi - ri > 45 && bi - ri > 80 {
+        Some(1)
+    } else if bi > 190 && ri > 130 && bi - ri > 18 && bi - ri < 75 && gi - ri < 40 {
+        Some(2)
+    } else {
+        None
+    }
+}
+
+/// Map icons in `image`, relative to the player at pixel `centre`, with `scale` image
+/// pixels per minimap pixel. `size` is the image's pixel size relative to 2160 px height.
+pub fn icons(image: &Image, centre: [f64; 2], scale: f64, size: f64) -> Vec<Icon> {
+    let (w, h) = (image.width, image.height);
+    let kinds: Vec<Option<usize>> =
+        image.pixels.chunks_exact(3).map(|p| icon_kind(p[0], p[1], p[2])).collect();
+    let mut seen = vec![false; w * h];
+    let mut found = Vec::new();
+    for (kind, &(name, least)) in ICONS.iter().enumerate() {
+        // Touching pixels of this kind: (pixels, sum x, sum y).
+        let mut blobs: Vec<(u32, f64, f64)> = Vec::new();
+        for start in 0..w * h {
+            if kinds[start] != Some(kind) || seen[start] {
+                continue;
+            }
+            let (mut n, mut sx, mut sy) = (0u32, 0f64, 0f64);
+            let mut stack = vec![start];
+            seen[start] = true;
+            while let Some(i) = stack.pop() {
+                let (x, y) = (i % w, i / w);
+                n += 1;
+                sx += x as f64 + 0.5;
+                sy += y as f64 + 0.5;
+                for (dx, dy) in [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)] {
+                    let (nx, ny) = (x as i64 + dx, y as i64 + dy);
+                    if nx >= 0 && ny >= 0 && (nx as usize) < w && (ny as usize) < h {
+                        let j = ny as usize * w + nx as usize;
+                        if kinds[j] == Some(kind) && !seen[j] {
+                            seen[j] = true;
+                            stack.push(j);
+                        }
+                    }
+                }
+            }
+            blobs.push((n, sx, sy));
+        }
+        // Join blobs whose centres are close, largest first.
+        blobs.sort_by(|a, b| b.0.cmp(&a.0));
+        let mut joined: Vec<(u32, f64, f64)> = Vec::new();
+        for (n, sx, sy) in blobs {
+            let at = [sx / n as f64, sy / n as f64];
+            let near = joined.iter_mut().find(|(m, jx, jy)| {
+                (jx / *m as f64 - at[0]).hypot(jy / *m as f64 - at[1]) < ICON_JOIN * size
+            });
+            match near {
+                Some(group) => *group = (group.0 + n, group.1 + sx, group.2 + sy),
+                None => joined.push((n, sx, sy)),
+            }
+        }
+        let least = (least as f64 * size * size) as u32;
+        for (n, sx, sy) in joined.into_iter().filter(|&(n, _, _)| n >= least) {
+            let to_cells = |p: f64, c: f64| ((p / n as f64 - c) / scale / CELL as f64) as f32;
+            found.push(Icon { kind: name, x: to_cells(sx, centre[0]), y: to_cells(sy, centre[1]) });
+        }
+    }
+    found
 }
 
 /// Occupied cells in groups (touching, diagonals too) of at least `MIN_GROUP`.
@@ -233,7 +332,7 @@ mod tests {
         assert!((x - 300.5).abs() < 1.0 && (y - 60.7).abs() < 1.0, "{x},{y}");
         // Nothing orange-cross-like where there is no marker.
         assert!(marker_near(&image, [200.0, 100.0], 16.0).is_none());
-        let view = analyse(&image, &player_plan());
+        let view = read(&image, &player_plan()).0;
         assert!(view.visible, "{}", view.message);
         assert_eq!(view.player, Some([150.0, 30.0]));
     }
@@ -241,7 +340,7 @@ mod tests {
     #[test]
     fn walls_follow_the_map_lines() {
         let image = fixture("bigmap-player.ppm");
-        let view = analyse(&image, &player_plan());
+        let view = read(&image, &player_plan()).0;
         let found = relative(&view.walls, view.player.unwrap());
         let found_set: HashSet<_> = found.iter().copied().collect();
         let recorded = recorded();
@@ -267,7 +366,7 @@ mod tests {
         assert!(raw > 100);
         assert!(walls.len() <= 4, "{}", walls.len());
         let plan = Plan { marker: [128.0, 80.0], radius: 16.0, frame };
-        assert!(!analyse(&image, &plan).visible);
+        assert!(!read(&image, &plan).0.visible);
     }
 
     #[test]
@@ -315,6 +414,49 @@ mod tests {
         let walls = walls_in(&image, [40.0, 30.0], &frame, 2.0);
         assert!(!walls.is_empty());
         assert!(walls.iter().all(|&[x, _]| x == 20 || x == 21), "{walls:?}");
+    }
+
+    /// Icons found in a fixture, as (kind, x, y) rounded to cells.
+    fn found_icons(name: &str, centre: [f64; 2]) -> Vec<(&'static str, i32, i32)> {
+        let mut found: Vec<_> = icons(&fixture(name), centre, SCALE, 1.0)
+            .into_iter()
+            .map(|i| (i.kind, i.x.round() as i32, i.y.round() as i32))
+            .collect();
+        found.sort();
+        found
+    }
+
+    #[test]
+    fn finds_exits_checkpoints_and_the_waypoint() {
+        // Around the player: the Grelwood exit and a checkpoint below-left; the player's
+        // own cross (also orange) is not an exit.
+        let near = found_icons("bigmap-player.ppm", [300.5, 60.7]);
+        assert_eq!(near, [("checkpoint", -97, 102), ("exit", -136, 83)]);
+        // Further east: the Mud Burrow exit, a checkpoint and the waypoint (positions
+        // relative to the crop's corner here).
+        let east = found_icons("bigmap-icons.ppm", [0.0, 0.0]);
+        let kinds: Vec<_> = east.iter().map(|i| i.0).collect();
+        assert_eq!(kinds, ["checkpoint", "exit", "waypoint"]);
+        // At 3492,1263 / 3546,1280 / 3381,1257 px of the screenshot, crop at 3340,1215.
+        for ((_, x, y), (ex, ey)) in east.iter().zip([(76.0, 24.0), (103.0, 32.5), (20.5, 21.0)]) {
+            assert!((*x as f64 - ex).abs() <= 1.5 && (*y as f64 - ey).abs() <= 1.5, "{east:?}");
+        }
+        // No icons on plain scene or in the corner's zone text.
+        assert!(found_icons("bigmap-scene.ppm", [0.0, 0.0]).is_empty());
+        assert!(found_icons("corner-bigmap-open.ppm", [0.0, 0.0]).is_empty());
+    }
+
+    /// Icons on a screenshot or crop (binary PPM), printed in its pixels; BIGMAP_SIZE is
+    /// the game window's height / 2160 (default 1):
+    /// `BIGMAP_SHOT=shot.ppm cargo test icons_on_a_screenshot -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn icons_on_a_screenshot() {
+        let image = parse_ppm(&std::fs::read(std::env::var("BIGMAP_SHOT").unwrap()).unwrap()).unwrap();
+        let size = std::env::var("BIGMAP_SIZE").ok().and_then(|s| s.parse().ok()).unwrap_or(1.0);
+        for icon in icons(&image, [0.0, 0.0], SCALE, size) {
+            println!("{} at {:.0}, {:.0}", icon.kind, icon.x * 2.0, icon.y * 2.0);
+        }
     }
 
     #[test]

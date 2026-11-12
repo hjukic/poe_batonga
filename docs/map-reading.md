@@ -371,6 +371,25 @@ changes (keep a `frame_size` in the live part and skip the 4-cell rule when it
 differs). With that change the ignored test `one_track_with_wide_big_map_frames`
 passes; then set `BIG_FRAME` to `BigFrame::Wide(600, 518)`.
 
+### Map icons
+
+Each frame also lists the map icons around the player, in either view: zone exits
+(orange), checkpoints and waypoints, as minimap cells from the player
+(`bigmap::Icon`, kept in `Minimap.icons`; nothing reads them yet). Colours and
+least sizes, measured on the big map: exits are orange blobs in the player cross's
+colour, 359–373 px (the cross is 58, so it never counts); a checkpoint is a cyan
+crystal over a cyan base (about 100,170,220; 145–185 px, joined within 20 px); a
+waypoint is a pale blue ring (about 170,180,225, B−R 24–72); labels are neutral grey
+and do not pass.
+
+Quality: on the whole Clearfell screenshot all six map icons are found (2 exits, 3
+checkpoints, 1 waypoint) at their centres within a pixel or two, with no false ones
+in the areas the reader captures. False hits appear only outside them: the life and
+mana orbs, the skill bar, the desktop bar and the overlay's own checklist panel. On
+the minimap (a quarter-size screenshot scaled up) the Grelwood exit and the checkpoint
+are found, and the player cross is not taken for an exit. Plain scene and the
+corner's zone text give none.
+
 ### Limits
 
 - Measured at 3840x2160 with the owner's settings. Other resolutions use the same
