@@ -829,6 +829,27 @@ trail, 52 KB). 44 pairs of trail points 40 points apart along stretches without 
   to another line (widths 1, 1, 1, 3, 3, 5, 5, 6), which the raw grid would leak
   through; all 8 are closed. Two more have a narrowest gap of 9-11 cells, left open.
 
+**Shadow mode for ways ahead** (fix pass 2, the chair's decision). On the only real
+recording the map needle matched where the player went less often than the straight
+line (16 against 21 of 35; gold-eligible 14 against 18 of 29; "Where the player went"
+above). The recording is old and its walls drift, so that does not condemn the way,
+but it does not support showing it. So for a target placed from an icon in view or a
+sighting (a way ahead) the way is still worked out, but the needle shown is exactly
+what `guide_on` gives without the map (as on v0.1.46). What the map would have shown
+goes to the flight recorder on that needle line, as `shadow` (its bearing, length,
+look-ahead, share over unrecorded ground, would-be gold), and the replay scores it
+against the exit taken in a third row, "map (shadow)" (see "Replay"). One constant,
+`nav::MAP_AHEAD_LIVE` (false), switches ways ahead on; the tests of their live
+behaviour switch it on for themselves (`Navigator::map_ahead_live`), and
+`ways_ahead_run_in_shadow` pins the default. The way back to a trusted arrival stays
+live: it rests on ground the player walked, not on inferred doors.
+
+**What would switch ways ahead on** (proposed): over at least five real visits scored
+against the exit taken (recorded after the cross fix), the shadow within 45° at least
+as often as the needle shown on the same frames, and the would-be gold shadow wrong
+(more than 45° off) on at most 3% of its frames. The replay's last line gives both
+numbers over all visits.
+
 **The needle** (`guide_on`). The target's place in the part's coordinates is known
 when (in this order):
 
@@ -931,7 +952,7 @@ counts, so the replay can hand the navigator every `icons` call the app made.
 | `icons` | `whole` (absent = false), `size` (frame cells, when it changed), `icons`: `kind` (absent = exit), `x`, `y`, `label` | when the exits differ from the last written, on every whole-window scan with an exit or while far exits are kept, for a checkpoint or waypoint not yet written in this part |
 | `seen` | `exit` or `tag`, `left` | each log anchor |
 | `targets` | `targets` (`label`, `exit`, `tag`, `optional`) | when the list asked for changes |
-| `needle` | `target`, `degrees`, `source`, `confidence`, `variant`, `distance`; `kept` (tracking lost, the last needle stayed), `stale` (no frame for 2 s), `way` (it followed a way through the recorded map); on `way` lines `ahead` (the look-ahead point from the player, cells) and `fog` (share of the way over unrecorded ground), absent until the navigator gives them | when source, target or variant change or it turns more than 15°, else every 5 s while frames come |
+| `needle` | `target`, `degrees`, `source`, `confidence`, `variant`, `distance`; `kept` (tracking lost, the last needle stayed), `stale` (no frame for 2 s), `way` (it followed a way through the recorded map); on `way` lines `ahead` (the look-ahead point from the player, cells) and `fog` (share of the way over unrecorded ground); with ways ahead in shadow, `shadow`: what the map's way would have shown (`degrees`, `length`, `ahead`, `fog`, `gold` when it would have been gold) | when source, target or variant change or it turns more than 15° (the shadow too: it comes, goes, turns more than 15° or changes gold), else every 5 s while frames come |
 | `end` | | when the zone is left |
 | `gap` | `f` (always written) | before the next line after a failed write: the lines between are lost |
 
@@ -988,6 +1009,7 @@ visit it prints:
    needle within 45° of the exit taken (last part):
      shown by the app: gold 100% of 5, rough 98% of 63 (0 through the recorded map); right for good after 14 s, 710 cells (910 units); 0 to another target
      replayed, no map, every frame: gold 100% of 6, rough 98% of 62; right for good after 14 s, 687 cells (881 units); 1 to another target
+     map (shadow), the way ahead the app did not show: no samples; never right for good
    app's needles: 13 logged, 13 agree with the current code; 0 through the recorded map (not replayed)
 ```
 
@@ -1012,9 +1034,12 @@ visit it prints:
   target are counted apart. **Right for good**: the first such frame after which
   every one was within 45°, seconds and cells walked from the start. Two rows:
   **shown by the app**, the needle the player saw on each frame (the last `needle`
-  line, `kept` and `way` ones included; how many went through the recorded map):
-  this is how the map's way is judged on real visits; and **replayed**, the
-  current code's needle without the recorded map (the log holds no walls).
+  line, `kept` and `way` ones included; how many went through the recorded map);
+  **replayed**, the current code's needle without the recorded map (the log holds
+  no walls); and **map (shadow)**, with ways ahead in shadow, what the map's way
+  would have shown on each frame (the last needle line's `shadow`), by would-be gold
+  and rough: this is how ways ahead are judged on real visits before they are shown
+  (`the_map_in_shadow_is_scored_apart`).
 - **app's needles**: the `needle` lines (not `kept`, not `way`: the log holds no
   walls, so a needle through the recorded map is counted apart) against what the current code
   gives at the same point (same target, source, layout, within 5°; a `stale` gold
@@ -1024,7 +1049,7 @@ visit it prints:
   pointing at an icon and along the route has hysteresis, and the app asked about
   once a second where the replay asks every frame.
 - A last line: visits, how many have a truth and an exit, the needle's shares over
-  all visits, shown and replayed, and the agreement
+  all visits, shown, replayed and map (shadow), and the agreement
   (`needles_through_the_map_are_scored_as_shown`).
 
 The synthetic visit above is `a_simulated_visit_replays_as_it_was_fed` (the

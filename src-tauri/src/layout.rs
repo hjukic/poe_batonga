@@ -975,7 +975,15 @@ impl State {
                 ahead: Some([w.ahead.0 as f32, w.ahead.1 as f32]),
                 fog: Some(w.unrecorded as f32),
             });
-            log.needle(obs::now_ms(), &self.nav_targets(session), view, kept, stale, way);
+            // A way ahead in shadow: what the map would have shown in its place.
+            let shadow = session.navigator.as_ref().and_then(|n| n.last_shadow()).filter(|_| !kept).map(|h| obs::Shadow {
+                degrees: h.degrees,
+                length: h.length,
+                ahead: [h.ahead.0 as f32, h.ahead.1 as f32],
+                fog: h.unrecorded as f32,
+                gold: h.gold,
+            });
+            log.needle(obs::now_ms(), &self.nav_targets(session), view, kept, stale, way, shadow);
         }
         view
     }
@@ -1412,9 +1420,11 @@ mod tests {
         eprint!("{}", obs::replay::report(v));
         assert_eq!(v.frames, 46);
         assert!(v.logged > 0 && v.agree == v.logged, "{} of {}: {:?}", v.agree, v.logged, v.differ);
-        // The first needles follow the recorded corridor round to the far exit: marked,
-        // and not replayed (the log holds no walls).
-        assert!(text.contains("\"way\":true") && v.mapped > 0, "{}", v.mapped);
+        // The first needles would follow the recorded corridor round to the far exit:
+        // ways ahead run in shadow, so the needle shown is the one without the map (the
+        // replay gives it), and the map's way goes on the line as `shadow`, scored apart.
+        assert!(!nav::MAP_AHEAD_LIVE);
+        assert!(text.contains("\"shadow\":{") && !text.contains("\"way\":true") && v.mapped == 0, "{text}");
         assert_eq!(v.left.as_ref().unwrap().0, "G1_4");
         // A later visit of the same instance appends; its navigator starts from the
         // instance's memory, which the start line holds: the replay agrees again.

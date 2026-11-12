@@ -161,12 +161,26 @@ impl LoggedTarget {
     }
 }
 
-/// A needle that followed a way through the recorded map, with what the navigator
-/// tells about it (nothing yet: see `Entry::Needle`).
+/// A needle that followed a way through the recorded map (`Navigator::last_way`):
+/// where it looked, from the player (cells, screen axes), and the share of the way
+/// over unrecorded ground.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Way {
     pub ahead: Option<[f32; 2]>,
     pub fog: Option<f32>,
+}
+
+/// What a way ahead in shadow would have shown (`Navigator::last_shadow`, ways ahead
+/// not live): its bearing (screen degrees), length (cells), look-ahead from the
+/// player (cells), the share over unrecorded ground, and whether it would be gold.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+pub struct Shadow {
+    pub degrees: Option<f32>,
+    pub length: f32,
+    pub ahead: [f32; 2],
+    pub fog: f32,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub gold: bool,
 }
 
 /// How the visit's navigator was made.
@@ -273,6 +287,9 @@ pub enum Entry {
         ahead: Option<[f32; 2]>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         fog: Option<f32>,
+        /// Ways ahead in shadow: what the map would have shown instead.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        shadow: Option<Shadow>,
     },
     End {
         #[serde(default, skip_serializing_if = "is_zero")]
@@ -533,7 +550,7 @@ impl Log {
     }
 
     /// The needle shown, asked for `targets`; written by the rules above.
-    pub fn needle(&mut self, t: u64, targets: &[NavTarget], view: &GuideView, kept: bool, stale: bool, way: Option<Way>) {
+    pub fn needle(&mut self, t: u64, targets: &[NavTarget], view: &GuideView, kept: bool, stale: bool, way: Option<Way>, shadow: Option<Shadow>) {
         if !self.active {
             return;
         }
@@ -557,6 +574,13 @@ impl Log {
             way: way.is_some(),
             ahead: way.and_then(|w| w.ahead),
             fog: way.and_then(|w| w.fog),
+            shadow: shadow.map(|s| Shadow {
+                degrees: s.degrees.map(|d| round(d, 10.0)),
+                length: s.length.round(),
+                ahead: [round(s.ahead[0], 10.0), round(s.ahead[1], 10.0)],
+                fog: round(s.fog, 100.0),
+                gold: s.gold,
+            }),
         };
         let due = match &self.last_needle {
             None => true,
@@ -611,9 +635,24 @@ impl Log {
 fn changed(last: &Entry, now: &Entry) -> bool {
     match (last, now) {
         (
-            Entry::Needle { target: t0, degrees: d0, source: s0, variant: v0, kept: k0, .. },
-            Entry::Needle { target: t1, degrees: d1, source: s1, variant: v1, kept: k1, .. },
+            Entry::Needle { target: t0, degrees: d0, source: s0, variant: v0, kept: k0, shadow: h0, .. },
+            Entry::Needle { target: t1, degrees: d1, source: s1, variant: v1, kept: k1, shadow: h1, .. },
         ) => {
+            let shadow_moved = match (h0, h1) {
+                (Some(a), Some(b)) => {
+                    a.gold != b.gold
+                        || match (a.degrees, b.degrees) {
+                            (Some(x), Some(y)) => super::guide::angle_between(x, y) > NEEDLE_TURN,
+                            (None, None) => false,
+                            _ => true,
+                        }
+                }
+                (None, None) => false,
+                _ => true,
+            };
+            if shadow_moved {
+                return true;
+            }
             let turned = match (d0, d1) {
                 (Some(a), Some(b)) => super::guide::angle_between(*a, *b) > NEEDLE_TURN,
                 (None, None) => false,
@@ -825,6 +864,8 @@ pub(super) mod replay {
         /// `needle` line, kept ones included) and the one the replay gives (no recorded map).
         pub shown: Score,
         pub replayed: Score,
+        /// The map's ways ahead in shadow (not shown): gold or rough as they would have been.
+        pub shadow: Score,
         /// The app's needles, those the current code gives alike, the first that differ.
         pub logged: usize,
         pub agree: usize,
@@ -866,6 +907,9 @@ pub(super) mod replay {
         shown: Vec<Sample>,
         /// The needle on screen: the last `needle` line (target's exit, degrees, source, way).
         on_screen: Option<(Option<String>, Option<f32>, String, bool)>,
+        /// What the map's way ahead would have shown then (ways ahead in shadow).
+        shadow_on: Option<(Option<String>, Option<f32>, bool)>,
+        shadows: Vec<Sample>,
         top: Option<String>,
         visit: Visit,
     }
@@ -908,6 +952,8 @@ pub(super) mod replay {
                 exits: Vec::new(),
                 samples: Vec::new(),
                 shown: Vec::new(),
+                shadow_on: None,
+                shadows: Vec::new(),
                 on_screen: None,
                 top: None,
                 visit: Visit {
@@ -985,6 +1031,11 @@ pub(super) mod replay {
             if let Some((target_exit, degrees, source, way)) = self.on_screen.clone() {
                 self.shown.push(Sample { t: self.t, part: self.part, pos: self.pos, walked: self.visit.walked, target_exit, degrees, source, way });
             }
+            // And what the map would have shown in its place.
+            if let Some((target_exit, degrees, gold)) = self.shadow_on.clone() {
+                let source = if gold { "estimated" } else { "rough" }.to_string();
+                self.shadows.push(Sample { t: self.t, part: self.part, pos: self.pos, walked: self.visit.walked, target_exit, degrees, source, way: true });
+            }
             let ranking = self.nav.ranking();
             let (id, p) = ranking[0];
             if self.top.as_deref() != Some(id) {
@@ -1056,9 +1107,10 @@ pub(super) mod replay {
                     _ => {}
                 },
                 Entry::Targets { targets, .. } => self.targets = targets.iter().map(LoggedTarget::target).collect(),
-                Entry::Needle { target, degrees, source, variant, kept, stale, way, .. } => {
+                Entry::Needle { target, degrees, source, variant, kept, stale, way, shadow, .. } => {
                     // What the player sees from now on (a kept needle too: gray).
                     let target_exit = self.targets.iter().find(|t| t.label == *target).and_then(|t| t.exit.clone());
+                    self.shadow_on = shadow.filter(|_| !*kept).map(|s| (target_exit.clone(), s.degrees, s.gold));
                     self.on_screen = Some((target_exit, *degrees, source.clone(), *way));
                     if *kept {
                         return;
@@ -1190,6 +1242,7 @@ pub(super) mod replay {
             }
             self.visit.replayed = tally(&self.samples, self.part, &exit, at, self.visit.start);
             self.visit.shown = tally(&self.shown, self.part, &exit, at, self.visit.start);
+            self.visit.shadow = tally(&self.shadows, self.part, &exit, at, self.visit.start);
         }
     }
 
@@ -1328,6 +1381,10 @@ pub(super) mod replay {
                     "     replayed, no map, every frame: {}; {}; {} to another target\n",
                     v.replayed.shares(), good(&v.replayed), v.replayed.other_target
                 );
+                out += &format!(
+                    "     map (shadow), the way ahead the app did not show: {}; {}\n",
+                    v.shadow.shares(), good(&v.shadow)
+                );
             }
             None => out += "   exit taken: unknown (no live zone change)\n",
         }
@@ -1348,10 +1405,11 @@ pub(super) mod replay {
         let truths = played.iter().filter(|v| v.truth.as_ref().is_some_and(|t| t.1 >= FIXED)).count();
         let exits = played.iter().filter(|v| v.left.is_some() && !v.unscored).count();
         let unscored = played.iter().filter(|v| v.unscored).count();
-        let (mut shown, mut replayed) = (Score::default(), Score::default());
+        let (mut shown, mut replayed, mut shadow) = (Score::default(), Score::default(), Score::default());
         for v in &played {
             shown.add(&v.shown);
             replayed.add(&v.replayed);
+            shadow.add(&v.shadow);
         }
         // A visit whose navigator started from a memory the file does not hold cannot agree.
         let comparable: Vec<&&Visit> = played.iter().filter(|v| !v.memory || v.memory_replayed).collect();
@@ -1360,12 +1418,14 @@ pub(super) mod replay {
         format!(
             "replay: {files} file(s), {} visit(s) replayed ({} skipped, {incomplete} incomplete), {truths} with a layout truth, {exits} with the exit taken, \
              {unscored} unscored exit(s) (no exit icon where they left); \
-             needle within 45°, shown: {} ({} through the map); replayed: {}; app's needles agree {} ({agree} of {logged}; {blind} visit(s) from a memory not in the file left out)",
+             needle within 45°, shown: {} ({} through the map); replayed: {}; map (shadow): {}; \
+             app's needles agree {} ({agree} of {logged}; {blind} visit(s) from a memory not in the file left out)",
             played.len(),
             visits.len() - played.len() - incomplete,
             shown.shares(),
             shown.way,
             replayed.shares(),
+            shadow.shares(),
             pct(agree, logged),
         )
     }
@@ -1447,7 +1507,7 @@ mod tests {
                 icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: i.label.clone() }).collect();
             nav.icons(&list);
             if let Some(view) = nav.guide(&targets) {
-                log.needle(t, &targets, &view, false, false, None);
+                log.needle(t, &targets, &view, false, false, None, None);
                 needles.push(view);
             }
         }
@@ -1463,7 +1523,7 @@ mod tests {
             log.icons(t, &[icon.clone()], true, size, false);
             nav.icons(&[ExitIcon { dx: icon.x as f64, dy: icon.y as f64, to: icon.label.clone() }]);
             if let Some(view) = nav.guide(&targets) {
-                log.needle(t, &targets, &view, false, false, None);
+                log.needle(t, &targets, &view, false, false, None, None);
                 needles.push(view);
             }
         }
@@ -1528,12 +1588,67 @@ mod tests {
             variant: String::new(), target_kind: "entrance".into(), target: "Mud Burrow".into(), degrees: Some(10.0),
             source: "rough".into(), distance: 300.0, confidence: 0.7, measured: false, turned: false,
         };
-        log.needle(T0 + 1, &targets, &view, false, false, Some(Way { ahead: Some([3.5, -1.0]), fog: Some(0.4) }));
+        log.needle(T0 + 1, &targets, &view, false, false, Some(Way { ahead: Some([3.5, -1.0]), fog: Some(0.4) }), None);
         log.frame();
-        log.needle(T0 + 2, &targets, &GuideView { degrees: Some(50.0), ..view }, false, false, Some(Way::default()));
+        log.needle(T0 + 2, &targets, &GuideView { degrees: Some(50.0), ..view }, false, false, Some(Way::default()), None);
         let text = log.text();
         assert!(text.contains(r#""way":true,"ahead":[3.5,-1.0],"fog":0.4"#), "{text}");
         assert_eq!(text.matches("ahead").count(), 1, "{text}");
+    }
+
+    /// Ways ahead in shadow: the needle shown is the one without the map, and what the
+    /// map would have shown rides on the needle line; the replay scores it apart, by
+    /// would-be gold and rough.
+    #[test]
+    fn the_map_in_shadow_is_scored_apart() {
+        let (text, _, _) = simulated(false, 8.0);
+        // Each needle line gets a shadow turned by `turn` from the needle shown.
+        let shadowed = |turn: f32, gold: bool| -> String {
+            text.lines()
+                .map(|l| {
+                    if !l.contains(r#""k":"needle""#) {
+                        return l.to_string();
+                    }
+                    let degrees = l.split(r#""degrees":"#).nth(1).and_then(|r| r.split(',').next()).and_then(|d| d.parse::<f32>().ok());
+                    let Some(d) = degrees else { return l.to_string() };
+                    let shadow = Shadow { degrees: Some(d + turn), length: 100.0, ahead: [1.0, 2.0], fog: 0.2, gold };
+                    l.replace(r#""distance""#, &format!(r#""shadow":{},"distance""#, serde_json::to_string(&shadow).unwrap()))
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let same = replay(&shadowed(0.0, true), &Graphs::default());
+        let v = &same[0];
+        let report = report(v);
+        eprint!("{report}");
+        // Shown as before (the replay agrees), the shadow scored on the same frames.
+        assert!(v.logged > 0 && v.agree == v.logged, "{} of {}", v.agree, v.logged);
+        assert_eq!(v.shadow.count(), v.shown.count());
+        let shown_right: usize = v.shown.by_source.iter().map(|s| s.0).sum();
+        assert_eq!(v.shadow.by_source[0], (shown_right, v.shown.count()), "{:?} {:?}", v.shadow, v.shown);
+        assert!(report.contains("map (shadow), the way ahead the app did not show: gold"), "{report}");
+        assert!(summary(1, &same).contains("map (shadow): gold"));
+        // Turned round and rough: counted as rough, and hardly ever within 45° (only
+        // where the needle shown was itself turned away).
+        let turned = replay(&shadowed(180.0, false), &Graphs::default());
+        let v = &turned[0];
+        let (right, all) = v.shadow.by_source[1];
+        assert!(all == v.shown.count() && right * 20 < all, "{:?}", v.shadow);
+        // The writer: the shadow on the line, and a shadow that turns alone is a new line.
+        let mut log = Log::memory(&start("G1_2", "G1_town"), T0);
+        log.frame();
+        let targets = [NavTarget { label: "Mud Burrow".into(), exit: Some("G1_3".into()), ..Default::default() }];
+        let view = GuideView {
+            variant: String::new(), target_kind: "entrance".into(), target: "Mud Burrow".into(), degrees: Some(10.0),
+            source: "rough".into(), distance: 300.0, confidence: 0.7, measured: false, turned: false,
+        };
+        let shadow = Shadow { degrees: Some(40.04), length: 120.4, ahead: [3.46, -1.0], fog: 0.333, gold: true };
+        log.needle(T0 + 1, &targets, &view, false, false, None, Some(shadow));
+        log.frame();
+        log.needle(T0 + 2, &targets, &view, false, false, None, Some(Shadow { degrees: Some(80.0), ..shadow }));
+        let text = log.text();
+        assert!(text.contains(r#""shadow":{"degrees":40.0,"length":120.0,"ahead":[3.5,-1.0],"fog":0.33,"gold":true}"#), "{text}");
+        assert_eq!(text.matches(r#""k":"needle""#).count(), 2, "{text}");
     }
 
     /// A visit that ends with leaving to the town where no exit icon was (a portal
@@ -1555,7 +1670,7 @@ mod tests {
             log.icons(t, &icons, step % 3 == 0, (300, 260), false);
             nav.icons(&icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: None }).collect::<Vec<_>>());
             if let Some(view) = nav.guide(&town) {
-                log.needle(t, &town, &view, false, false, None);
+                log.needle(t, &town, &view, false, false, None, None);
             }
         }
         log.seen(t, Seen::Left("G1_town"));
@@ -1718,13 +1833,13 @@ mod tests {
         for (deg, source) in [(10.0, "rough"), (20.0, "rough"), (30.0, "rough"), (31.0, "estimated"), (31.0, "estimated")] {
             t += 900;
             log.frame();
-            log.needle(t, &targets, &view(deg, source), false, false, None);
+            log.needle(t, &targets, &view(deg, source), false, false, None, None);
         }
         // Then the same needle, frames still coming, for 6 s.
         for _ in 0..7 {
             t += 900;
             log.frame();
-            log.needle(t, &targets, &view(31.0, "estimated"), false, false, None);
+            log.needle(t, &targets, &view(31.0, "estimated"), false, false, None, None);
         }
         let text = log.text();
         let needles: Vec<u64> = text.lines().filter(|l| l.contains(r#""k":"needle""#)).map(|l| serde_json::from_str::<Line>(l).unwrap().t - T0).collect();
@@ -1852,7 +1967,7 @@ mod tests {
                         source: if frames % 30 < 15 { "rough".into() } else { "estimated".into() },
                         distance: 312.4, confidence: 0.734, measured: false, turned: false,
                     };
-                    log.needle(t, &[NavTarget { label: "Mud Burrow".into(), ..target.clone() }], &view, false, false, None);
+                    log.needle(t, &[NavTarget { label: "Mud Burrow".into(), ..target.clone() }], &view, false, false, None, None);
                 }
             }
         }
