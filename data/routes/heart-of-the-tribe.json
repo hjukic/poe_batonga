@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "order": 780,
+  "zone": { "id": "G4_11_2", "name": "Heart of the Tribe", "level": 53 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "meeting-house-chests",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Meeting House chests" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-tavakai",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_11_2", "label": "Tavakai", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Tavakai", "style": "boss" }, { "text": ", talk to him" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 3 layouts."
+    },
+    {
+      "id": "tribe-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Kingsmarch was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

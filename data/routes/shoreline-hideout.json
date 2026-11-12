@@ -1,0 +1,22 @@
+{
+  "formatVersion": 1,
+  "order": 630,
+  "zone": { "id": "MapHideoutShoreline_Claimable", "name": "Shoreline Hideout", "level": 46 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "clear-hideout",
+      "kind": "objective",
+      "parts": [{ "text": "Clear the hideout" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "hideout-ange",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Ange", "style": "npc" }, { "text": "Hideout", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "formatVersion": 1,
+  "order": 610,
+  "zone": { "id": "G4_3_1", "name": "Whakapanu Island", "level": 46 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "petrified-pirate",
+      "kind": "objective",
+      "parts": [{ "text": "Petrified Pirate (coast)" }, { "text": "Torn Map", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-great-white-one",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_3_1", "label": "Shark Pit", "tag": "boss" },
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Great White One", "style": "boss" }, { "text": "Shark Fin", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 8 layouts (this area's boss is the Great White One)."
+    },
+    {
+      "id": "kill-clawcrunch",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_3_1", "label": "Crabshell Cavern", "tag": "CrabCave" },
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Clawcrunch", "style": "boss" }, { "text": "Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'CrabCave' node in all 8 layouts."
+    },
+    {
+      "id": "enter-singing-caverns",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_3_1", "label": "Singing Caverns", "exit": "G4_3_2" },
+      "parts": [{ "text": "Enter Singing Caverns" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_3_2" },
+      "evidence": "Zone-generation line for G4_3_2."
+    }
+  ]
+}

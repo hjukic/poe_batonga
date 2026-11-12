@@ -1,0 +1,45 @@
+{
+  "formatVersion": 1,
+  "order": 750,
+  "zone": { "id": "G4_8b", "name": "Arastas", "level": 52 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "follow-lorandis",
+      "kind": "objective",
+      "parts": [{ "text": "Follow " }, { "text": "Lorandis", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "destroy-the-shield",
+      "kind": "objective",
+      "parts": [{ "text": "Destroy the shield" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "arastas-bells",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Evening or Morning Bells" }, { "text": "Exalts/Regals", "style": "reward" }],
+      "trigger": null,
+      "evidence": "Evening gives 3 Exalted Orbs, Morning 3 Regal Orbs. No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-torvian",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Torvian", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "enter-excavation",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_8b", "label": "The Excavation", "exit": "G4_10" },
+      "parts": [{ "text": "Enter The Excavation" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_10" },
+      "evidence": "Zone-generation line for G4_10."
+    }
+  ]
+}

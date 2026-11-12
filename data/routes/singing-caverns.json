@@ -1,0 +1,38 @@
+{
+  "formatVersion": 1,
+  "order": 620,
+  "zone": { "id": "G4_3_2", "name": "Singing Caverns", "level": 47 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "beckoning-clam",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Beckoning Clam: Pearl" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-diamora",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_3_2", "label": "Diamora", "tag": "bossman_new" },
+      "parts": [{ "text": "Kill " }, { "text": "Diamora", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'bossman_new' node in all 4 layouts."
+    },
+    {
+      "id": "caverns-hooded-one",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "caverns-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Kingsmarch was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

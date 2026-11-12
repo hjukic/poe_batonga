@@ -1,0 +1,156 @@
+{
+  "formatVersion": 1,
+  "order": 600,
+  "zone": { "id": "G4_town", "name": "Kingsmarch", "level": 53 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kingsmarch-doryani",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Doryani", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kingsmarch-alva",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Alva", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kingsmarch-tujen",
+      "kind": "objective",
+      "parts": [{ "text": "Take " }, { "text": "Tujen", "style": "npc" }, { "text": "'s quest" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kingsmarch-farrow",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Farrow", "style": "npc" }, { "text": ": Runeseeker" }],
+      "trigger": null,
+      "evidence": "Starts The Runeseeker; it ends at the Deserted Post and unlocks the Verisium Anvil. No log line known. Tick by hand."
+    },
+    {
+      "id": "sail-whakapanu",
+      "kind": "objective",
+      "parts": [{ "text": "Sail to Whakapanu Island" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_3_1" },
+      "evidence": "Zone-generation line for G4_3_1. Makoru's ship from Kingsmarch; no exit to walk to."
+    },
+    {
+      "id": "kingsmarch-ange",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Ange", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After the Singing Caverns. No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-shoreline-hideout",
+      "kind": "objective",
+      "parts": [{ "text": "Enter Shoreline Hideout" }],
+      "trigger": { "type": "zoneEntered", "area": "MapHideoutShoreline_Claimable" },
+      "evidence": "Zone-generation line for MapHideoutShoreline_Claimable (in Kingsmarch's Connections). No compass target: later town exits have none."
+    },
+    {
+      "id": "sail-shrike-island",
+      "kind": "objective",
+      "parts": [{ "text": "Sail to Shrike Island" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_7" },
+      "evidence": "Zone-generation line for G4_7. Makoru's ship from Kingsmarch; no exit to walk to."
+    },
+    {
+      "id": "sail-abandoned-prison",
+      "kind": "objective",
+      "parts": [{ "text": "Sail to Abandoned Prison" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_5_1" },
+      "evidence": "Zone-generation line for G4_5_1. Makoru's ship from Kingsmarch; no exit to walk to."
+    },
+    {
+      "id": "sail-isle-of-kin",
+      "kind": "objective",
+      "parts": [{ "text": "Sail to Isle of Kin" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_1_1" },
+      "evidence": "Zone-generation line for G4_1_1. Makoru's ship from Kingsmarch; no exit to walk to."
+    },
+    {
+      "id": "sail-eye-of-hinekora",
+      "kind": "objective",
+      "parts": [{ "text": "Sail to Eye of Hinekora" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_4_1" },
+      "evidence": "Zone-generation line for G4_4_1. Makoru's ship from Kingsmarch; no exit to walk to."
+    },
+    {
+      "id": "sail-kedge-bay",
+      "kind": "objective",
+      "parts": [{ "text": "Sail to Kedge Bay" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_2_1" },
+      "evidence": "Zone-generation line for G4_2_1. Makoru's ship from Kingsmarch; no exit to walk to."
+    },
+    {
+      "id": "verisium-spikes",
+      "kind": "objective",
+      "parts": [{ "text": "Spikes from " }, { "text": "Dannig", "style": "npc" }],
+      "trigger": null,
+      "evidence": "From Journey's End, after Freya. No log line known. Tick by hand."
+    },
+    {
+      "id": "kingsmarch-to-journeys-end",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to Journey's End" }],
+      "trigger": null,
+      "evidence": "Journey's End was entered before, so its zone line would tick this early. Tick by hand."
+    },
+    {
+      "id": "kingsmarch-tujen-reward",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Tujen", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }],
+      "trigger": null,
+      "evidence": "After Omniphobia. No log line known. Tick by hand."
+    },
+    {
+      "id": "maps-to-makoru",
+      "kind": "objective",
+      "parts": [{ "text": "Give 4 maps to Makoru" }],
+      "trigger": null,
+      "evidence": "The four Torn Maps open Plunder's Point. No log line known. Tick by hand."
+    },
+    {
+      "id": "sail-plunders-point",
+      "kind": "objective",
+      "parts": [{ "text": "Sail to Plunder's Point" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_13" },
+      "evidence": "Zone-generation line for G4_13. Makoru's ship from Kingsmarch; no exit to walk to."
+    },
+    {
+      "id": "sail-arastas",
+      "kind": "objective",
+      "parts": [{ "text": "Sail to Arastas" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_8b" },
+      "evidence": "Zone-generation line for G4_8b, the Arastas with Torvian and the Excavation (seen 10 times in the log; G4_8a once). Makoru's ship from Kingsmarch; no exit to walk to."
+    },
+    {
+      "id": "sail-ngakanu",
+      "kind": "objective",
+      "parts": [{ "text": "Sail to Ngakanu" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_11_1b" },
+      "evidence": "Zone-generation line for G4_11_1b, the Ngakanu after the Excavation that leads to the Heart of the Tribe. Makoru's ship from Kingsmarch; no exit to walk to."
+    },
+    {
+      "id": "kingsmarch-hooded-one-act-end",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After Tavakai; unlocks the Interludes. No log line known. Tick by hand."
+    },
+    {
+      "id": "shark-fin-kaimana",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Shark Fin to " }, { "text": "Kaimana", "style": "npc" }, { "text": "Gem + blessing", "style": "reward" }],
+      "trigger": null,
+      "evidence": "Tribal Medicine: at Ngakanu early, or on the docks after Tavakai. No log line known. Tick by hand."
+    }
+  ]
+}

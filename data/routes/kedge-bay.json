@@ -1,0 +1,49 @@
+{
+  "formatVersion": 1,
+  "order": 720,
+  "zone": { "id": "G4_2_1", "name": "Kedge Bay", "level": 46 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "dead-mans-chest",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_2_1", "label": "Torn Map", "tag": "map_piece" },
+      "parts": [{ "text": "Dead Man's Chest or Stash" }, { "text": "Torn Map", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand. Target: the one 'map_piece' node in all 8 layouts."
+    },
+    {
+      "id": "abandoned-ship",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_2_1", "label": "Abandoned Ship", "tag": "shipwreck_feature" },
+      "optional": true,
+      "parts": [{ "text": "Abandoned Ship (loot)" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand. Target: the one 'shipwreck_feature' node in all 8 layouts."
+    },
+    {
+      "id": "kill-tombgrowl",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Tombgrowl", "style": "boss" }, { "text": " (Tidal Cay)" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "kill-doran",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Doran", "style": "boss" }, { "text": " (near entrance)" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "enter-journeys-end",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_2_1", "label": "Journey's End", "exit": "G4_2_2" },
+      "parts": [{ "text": "Enter Journey's End" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_2_2" },
+      "evidence": "Zone-generation line for G4_2_2."
+    }
+  ]
+}

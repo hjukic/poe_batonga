@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "order": 680,
+  "zone": { "id": "G4_1_2", "name": "Volcanic Warrens", "level": 47 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-magma-twins",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Magma Twins", "style": "boss" }, { "text": "Ruby/Topaz Ring", "style": "reward" }],
+      "trigger": null,
+      "evidence": "Lightning twin first gives the Ruby Ring, fire twin first the Topaz Ring. No kill line known. Tick by hand."
+    },
+    {
+      "id": "kill-krutog",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_1_2", "label": "Krutog", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Krutog", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 4 layouts."
+    },
+    {
+      "id": "warrens-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Kingsmarch was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

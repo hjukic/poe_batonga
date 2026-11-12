@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "order": 700,
+  "zone": { "id": "G4_4_2", "name": "Halls of the Dead", "level": 47 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "trial-of-ngakanu",
+      "kind": "objective",
+      "parts": [{ "text": "Trial of Ngakanu: Tattoos" }, { "text": "Tattoo buff", "style": "reward" }],
+      "trigger": null,
+      "evidence": "Three tests; the tattoo is a choice of +5% resistance or +5 attribute. No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-yama",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_4_2", "label": "Yama", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Yama the White", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in its only layout."
+    },
+    {
+      "id": "enter-trial-of-ancestors",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_4_2", "label": "Trial of the Ancestors", "exit": "G4_4_3" },
+      "parts": [{ "text": "Enter Trial of Ancestors" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_4_3" },
+      "evidence": "Zone-generation line for G4_4_3."
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "formatVersion": 1,
+  "order": 745,
+  "zone": { "id": "ExpeditionSubArea_Kalguur_Act4", "name": "Deserted Post", "level": 53 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "summon-farrow",
+      "kind": "objective",
+      "parts": [{ "text": "Summon " }, { "text": "Farrow", "style": "npc" }, { "text": "Verisium Anvil", "style": "reward" }],
+      "trigger": null,
+      "evidence": "Ends The Runeseeker: Runesmithing of Knowledge unlocks the Verisium Anvil. No log line known. Tick by hand."
+    }
+  ]
+}

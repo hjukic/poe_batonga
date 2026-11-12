@@ -1,0 +1,29 @@
+{
+  "formatVersion": 1,
+  "order": 740,
+  "zone": { "id": "G4_13", "name": "Plunder's Point", "level": 53 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "plunders-point-dannig",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Dannig", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-deserted-post",
+      "kind": "objective",
+      "parts": [{ "text": "Expedition: Deserted Post" }],
+      "trigger": { "type": "zoneEntered", "area": "ExpeditionSubArea_Kalguur_Act4" },
+      "evidence": "Zone-generation line for ExpeditionSubArea_Kalguur_Act4, named Deserted Post in WorldAreas."
+    },
+    {
+      "id": "plunders-point-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Kingsmarch was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

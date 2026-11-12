@@ -1,0 +1,58 @@
+{
+  "formatVersion": 1,
+  "order": 730,
+  "zone": { "id": "G4_2_2", "name": "Journey's End", "level": 47 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "journeys-end-tujen",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Tujen", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-captain-hartlin",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_2_2", "label": "Captain Hartlin", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Captain Hartlin", "style": "boss" }, { "text": "Verisium", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 9 layouts."
+    },
+    {
+      "id": "journeys-end-freya",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Freya", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "journeys-end-to-town",
+      "kind": "objective",
+      "parts": [{ "text": "Waypoint to town" }],
+      "trigger": null,
+      "evidence": "Kingsmarch was entered before, so its zone line would tick this early. Tick by hand."
+    },
+    {
+      "id": "journeys-end-freya-spikes",
+      "kind": "objective",
+      "parts": [{ "text": "Spikes to " }, { "text": "Freya", "style": "npc" }],
+      "trigger": null,
+      "evidence": "After Dannig's Verisium Spikes. No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-omniphobia",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Omniphobia", "style": "boss" }, { "text": " (totem)" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "journeys-end-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Kingsmarch was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

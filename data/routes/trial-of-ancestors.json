@@ -1,0 +1,22 @@
+{
+  "formatVersion": 1,
+  "order": 710,
+  "zone": { "id": "G4_4_3", "name": "Trial of the Ancestors", "level": 51 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "navali-hinekora",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Navali", "style": "npc" }, { "text": " & Hinekora" }, { "text": "2 Skill Points", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "ancestors-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Kingsmarch was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "formatVersion": 1,
+  "order": 640,
+  "zone": { "id": "G4_7", "name": "Shrike Island", "level": 46 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "corpse-nest",
+      "kind": "objective",
+      "parts": [{ "text": "Corpse Nest (Impaled Karui)" }, { "text": "Torn Map", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-scourge-of-the-skies",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_7", "label": "Scourge of the Skies", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Scourge of the Skies", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 8 layouts."
+    },
+    {
+      "id": "shrike-hooded-one",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "shrike-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Kingsmarch was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

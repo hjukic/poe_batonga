@@ -1,0 +1,45 @@
+{
+  "formatVersion": 1,
+  "order": 690,
+  "zone": { "id": "G4_4_1", "name": "Eye of Hinekora", "level": 46 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "matiki-well",
+      "kind": "objective",
+      "parts": [{ "text": "Well: talk to " }, { "text": "Matiki", "style": "npc" }],
+      "trigger": null,
+      "evidence": "He is at the well, not in town. No log line known. Tick by hand."
+    },
+    {
+      "id": "waterfall-chest",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Chest behind waterfall" }, { "text": "Spirit Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "three-tests",
+      "kind": "objective",
+      "parts": [{ "text": "Tests: Fire, Nature, Cold" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "silent-hall",
+      "kind": "objective",
+      "parts": [{ "text": "Pay Respects (Silent Hall)" }, { "text": "+5% Max Mana", "style": "reward" }],
+      "trigger": null,
+      "evidence": "At the Silent Hall altar, then talk to Navali. No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-halls-of-the-dead",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_4_1", "label": "Halls of the Dead", "exit": "G4_4_2" },
+      "parts": [{ "text": "Enter Halls of the Dead" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_4_2" },
+      "evidence": "Zone-generation line for G4_4_2."
+    }
+  ]
+}

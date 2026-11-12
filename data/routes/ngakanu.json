@@ -1,0 +1,32 @@
+{
+  "formatVersion": 1,
+  "order": 770,
+  "zone": { "id": "G4_11_1b", "name": "Ngakanu", "level": 53 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "ngakanu-abyssal-depths",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Abyss: Abyssal Depths" }],
+      "trigger": null,
+      "evidence": "Not tracked as an area: WorldAreas has three Abyssal Depths and none is connected here. No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-mad-butcher",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Mad Butcher", "style": "boss" }, { "text": " (big hut)" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "enter-heart-of-the-tribe",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_11_1b", "label": "Heart of the Tribe", "exit": "G4_11_2" },
+      "parts": [{ "text": "Enter Heart of the Tribe" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_11_2" },
+      "evidence": "Zone-generation line for G4_11_2."
+    }
+  ]
+}

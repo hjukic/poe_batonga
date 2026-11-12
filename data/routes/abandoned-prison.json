@@ -1,0 +1,40 @@
+{
+  "formatVersion": 1,
+  "order": 650,
+  "zone": { "id": "G4_5_1", "name": "Abandoned Prison", "level": 46 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "chapel-key",
+      "kind": "objective",
+      "parts": [{ "text": "Kill mobs for Chapel Key" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "armoury-cells",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_5_1", "label": "Armoury", "tag": "armoury" },
+      "optional": true,
+      "parts": [{ "text": "Armoury, Forgotten Cells" }, { "text": "Jewel", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand. Target: the one 'armoury' node in all 4 layouts."
+    },
+    {
+      "id": "kill-forael",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_5_1", "label": "Chapel", "tag": "prison_chapel" },
+      "parts": [{ "text": "Kill " }, { "text": "Forael", "style": "boss" }, { "text": " (Chapel)" }, { "text": "Flask choice", "style": "reward" }],
+      "trigger": null,
+      "evidence": "Then use the Goddess of Justice for the flask choice. No kill line known. Tick by hand. Target: the one 'prison_chapel' node in all 4 layouts."
+    },
+    {
+      "id": "enter-solitary-confinement",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_5_1", "label": "Solitary Confinement", "exit": "G4_5_2" },
+      "parts": [{ "text": "Enter Solitary Confinement" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_5_2" },
+      "evidence": "Zone-generation line for G4_5_2."
+    }
+  ]
+}

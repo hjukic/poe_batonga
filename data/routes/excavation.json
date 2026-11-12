@@ -1,0 +1,38 @@
+{
+  "formatVersion": 1,
+  "order": 760,
+  "zone": { "id": "G4_10", "name": "The Excavation", "level": 52 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "kill-benedictus",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_10", "label": "Benedictus", "tag": "boss" },
+      "parts": [{ "text": "Kill " }, { "text": "Benedictus", "style": "boss" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 5 layouts."
+    },
+    {
+      "id": "excavation-hooded-one",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "excavated-cache",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Excavated Cache" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "excavation-portal-town",
+      "kind": "objective",
+      "parts": [{ "text": "Portal to town" }],
+      "trigger": null,
+      "evidence": "Kingsmarch was entered before, so its zone line would tick this early. Tick by hand."
+    }
+  ]
+}

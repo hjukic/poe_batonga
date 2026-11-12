@@ -1,0 +1,57 @@
+{
+  "formatVersion": 1,
+  "order": 670,
+  "zone": { "id": "G4_1_1", "name": "Isle of Kin", "level": 46 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act4_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "steps": [
+    {
+      "id": "flayed-sailor",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_1_1", "label": "Flayed Sailor", "tag": "map_piece" },
+      "parts": [{ "text": "Flayed Sailor (shore)" }, { "text": "Torn Map", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand. Target: the one 'map_piece' node in all 8 layouts."
+    },
+    {
+      "id": "doomed-mine",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_1_1", "label": "Doomed Mine", "tag": "delve" },
+      "optional": true,
+      "parts": [{ "text": "Doomed Mine (delve)" }, { "text": "Jeweller's Orb", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand. Target: the one 'delve' node in all 8 layouts."
+    },
+    {
+      "id": "beast-pen",
+      "kind": "objective",
+      "optional": true,
+      "parts": [{ "text": "Beast Pen" }, { "text": "Skill+Support", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "kill-mimok",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Mimok", "style": "boss" }, { "text": " (Beast Pen)" }, { "text": "Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand."
+    },
+    {
+      "id": "kill-blind-beast",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_1_1", "label": "Primal Arena", "tag": "arena" },
+      "optional": true,
+      "parts": [{ "text": "Kill " }, { "text": "Blind Beast", "style": "boss" }, { "text": "Blank Rune", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line known. Tick by hand. Target: the one 'arena' node in all 8 layouts (this area's boss is The Blind Beast)."
+    },
+    {
+      "id": "enter-volcanic-warrens",
+      "kind": "objective",
+      "navigationTarget": { "area": "G4_1_1", "label": "Volcanic Warrens", "exit": "G4_1_2" },
+      "parts": [{ "text": "Enter Volcanic Warrens" }],
+      "trigger": { "type": "zoneEntered", "area": "G4_1_2" },
+      "evidence": "Zone-generation line for G4_1_2."
+    }
+  ]
+}
