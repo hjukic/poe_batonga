@@ -280,7 +280,12 @@ pub struct Inner {
     pub save_path: Option<PathBuf>,
     /// The compass passes over optional steps (a setting of the page).
     pub skip_optional: bool,
+    /// The last dialogue lines seen live: (timestamp, speaker, text), oldest first.
+    pub recent: std::collections::VecDeque<(String, String, String)>,
 }
+
+/// Dialogue lines kept for `Inner::note_hand_tick`.
+const RECENT_LINES: usize = 30;
 
 impl Inner {
     pub fn sync_navigation(&self, app: &AppHandle) {
@@ -347,6 +352,28 @@ impl Inner {
         }
     }
 
+    /// A step was ticked by hand: keep the dialogue lines seen just before it, in
+    /// `step-observations.jsonl` beside the progress file. Lines that turn up before
+    /// the same step every time can become its log trigger. Player chat never gets
+    /// here (`parse_line` drops it).
+    pub fn note_hand_tick(&self, id: &str) {
+        let Some(path) = self.save_path.as_ref().map(|p| p.with_file_name("step-observations.jsonl")) else { return };
+        let lines: Vec<_> = self
+            .recent
+            .iter()
+            .map(|(at, speaker, text)| serde_json::json!({ "at": at, "speaker": speaker, "text": text }))
+            .collect();
+        let at = self.progress.completed.get(id).map(|c| c.at.clone()).unwrap_or_default();
+        let entry = serde_json::json!({ "step": id, "area": self.progress.current_area, "at": at, "lines": lines });
+        let result = std::fs::OpenOptions::new().create(true).append(true).open(&path).and_then(|mut file| {
+            use std::io::Write;
+            writeln!(file, "{entry}")
+        });
+        if let Err(error) = result {
+            eprintln!("Tracker: could not note the tick: {error}");
+        }
+    }
+
     pub fn save(&self) {
         let Some(path) = &self.save_path else { return };
         let result = (|| -> std::io::Result<()> {
@@ -389,6 +416,7 @@ pub fn init(app: &AppHandle) -> Tracker {
         log: LogStatus { connected: false, path: None, message: "Looking for Client.txt".into() },
         save_path,
         skip_optional: false,
+        recent: Default::default(),
     }))
 }
 
@@ -535,13 +563,19 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
     let recorder = app.state::<crate::layout::Recorder>();
     let tracker = app.state::<Tracker>();
     let Ok(mut inner) = tracker.0.lock() else { return };
-    let Inner { routes, progress, .. } = &mut *inner;
+    let Inner { routes, progress, recent, .. } = &mut *inner;
     let mut changed = false;
     // Every line is handled in order; one event never hides the rest of a batch.
     for line in String::from_utf8_lossy(bytes).lines() {
         if let Some((timestamp, event)) = parse_line(line) {
             changed |= apply(routes, progress, &timestamp, &event);
             recorder.on_log(&event, live);
+            if let (true, LogEvent::Dialogue { speaker, text }) = (live, &event) {
+                recent.push_back((timestamp, speaker.clone(), text.clone()));
+                if recent.len() > RECENT_LINES {
+                    recent.pop_front();
+                }
+            }
         }
     }
     progress.log_path = Some(path.to_string());

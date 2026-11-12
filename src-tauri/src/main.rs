@@ -450,6 +450,9 @@ fn toggle_step(app: AppHandle, id: String) -> Result<tracker::TrackerView, Strin
     let mut inner = tracker.0.lock().map_err(|e| e.to_string())?;
     let tracker::Inner { routes, progress, .. } = &mut *inner;
     tracker::toggle(routes, progress, &id)?;
+    if inner.progress.completed.contains_key(&id) {
+        inner.note_hand_tick(&id);
+    }
     inner.sync_navigation(&app);
     inner.save();
     let view = inner.view();
