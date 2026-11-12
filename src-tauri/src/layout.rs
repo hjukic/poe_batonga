@@ -160,8 +160,9 @@ const HELD_DROP: (u32, f64) = (16, 0.25);
 
 /// The eight cells around a cell.
 const NEIGHBOURS: [(i32, i32); 8] = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)];
-/// Frames to find the player on a known map before starting a new part (about 3 s).
-const FIND_FRAMES: u32 = 24;
+/// Frames to find the player on a known map before starting a new part (about 8 s): nothing
+/// of the visit is fed to the navigator while it is looked for, so looking longer costs nothing.
+const FIND_FRAMES: u32 = 64;
 /// Times a wall cell counts as seen at most: more sightings add nothing.
 const SEEN_MOST: u32 = 50;
 
@@ -760,6 +761,23 @@ impl Session {
     /// Hands the navigator the move to `pos`. Within a part the move is measured
     /// exactly (the frames were registered), however long the pause between them;
     /// only a new part is a loss.
+    /// A new part starts: its cells are new, so every place noted in the old part's cells
+    /// means nothing in it. Kept, the named exits of a saved map that could not be found
+    /// again were read at the wrong places in the new part: the town's exit 70 cells from
+    /// the Grelwood's, which fits no layout (the owner's Clearfell, 2026-11-12).
+    fn forget_places(&mut self) {
+        self.fed = None;
+        self.far_icons.clear();
+        self.named_exits.clear();
+        self.exit_places.clear();
+        self.waypoint_at = None;
+        self.came_in = None;
+        self.boss_places.clear();
+        self.named_seen.clear();
+        self.checkpoint_marks.clear();
+        crate::minimap::bigmap::set_icon_hints(vec![]);
+    }
+
     fn feed(&mut self, pos: (i32, i32)) {
         let Some(nav) = self.navigator.as_mut() else { return };
         let mut log = self.obs.get_mut().as_mut();
@@ -1118,7 +1136,10 @@ impl Recorder {
                     Some(i) if !respawn && recording.parts[i].walls.len() >= MERGE_MIN_WALLS => {
                         let part = recording.parts.remove(i);
                         let from = arrived_from.as_deref();
-                        let hint = part.pois.iter().filter(|p| p.kind == "arrived" && Some(p.label.as_str()) == from).map(|p| (p.x, p.y)).last();
+                        // Came in by that exit before, or left by it (a visit whose arrival was not
+                        // known, as after an app restart, still noted where it left for town).
+                        let at = |kind: &str| part.pois.iter().filter(|p| p.kind == kind && Some(p.label.as_str()) == from).map(|p| (p.x, p.y)).last();
+                        let hint = from.filter(|from| !from.is_empty()).and_then(|_| at("arrived").or_else(|| at("left")));
                         Live::from_part(part, hint)
                     }
                     _ => Live::new(),
@@ -1223,6 +1244,7 @@ impl Recorder {
             return None;
         }
         live.part.frames += 1;
+        let mut gave_up = false;
         let placed = if live.walls.is_empty() {
             Some(live.pos)
         } else if live.unplaced {
@@ -1239,6 +1261,7 @@ impl Recorder {
                     live.centre = known.centre;
                     live.frame_size = known.frame_size;
                     session.recording.parts.push(known.snapshot());
+                    gave_up = true;
                 }
             }
             found
@@ -1254,6 +1277,9 @@ impl Recorder {
                 (score >= MIN_MATCH).then_some(wide).or_else(|| locate_piece(&live.walls, &rel, Some(live.pos)))
             }
         };
+        if gave_up {
+            session.forget_places();
+        }
         match placed {
             Some(pos) => {
                 session.feed(pos);
@@ -1296,6 +1322,7 @@ impl Recorder {
                 }
             }
             None => {
+                let live = &mut session.live;
                 live.part.lost += 1;
                 live.lost_streak += 1;
                 if live.lost_streak >= LOST_LIMIT {
@@ -1304,17 +1331,7 @@ impl Recorder {
                     let finished = std::mem::replace(&mut session.live, Live::new());
                     session.live.centre = finished.centre;
                     session.live.frame_size = finished.frame_size;
-                    session.fed = None;
-                    session.far_icons.clear();
-                    session.named_exits.clear();
-                    session.exit_places.clear();
-                    session.waypoint_at = None;
-                    session.came_in = None;
-                    // Places of the old part mean nothing in the new one's cells.
-                    session.boss_places.clear();
-                    session.named_seen.clear();
-                    session.checkpoint_marks.clear();
-                    crate::minimap::bigmap::set_icon_hints(vec![]);
+                    session.forget_places();
                     if finished.part.matched > 0 {
                         session.recording.parts.push(finished.snapshot());
                     }
@@ -1882,6 +1899,45 @@ mod tests {
         assert_eq!(session.live.pos, (156, 0), "the first visit's coordinates");
         assert!(session.live.walls.len() <= first + 2, "the same corridor drawn again: {} -> {}", first, session.live.walls.len());
         assert_eq!(session.named_exits.iter().map(|e| e.2.as_str()).collect::<Vec<_>>(), ["The Grelwood"], "named before, known again");
+        drop(state);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_saved_map_not_found_again_leaves_its_named_exits_behind() {
+        let dir = scratch("giveup");
+        let recorder = Recorder::new(Some(dir.clone()));
+        enter(&recorder, "G1_town");
+        enter(&recorder, "G1_2");
+        for step in 0..40 {
+            if step == 10 {
+                let grelwood = crate::minimap::bigmap::Icon { kind: "exit", x: -100.0, y: 40.0, label: Some("The Grelwood".into()), sprite: None };
+                recorder.on_icons(&[grelwood], true);
+            }
+            recorder.on_frame(&frame((step * 4, 0)), [300, 260]);
+        }
+        recorder.on_icons(&[], true);
+        // Back from town to a place the saved map does not have: a ring of walls.
+        enter(&recorder, "G1_town");
+        enter(&recorder, "G1_2");
+        assert_eq!(recorder.0.lock().unwrap().session.as_ref().unwrap().named_exits.len(), 1, "known while it is looked for");
+        let ring: Vec<[u16; 2]> = (0..360)
+            .step_by(3)
+            .map(|d| {
+                let a = (d as f32).to_radians();
+                [(75.0 + 40.0 * a.cos()) as u16, (65.0 + 25.0 * a.sin()) as u16]
+            })
+            .collect();
+        let odd = MinimapView { walls: ring, ..frame((0, 0)) };
+        for _ in 0..FIND_FRAMES + 2 {
+            recorder.on_frame(&odd, [300, 260]);
+        }
+        let state = recorder.0.lock().unwrap();
+        let session = state.session.as_ref().unwrap();
+        assert!(!session.live.unplaced, "a new part");
+        assert!(session.named_exits.is_empty(), "the old part's exits stay with it: {:?}", session.named_exits);
+        assert!(!session.live.part.pois.iter().any(|p| p.kind == "exit"));
+        assert!(session.recording.parts.iter().any(|p| p.pois.iter().any(|p| p.kind == "exit")), "kept in the saved part");
         drop(state);
         let _ = std::fs::remove_dir_all(dir);
     }
