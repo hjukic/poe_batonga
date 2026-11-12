@@ -270,6 +270,50 @@ another way (the text in another row of the same speaker, the row also spoken by
 `NPCTalk` options that differ in NPC, flags or zone). See
 [triggers](triggers.md).
 
+## Map icons (datamined)
+
+`data/icons/` holds the map icon sprites the reader compares the screen with (`bigmap.rs`,
+[map reading](map-reading.md#icons-by-their-sprite)). From the game files, read-only:
+
+```sh
+scripts/update-icons.sh [game folder]   # needs poe_data_tools, ImageMagick (magick) and node
+```
+
+It dumps the `MinimapIcons` and `WorldAreas` tables and the sheet `art/2dart/minimap/player.dds`
+(896x4928 px, RGBA), and `scripts/import-icons.mjs` cuts the icons. The sheet is a grid of 64x64
+cells, 14 a row: row `i` of `MinimapIcons` is cell (`i % 14`, `i / 14`) (checked by eye: 18 is the
+orange door, 9 the waypoint ring, 804/805 the orange and grey skulls). Check with
+`node --test scripts/import-icons.test.mjs`.
+
+- `sprites.rgba`: 32x32 RGBA per icon, 4096 bytes each, in `index.json` order (432 KiB for 108
+  icons). Each 64x64 cell is reduced by a box filter: the sheet's first mip level, about what the
+  game draws (the exit icon is 0.48 of its sprite on the big map at 2160 px height).
+- `index.json`: the game build and tool; per icon `id` (the table's), `row`, `kind` (what the
+  reader calls it: `exit`, `checkpoint`, `waypoint`, `portal`, `boss`, `boss-dead`, `rare`,
+  `rare-dead`, `npc`, `quest`), the table's `minimapRadius` / `largemapRadius`, the opaque box at
+  64 px (`box`: x, y, w, h); boss pairs also `pair`, `area`, `areaName`, `boss`, `how`, and the
+  place name the game gives the live icon (`place`, the Active row's `Name`).
+- **Which icons:** `Entrance`, `EntrancePortal` (exits), `Portal`, `Waypoint`, `Checkpoint`,
+  `CheckpointNotActive`, `BossCheckpointActive`, `UniqueMonsterAlive`/`Dead` (orange and grey
+  skull), `RareMonsterAlive`/`Dead` (yellow and grey skull), `NPC`, `QuestObject`, `QuestItem`, and
+  47 campaign boss pairs (`<name>Active`/`<name>Inactive`, e.g. `MillerActive`,
+  `GrimTangleBossActive`, `G4_7_BossActive`). League icons (Breach, Delirium, Incursion, …) and
+  landmarks are left out.
+- **Which area a boss pair belongs to** (`how`): `id` (the id holds the area id, `G4_7_Boss`),
+  `name` (the area's or boss's name, `GrimTangleBoss`, `IgnagdukBoss`), `monster` (the area's boss
+  in `WorldAreas.Bosses_MonsterVarietiesKeys` carries the id's word: `MudBurrower` →
+  `MudBurrowerHeadBoss`; the script checks it), `place` (the place name is the checklist target's
+  label: `Primal Arena`, `Shark Pit`, `Crabshell Cavern`), `assumed` (read by hand: `Crone` ↔
+  `UrchinHagBoss` in Clearfell, `Count` ↔ `BaronBossHumanForm`). 45 of 47 pairs have an area;
+  `BeetleBoss` ("The Galleria") and `GoldcrushBoss` ("The Aureaduct") have none.
+- `boss` is the checklist's name for the boss (the text of a step's boss part; the script checks it
+  is one of the area's) and is set only where the tie names that boss (24 pairs); never for
+  `assumed` ties. A pair whose boss is no checklist boss (`CarnivorousPlant` in The Grelwood,
+  `SnakePitBoss` in The Venom Crypts) has an area and no `boss`.
+
+Nothing here says that a campaign boss shows its icon, when, or that it turns grey when killed:
+that is the table's word, not seen on a real screen yet.
+
 ## Other candidates
 
 - [Exile-UI](https://github.com/Lailloken/Exile-UI) Act-Decoder layouts: its
