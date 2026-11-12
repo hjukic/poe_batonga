@@ -290,7 +290,7 @@ orange door, 9 the waypoint ring, 804/805 the orange and grey skulls). Check wit
   game draws (the exit icon is 0.48 of its sprite on the big map at 2160 px height).
 - `index.json`: the game build and tool; per icon `id` (the table's), `row`, `kind` (what the
   reader calls it: `exit`, `checkpoint`, `waypoint`, `portal`, `boss`, `boss-dead`, `rare`,
-  `rare-dead`, `npc`, `quest`), the table's `minimapRadius` / `largemapRadius`, the opaque box at
+  `dead` (both grey skulls: one picture), `npc`, `quest`), the table's `minimapRadius` / `largemapRadius`, the opaque box at
   64 px (`box`: x, y, w, h); boss pairs also `pair`, `area`, `areaName`, `boss`, `how`, and the
   place name the game gives the live icon (`place`, the Active row's `Name`).
 - **Which icons:** `Entrance`, `EntrancePortal` (exits), `Portal`, `Waypoint`, `Checkpoint`,

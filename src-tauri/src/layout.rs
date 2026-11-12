@@ -641,6 +641,8 @@ impl Recorder {
                     }
                 }
                 state.finish();
+                // The map reader compares this area's boss icons too.
+                crate::minimap::bigmap::set_icon_area(Some(area));
                 // A live arrival with no zone before it (e.g. a new character) still starts at the arrival point.
                 state.previous_area = if live { Some(left.unwrap_or_default()) } else { None };
                 let recording = state
@@ -1382,7 +1384,7 @@ mod tests {
         recorder.set_targets(vec![("G1_2".into(), guide::NavTarget { label: "The Grelwood".into(), exit: Some("G1_4".into()), ..Default::default() })]);
         recorder.on_frame(&frame((0, 0)), [300, 260]);
         // A whole-window scan: The Grelwood's exit, labelled, outside the wall frame.
-        let grelwood = Icon { kind: "exit", x: -136.0, y: 83.0, label: Some("The Grelwood".into()) };
+        let grelwood = Icon { kind: "exit", x: -136.0, y: 83.0, label: Some("The Grelwood".into()), sprite: None };
         recorder.on_icons(&[grelwood], true);
         recorder.on_frame(&frame((4, 0)), [300, 260]);
         // The navigator's needle without the recorded map: whether the icon reached
@@ -1408,7 +1410,7 @@ mod tests {
         assert_eq!(state.session.as_ref().unwrap().far_age, 1);
         drop(state);
         // A frame with an icon in the capture's margin is no scan: the kept far icon stays.
-        let margin = Icon { kind: "exit", x: 90.0, y: 0.0, label: None };
+        let margin = Icon { kind: "exit", x: 90.0, y: 0.0, label: None, sprite: None };
         recorder.on_icons(&[margin], false);
         recorder.on_frame(&frame((8, 0)), [300, 260]);
         assert_eq!(recorder.0.lock().unwrap().session.as_ref().unwrap().far_icons.len(), 1);
@@ -1495,8 +1497,8 @@ mod tests {
             let x = step * 4;
             let icons = if whole {
                 vec![
-                    Icon { kind: "exit", x: -136.0 - x as f32, y: 83.0, label: Some("The Grelwood".into()) },
-                    Icon { kind: "checkpoint", x: 20.0 - x as f32, y: 10.0, label: None },
+                    Icon { kind: "exit", x: -136.0 - x as f32, y: 83.0, label: Some("The Grelwood".into()), sprite: None },
+                    Icon { kind: "checkpoint", x: 20.0 - x as f32, y: 10.0, label: None, sprite: None },
                 ]
             } else {
                 vec![]
@@ -1668,8 +1670,8 @@ mod tests {
             let on_map = state.session.as_ref().unwrap().navigator.as_ref().unwrap().on_map();
             (on_map, view)
         };
-        let exit = Icon { kind: "exit", x: -6.0, y: 2.0, label: None };
-        let waypoint = Icon { kind: "waypoint", x: 5.0, y: -4.0, label: None };
+        let exit = Icon { kind: "exit", x: -6.0, y: 2.0, label: None, sprite: None };
+        let waypoint = Icon { kind: "waypoint", x: 5.0, y: -4.0, label: None, sprite: None };
         let (on_map, view) = visit(vec![exit], false);
         assert!(on_map && view.source == "estimated", "{view:?}");
         // Back west along the corridor.

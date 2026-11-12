@@ -331,15 +331,21 @@ fn walls_in(image: &Image, centre: [f64; 2], frame: &Frame, scale: f64) -> (Vec<
 }
 
 /// A map icon, in minimap cells from the player (x right, y down).
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
 pub struct Icon {
-    /// "exit" (orange zone exit), "checkpoint" or "waypoint".
+    /// Found by colour: "exit" (orange zone exit), "checkpoint" or "waypoint". Named by the
+    /// sprite matcher (`identify`): "boss" (an orange skull, or a boss's own icon while it
+    /// lives), "boss-dead" (a boss's own icon, grey), "dead" (a grey skull: a dead unique
+    /// or a dead rare, the game draws both alike), "rare" (a yellow skull), "portal".
     pub kind: &'static str,
     pub x: f32,
     pub y: f32,
     /// An exit's label: the zone it leads to, as given to `set_label_candidates`, when
     /// read (whole-window frames only).
     pub label: Option<String>,
+    /// The sprite that matched (an id of `data/icons/index.json`), when one did.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sprite: Option<&'static str>,
 }
 
 /// Icon colours and least size in pixels at 2160 px height, measured on the big map
@@ -390,6 +396,24 @@ fn icon_kind(r: u8, g: u8, b: u8) -> u8 {
     }
 }
 
+/// Pixel classes that only point the sprite matcher somewhere (no icon by themselves):
+/// pale grey (a grey skull's light half, 42% of its pixels; label text) and warm (orange
+/// and yellow that is not the cross's colour: a yellow skull 57%, the orange skull's other
+/// 25%). The colour classes 0-2 are tested first and stay as they were.
+const PALE: u8 = 3;
+const WARM: u8 = 4;
+
+fn hint_kind(r: u8, g: u8, b: u8) -> u8 {
+    let (lo, hi) = (r.min(g).min(b), r.max(g).max(b));
+    if lo >= 110 && hi - lo <= 45 {
+        PALE
+    } else if r >= 140 && r as i32 - b as i32 >= 60 {
+        WARM
+    } else {
+        NONE
+    }
+}
+
 /// Map icons in `image`, relative to the player at pixel `centre`, with `scale` image
 /// pixels per minimap pixel. `size` is the image's pixel size relative to 2160 px height.
 pub fn icons(image: &Image, centre: [f64; 2], scale: f64, size: f64) -> Vec<Icon> {
@@ -413,7 +437,9 @@ pub fn icons_in(image: &Image, centre: [f64; 2], scale: f64, size: f64, stride: 
                 kinds.push(NONE);
             } else {
                 let i = (y * image.width + x) * 3;
-                kinds.push(icon_kind(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]));
+                let (r, g, b) = (image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]);
+                let kind = icon_kind(r, g, b);
+                kinds.push(if kind == NONE { hint_kind(r, g, b) } else { kind });
             }
         }
     }
@@ -421,7 +447,9 @@ pub fn icons_in(image: &Image, centre: [f64; 2], scale: f64, size: f64, stride: 
     let found = blobs(&mut kinds, w, h);
     // The player in samples.
     let player = centre.map(|c| (c - 0.5) / stride as f64 + 0.5);
-    let mut icons = Vec::new();
+    // Sample centre (in samples) -> image pixel centre.
+    let to_px = |v: f64| (v - 0.5) * stride as f64 + 0.5;
+    let mut icons: Vec<(Icon, [f64; 2])> = Vec::new();
     for (kind, &(name, least)) in ICONS.iter().enumerate() {
         let exit_least = least as f64 * size * size;
         let shaped = |blob: &Blob| name != "exit" || exit_shaped(blob, exit_least, CROSS_PX * size * size, player);
@@ -445,14 +473,623 @@ pub fn icons_in(image: &Image, centre: [f64; 2], scale: f64, size: f64, stride: 
         }
         let least = (least as f64 * size * size) as u32;
         for (n, sx, sy) in joined.into_iter().filter(|&(n, _, _)| n >= least) {
-            // Sample centre (in samples) -> image pixel centre.
-            let at = [(sx / n as f64 - 0.5) * stride as f64 + 0.5, (sy / n as f64 - 0.5) * stride as f64 + 0.5];
-            let to_cells = |p: f64, c: f64| ((p - c) / scale / CELL as f64) as f32;
-            let label = (read_labels && name == "exit").then(|| labels::read(image, at, window)).flatten();
-            icons.push(Icon { kind: name, x: to_cells(at[0], centre[0]), y: to_cells(at[1], centre[1]), label });
+            let at = [to_px(sx / n as f64), to_px(sy / n as f64)];
+            icons.push((Icon { kind: name, ..Icon::default() }, at));
         }
     }
+    #[cfg(test)]
+    let matching = MATCHING.with(|m| m.get());
+    #[cfg(not(test))]
+    let matching = true;
+    if matching {
+        identify(image, &mut icons, &found, stride, window, centre, scale);
+    }
+    let to_cells = |p: f64, c: f64| ((p - c) / scale / CELL as f64) as f32;
     icons
+        .into_iter()
+        .map(|(icon, at)| {
+            // Exit labels are read only for what is still an exit after the matcher.
+            let label = (read_labels && icon.kind == "exit").then(|| labels::read(image, at, window)).flatten();
+            Icon { x: to_cells(at[0], centre[0]), y: to_cells(at[1], centre[1]), label, ..icon }
+        })
+        .collect()
+}
+
+/// The game's map icon sprites (`data/icons/`, `scripts/update-icons.sh`): 32x32 RGBA
+/// each, the sheet's 64 px cells reduced by half (the sheet's first mip level).
+static SPRITE_INDEX: &str = include_str!("../../data/icons/index.json");
+static SPRITE_PIXELS: &[u8] = include_bytes!("../../data/icons/sprites.rgba");
+const SPRITE_PX: usize = 32;
+/// Screen pixels per pixel of a 64 px sprite cell at 2160 px height, by kind: the best fit
+/// of each sprite on the real icons of the Clearfell screenshot (`sprite_scores_on_the_screenshot`):
+/// `Entrance` 0.48 (the exit icon 18-19 x 26-27 px, the sprite's opaque box 39 x 56; 0.46-0.50
+/// score within 0.01), `Checkpoint` 0.52-0.54, `Waypoint` 0.52. Kinds not seen on a real
+/// screen yet are tried at both.
+fn sprite_scales(kind: &str) -> &'static [f64] {
+    match kind {
+        "exit" => &[0.48],
+        "checkpoint" | "waypoint" => &[0.53],
+        _ => &[0.48, 0.53],
+    }
+}
+
+/// One icon sprite of the game.
+pub struct Sprite {
+    /// The `MinimapIcons` id ("Entrance", "UniqueMonsterAlive", "GrimTangleBossActive").
+    pub id: String,
+    /// What the reader calls it: "exit", "checkpoint", "waypoint", "portal", "boss",
+    /// "boss-dead", "dead", "rare", "npc", "quest".
+    pub kind: &'static str,
+    /// A boss pair: its stem ("GrimTangleBoss"), area id and checklist boss name, where
+    /// `data/icons/index.json` has them.
+    pub pair: Option<String>,
+    pub area: Option<String>,
+    #[allow(dead_code)] // read by the recorder from I6 on
+    pub boss: Option<String>,
+    rgba: &'static [u8],
+}
+
+/// Every sprite of `data/icons/`, in its order.
+pub fn sprites() -> &'static [Sprite] {
+    static SPRITES: std::sync::OnceLock<Vec<Sprite>> = std::sync::OnceLock::new();
+    SPRITES.get_or_init(|| {
+        #[derive(serde::Deserialize)]
+        struct Entry {
+            id: String,
+            kind: String,
+            #[serde(default)]
+            pair: Option<String>,
+            #[serde(default)]
+            area: Option<String>,
+            #[serde(default)]
+            boss: Option<String>,
+        }
+        #[derive(serde::Deserialize)]
+        struct Index {
+            icons: Vec<Entry>,
+        }
+        const KINDS: [&str; 10] = ["exit", "checkpoint", "waypoint", "portal", "boss", "boss-dead", "dead", "rare", "npc", "quest"];
+        let index: Index = serde_json::from_str(SPRITE_INDEX).expect("data/icons/index.json");
+        let bytes = SPRITE_PX * SPRITE_PX * 4;
+        index
+            .icons
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, e)| {
+                let kind = *KINDS.iter().find(|k| **k == e.kind)?;
+                let rgba = SPRITE_PIXELS.get(i * bytes..(i + 1) * bytes)?;
+                Some(Sprite { id: e.id, kind, pair: e.pair, area: e.area, boss: e.boss, rgba })
+            })
+            .collect()
+    })
+}
+
+/// The sprites every candidate is compared with: the generic icons (not the boss pairs).
+fn generic_sprites() -> &'static [usize] {
+    static GENERIC: std::sync::OnceLock<Vec<usize>> = std::sync::OnceLock::new();
+    GENERIC.get_or_init(|| (0..sprites().len()).filter(|&i| sprites()[i].pair.is_none()).collect())
+}
+
+/// The area being read: its boss pairs are compared too (others are left out: cost, and a
+/// boss's icon is only looked for where it stands). Tests keep it per thread.
+#[cfg(not(test))]
+static ICON_AREA: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+/// Places where a boss pair's icon was seen in this visit, in minimap cells from the
+/// player, set by the recorder before each frame: the matcher looks there for both of the
+/// pair's sprites (a boss's grey icon is dark, colour alone does not find it).
+#[cfg(not(test))]
+static ICON_HINTS: std::sync::Mutex<Vec<(String, [f32; 2])>> = std::sync::Mutex::new(Vec::new());
+#[cfg(test)]
+thread_local! {
+    static ICON_AREA_T: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+    static ICON_HINTS_T: std::cell::RefCell<Vec<(String, [f32; 2])>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Sets the area the reader is in (the recorder's zone entry); None: no boss pairs.
+pub fn set_icon_area(area: Option<&str>) {
+    #[cfg(not(test))]
+    if let Ok(mut current) = ICON_AREA.lock() {
+        *current = area.map(String::from);
+    }
+    #[cfg(test)]
+    ICON_AREA_T.with(|a| *a.borrow_mut() = area.map(String::from));
+}
+
+fn icon_area() -> Option<String> {
+    #[cfg(not(test))]
+    return ICON_AREA.lock().ok().and_then(|a| a.clone());
+    #[cfg(test)]
+    return ICON_AREA_T.with(|a| a.borrow().clone());
+}
+
+/// The current area's boss sprites (both of each pair).
+fn area_sprites() -> Vec<usize> {
+    let Some(area) = icon_area() else { return vec![] };
+    (0..sprites().len()).filter(|&i| sprites()[i].area.as_deref() == Some(area.as_str())).collect()
+}
+
+/// `hints`: (pair stem, cells from the player), replacing the last ones.
+#[allow(dead_code)] // the recorder sets them from I5 on
+pub fn set_icon_hints(hints: Vec<(String, [f32; 2])>) {
+    #[cfg(not(test))]
+    if let Ok(mut current) = ICON_HINTS.lock() {
+        *current = hints;
+    }
+    #[cfg(test)]
+    ICON_HINTS_T.with(|h| *h.borrow_mut() = hints);
+}
+
+fn icon_hints() -> Vec<(String, [f32; 2])> {
+    #[cfg(not(test))]
+    return ICON_HINTS.lock().map(|h| h.clone()).unwrap_or_default();
+    #[cfg(test)]
+    return ICON_HINTS_T.with(|h| h.borrow().clone());
+}
+
+/// A sprite drawn at screen scale with its centre `phase` pixels right and down of the
+/// template's middle: straight colour and coverage per pixel, and the pixels it covers
+/// fully (`core`: alpha at least `CORE`), the only ones compared, so the map lines and
+/// ground behind its soft edges do not count.
+struct Template {
+    w: usize,
+    h: usize,
+    /// The sprite's centre in template pixels (continuous; pixel `i` spans i..i+1).
+    centre: [f64; 2],
+    /// Colour and coverage per pixel (drawing a sprite in tests uses them).
+    #[cfg_attr(not(test), allow(dead_code))]
+    rgb: Vec<[f32; 3]>,
+    #[cfg_attr(not(test), allow(dead_code))]
+    alpha: Vec<f32>,
+    /// The core: template pixel indices, their offsets in an image row of `stride_px`
+    /// pixels (set by `for_width`), and their colours.
+    core: Vec<u32>,
+    offsets: Vec<u32>,
+    core_rgb: Vec<[f32; 3]>,
+}
+
+/// Alpha a template pixel needs to be compared.
+const CORE: f32 = 0.9;
+
+impl Template {
+    /// `sprite` drawn `k` screen pixels per stored (32 px) sprite pixel, its centre at
+    /// `phase` pixels from the middle of the template. Each screen pixel averages 4x4
+    /// bilinear samples of the sprite (premultiplied), which serves any `k` near 1 or below.
+    fn new(sprite: &Sprite, k: f64, phase: [f64; 2]) -> Template {
+        let n = (SPRITE_PX as f64 * k).ceil() as usize + 3;
+        let (w, h) = (n, n);
+        let centre = [w as f64 / 2.0 + phase[0], h as f64 / 2.0 + phase[1]];
+        let px = |x: i64, y: i64| -> [f32; 4] {
+            if x < 0 || y < 0 || x >= SPRITE_PX as i64 || y >= SPRITE_PX as i64 {
+                return [0.0; 4];
+            }
+            let i = (y as usize * SPRITE_PX + x as usize) * 4;
+            let a = sprite.rgba[i + 3] as f32 / 255.0;
+            [sprite.rgba[i] as f32 * a, sprite.rgba[i + 1] as f32 * a, sprite.rgba[i + 2] as f32 * a, a]
+        };
+        let sample = |u: f64, v: f64| -> [f32; 4] {
+            // Bilinear between pixel centres (pixel i's centre at i + 0.5).
+            let (fu, fv) = (u - 0.5, v - 0.5);
+            let (x0, y0) = (fu.floor(), fv.floor());
+            let (tx, ty) = ((fu - x0) as f32, (fv - y0) as f32);
+            let (x0, y0) = (x0 as i64, y0 as i64);
+            let (a, b, c, d) = (px(x0, y0), px(x0 + 1, y0), px(x0, y0 + 1), px(x0 + 1, y0 + 1));
+            std::array::from_fn(|j| (a[j] * (1.0 - tx) + b[j] * tx) * (1.0 - ty) + (c[j] * (1.0 - tx) + d[j] * tx) * ty)
+        };
+        const SUB: usize = 4;
+        let half = SPRITE_PX as f64 / 2.0;
+        let mut rgb = Vec::with_capacity(w * h);
+        let mut alpha = Vec::with_capacity(w * h);
+        for ty in 0..h {
+            for tx in 0..w {
+                let mut acc = [0.0f32; 4];
+                for sy in 0..SUB {
+                    for sx in 0..SUB {
+                        let x = tx as f64 + (sx as f64 + 0.5) / SUB as f64;
+                        let y = ty as f64 + (sy as f64 + 0.5) / SUB as f64;
+                        let s = sample((x - centre[0]) / k + half, (y - centre[1]) / k + half);
+                        for j in 0..4 {
+                            acc[j] += s[j];
+                        }
+                    }
+                }
+                let a = acc[3] / (SUB * SUB) as f32;
+                let c = if a > 1e-4 { [acc[0] / acc[3], acc[1] / acc[3], acc[2] / acc[3]] } else { [0.0; 3] };
+                rgb.push(c);
+                alpha.push(a);
+            }
+        }
+        let core: Vec<u32> = (0..w * h).filter(|&i| alpha[i] >= CORE).map(|i| i as u32).collect();
+        let core_rgb = core.iter().map(|&i| rgb[i as usize]).collect();
+        Template { w, h, centre, rgb, alpha, core, offsets: Vec::new(), core_rgb }
+    }
+
+    /// The template with its core's offsets for images `width` pixels wide.
+    fn for_width(mut self, width: usize) -> Template {
+        self.offsets = self.core.iter().map(|&i| ((i as usize / self.w) * width + i as usize % self.w) as u32).collect();
+        self
+    }
+
+    /// How well the image matches the template with its top-left at pixel `at`: the
+    /// normalised correlation of the core's colour values (all three channels in one
+    /// vector, so colour counts as much as shape), and the distance of the mean colours
+    /// (0-1 of 255). None when the template leaves the image.
+    fn score(&self, image: &Image, at: [i64; 2]) -> Option<Match> {
+        self.score_every(image, at, 1)
+    }
+
+    /// `score` over every `step`-th core pixel (a coarse look costs less).
+    fn score_every(&self, image: &Image, at: [i64; 2], step: usize) -> Option<Match> {
+        if at[0] < 0 || at[1] < 0 || at[0] as usize + self.w > image.width || at[1] as usize + self.h > image.height {
+            return None;
+        }
+        let (x0, y0) = (at[0] as usize, at[1] as usize);
+        let base = y0 * image.width + x0;
+        let (mut n, mut channel, mut tsum) = (0usize, [0.0f32; 3], [0.0f32; 3]);
+        let (mut ss, mut tt, mut st, mut chroma) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
+        for k in (0..self.core.len()).step_by(step) {
+            let (off, t) = (self.offsets[k] as usize, &self.core_rgb[k]);
+            let p = (base + off) * 3;
+            let c = [image.pixels[p] as f32, image.pixels[p + 1] as f32, image.pixels[p + 2] as f32];
+            for j in 0..3 {
+                channel[j] += c[j];
+                tsum[j] += t[j];
+                ss += c[j] * c[j];
+                tt += t[j] * t[j];
+                st += c[j] * t[j];
+            }
+            chroma += ((c[0] - c[1]) - (t[0] - t[1])).abs() + ((c[2] - c[1]) - (t[2] - t[1])).abs();
+            n += 1;
+        }
+        if n == 0 {
+            return None;
+        }
+        let count = (3 * n) as f32;
+        let (s_all, t_all) = (channel.iter().sum::<f32>(), tsum.iter().sum::<f32>());
+        let cross = st - s_all * t_all / count;
+        let own = (ss - s_all * s_all / count).max(0.0);
+        let norm = (tt - t_all * t_all / count).max(0.0);
+        let ncc = if own > 0.0 && norm > 0.0 { cross / (own.sqrt() * norm.sqrt()) } else { 0.0 };
+        let colour = (0..3).map(|j| ((channel[j] - tsum[j]) / n as f32).abs()).sum::<f32>() / (3.0 * 255.0);
+        Some(Match { ncc: ncc as f64, colour: colour as f64, chroma: (chroma / (2.0 * 255.0 * n as f32)) as f64 })
+    }
+}
+
+/// A template match: normalised correlation (-1..1), the distance of the mean colours
+/// (0..1) and the mean per-pixel distance of hue (red and blue against green, 0..1: grey
+/// against colour, which the correlation of a dark icon hardly sees).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Match {
+    pub ncc: f64,
+    pub colour: f64,
+    pub chroma: f64,
+}
+
+impl Match {
+    /// One number to rank by: the correlation, less the colour distances weighted.
+    pub fn value(&self) -> f64 {
+        self.ncc - COLOUR_WEIGHT * self.colour - CHROMA_WEIGHT * self.chroma
+    }
+}
+
+/// How much a per-pixel hue distance (0-1) costs in the ranking value.
+const CHROMA_WEIGHT: f64 = 2.0;
+
+/// How much a mean-colour distance (0-1) costs in the ranking value.
+const COLOUR_WEIGHT: f64 = 3.0;
+
+/// Sub-pixel phases tried: the template's centre at 0 or half a pixel in each direction.
+const PHASES: [[f64; 2]; 4] = [[0.0, 0.0], [0.5, 0.0], [0.0, 0.5], [0.5, 0.5]];
+
+/// Templates per (sprite, scale, image width), 4 phases each, for one window size;
+/// dropped when the size changes.
+struct Templates {
+    size: f64,
+    built: std::collections::HashMap<(usize, u64, usize), std::sync::Arc<[Template; 4]>>,
+}
+
+static TEMPLATES: std::sync::Mutex<Option<Templates>> = std::sync::Mutex::new(None);
+
+/// The templates of sprite `index` at window size `size` (height / 2160) and `scale`
+/// (screen px per 64 px sprite pixel at 2160 px), for images `width` pixels wide (each
+/// capture size keeps its own: the reader's few capture sizes come in turn).
+fn templates(index: usize, size: f64, scale: f64, width: usize) -> std::sync::Arc<[Template; 4]> {
+    let mut cache = TEMPLATES.lock().unwrap_or_else(|e| e.into_inner());
+    if cache.as_ref().is_none_or(|c| c.size != size) {
+        *cache = Some(Templates { size, built: Default::default() });
+    }
+    let built = &mut cache.as_mut().expect("set above").built;
+    built
+        .entry((index, scale.to_bits(), width))
+        .or_insert_with(|| {
+            // Stored sprites are half the sheet's cells.
+            let k = 2.0 * scale * size;
+            std::sync::Arc::new(PHASES.map(|phase| Template::new(&sprites()[index], k, phase).for_width(width)))
+        })
+        .clone()
+}
+
+/// The best place for sprite `index` within `reach` pixels of `at` (where its centre is
+/// guessed, image pixels): every second pixel at phase 0 on half the core pixels, the
+/// pixels around the best, then the four half-pixel phases around that. Returns the match
+/// and the sprite centre found.
+fn best_match(image: &Image, at: [f64; 2], index: usize, size: f64, scale: f64, reach: i64) -> Option<(Match, [f64; 2])> {
+    let set = templates(index, size, scale, image.width);
+    let start = [(at[0] - set[0].centre[0]).round() as i64, (at[1] - set[0].centre[1]).round() as i64];
+    // A sprite whose mean colour is far from what lies under it anywhere near cannot reach
+    // `ACCEPT` (the colour alone costs more): nine coarse looks, no search.
+    let step = (reach / 2).max(1);
+    let mut coarse: Option<(f64, [i64; 2])> = None;
+    let mut nearest = f64::INFINITY;
+    for dy in [-step, 0, step] {
+        for dx in [-step, 0, step] {
+            let corner = [start[0] + dx, start[1] + dy];
+            if let Some(m) = set[0].score_every(image, corner, 2) {
+                nearest = nearest.min(m.colour);
+                if coarse.is_none_or(|(v, _)| m.value() > v) {
+                    coarse = Some((m.value(), corner));
+                }
+            }
+        }
+    }
+    if nearest > PRUNE {
+        let (_, corner) = coarse?;
+        let m = set[0].score(image, corner)?;
+        return Some((m, [corner[0] as f64 + set[0].centre[0], corner[1] as f64 + set[0].centre[1]]));
+    }
+    for dy in (-reach..=reach).step_by(2) {
+        for dx in (-reach..=reach).step_by(2) {
+            let corner = [start[0] + dx, start[1] + dy];
+            if let Some(m) = set[0].score_every(image, corner, 2) {
+                if coarse.is_none_or(|(v, _)| m.value() > v) {
+                    coarse = Some((m.value(), corner));
+                }
+            }
+        }
+    }
+    let (_, around) = coarse?;
+    let mut best: Option<(Match, [i64; 2], usize)> = None;
+    let try_at = |best: &mut Option<(Match, [i64; 2], usize)>, p: usize, corner: [i64; 2]| {
+        if let Some(m) = set[p].score(image, corner) {
+            if best.is_none_or(|(b, _, _)| m.value() > b.value()) {
+                *best = Some((m, corner, p));
+            }
+        }
+    };
+    for dy in -1..=1 {
+        for dx in -1..=1 {
+            try_at(&mut best, 0, [around[0] + dx, around[1] + dy]);
+        }
+    }
+    let (_, corner, _) = best?;
+    for p in 1..PHASES.len() {
+        for dy in -1..=0 {
+            for dx in -1..=0 {
+                try_at(&mut best, p, [corner[0] + dx, corner[1] + dy]);
+            }
+        }
+    }
+    let (m, c, p) = best?;
+    let t = &set[p];
+    Some((m, [c[0] as f64 + t.centre[0], c[1] as f64 + t.centre[1]]))
+}
+
+/// An icon is named by its sprite when that sprite's ranking value is at least `ACCEPT`
+/// and leads the best sprite of any other kind by `LEAD`. Real icons on the Clearfell
+/// screenshot: `Entrance` 0.98, `Checkpoint` 0.72-0.83 (so a checkpoint is never named,
+/// only kept), `Waypoint` 0.80; the best wrong sprite at a real icon 0.63, at any other
+/// candidate place of the screenshot and the fixtures in `ACCEPT`'s test. A sprite drawn
+/// onto real pixels scores 0.95-1.0.
+const ACCEPT: f64 = 0.85;
+const LEAD: f64 = 0.15;
+/// A colour-found icon keeps the name of its own kind's best sprite from this value.
+const OWN: f64 = 0.5;
+/// A sprite whose mean colour differs this much (0-1) from the pixels under it where the
+/// search starts is not searched further: at its best place it could not reach `ACCEPT`
+/// (3 x 0.15 of colour alone; the real exits differ by 0.001-0.004 at their place, the thin waypoint ring up to 0.1 where its search starts).
+const PRUNE: f64 = 0.15;
+/// How far around a candidate's guessed centre the sprites are tried (px at 2160 px).
+const REACH: f64 = 4.0;
+/// … and around a colour group's centre: a grey skull's pale pixels lie in its upper
+/// half, 6-7 px above its centre.
+const GROUP_REACH: f64 = 8.0;
+/// A hinted place is searched this far (px at 2160 px): the player moved since.
+const HINT_REACH: f64 = 10.0;
+/// The side of a drawn icon (px at 2160 px): 32 stored px at 0.96.
+const ICON_SIDE: f64 = 30.0;
+/// Candidate places tried per frame, at most (largest colour groups first).
+const MAX_CANDIDATES: usize = 16;
+
+/// `among`, each at its kind's scales and best place near `at`, best first.
+fn rank(image: &Image, at: [f64; 2], among: &[usize], size: f64, reach: i64) -> Vec<(usize, Match, [f64; 2])> {
+    let mut out = Vec::with_capacity(among.len());
+    for &i in among {
+        // The first scale searches; the others look only around where it found the sprite.
+        let scales = sprite_scales(sprites()[i].kind);
+        let mut best = best_match(image, at, i, size, scales[0], reach);
+        for &scale in &scales[1..] {
+            let Some((m, c)) = best else { break };
+            if m.colour > PRUNE {
+                break;
+            }
+            if let Some(other) = best_match(image, c, i, size, scale, 1) {
+                if other.0.value() > m.value() {
+                    best = Some(other);
+                }
+            }
+        }
+        if let Some((m, c)) = best {
+            out.push((i, m, c));
+        }
+    }
+    out.sort_by(|a, b| b.1.value().total_cmp(&a.1.value()));
+    out
+}
+
+/// The best of a ranking when it is sure: at least `ACCEPT`, `LEAD` ahead of other kinds.
+fn verdict(ranked: &[(usize, Match, [f64; 2])]) -> Option<(usize, Match, [f64; 2])> {
+    let &(best, m, c) = ranked.first()?;
+    let kind = sprites()[best].kind;
+    let other = ranked.iter().find(|(i, _, _)| sprites()[*i].kind != kind).map_or(f64::NEG_INFINITY, |(_, m, _)| m.value());
+    (m.value() >= ACCEPT && m.value() - other >= LEAD).then_some((best, m, c))
+}
+
+/// Names icons by their sprites. Each icon colour found is compared with the sprites:
+/// when another kind's sprite is clearly it (an orange skull read as an exit, a portal as
+/// a checkpoint) it takes that kind, else it stays and keeps its own best sprite's id. Then
+/// places colour does not make icons of are tried: groups of orange, warm and pale blobs
+/// (skulls), the spot below a label that belongs to no icon found (a boss's place name), and
+/// the hinted places of this visit's boss pairs; those name only kinds colour cannot find
+/// (a boss, a dead one, a rare, a portal, …), never an exit, checkpoint or waypoint.
+/// `found` are the frame's blobs (samples of `stride` px); `window` the size (height / 2160).
+fn identify(image: &Image, icons: &mut Vec<(Icon, [f64; 2])>, found: &[(u8, Blob)], stride: usize, window: f64, centre: [f64; 2], scale: f64) {
+    let area = area_sprites();
+    let mut among: Vec<usize> = generic_sprites().to_vec();
+    among.extend(&area);
+    let reach = (REACH * window).round().max(1.0) as i64;
+    let group_reach = (GROUP_REACH * window).round().max(1.0) as i64;
+    let side = ICON_SIDE * window;
+    // Colour-found icons: checked, relabelled when another kind is clearly it.
+    for (icon, at) in icons.iter_mut() {
+        let ranked = rank(image, *at, &among, window, reach);
+        let own = ranked.iter().find(|(i, _, _)| sprites()[*i].kind == icon.kind);
+        match verdict(&ranked) {
+            Some((i, _, c)) if sprites()[i].kind != icon.kind => {
+                let kind = sprites()[i].kind;
+                if !matches!(kind, "exit" | "checkpoint" | "waypoint") {
+                    (icon.kind, icon.sprite, *at) = (kind, Some(sprites()[i].id.as_str()), c);
+                }
+            }
+            _ => icon.sprite = own.filter(|(_, m, _)| m.value() >= OWN).map(|(i, _, _)| sprites()[*i].id.as_str()),
+        }
+    }
+    let px = |v: f64| (v - 0.5) * stride as f64 + 0.5;
+    let taken = |at: [f64; 2], icons: &[(Icon, [f64; 2])]| {
+        (at[0] - centre[0]).hypot(at[1] - centre[1]) < 0.5 * side || icons.iter().any(|(_, p)| (p[0] - at[0]).hypot(p[1] - at[1]) < 0.6 * side)
+    };
+    // (place, sprites, how far to search)
+    let mut places: Vec<([f64; 2], Vec<usize>, i64)> = Vec::new();
+    // Colour groups: orange that made no exit, warm, pale; joined within half an icon.
+    let least = 0.08 * side * side / (stride * stride) as f64;
+    let mut groups: Vec<(f64, f64, f64, [usize; 4])> = Vec::new();
+    for (class, blob) in found {
+        let fits = |a: usize, b: usize| ((b - a + 1) * stride) as f64 <= 1.5 * side;
+        if !matches!(*class, 0 | PALE | WARM) || blob.n < 3 || !fits(blob.x0, blob.x1) || !fits(blob.y0, blob.y1) {
+            continue;
+        }
+        let at = [blob.sx / blob.n as f64, blob.sy / blob.n as f64];
+        let near = groups.iter_mut().find(|(n, sx, sy, _)| ((sx / n - at[0]).hypot(sy / n - at[1])) * stride as f64 <= 0.5 * side);
+        match near {
+            Some(g) => {
+                (g.0, g.1, g.2) = (g.0 + blob.n as f64, g.1 + blob.sx, g.2 + blob.sy);
+                g.3 = [g.3[0].min(blob.x0), g.3[1].min(blob.y0), g.3[2].max(blob.x1), g.3[3].max(blob.y1)];
+            }
+            None => groups.push((blob.n as f64, blob.sx, blob.sy, [blob.x0, blob.y0, blob.x1, blob.y1])),
+        }
+    }
+    groups.retain(|(n, _, _, b)| *n >= least && ((b[2] - b[0] + 1).max(b[3] - b[1] + 1) * stride) as f64 <= 1.6 * side);
+    groups.sort_by(|a, b| b.0.total_cmp(&a.0));
+    for (n, sx, sy, _) in groups {
+        let at = [px(sx / n), px(sy / n)];
+        if !taken(at, icons) {
+            places.push((at, among.clone(), group_reach));
+        }
+    }
+    places.truncate(MAX_CANDIDATES);
+    // Below a label line no icon owns: a boss's place name (only with boss pairs here).
+    let actives: Vec<usize> = area.iter().copied().filter(|&i| sprites()[i].kind == "boss").collect();
+    if !actives.is_empty() {
+        for at in label_spots(found, stride, window) {
+            if !taken(at, icons) {
+                places.push((at, among.clone(), (2.0 * REACH * window).round() as i64));
+            }
+        }
+    }
+    // This visit's boss pairs, where they were seen.
+    for (pair, [dx, dy]) in icon_hints() {
+        let at = [centre[0] + dx as f64 * CELL as f64 * scale, centre[1] + dy as f64 * CELL as f64 * scale];
+        let mut set: Vec<usize> = (0..sprites().len()).filter(|&i| sprites()[i].pair.as_deref() == Some(pair.as_str())).collect();
+        set.extend(generic_sprites());
+        places.push((at, set, (HINT_REACH * window).round() as i64));
+    }
+    #[cfg(test)]
+    TRIED.with(|t| t.borrow_mut().extend(icons.iter().map(|(_, at)| (*at, reach)).chain(places.iter().map(|(at, _, r)| (*at, *r)))));
+    let mut new: Vec<(Icon, [f64; 2], f64)> = Vec::new();
+    for (at, set, reach) in places {
+        let ranked = rank(image, at, &set, window, reach);
+        let Some((i, m, c)) = verdict(&ranked) else { continue };
+        let kind = sprites()[i].kind;
+        if matches!(kind, "exit" | "checkpoint" | "waypoint") || taken(c, icons) {
+            continue;
+        }
+        let icon = Icon { kind, sprite: Some(sprites()[i].id.as_str()), ..Icon::default() };
+        match new.iter_mut().find(|(_, p, _)| (p[0] - c[0]).hypot(p[1] - c[1]) < 0.6 * side) {
+            Some(other) if other.2 >= m.value() => {}
+            Some(other) => *other = (icon, c, m.value()),
+            None => new.push((icon, c, m.value())),
+        }
+    }
+    icons.extend(new.into_iter().map(|(icon, at, _)| (icon, at)));
+    // One object read as two colour icons (a portal was both a checkpoint and a waypoint)
+    // is one icon once named.
+    let mut kept: Vec<(Icon, [f64; 2])> = Vec::with_capacity(icons.len());
+    for (icon, at) in icons.drain(..) {
+        let twin = icon.sprite.is_some() && kept.iter().any(|(k, p)| k.sprite == icon.sprite && k.kind == icon.kind && (p[0] - at[0]).hypot(p[1] - at[1]) < 0.6 * side);
+        if !twin {
+            kept.push((icon, at));
+        }
+    }
+    *icons = kept;
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Off: the reader as it was before the sprite matcher (for tests that compare).
+    static MATCHING: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+    /// Every place `identify` tried (colour-found icons first), and its reach: for tests.
+    static TRIED: std::cell::RefCell<Vec<([f64; 2], i64)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Where an icon would be below each line of label text in `found` (pale letters side by
+/// side, about the labels' 17 px font): the label's top lies 25 px above its icon's centre
+/// (measured for exits; assumed for named boss icons). Image pixels.
+fn label_spots(found: &[(u8, Blob)], stride: usize, window: f64) -> Vec<[f64; 2]> {
+    let s = stride as f64;
+    let mut letters: Vec<&Blob> = found
+        .iter()
+        .filter(|(c, b)| {
+            let (w, h) = (((b.x1 - b.x0 + 1) as f64) * s, ((b.y1 - b.y0 + 1) as f64) * s);
+            *c == PALE && (5.0 * window..=16.0 * window).contains(&h) && w <= 16.0 * window
+        })
+        .map(|(_, b)| b)
+        .collect();
+    letters.sort_by_key(|b| b.x0);
+    let mut lines: Vec<[f64; 4]> = Vec::new();
+    let mut used = vec![false; letters.len()];
+    for i in 0..letters.len() {
+        if used[i] {
+            continue;
+        }
+        let b = letters[i];
+        let mut line = [b.x0 as f64 * s, b.y0 as f64 * s, (b.x1 + 1) as f64 * s, (b.y1 + 1) as f64 * s];
+        let mut count = 1;
+        for j in i + 1..letters.len() {
+            let c = letters[j];
+            let mid = |b: &Blob| (b.y0 + b.y1) as f64 * s / 2.0;
+            if used[j] || (mid(c) - (line[1] + line[3]) / 2.0).abs() > 5.0 * window {
+                continue;
+            }
+            if c.x0 as f64 * s - line[2] > 9.0 * window {
+                break;
+            }
+            used[j] = true;
+            count += 1;
+            line = [line[0], line[1].min(c.y0 as f64 * s), line[2].max((c.x1 + 1) as f64 * s), line[3].max((c.y1 + 1) as f64 * s)];
+        }
+        if count >= 3 && line[2] - line[0] >= 25.0 * window {
+            lines.push(line);
+        }
+    }
+    lines.iter().map(|l| [(l[0] + l[2]) / 2.0, l[1] + 25.0 * window]).collect()
 }
 
 /// Occupied cells in groups (touching, diagonals too) of at least `MIN_GROUP` that are
@@ -698,6 +1335,322 @@ mod tests {
         let size = std::env::var("BIGMAP_SIZE").ok().and_then(|s| s.parse().ok()).unwrap_or(1.0);
         for icon in icons(&image, [0.0, 0.0], SCALE, size) {
             println!("{} at {:.0}, {:.0}", icon.kind, icon.x * 2.0, icon.y * 2.0);
+        }
+    }
+
+    fn sprite_index(id: &str) -> usize {
+        sprites().iter().position(|s| s.id == id).unwrap_or_else(|| panic!("no sprite {id}"))
+    }
+
+    /// `image` with sprite `id` drawn over it, its centre at pixel `at` (continuous), at
+    /// `scale` screen pixels per 64 px sprite pixel: the way the game would draw it (an
+    /// assumption: alpha blended, the sheet's half-size level resampled).
+    fn draw(image: &mut Image, id: &str, at: [f64; 2], scale: f64) {
+        let k = 2.0 * scale;
+        let n = (SPRITE_PX as f64 * k).ceil() as usize + 3;
+        let corner = [(at[0] - n as f64 / 2.0).round(), (at[1] - n as f64 / 2.0).round()];
+        let phase = [at[0] - corner[0] - n as f64 / 2.0, at[1] - corner[1] - n as f64 / 2.0];
+        let t = Template::new(&sprites()[sprite_index(id)], k, phase);
+        for ty in 0..t.h {
+            for tx in 0..t.w {
+                let (x, y) = (corner[0] as i64 + tx as i64, corner[1] as i64 + ty as i64);
+                if x < 0 || y < 0 || x as usize >= image.width || y as usize >= image.height {
+                    continue;
+                }
+                let (i, a) = ((y as usize * image.width + x as usize) * 3, t.alpha[ty * t.w + tx]);
+                for j in 0..3 {
+                    let v = t.rgb[ty * t.w + tx][j] * a + image.pixels[i + j] as f32 * (1.0 - a);
+                    image.pixels[i + j] = v.round().clamp(0.0, 255.0) as u8;
+                }
+            }
+        }
+    }
+
+    /// I3: the matcher on the whole Clearfell screenshot (`BIGMAP_FULL`, a PPM): what it
+    /// reads, its time, and at every place it tried the best sprite of each kind among all
+    /// 108 (so the highest score of anything that is no icon): `BIGMAP_FULL=full.ppm cargo
+    /// test --release matcher_on_the_screenshot -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn matcher_on_the_screenshot() {
+        let image = parse_ppm(&std::fs::read(std::env::var("BIGMAP_FULL").unwrap()).unwrap()).unwrap();
+        let skip = [[0, 1987, 3840, 2160], [0, 0, 730, 864], [3034, 0, 3840, 994], [0, 1685, 1229, 2160], [2765, 1685, 3840, 2160]];
+        set_icon_area(Some("G1_2"));
+        set_icon_hints(vec![]);
+        let read = |stride| icons_in(&image, [1919.0, 1059.0], SCALE, 1.0, stride, &skip, false);
+        let _ = read(2);
+        TRIED.with(|t| t.borrow_mut().clear());
+        let t = std::time::Instant::now();
+        let icons = read(2);
+        let took = t.elapsed();
+        let tried = TRIED.with(|t| t.take());
+        println!("{} icons in {took:?}, {} places tried:", icons.len(), tried.len());
+        for icon in &icons {
+            println!("  {} {:?} at {:.0},{:.0}", icon.kind, icon.sprite, 1919.0 + icon.x * 2.0, 1059.0 + icon.y * 2.0);
+        }
+        let all: Vec<usize> = (0..sprites().len()).collect();
+        let mut worst: Vec<(f64, String)> = vec![];
+        for (at, reach) in tried {
+            let ranked = rank(&image, at, &all, 1.0, reach);
+            let real = icons.iter().find(|i| (1919.0 + i.x as f64 * 2.0 - at[0]).hypot(1059.0 + i.y as f64 * 2.0 - at[1]) < 12.0);
+            let best_of = |kind: &str| ranked.iter().find(|(i, _, _)| sprites()[*i].kind == kind).map(|(i, m, _)| (sprites()[*i].id.as_str(), m.value()));
+            let line = format!(
+                "{:.0},{:.0} ({}): top {} {:.3}; boss {:?} boss-dead {:?} dead {:?} rare {:?}",
+                at[0], at[1], real.map_or("none", |i| i.kind), sprites()[ranked[0].0].id, ranked[0].1.value(),
+                best_of("boss"), best_of("boss-dead"), best_of("dead"), best_of("rare")
+            );
+            println!("  {line}");
+            for kind in ["boss", "boss-dead", "dead", "rare", "portal", "npc", "quest"] {
+                if let Some((id, v)) = best_of(kind) {
+                    if real.is_none_or(|i| i.kind != kind) {
+                        worst.push((v, format!("{id} at {:.0},{:.0}", at[0], at[1])));
+                    }
+                }
+            }
+        }
+        worst.sort_by(|a, b| b.0.total_cmp(&a.0));
+        println!("highest scores of sprites where there is no such icon: {:?}", &worst[..worst.len().min(8)]);
+        // Time per frame, with and without the matcher (best of 5): the whole window every
+        // second pixel, and the area around the player (685 x 603 px) at every pixel... the
+        // reader's two big-map captures.
+        let time = |f: &dyn Fn() -> usize| (0..5).map(|_| { let t = std::time::Instant::now(); f(); t.elapsed() }).min().unwrap();
+        let crop = |x0: usize, y0: usize, w: usize, h: usize| Image {
+            width: w,
+            height: h,
+            pixels: (y0..y0 + h).flat_map(|y| image.pixels[(y * image.width + x0) * 3..(y * image.width + x0 + w) * 3].to_vec()).collect(),
+        };
+        let near = crop(1919 - 342, 1059 - 301, 685, 603);
+        let whole_on = time(&|| icons_in(&image, [1919.0, 1059.0], SCALE, 1.0, 2, &skip, false).len());
+        let whole_off = without_matching(|| time(&|| icons_in(&image, [1919.0, 1059.0], SCALE, 1.0, 2, &skip, false).len()));
+        let near_on = time(&|| icons_in(&near, [342.0, 301.0], SCALE, 1.0, 2, &[], false).len());
+        let near_off = without_matching(|| time(&|| icons_in(&near, [342.0, 301.0], SCALE, 1.0, 2, &[], false).len()));
+        println!("whole window: {whole_off:?} without the matcher, {whole_on:?} with; around the player: {near_off:?}, {near_on:?}");
+        assert_eq!(icons.len(), 6);
+    }
+
+    /// The icons read within 15 px of pixel `at` (kind, sprite), the player at `centre`.
+    fn read_near(image: &Image, centre: [f64; 2], at: [f64; 2], stride: usize) -> Vec<(&'static str, Option<&'static str>)> {
+        icons_in(image, centre, SCALE, 1.0, stride, &[], false)
+            .into_iter()
+            .filter(|i| (centre[0] + i.x as f64 * 2.0 - at[0]).hypot(centre[1] + i.y as f64 * 2.0 - at[1]) < 15.0)
+            .map(|i| (i.kind, i.sprite))
+            .collect()
+    }
+
+    fn without_matching<R>(f: impl FnOnce() -> R) -> R {
+        MATCHING.with(|m| m.set(false));
+        let r = f();
+        MATCHING.with(|m| m.set(true));
+        r
+    }
+
+    /// Places on the player fixture: dark ground, on a map line, on lit ground.
+    const PLACES: [[f64; 2]; 3] = [[60.0, 60.0], [129.0, 115.0], [250.0, 120.0]];
+    const PLAYER: [f64; 2] = [300.5, 60.7];
+
+    #[test]
+    fn an_orange_skull_was_an_exit_and_is_a_boss() {
+        // I2: drawn onto real map pixels at 0.52 (the scale checkpoints and the waypoint
+        // are drawn at), the colour reader took the orange skull for an exit on every second
+        // pixel (the whole-window scans); at 0.48 it saw nothing there.
+        set_icon_area(None);
+        let mut taken = 0;
+        for at in PLACES {
+            for (scale, stride) in [(0.48, 1), (0.48, 2), (0.52, 1), (0.52, 2)] {
+                let mut image = fixture("bigmap-player.ppm");
+                draw(&mut image, "UniqueMonsterAlive", at, scale);
+                let old = without_matching(|| read_near(&image, PLAYER, at, stride));
+                taken += old.iter().filter(|i| i.0 == "exit").count();
+                assert_eq!(read_near(&image, PLAYER, at, stride), [("boss", Some("UniqueMonsterAlive"))], "{at:?} at {scale}, every {stride} px; before: {old:?}");
+            }
+        }
+        assert!(taken >= 2, "the old reader's exits: {taken}");
+    }
+
+    #[test]
+    fn skulls_and_a_portal_are_named_and_no_exit_checkpoint_or_waypoint() {
+        set_icon_area(None);
+        // A yellow skull is a rare; both grey skulls are one picture: "dead". A town portal
+        // (blue) was a checkpoint, from 0.52 also a waypoint.
+        let cases = [("RareMonsterAlive", "rare"), ("UniqueMonsterDead", "dead"), ("RareMonsterDead", "dead"), ("Portal", "portal")];
+        for (id, kind) in cases {
+            for at in PLACES {
+                for (scale, stride) in [(0.48, 2), (0.52, 1), (0.52, 2)] {
+                    let mut image = fixture("bigmap-player.ppm");
+                    draw(&mut image, id, at, scale);
+                    let near = read_near(&image, PLAYER, at, stride);
+                    assert_eq!(near.len(), 1, "{id} at {at:?}, {scale}, every {stride} px: {near:?}");
+                    assert_eq!(near[0].0, kind, "{id} at {at:?}, {scale}, every {stride} px: {near:?}");
+                }
+            }
+        }
+        let mut image = fixture("bigmap-player.ppm");
+        draw(&mut image, "Portal", PLACES[0], 0.48);
+        assert_eq!(without_matching(|| read_near(&image, PLAYER, PLACES[0], 2)), [("checkpoint", None)]);
+    }
+
+    #[test]
+    fn real_icons_keep_their_kind_and_are_named_by_their_sprite() {
+        set_icon_area(Some("G1_2"));
+        let named = |name: &str, centre: [f64; 2], stride: usize| -> Vec<(&str, Option<&str>)> {
+            let mut found: Vec<_> = icons_in(&fixture(name), centre, SCALE, 1.0, stride, &[], false).into_iter().map(|i| (i.kind, i.sprite)).collect();
+            found.sort();
+            found
+        };
+        for stride in [1, 2] {
+            assert_eq!(named("bigmap-player.ppm", PLAYER, stride), [("checkpoint", Some("Checkpoint")), ("exit", Some("Entrance"))]);
+            assert_eq!(named("bigmap-icons.ppm", [0.0, 0.0], stride), [("checkpoint", Some("Checkpoint")), ("exit", Some("Entrance")), ("waypoint", Some("Waypoint"))]);
+        }
+        set_icon_area(None);
+    }
+
+    #[test]
+    fn no_boss_or_monster_on_the_real_fixtures_in_any_area() {
+        // Nothing of the kind is in view on the fixtures; every area's boss pairs are tried.
+        let areas: std::collections::BTreeSet<&str> = sprites().iter().filter_map(|s| s.area.as_deref()).collect();
+        let fixtures = [("bigmap-player.ppm", PLAYER), ("bigmap-icons.ppm", [0.0, 0.0]), ("bigmap-scene.ppm", [128.0, 80.0]), ("corner-bigmap-open.ppm", [0.0, 0.0]), ("labels-grelwood.ppm", [0.0, 0.0]), ("labels-mudburrow.ppm", [0.0, 0.0])];
+        let images: Vec<(Image, [f64; 2])> = fixtures.iter().map(|(n, c)| (fixture(n), *c)).collect();
+        for area in areas {
+            set_icon_area(Some(area));
+            for ((name, _), (image, centre)) in fixtures.iter().zip(&images) {
+                for stride in [1, 2] {
+                    let extra: Vec<_> = icons_in(image, *centre, SCALE, 1.0, stride, &[], false)
+                        .into_iter()
+                        .filter(|i| !matches!(i.kind, "exit" | "checkpoint" | "waypoint"))
+                        .collect();
+                    assert!(extra.is_empty(), "{area}, {name}, every {stride} px: {extra:?}");
+                }
+            }
+        }
+        set_icon_area(None);
+    }
+
+    #[test]
+    fn a_boss_icon_is_known_by_name_only_in_its_area() {
+        // The Grim Tangle's boss icon (tan and brown: warm pixels point the matcher at it).
+        let at = PLACES[0];
+        let mut image = fixture("bigmap-player.ppm");
+        draw(&mut image, "GrimTangleBossActive", at, 0.48);
+        set_icon_area(Some("G1_6"));
+        assert_eq!(read_near(&image, PLAYER, at, 2), [("boss", Some("GrimTangleBossActive"))]);
+        // In another area its sprite is not compared: nothing there is sure.
+        set_icon_area(Some("G1_2"));
+        assert_eq!(read_near(&image, PLAYER, at, 2), []);
+        set_icon_area(None);
+        assert_eq!(read_near(&image, PLAYER, at, 2), []);
+    }
+
+    #[test]
+    fn a_dark_boss_icon_is_found_below_its_label_or_where_it_was_seen() {
+        // The Bloated Miller's icon is dark (13% bright pixels): colour does not point at it.
+        set_icon_area(Some("G1_1"));
+        let at = PLACES[0];
+        let mut image = fixture("bigmap-player.ppm");
+        draw(&mut image, "MillerActive", at, 0.48);
+        assert_eq!(read_near(&image, PLAYER, at, 2), []);
+        // With its place name above it (pale letters, the label's top 25 px above the
+        // icon's centre; drawn here as 9 letter-sized boxes).
+        let mut labelled = image.clone();
+        let top = at[1] as usize - 25;
+        paint(&mut labelled, [200, 200, 200], |x, y| {
+            let x0 = at[0] as usize - 45;
+            (top..top + 11).contains(&y) && x >= x0 && x < x0 + 90 && (x - x0) % 10 < 7
+        });
+        assert_eq!(read_near(&labelled, PLAYER, at, 2), [("boss", Some("MillerActive"))]);
+        // Grey (killed), with no label: found where this visit saw the pair, though the
+        // player moved 4 px since.
+        let mut dead = fixture("bigmap-player.ppm");
+        draw(&mut dead, "MillerInactive", at, 0.48);
+        let cells = |v: f64, c: f64| ((v - c + 4.0) / 2.0) as f32;
+        set_icon_hints(vec![("Miller".into(), [cells(at[0], PLAYER[0]), cells(at[1], PLAYER[1])])]);
+        assert_eq!(read_near(&dead, PLAYER, at, 2), [("boss-dead", Some("MillerInactive"))]);
+        // A hint where nothing is gives nothing.
+        assert_eq!(read_near(&fixture("bigmap-player.ppm"), PLAYER, at, 2), []);
+        set_icon_hints(vec![]);
+        set_icon_area(None);
+    }
+
+    #[test]
+    #[ignore]
+    fn debug_case() {
+        let id = std::env::var("ID").unwrap();
+        let scale: f64 = std::env::var("SC").unwrap().parse().unwrap();
+        let stride: usize = std::env::var("ST").unwrap().parse().unwrap();
+        set_icon_area(std::env::var("AREA").ok().as_deref());
+        let at = PLACES[0];
+        let mut image = fixture("bigmap-player.ppm");
+        draw(&mut image, &id, at, scale);
+        if std::env::var("LABEL").is_ok() {
+            let top = at[1] as usize - 25;
+            paint(&mut image, [200, 200, 200], |x, y| {
+                let x0 = at[0] as usize - 45;
+                (top..top + 11).contains(&y) && x >= x0 && x < x0 + 90 && (x - x0) % 10 < 7
+            });
+        }
+        TRIED.with(|t| t.borrow_mut().clear());
+        let icons = icons_in(&image, PLAYER, SCALE, 1.0, stride, &[], false);
+        println!("{icons:?}");
+        let all: Vec<usize> = (0..sprites().len()).collect();
+        for (p, reach) in TRIED.with(|t| t.take()) {
+            let ranked = rank(&image, p, &all, 1.0, reach);
+            println!("{p:?} r{reach}: {:?}", ranked.iter().take(4).map(|(i, m, c)| (sprites()[*i].id.as_str(), (m.value() * 1000.0).round() / 1000.0, (m.chroma * 1000.0).round() / 1000.0, c)).collect::<Vec<_>>());
+        }
+    }
+
+    /// I2, measured: what today's colour reader made of icons it was not built for, drawn
+    /// at several scales onto real map pixels: `cargo test boss_icons_to_the_old_reader -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn boss_icons_to_the_old_reader() {
+        let ids = ["UniqueMonsterAlive", "UniqueMonsterDead", "RareMonsterAlive", "RareMonsterDead", "GrimTangleBossActive", "GrimTangleBossInactive", "MillerActive", "MillerInactive", "GraveyardBossActive", "EntrancePortal", "BossCheckpointActive", "Portal", "NPC", "QuestObject", "QuestItem", "Entrance"];
+        // Places on the player fixture: dark ground, on a map line, on lit ground by the player.
+        let places = [("dark", [60.0, 60.0]), ("line", [129.0, 115.0]), ("lit", [250.0, 120.0]), ("lit2", [330.0, 200.0])];
+        for id in ids {
+            let mut row = vec![];
+            for scale in [0.40, 0.44, 0.48, 0.52, 0.56, 0.60, 0.72, 0.96] {
+                let mut seen = vec![];
+                for (place, at) in places {
+                    let mut image = fixture("bigmap-player.ppm");
+                    draw(&mut image, id, at, scale);
+                    for stride in [1, 2] {
+                        for icon in icons_in(&image, [300.5, 60.7], SCALE, 1.0, stride, &[], false) {
+                            let px = [300.5 + icon.x as f64 * 2.0, 60.7 + icon.y as f64 * 2.0];
+                            if (px[0] - at[0]).hypot(px[1] - at[1]) < 20.0 * scale / 0.48 {
+                                seen.push(format!("{place}/{stride}:{}", icon.kind));
+                            }
+                        }
+                    }
+                }
+                row.push(format!("{scale}: [{}]", seen.join(" ")));
+            }
+            println!("{id}: {}", row.join("  "));
+        }
+    }
+
+    /// Scores of every sprite at the real icons of the whole Clearfell screenshot, by scale:
+    /// `BIGMAP_FULL=full.ppm cargo test sprite_scores_on_the_screenshot -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn sprite_scores_on_the_screenshot() {
+        let image = parse_ppm(&std::fs::read(std::env::var("BIGMAP_FULL").unwrap()).unwrap()).unwrap();
+        // Where today's reader finds them (every second pixel), in the area it reads (the
+        // bottom 8% and the panels left out; the truth: 2 exits, 3 checkpoints, the waypoint).
+        let skip = [[0, 1987, 3840, 2160], [0, 0, 730, 864], [3034, 0, 3840, 994], [0, 1685, 1229, 2160], [2765, 1685, 3840, 2160]];
+        let real: Vec<(&str, [f64; 2])> = icons_in(&image, [1919.0, 1059.0], SCALE, 1.0, 2, &skip, false)
+            .into_iter()
+            .map(|icon| (icon.kind, [1919.0 + icon.x as f64 * 2.0, 1059.0 + icon.y as f64 * 2.0]))
+            .collect();
+        println!("reader: {real:?}");
+        for scale in [0.44, 0.46, 0.48, 0.50, 0.52, 0.54, 0.56, 0.58, 0.60] {
+            println!("scale {scale}");
+            for &(name, at) in &real {
+                let mut all: Vec<(f64, &str, Match, [f64; 2])> = (0..sprites().len())
+                    .filter_map(|i| best_match(&image, at, i, 1.0, scale, 4).map(|(m, c)| (m.value(), sprites()[i].id.as_str(), m, c)))
+                    .collect();
+                all.sort_by(|a, b| b.0.total_cmp(&a.0));
+                let top: Vec<String> = all.iter().take(4).map(|(v, id, m, c)| format!("{id} {v:.3} (ncc {:.3}, colour {:.3}, chroma {:.3}) at {:.1},{:.1}", m.ncc, m.colour, m.chroma, c[0], c[1])).collect();
+                println!("  {name}: {}", top.join(" | "));
+            }
         }
     }
 

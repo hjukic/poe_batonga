@@ -135,7 +135,7 @@ impl LoggedIcon {
             "waypoint" => "waypoint",
             _ => "other",
         };
-        Icon { kind, x: self.x, y: self.y, label: self.label.clone() }
+        Icon { kind, x: self.x, y: self.y, label: self.label.clone(), sprite: None }
     }
 }
 
@@ -1502,7 +1502,7 @@ mod tests {
                     let whole = i % frames_whole == 0;
                     icons = seen
                         .iter()
-                        .map(|e| Icon { kind: "exit", x: e.dx as f32, y: e.dy as f32, label: e.to.clone().filter(|_| whole) })
+                        .map(|e| Icon { kind: "exit", x: e.dx as f32, y: e.dy as f32, label: e.to.clone().filter(|_| whole), sprite: None })
                         .collect();
                     let due = misread.is_some_and(|m| i >= m);
                     if let Some(icon) = icons.iter_mut().find(|ic| due && ic.label.as_deref() == Some("G1_3")) {
@@ -1529,7 +1529,7 @@ mod tests {
             log.frame();
             log.moved(t, dx, dy);
             nav.moved(dx as f64, dy as f64);
-            let icon = Icon { kind: "exit", x: (at.0 - pos.0 - dx as f64) as f32, y: (at.1 - pos.1 - dy as f64) as f32, label: Some("G1_3".into()) };
+            let icon = Icon { kind: "exit", x: (at.0 - pos.0 - dx as f64) as f32, y: (at.1 - pos.1 - dy as f64) as f32, label: Some("G1_3".into()), sprite: None };
             log.icons(t, &[icon.clone()], true, size, false);
             nav.icons(&[ExitIcon { dx: icon.x as f64, dy: icon.y as f64, to: icon.label.clone() }]);
             if let Some(view) = nav.guide(&targets) {
@@ -1676,7 +1676,7 @@ mod tests {
             log.moved(t, 6, -3);
             nav.moved(6.0, -3.0);
             // An exit far away, then nothing.
-            let icons = if step < 3 { vec![Icon { kind: "exit", x: 200.0 - 6.0 * step as f32, y: 90.0, label: None }] } else { vec![] };
+            let icons = if step < 3 { vec![Icon { kind: "exit", x: 200.0 - 6.0 * step as f32, y: 90.0, label: None, sprite: None }] } else { vec![] };
             log.icons(t, &icons, step % 3 == 0, (300, 260), false);
             nav.icons(&icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: None }).collect::<Vec<_>>());
             if let Some(view) = nav.guide(&town) {
@@ -1713,8 +1713,8 @@ mod tests {
         log.frame();
         log.moved(T0 + 1, 0, 0);
         log.moved(T0 + 2, 3, -2);
-        let exit = Icon { kind: "exit", x: -136.23457, y: 83.1, label: Some("The Grelwood".into()) };
-        let cp = Icon { kind: "checkpoint", x: 12.5, y: -40.25, label: None };
+        let exit = Icon { kind: "exit", x: -136.23457, y: 83.1, label: Some("The Grelwood".into()), sprite: None };
+        let cp = Icon { kind: "checkpoint", x: 12.5, y: -40.25, label: None, sprite: None };
         log.icons(T0 + 3, &[exit.clone(), cp.clone()], true, (300, 260), false);
         // The same icons again on a frame between scans: not written.
         log.frame();
@@ -1958,11 +1958,11 @@ mod tests {
                         log.moved(t, dx as i32, dy as i32);
                         for e in seen.iter().filter(|e| whole || (e.dx.abs() <= 75.0 && e.dy.abs() <= 65.0)) {
                             let label = e.to.clone().filter(|_| whole).map(|id| area.names.get(&id).cloned().unwrap_or(id));
-                            icons.push(Icon { kind: "exit", x: e.dx as f32, y: e.dy as f32, label });
+                            icons.push(Icon { kind: "exit", x: e.dx as f32, y: e.dy as f32, label, sprite: None });
                             for (ox, oy) in [(40.0, -25.0), (-60.0, 35.0)] {
                                 let (x, y) = (e.dx + ox, e.dy + oy);
                                 if whole || (x.abs() <= 75.0 && y.abs() <= 65.0) {
-                                    icons.push(Icon { kind: "checkpoint", x: x as f32, y: y as f32, label: None });
+                                    icons.push(Icon { kind: "checkpoint", x: x as f32, y: y as f32, label: None, sprite: None });
                                 }
                             }
                         }

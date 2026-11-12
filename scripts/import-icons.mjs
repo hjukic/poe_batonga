@@ -32,9 +32,11 @@ const GENERIC = {
   CheckpointNotActive: "checkpoint",
   BossCheckpointActive: "checkpoint",
   UniqueMonsterAlive: "boss",
-  UniqueMonsterDead: "boss-dead",
+  // The two grey skulls are one picture (1 px apart in their cells): a dead unique and a
+  // dead rare cannot be told apart.
+  UniqueMonsterDead: "dead",
   RareMonsterAlive: "rare",
-  RareMonsterDead: "rare-dead",
+  RareMonsterDead: "dead",
   NPC: "npc",
   QuestObject: "quest",
   QuestItem: "quest",

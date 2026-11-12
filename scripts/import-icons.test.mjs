@@ -27,7 +27,7 @@ test("the icons the reader needs are there", () => {
   for (const [id, kind] of [
     ["Entrance", "exit"], ["EntrancePortal", "exit"], ["Waypoint", "waypoint"], ["Checkpoint", "checkpoint"],
     ["CheckpointNotActive", "checkpoint"], ["BossCheckpointActive", "checkpoint"], ["UniqueMonsterAlive", "boss"],
-    ["UniqueMonsterDead", "boss-dead"], ["RareMonsterAlive", "rare"], ["RareMonsterDead", "rare-dead"],
+    ["UniqueMonsterDead", "dead"], ["RareMonsterAlive", "rare"], ["RareMonsterDead", "dead"],
     ["NPC", "npc"], ["QuestObject", "quest"], ["QuestItem", "quest"], ["Portal", "portal"],
     ["GrimTangleBossActive", "boss"], ["GraveyardBossInactive", "boss-dead"], ["MillerActive", "boss"],
   ]) {

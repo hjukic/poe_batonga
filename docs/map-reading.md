@@ -508,6 +508,98 @@ the minimap (a quarter-size screenshot scaled up) the Grelwood exit and the chec
 are found, and the player cross is not taken for an exit. Plain scene and the
 corner's zone text give none.
 
+### Icons by their sprite (2026-11-12, third build)
+
+The game's own icon pictures (`data/icons/`, [data sources](data-sources.md#map-icons-datamined))
+are compared with the screen: a boss, a dead one, a rare monster or a portal is named by its sprite,
+and what colour reads as an exit, a checkpoint or a waypoint is checked against them
+(`bigmap.rs`, `identify`).
+
+**Scale (measured).** Each sprite matched at scales 0.44–0.60 (screen pixels per pixel of the 64 px
+sheet cell, at 2160 px height) onto the real icons of the Clearfell screenshot
+(`sprite_scores_on_the_screenshot`):
+
+| Icon | Best scale | Score there | At 0.48 |
+| --- | --- | ---: | ---: |
+| Exit (`Entrance`), both | 0.48 (0.46–0.50 within 0.01) | 0.98 (correlation 0.99, colour off 0.001–0.004) | 0.98 |
+| Checkpoints, three | 0.52–0.54 | 0.73–0.83 | 0.72–0.78 |
+| Waypoint | 0.52 | 0.80 | 0.47 |
+
+(Scores before the hue term below.) So the exit icon is drawn at 0.48 of its sprite and checkpoints and
+the waypoint larger, at about 0.53; the reader tries exits at 0.48, checkpoints and waypoints at 0.53,
+and every kind not seen on a screen yet (skulls, boss icons, portals) at both.
+
+**What the old reader made of other icons (drawn, I2).** Each sprite drawn onto the real big-map
+fixture (alpha-blended, at a dark spot, on a map line, on the lit ground by the player) at 0.40–0.96,
+read at every pixel and every second (`boss_icons_to_the_old_reader`, `an_orange_skull_was_an_exit_and_is_a_boss`):
+
+| Drawn | Old reader |
+| --- | --- |
+| Orange skull (a unique monster) | nothing at 0.40–0.48; **an exit** at 0.52 on every second pixel (3 of 4 places), at 0.60 and 0.72 too |
+| Yellow skull (rare), grey skulls, boss icons (Grim Tangle, Miller, Cemetery), NPC, quest icons, boss checkpoint | nothing at any scale |
+| Town portal (blue) | **a checkpoint** at every scale, also a waypoint from 0.52 |
+| `EntrancePortal` (red swirl) | an exit from 0.48 (it is one) |
+
+Both were bugs (a skull counted as exit evidence; a portal as a checkpoint or a waypoint, which the
+arrival check uses). Both are fixed and pinned.
+
+**The match.** A sprite is drawn at the scale (4x4 samples per pixel, bilinear, premultiplied), at four
+half-pixel phases. Only its core counts (alpha at least 0.9): the ground and map lines behind its soft
+edges do not. Over the core, three numbers: the normalised correlation of all colour values in one
+vector (so colour counts as much as shape), the distance of the mean colours (0–1) and the mean per-pixel
+hue distance (red and blue against green, 0–1; it tells a grey icon from a dark coloured one, which the
+correlation hardly does: the Miller's live and grey icons differed by 0.11 without it, 0.22 with).
+Value = correlation − 3 × colour − 2 × hue. The search: around the guessed centre (4 px; 8 px for
+colour groups, whose pale part lies high), every second pixel on half the core, then the pixels around
+the best, then the phases; a sprite whose mean colour is more than 0.15 off everywhere near is not
+searched.
+
+**Where it looks.**
+1. Every icon colour found: compared with the generic sprites and the area's boss pairs. When another
+   kind's sprite scores at least 0.85 and leads every other kind by 0.15 it takes that kind (never an
+   exit, checkpoint or waypoint made from something else); else it stays as it was and carries its
+   own best sprite's id from 0.5 (`Entrance`, `Checkpoint`, `Waypoint`). Two colour icons of one
+   object (the portal) become one.
+2. Groups of orange (not an exit), warm and pale blobs, joined within half an icon, at least 8% of an
+   icon's area, at most 1.6 icons across, largest first, 16 at most: the skulls (the orange skull is
+   36% cross-orange and 25% warm, the yellow 57% warm, the grey 42% pale).
+3. Below each line of pale letters that belongs to no icon found (the label's top 25 px above the
+   icon's centre, as measured for exits): a boss's place name. Only in an area with boss pairs.
+4. Where this visit saw a boss pair's icon (`set_icon_hints`, from the recorder), within 10 px: most
+   boss icons are dark (the Miller 13% bright pixels, the Executioner 2%), and grey once killed with no
+   label (the table gives inactive icons no name), so neither colour nor a label finds them.
+
+A new place is named only as a kind colour cannot make (boss, boss-dead, dead, rare, portal, npc,
+quest), at 0.85 with a lead of 0.15.
+
+**Scores (measured, Clearfell screenshot, `matcher_on_the_screenshot`).** With the area's pairs
+(Clearfell) the reader finds the same six icons as before and nothing else; each carries its sprite.
+Real icons now: exits 0.95, checkpoints 0.55–0.66, the waypoint 0.67 (at 0.53). At the 22 places tried
+on the whole screenshot (the six icons, colour groups by the player and the zone's name label), the best
+of **all 108 sprites** of a kind that is not there scored at most **0.64** (`G4_10_BossInactive` by the
+player's name label; skulls at most 0.59). The threshold 0.85 lies between that and what a sprite drawn
+onto real pixels scores (0.95–1.0) and the real exits (0.95). The fixtures with every area's pairs give no
+boss, dead, rare or portal (`no_boss_or_monster_on_the_real_fixtures_in_any_area`).
+
+**Drawn, not seen (pinned in tests).** The orange skull is a boss at 0.48 and 0.52 at every place and both
+strides; the yellow skull a rare; both grey skulls "dead"; the portal a portal; the Grim Tangle's icon is
+`GrimTangleBossActive` in G1_6 and nothing elsewhere; the Miller's dark icon is found below a label or at a
+hint, and its grey icon at a hint 2 px off.
+
+**The grey skulls are one picture.** `UniqueMonsterDead` and `RareMonsterDead` differ by one pixel of
+offset in their cells (mean difference 0.9 of 255 after it). A grey skull is therefore `"dead"`: a dead
+unique or a dead rare, never by itself a dead boss.
+
+**Cost (measured, release, best of 5).** Whole window every second pixel: 6.5 ms without the matcher,
+19 ms with; the area around the player (685 x 603 px): 0.3 ms and 5.7 ms. About +12 ms on every third
+frame and +5.5 ms on the others; the frame interval is 330 ms.
+
+**Assumed.** That campaign bosses show these icons at all, when, and that the grey one stays after the
+kill (the icon table's word); that skulls and boss icons are drawn at 0.48–0.53 like exits and
+checkpoints; that a boss's place name is drawn above its icon like the exit labels; that the corner
+minimap draws icons at the big map's size (the table's `MinimapIconRadius` equals `LargemapIconRadius`
+for all of them; not measured). The boss captures (`samples/boss-*.ppm`) are where this is first checked.
+
 ### Limits
 
 - Measured at 3840x2160 with the owner's settings. Other sizes use the same fractions
