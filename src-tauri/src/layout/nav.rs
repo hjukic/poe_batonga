@@ -229,6 +229,7 @@ struct Bank {
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Tuning {
     pub gold: f64,
+    pub gold_layout: f64,
     pub gold_walk: f64,
     pub missing: f64,
     pub flat: f64,
@@ -236,7 +237,7 @@ pub(super) struct Tuning {
 
 impl Default for Tuning {
     fn default() -> Self {
-        Tuning { gold: GOLD, gold_walk: GOLD_WALK, missing: MISSING, flat: FLAT }
+        Tuning { gold: GOLD, gold_layout: GOLD_LAYOUT, gold_walk: GOLD_WALK, missing: MISSING, flat: FLAT }
     }
 }
 
@@ -803,7 +804,7 @@ impl Navigator {
         // Gold needs one layout to carry the belief, which only anchors and icons can
         // do (the walked line alone gives at most PATH_MOST): with the belief spread
         // over layouts that happen to point the same way the needle was often wrong.
-        let source = if confidence >= t.gold && p_top >= GOLD_LAYOUT && (self.walked >= t.gold_walk || self.anchored) {
+        let source = if confidence >= t.gold && p_top >= t.gold_layout && (self.walked >= t.gold_walk || self.anchored) {
             "estimated"
         } else if confidence >= ROUGH {
             "rough"

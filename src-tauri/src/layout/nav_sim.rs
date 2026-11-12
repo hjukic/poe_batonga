@@ -735,21 +735,24 @@ mod tests {
         assert!(!c.class_ok(), "{c:?}");
     }
 
-    /// Broken navigators the gates should catch: which do they?
+    /// Broken navigators the gates should catch: which do they? Run with labelled
+    /// icons in the wide view, where gold exists.
     #[test]
     #[ignore]
     fn mutations() {
         let base = Tuning::default();
         for (name, tuning) in [
-            ("GOLD 0.5", Tuning { gold: 0.5, ..base }),
-            ("GOLD 0.3, GOLD_WALK 0", Tuning { gold: 0.3, gold_walk: 0.0, ..base }),
-            ("GOLD_WALK 100 (pass 1: gold from the walk)", Tuning { gold_walk: 100.0, ..base }),
+            ("as built", base),
+            ("GOLD 0.5, top layout 0.5", Tuning { gold: 0.5, gold_layout: 0.5, ..base }),
+            ("top layout 0 (any spread belief)", Tuning { gold_layout: 0.0, ..base }),
+            ("GOLD_WALK 100, top layout 0 (pass 1: gold from the walk)", Tuning { gold: 0.8, gold_layout: 0.0, gold_walk: 100.0, ..base }),
             ("MISSING 0", Tuning { missing: 0.0, ..base }),
             ("FLAT 120", Tuning { flat: 120.0, ..base }),
         ] {
-            let (c, _) = all(1, true, &Options { tuning, ..Default::default() });
+            let (c, _) = all(1, true, &Options { tuning, view: Some(2.0), labels: true, ..Default::default() });
             print(name, &c);
-            eprintln!("  {name}: gate A {}", if c.class_ok() { "passes (not caught)" } else { "fails (caught)" });
+            eprintln!("  {name}: gate A share {}, per layout {}", if c.off_share() <= 0.03 { "passes" } else { "fails (caught)" },
+                if c.layout_fails { "fails" } else { "passes" });
         }
     }
 
