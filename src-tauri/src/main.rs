@@ -324,6 +324,48 @@ struct Presence {
     hidden_by_watcher: std::sync::atomic::AtomicBool,
     /// The overlay page has loaded: the window may be shown.
     page_ready: std::sync::atomic::AtomicBool,
+    /// The setting "Hide during boss fights".
+    fight_hide: std::sync::atomic::AtomicBool,
+    /// A boss fight hid the overlay; it shows again when the fight is over.
+    hidden_by_fight: std::sync::atomic::AtomicBool,
+}
+
+/// A boss fight started or ended (`tracker::Fight`). The overlay hides for its length,
+/// so nothing sits over the fight, and comes back with the next target.
+pub fn set_fight(app: &AppHandle, fighting: bool) {
+    use std::sync::atomic::Ordering;
+    let presence = app.state::<Presence>();
+    if fighting {
+        if presence.fight_hide.load(Ordering::SeqCst) && snapshot(app).is_ok_and(|status| status.visible) {
+            presence.hidden_by_fight.store(true, Ordering::SeqCst);
+            let _ = report(app, apply_visibility(app, false));
+        }
+    } else if presence.hidden_by_fight.swap(false, Ordering::SeqCst) {
+        show_after_fight(app);
+    }
+}
+
+/// Shows an overlay a fight hid, unless the game has left the screen meanwhile: then
+/// the game watcher shows it when the game is back.
+fn show_after_fight(app: &AppHandle) {
+    use std::sync::atomic::Ordering;
+    let presence = app.state::<Presence>();
+    if presence.auto_hide.load(Ordering::SeqCst) && game_on_screen() == Some(false) {
+        presence.hidden_by_watcher.store(true, Ordering::SeqCst);
+    } else {
+        show_overlay(app);
+    }
+}
+
+/// The setting "Hide during boss fights". Switched off, an overlay a fight hid comes back.
+#[tauri::command]
+fn set_fight_hide(app: AppHandle, enabled: bool) {
+    use std::sync::atomic::Ordering;
+    let presence = app.state::<Presence>();
+    presence.fight_hide.store(enabled, Ordering::SeqCst);
+    if !enabled && presence.hidden_by_fight.swap(false, Ordering::SeqCst) {
+        show_after_fight(&app);
+    }
 }
 
 /// Shows the overlay; the very first time with `first_show`'s extra hide-and-show.
@@ -571,6 +613,12 @@ fn toggle_step(app: AppHandle, id: String) -> Result<tracker::TrackerView, Strin
     inner.save();
     let view = inner.view();
     let _ = app.emit("tracker-state", view.clone());
+    // Ticking the boss's step by hand ends its fight: the overlay comes back.
+    let fight_over = inner.settle_fight();
+    drop(inner);
+    if fight_over {
+        set_fight(&app, false);
+    }
     Ok(view)
 }
 
@@ -683,6 +731,8 @@ fn main() {
             auto_hide: std::sync::atomic::AtomicBool::new(true),
             hidden_by_watcher: Default::default(),
             page_ready: Default::default(),
+            fight_hide: std::sync::atomic::AtomicBool::new(true),
+            hidden_by_fight: Default::default(),
         })
         .manage(InputRects(Mutex::new(Vec::new())))
         .manage(Dragging(Default::default()))
@@ -702,6 +752,7 @@ fn main() {
             reset_progress,
             set_compass_optional,
             set_auto_hide,
+            set_fight_hide,
             minimap_state,
             layout_state,
             restart::restart_latest,

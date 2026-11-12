@@ -376,12 +376,62 @@ pub struct Inner {
     pub skip_optional: bool,
     /// The last dialogue lines seen live: (timestamp, speaker, text), oldest first.
     pub recent: std::collections::VecDeque<(String, String, String)>,
+    /// A boss fight under way (see `Fight`).
+    pub fight: Option<Fight>,
+}
+
+/// A boss fight under way: the overlay stays out of the way until it is over. It starts
+/// when a boss of the zone whose kill step is open speaks (live lines only), and ends
+/// when that step is ticked, the player dies or changes zone, or the boss has said
+/// nothing for `FIGHT_QUIET` (bosses bark every few seconds while they fight; one that
+/// never speaks starts no fight).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Fight {
+    /// The boss's kill step.
+    pub step: String,
+    /// When the boss last spoke.
+    pub last_line: std::time::Instant,
+}
+
+/// A boss silent for this long is taken to be dead or left behind. The Bloated Miller's
+/// lines came at most 19 s apart in two logged fights.
+pub const FIGHT_QUIET: Duration = Duration::from_secs(30);
+
+/// The open kill step in `area` of the boss who is speaking. As in the layout recorder,
+/// the speaker must contain the checklist's boss name (at least four letters), so
+/// "Beira" matches "Beira of the Rotten Pack".
+pub fn boss_step<'a>(routes: &'a [Route], progress: &Progress, area: &str, speaker: &str) -> Option<&'a Step> {
+    let speaker = speaker.to_lowercase();
+    routes.iter().filter(|r| r.zone.id == area).flat_map(|r| &r.steps).find(|step| {
+        !progress.completed.contains_key(&step.id)
+            && step.parts.iter().any(|p| {
+                let name = p.text.trim().to_lowercase();
+                p.style.as_deref() == Some("boss") && name.len() >= 4 && speaker.contains(&name)
+            })
+    })
+}
+
+/// The log line of the player's death: `: <character> has been slain.`
+fn is_death(line: &str) -> bool {
+    line.trim_end().ends_with(" has been slain.") && line.contains("] : ")
 }
 
 /// Dialogue lines kept for `Inner::note_hand_tick`.
 const RECENT_LINES: usize = 30;
 
 impl Inner {
+    /// Ends the fight when its step is ticked or the boss has been quiet too long.
+    /// True when a fight ended.
+    pub fn settle_fight(&mut self) -> bool {
+        let over = self.fight.as_ref().is_some_and(|fight| {
+            self.progress.completed.contains_key(&fight.step) || fight.last_line.elapsed() > FIGHT_QUIET
+        });
+        if over {
+            self.fight = None;
+        }
+        over
+    }
+
     pub fn sync_navigation(&self, app: &AppHandle) {
         let completed = self.routes.iter().flat_map(|r| &r.steps)
             .filter(|s| self.progress.completed.contains_key(&s.id))
@@ -532,6 +582,7 @@ pub fn init(app: &AppHandle) -> Tracker {
         save_path,
         skip_optional: false,
         recent: Default::default(),
+        fight: None,
     }))
 }
 
@@ -670,6 +721,7 @@ fn follow(app: &AppHandle, path: &Path) -> std::io::Result<()> {
             continue; // more may be waiting beyond MAX_READ
         }
         live = true;
+        settle_quiet_fight(app);
         std::thread::sleep(POLL);
     }
 }
@@ -699,12 +751,27 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
     let recorder = app.state::<crate::layout::Recorder>();
     let tracker = app.state::<Tracker>();
     let Ok(mut inner) = tracker.0.lock() else { return };
-    let Inner { routes, progress, recent, .. } = &mut *inner;
+    let fighting = inner.fight.is_some();
+    let Inner { routes, progress, recent, fight, .. } = &mut *inner;
     let mut changed = false;
     // Every line is handled in order; one event never hides the rest of a batch.
     for line in String::from_utf8_lossy(bytes).lines() {
+        if live && is_death(line) {
+            *fight = None;
+        }
         if let Some((timestamp, event)) = parse_line(line) {
             changed |= apply(routes, progress, &timestamp, &event);
+            match &event {
+                // A new zone: whatever fight there was is behind the player.
+                LogEvent::ZoneEntered { .. } => *fight = None,
+                LogEvent::Dialogue { speaker, .. } if live => {
+                    let area = progress.current_area.as_deref().unwrap_or_default();
+                    if let Some(step) = boss_step(routes, progress, area, speaker) {
+                        *fight = Some(Fight { step: step.id.clone(), last_line: std::time::Instant::now() });
+                    }
+                }
+                LogEvent::Dialogue { .. } => {}
+            }
             if let LogEvent::ZoneEntered { area, .. } = &event {
                 // The big map's exit labels are read against this zone's exit names.
                 crate::minimap::set_label_candidates(exit_names(area));
@@ -724,6 +791,22 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
     if changed {
         inner.sync_navigation(app);
         let _ = app.emit("tracker-state", inner.view());
+    }
+    // After the checklist is up to date: a kill ticked in this batch ends the fight.
+    inner.settle_fight();
+    let now = inner.fight.is_some();
+    drop(inner);
+    if now != fighting {
+        crate::set_fight(app, now);
+    }
+}
+
+/// Between log lines: ends a fight whose boss has gone quiet.
+fn settle_quiet_fight(app: &AppHandle) {
+    let tracker = app.state::<Tracker>();
+    let ended = tracker.0.lock().is_ok_and(|mut inner| inner.settle_fight());
+    if ended {
+        crate::set_fight(app, false);
     }
 }
 
@@ -1078,5 +1161,58 @@ mod tests {
         let len = file.metadata().unwrap().len();
         assert_eq!(first_run_offset(&mut file, len).unwrap(), old.len() as u64);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn done(progress: &mut Progress, id: &str) {
+        progress.completed.insert(id.into(), Completion { at: "now".into(), source: "manual".into(), evidence: String::new() });
+    }
+
+    #[test]
+    fn a_zone_boss_speaking_names_its_open_kill_step() {
+        let routes = load_routes();
+        let mut progress = Progress::default();
+        let step = |progress: &Progress, area: &str, speaker: &str| {
+            boss_step(&routes, progress, area, speaker).map(|s| s.id.clone())
+        };
+        assert_eq!(step(&progress, "G1_1", "The Bloated Miller").as_deref(), Some("kill-bloated-miller"));
+        // The game's longer name holds the checklist's.
+        assert_eq!(step(&progress, "G1_2", "Beira of the Rotten Pack").as_deref(), Some("kill-beira"));
+        // Not a boss, not this zone's boss, and not once the boss is dead.
+        assert_eq!(step(&progress, "G1_1", "Mortimer"), None);
+        assert_eq!(step(&progress, "G1_2", "The Bloated Miller"), None);
+        done(&mut progress, "kill-bloated-miller");
+        assert_eq!(step(&progress, "G1_1", "The Bloated Miller"), None);
+    }
+
+    #[test]
+    fn a_fight_ends_with_the_kill_or_a_quiet_boss() {
+        let mut inner = Inner {
+            routes: load_routes(),
+            progress: Progress::default(),
+            log: LogStatus { connected: false, path: None, message: String::new() },
+            save_path: None,
+            skip_optional: false,
+            recent: Default::default(),
+            fight: None,
+        };
+        let fight = |ago: Duration| Some(Fight { step: "kill-bloated-miller".into(), last_line: std::time::Instant::now() - ago });
+        assert!(!inner.settle_fight(), "no fight");
+        inner.fight = fight(Duration::from_secs(5));
+        assert!(!inner.settle_fight(), "the boss spoke five seconds ago");
+        assert!(inner.fight.is_some());
+        inner.fight = fight(FIGHT_QUIET + Duration::from_secs(1));
+        assert!(inner.settle_fight(), "quiet for too long");
+        assert!(inner.fight.is_none());
+        inner.fight = fight(Duration::from_secs(1));
+        done(&mut inner.progress, "kill-bloated-miller");
+        assert!(inner.settle_fight(), "the kill is ticked");
+    }
+
+    #[test]
+    fn the_players_death_line_is_told_from_chat() {
+        assert!(is_death(&line("INFO", ": Somebody has been slain.")));
+        assert!(!is_death(&line("INFO", "#Somebody: the boss has been slain.")));
+        assert!(!is_death(&line("INFO", "Somebody: he has been slain.")));
+        assert!(!is_death(&line("INFO", ": Somebody (Ranger) is now level 2")));
     }
 }

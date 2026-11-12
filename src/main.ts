@@ -106,6 +106,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <div class="row"><span>Tick current step</span><span id="tick-shortcut" class="keycap static"></span></div>
     <label class="row" title="Off (speedrun): only the steps needed to progress are listed and the arrow leads to them. On: side steps marked optional are listed too, and the arrow leads to them in order."><span>Optional content</span><input id="optional-content" type="checkbox" /></label>
     <label class="row" title="The overlay hides while the game is closed or on a workspace that is not shown"><span>Hide when game is off screen</span><input id="auto-hide" type="checkbox" checked /></label>
+    <label class="row" title="The overlay hides when a zone boss starts talking and comes back when the kill is logged, you die or leave, or the boss has been quiet for 30 seconds"><span>Hide during boss fights</span><input id="fight-hide" type="checkbox" checked /></label>
     <label class="row" title="The map recorded so far, for checking the tracking"><span>Map preview</span><input id="map-preview" type="checkbox" /></label>
     <p id="shortcut-error" class="warning" hidden></p>
     <hr />
@@ -379,6 +380,10 @@ const autoHide = $<HTMLInputElement>('#auto-hide');
 autoHide.checked = stored('auto-hide', true);
 const sendAutoHide = () => isTauri() && void invoke('set_auto_hide', { enabled: autoHide.checked }).catch(console.error);
 autoHide.addEventListener('change', () => { keep('auto-hide', autoHide.checked); sendAutoHide(); });
+const fightHide = $<HTMLInputElement>('#fight-hide');
+fightHide.checked = stored('fight-hide', true);
+const sendFightHide = () => isTauri() && void invoke('set_fight_hide', { enabled: fightHide.checked }).catch(console.error);
+fightHide.addEventListener('change', () => { keep('fight-hide', fightHide.checked); sendFightHide(); });
 const mapPreview = $<HTMLInputElement>('#map-preview');
 mapPreview.checked = stored('map-preview', false);
 const showMapPreview = () => { document.body.dataset.mapPreview = String(mapPreview.checked); };
@@ -572,6 +577,7 @@ async function start() {
   renderTracker(await invoke<TrackerView>('tracker_state'));
   sendCompassOptional();
   sendAutoHide();
+  sendFightHide();
   fitWindow();
   // The window is first shown now that the page has something to draw.
   await invoke('page_ready');
