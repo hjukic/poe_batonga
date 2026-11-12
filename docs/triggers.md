@@ -26,7 +26,8 @@ Two kinds, read by `src-tauri/src/tracker.rs`:
   with `#`, `@`, `$`, `%` or `&` and is ignored). It counts only while the player is in `area`,
   the step's own zone. `lines` lists every line that ticks the step (random and class variants,
   several speakers); any one of them does. The older one-line form, `"speaker"` + `"text"`,
-  still works (the Riverbank's two triggers use it).
+  still works (no shipped trigger uses it now). A line with an unknown field, or an empty
+  `speaker` or `text` (after the shown form), fails to load.
 - `after` (both kinds): the trigger counts only once that step was done before this line.
 - Texts compare in a shown form: `<i>{word}` (and `<b>`, `<italic>`) becomes `word`, other
   tags (`<continue>`, `<br/>`) and runs of whitespace become one space, on both sides. The
@@ -47,7 +48,12 @@ about, or a quest hand-in line that the quest flags of `NPCTalk` tie to the step
 option needs, hides on and sets). Not: fight barks and taunts, lines for the player's death,
 greetings and vendor lines, lines also said earlier or elsewhere, and anything whose timing the
 data does not show. The same line in two zones is told apart by `area` (Finn's line after the
-King in the Mists is said in Freythorn and in town; only the town talk is the hand-in).
+King in the Mists is said in Freythorn and in town; only the town talk is the hand-in). A boss
+with phases or a scripted death scene gets only its last lines: the King in the Mists only his
+treant death lines (not `KingInTheMists_Druid_Death`), Doryani not "Do not fail me...",
+Jamanra only `PostStabDeath` and `DeathFinal` (not the opening "Give me a warrior's death!").
+A talk that can come before the step's place in the route is left out (Zarka's Trial of the
+Sekhemas talk, possible right after Traitor's Passage, for `caravan-zarka-trial`).
 
 Measured and assumed: every NPC line in the owner's log so far (36 lines: the Wounded Man,
 Mortimer, The Bloated Miller, Renly, Una) is an `NPCTextAudio` row with the same text and its
@@ -55,7 +61,10 @@ NPC's `Name` as the speaker. That bosses' death lines and the other barks are lo
 way is assumed (same table, same kind of line). That the log shows the full `Name` where it
 differs from `ShortName` is assumed. Whether panel text is logged, and whether a long panel
 line with `<continue>` breaks is logged whole or page by page, is not known: if it is logged
-by page, those triggers stay silent and the observations will show it.
+by page, those triggers stay silent and the observations will show it. A hint against it
+(not proof): Renly's intro row (`RenlyIntro`) is not in the old log, where his first logged line
+is the shop greeting a minute after the Miller died. The owner started a new character on
+2026-11-12; that log will show whether Renly's intro in the Clearfell Encampment is logged.
 
 ## After a game patch
 
@@ -66,8 +75,10 @@ scripts/check-triggers.sh          # dumps the dialogue tables from the install 
 It runs `scripts/check-triggers.mjs` on a fresh `poe_data_tools` dump (read-only, in a
 temporary folder) and prints, per step: rows that are gone, texts that changed (old and new),
 speakers that no longer match, and warnings for variants a trigger lacks, triggers bound to
-another zone and an `evidenceKind` that does not match the tables. Exit code 1 when a line no
-longer matches. Fix the trigger's `text`, `speaker` or `lines`, or drop the trigger when the
+another zone, an `evidenceKind` that does not match the tables, and lines said another way:
+the text also in another row of the same speaker, the row also spoken by another NPC, or the
+row named by `NPCTalk` options that differ in NPC, quest flags or zone (a trigger may then tick
+at another time). Exit code 1 when a line no longer matches. Fix the trigger's `text`, `speaker` or `lines`, or drop the trigger when the
 line is gone. Tests: `node --test scripts/check-triggers.test.mjs` (with
 `TRIGGER_TABLES=<dump folder>` it also runs the full check).
 
@@ -85,10 +96,30 @@ rest.
 | --- | --- | --- | --- | --- |
 | With a trigger, before (v0.1.50) | 1 | 1 | 145 | 147 |
 | With a trigger, now | 20 | 46 | 162 | 228 |
+| of these: zone entry (`zoneEntered`) | 0 | 0 | 145 | 145 |
+| of these: seen or bark (`npcLine`, the kind the log shows) | 19 | 2 | 4 | 25 |
+| of these: panel (`npcLine`, fires only if the log shows panel text) | 1 | 44 | 13 | 58 |
 | Ticked by hand, now | 54 | 15 | 105 | 174 |
 
-The 83 `npcLine` triggers by evidence: seen 2 (the Riverbank's), bark 24, panel 57.
-The 145 `zoneEntered` triggers are unchanged.
+So 228 steps carry a trigger, but not 228 working ones: 145 zone entries and 2 seen lines are
+measured, 23 barks are assumed to be logged like the barks seen, and the 58 panel ones work
+only if panel text turns out to be logged, whole. The 83 `npcLine` triggers by evidence: seen 2 (the
+Riverbank's; the Miller's second variant, a bark, is not seen yet), bark 23, panel 58. The 145
+`zoneEntered` triggers are unchanged.
+
+The checker's warnings on the shipped triggers (2026-11-12 tables) are all "said another way";
+none is known to tick early, and only the first was looked at closely:
+- `caravan-asala-halani`: Asala's Halani line is also the Desert Map's option "Travel to the
+  Halani Gates" (flag `NEVER_SET`). The route puts the step after the first Halani visit, so a
+  tick from the map should do no harm.
+- `caravan-asala-grotto`: the same text is also `AsalaA2MapUIAncientGatesSeven` (Asala or the
+  Desert Map).
+- `caravan-hooded-one-outside`: hood-up and hood-down rows of the same "To Utzaal" talk.
+- `journeys-end-tujen`: two intro rows with the same text, by who was met first.
+- `vastiri-hooded-one`: `HoodedOneDockA2Intro` has the same text; where it plays is not in the
+  tables.
+- `hammer-to-oswald`: two Oswald options ("The Hammer", "Forgemaster") name the line, with
+  different flags.
 
 ## Steps still ticked by hand
 

@@ -10,10 +10,9 @@
       "trigger": {
         "type": "npcLine",
         "area": "G1_1",
-        "speaker": "Wounded Man",
-        "text": "Reach... Clearfell... Find the Miller..."
+        "lines": [{ "id": "SamuelWildFindMiller", "speaker": "Wounded Man", "text": "Reach... Clearfell... Find the Miller..." }]
       },
-      "evidence": "Last line of his dialogue; seen in a live log on 2026-11-11."
+      "evidence": "Last line of his dialogue (SamuelWildFindMiller); seen in a live log on 2026-11-11."
     },
     {
       "id": "directions-river",
@@ -28,10 +27,13 @@
       "trigger": {
         "type": "npcLine",
         "area": "G1_1",
-        "speaker": "Mortimer",
-        "text": "Well done! Please come inside."
+        "lines": [
+          { "id": "ClearfellGuardMillerDeathRandom", "speaker": "Mortimer", "text": "Well done! Please come inside." },
+          { "id": "ClearfellGuardMillerDeathRandom2", "speaker": "Mortimer", "text": "Well done! Come in and speak with the others." }
+        ]
       },
-      "evidence": "Mortimer says this after the Miller dies (live log 2026-11-12 01:09:14). It was absent after two fights that ended in death (23:39, 00:06); the Miller's own lines only mean the fight started."
+      "evidence": "Mortimer says one of his two random lines after the Miller dies. Seen: ClearfellGuardMillerDeathRandom (live log 2026-11-12 01:09:14); it was absent after two fights that ended in death (23:39, 00:06). Bark, not yet seen: ClearfellGuardMillerDeathRandom2, its random variant (same NPC, from the game's dialogue tables, 2026-11-12). The Miller's own lines only mean the fight started.",
+      "evidenceKind": "seen"
     },
     {
       "id": "enter-clearfell-encampment",

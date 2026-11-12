@@ -102,6 +102,52 @@ test('a missing variant, another zone and a wrong evidenceKind are warnings', ()
   assert.match(warnings[2], /evidenceKind panel, the tables say bark/);
 });
 
+test('a line named by a dialogue step in its NPCTalkDialogueTextAudio column is panel', () => {
+  const t = structuredClone(tables);
+  t.npcs.push({ Id: 'Metadata/NPC/HoodedOne', Name: 'The Hooded One', ShortName: '' });
+  t.npctextaudio.push({ Id: 'HoodedOneNewTravelEast', Text: 'East we go.', NPCs: { TableName: 'NPCs', Ids: ['Metadata/NPC/HoodedOne'] } });
+  assert.equal(linesFromTables(t).get('HoodedOneNewTravelEast').kind, 'bark');
+  t.npctalkdialoguesteps.push({ Step: 0, NPCTextAudio: [], NPCTalkDialogueTextAudio: { TableName: 'NPCTalkDialogueTextAudio', Ids: ['HoodedOneNewTravelEast'] } });
+  const lines = linesFromTables(t);
+  assert.equal(lines.get('HoodedOneNewTravelEast').kind, 'panel');
+  const { warnings } = check(route([step('a', one([{ id: 'HoodedOneNewTravelEast', speaker: 'The Hooded One', text: 'East we go.' }]), 'bark')]), lines);
+  assert.deepEqual(warnings, ['test.json a: evidenceKind bark, the tables say panel']);
+});
+
+test('a line said another way is a warning: another NPC, another row, NPCTalk options that differ', () => {
+  // Asala's Halani line: the same row is the Desert Map's 'Travel to the Halani Gates'.
+  const asala = 'Metadata/NPC/Four_Act2/MarakethMatriarch';
+  const map = 'Metadata/Terrain/Gallows/Act2/2_town/Objects/MapTable';
+  const flag = (id) => ({ TableName: 'QuestFlags', Id: id });
+  const t = structuredClone(tables);
+  t.npcs.push({ Id: asala, Name: 'Sekhema Asala', ShortName: 'Asala' }, { Id: map, Name: 'Desert Map', ShortName: '' });
+  t.npctextaudio.push(
+    { Id: 'AsalaGatesTwo', Text: 'The Gates are closed!', NPCs: { TableName: 'NPCs', Ids: [asala, map] } },
+    { Id: 'AsalaGatesAgain', Text: 'The Gates are closed!', NPCs: { TableName: 'NPCs', Ids: [asala] } },
+    { Id: 'GuardGates', Text: 'The Gates are closed!', NPCs: { TableName: 'NPCs', Ids: ['Metadata/NPC/Four_Act1/Renly'] } },
+  );
+  t.npctalk.push(
+    { NPCKey: { Id: asala }, DialogueOption: 'The Closed Gates', QuestFlag2: flag('AsalaClosedGatesChatSeen'), NPCTextAudioKeys: { Ids: ['AsalaGatesTwo'] } },
+    { NPCKey: { Id: map }, DialogueOption: 'Travel to the Halani Gates', QuestFlag2: flag('NEVER_SET'), NPCTextAudioKeys: { Ids: ['AsalaGatesTwo'] } },
+  );
+  const { errors, warnings } = check(
+    route([step('a', one([{ id: 'AsalaGatesTwo', speaker: 'Sekhema Asala', text: 'The Gates are closed!' }]), 'panel')]),
+    linesFromTables(t),
+  );
+  assert.deepEqual(errors, []);
+  assert.equal(warnings.length, 3, warnings.join('\n'));
+  assert.match(warnings[0], /AsalaGatesTwo is also spoken by Desert Map/);
+  // Renly's GuardGates has the same text but another speaker: the tracker can't confuse them.
+  assert.match(warnings[1], /the text of AsalaGatesTwo is also AsalaGatesAgain \(Sekhema Asala\)/);
+  assert.match(warnings[2], /AsalaGatesTwo is said by 2 NPCTalk options that differ: Sekhema Asala 'The Closed Gates' .*AsalaClosedGatesChatSeen.*; Desert Map 'Travel to the Halani Gates' .*NEVER_SET/);
+  // One option, or two alike, is not a warning.
+  t.npctalk.pop();
+  t.npctextaudio[t.npctextaudio.length - 3].NPCs.Ids = [asala];
+  t.npctextaudio.splice(t.npctextaudio.length - 2, 1);
+  const alone = check(route([step('a', one([{ id: 'AsalaGatesTwo', speaker: 'Sekhema Asala', text: 'The Gates are closed!' }]), 'panel')]), linesFromTables(t));
+  assert.deepEqual(alone.warnings, []);
+});
+
 test('the one-line form without an id is looked up by speaker and text', () => {
   const lines = linesFromTables(tables);
   const found = check(route([step('a', { type: 'npcLine', area: 'G1_1', speaker: 'Mortimer', text: 'Well done! Please come inside.' })]), lines);
@@ -119,7 +165,7 @@ test('every npcLine trigger in data/routes is bound to its zone, names its rows 
       count++;
       const where = `${r.file} ${s.id}`;
       assert.equal(s.trigger.area, r.zone.id, where);
-      assert.ok(['seen', 'bark', 'panel'].includes(s.evidenceKind) || ['talk-wounded-man', 'kill-bloated-miller'].includes(s.id), `${where}: evidenceKind`);
+      assert.ok(['seen', 'bark', 'panel'].includes(s.evidenceKind) || s.id === 'talk-wounded-man', `${where}: evidenceKind`);
       for (const line of triggerLines(s.trigger)) {
         assert.ok(line.speaker && line.text, where);
         assert.equal(shownText(line.text), line.text, `${where}: text in shown form`);

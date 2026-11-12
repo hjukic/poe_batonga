@@ -14,7 +14,10 @@
 // the `Name` of one of the row's NPCs (NPCTextAudio.NPCs, NPCTalkDialogueTextAudio.NPC1).
 // A line without an id (the two first triggers) is looked up by speaker and text.
 // Warnings: random or class variants of a line that the trigger lacks, a trigger bound to
-// another zone than its checklist's, an evidenceKind that does not match the table.
+// another zone than its checklist's, an evidenceKind that does not match the table, and a
+// line said in more than one way: its text in another row of the same speaker, its row
+// spoken by another NPC too, or its row named by NPCTalk options that differ in NPC, quest
+// flags or zone.
 // Exit code 1 when any line no longer matches; the report says what changed.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -61,18 +64,37 @@ export function loadLines(dir) {
   });
 }
 
-/** The dialogue lines by id: {id, table, text (shown form), speakers, shortNames, kind}.
- *  `kind` is "panel" for lines a dialogue panel shows (named by an NPCTalk option or a
- *  dialogue's steps, and every NPCTalkDialogueTextAudio line), "bark" for the rest, null
- *  when NPCTalk or NPCTalkDialogueSteps is missing. */
+/** The dialogue lines by id: {id, table, text (shown form), speakers, shortNames, kind, talks}.
+ *  `kind` is "panel" for lines a dialogue panel shows (named by an NPCTalk option or by a
+ *  dialogue's steps, in either of its columns, and every NPCTalkDialogueTextAudio line),
+ *  "bark" for the rest, null when NPCTalk or NPCTalkDialogueSteps is missing. `talks` lists
+ *  the NPCTalk options that name the line: {npc, option, flags, areas}. */
 export function linesFromTables({ npcs, npctextaudio, npctalkdialoguetextaudio, npctalk, npctalkdialoguesteps }) {
   const byId = new Map(npcs.map((n) => [n.Id, n]));
   const names = (refs) => [...new Set(ids(refs).map((i) => byId.get(i)?.Name).filter(Boolean))];
   const shortNames = (refs) => [...new Set(ids(refs).map((i) => byId.get(i)?.ShortName).filter(Boolean))];
   const panel =
     npctalk && npctalkdialoguesteps
-      ? new Set([...npctalk.flatMap((r) => ids(r.NPCTextAudioKeys)), ...npctalkdialoguesteps.flatMap((s) => ids(s.NPCTextAudio))])
+      ? new Set([
+          ...npctalk.flatMap((r) => ids(r.NPCTextAudioKeys)),
+          ...npctalkdialoguesteps.flatMap((s) => [...ids(s.NPCTextAudio), ...ids(s.NPCTalkDialogueTextAudio)]),
+        ])
       : null;
+  // The NPCTalk options by line id. `flags` joins every quest-flag column of the option (the
+  // flags it needs, hides on and sets); two options that differ there come at different times.
+  const talks = new Map();
+  for (const r of npctalk ?? []) {
+    const talk = {
+      npc: byId.get(r.NPCKey?.Id)?.Name ?? r.NPCKey?.Id ?? '?',
+      option: r.DialogueOption ?? '',
+      flags: ['unknown_1', 'unknown_2', 'unknown_3', 'QuestFlags1', 'QuestFlag2', 'QuestFlag3'].map((c) => ids(r[c]).join('+')).join('/'),
+      areas: [...ids(r.WorldArea1), ...ids(r.WorldArea2)].join('+'),
+    };
+    for (const id of ids(r.NPCTextAudioKeys)) {
+      if (!talks.has(id)) talks.set(id, []);
+      talks.get(id).push(talk);
+    }
+  }
   const lines = new Map();
   for (const r of npctextaudio) {
     lines.set(r.Id, {
@@ -82,10 +104,12 @@ export function linesFromTables({ npcs, npctextaudio, npctalkdialoguetextaudio, 
       speakers: names(r.NPCs),
       shortNames: shortNames(r.NPCs),
       kind: panel ? (panel.has(r.Id) ? 'panel' : 'bark') : null,
+      talks: talks.get(r.Id) ?? [],
     });
   }
   for (const r of npctalkdialoguetextaudio ?? []) {
-    // 41 ids (endgame talks) are in both tables; NPCTextAudio wins. No trigger uses them.
+    // An id in both tables keeps its NPCTextAudio row (same text); its kind comes from the
+    // dialogue steps above.
     if (lines.has(r.Id)) continue;
     lines.set(r.Id, {
       id: r.Id,
@@ -94,6 +118,7 @@ export function linesFromTables({ npcs, npctextaudio, npctalkdialoguetextaudio, 
       speakers: names(r.NPC1),
       shortNames: shortNames(r.NPC1),
       kind: 'panel',
+      talks: talks.get(r.Id) ?? [],
     });
   }
   return lines;
@@ -171,6 +196,24 @@ export function check(routes, lines) {
           if (!sibling.speakers.some((s) => row.speakers.includes(s))) continue;
           have.add(sibling.id);
           warnings.push(`${where}: variant ${sibling.id} is not in the trigger: ${JSON.stringify(sibling.text)}`);
+        }
+      }
+      // The same line said another way: the trigger may tick at another time or not at all.
+      const speakers = new Set(triggerLines(trigger).map((l) => l.speaker));
+      for (const row of found) {
+        const others = row.speakers.filter((s) => !speakers.has(s));
+        if (others.length) warnings.push(`${where}: ${row.id} is also spoken by ${others.join(' / ')}`);
+        // Another row with this text only matters when the log could name the same speaker:
+        // the tracker matches speaker and text ("As you wish." is also many vendors' line).
+        for (const other of byText.get(row.text) ?? []) {
+          if (have.has(other.id) || !other.speakers.some((s) => speakers.has(s))) continue;
+          have.add(other.id);
+          warnings.push(`${where}: the text of ${row.id} is also ${other.id} (${other.speakers.join(' / ')})`);
+        }
+        const kinds = new Set(row.talks.map((t) => `${t.npc}|${t.flags}|${t.areas}`));
+        if (kinds.size > 1) {
+          const list = row.talks.map((t) => `${t.npc} '${t.option}' (flags ${t.flags.replace(/\/+$/, '') || 'none'}${t.areas ? `, ${t.areas}` : ''})`);
+          warnings.push(`${where}: ${row.id} is said by ${row.talks.length} NPCTalk options that differ: ${list.join('; ')}`);
         }
       }
       const kinds = found.map((l) => l.kind).filter(Boolean);

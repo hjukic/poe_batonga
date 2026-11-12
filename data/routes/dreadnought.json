@@ -13,22 +13,13 @@
         "type": "npcLine",
         "area": "G2_12",
         "lines": [
-          { "id": "PerennialKing_Dreadnought_DeathIntro_Random", "speaker": "Jamanra, the Abomination", "text": "What are.... you waiting for... Give me.... a warrior's death!" },
-          { "id": "PerennialKing_Dreadnought_DeathIntro_2", "speaker": "Jamanra, the Abomination", "text": "What are.... you waiting for... Give me.... a warrior's death!" },
-          { "id": "PerennialKing_Dreadnought_DeathStabbed_Random", "speaker": "Jamanra, the Abomination", "text": "Countess? My Queen... she gave us power... she gave us respect... We would have been fools not to try..." },
-          { "id": "PerennialKing_Dreadnought_DeathStabbed_2", "speaker": "Jamanra, the Abomination", "text": "Countess? My Queen... she gave us power... she gave us respect... We would have been fools not to try..." },
           { "id": "PerennialKing_Dreadnought_PostStabDeath", "speaker": "Jamanra, the Abomination", "text": "You have accomplished... nothing. Oriana will prevail... and the Faridun will rule the Vastiri." },
-          { "id": "PerennialKing_Dreadnought_DeathBeast_Random", "speaker": "Jamanra, the Abomination", "text": "She's taking it... far from here... it's beyond you now." },
-          { "id": "PerennialKing_Dreadnought_DeathBeast_2", "speaker": "Jamanra, the Abomination", "text": "She's taking it... far from here... it's beyond you now." },
-          { "id": "PerennialKing_Dreadnought_DeathBeast_3", "speaker": "Jamanra, the Abomination", "text": "She's taking it... far from here... it's beyond you now." },
-          { "id": "PerennialKing_Dreadnought_DeathFaridun_Random", "speaker": "Jamanra, the Abomination", "text": "You thought us weak... we have proven... how wrong you were..." },
-          { "id": "PerennialKing_Dreadnought_DeathFaridun_2", "speaker": "Jamanra, the Abomination", "text": "You thought us weak... we have proven... how wrong you were..." },
           { "id": "PerennialKing_Dreadnought_DeathFinal_Random", "speaker": "Jamanra, the Abomination", "text": "I die a true warrior." },
           { "id": "PerennialKing_Dreadnought_DeathFinal_2", "speaker": "Jamanra, the Abomination", "text": "I die a true warrior." },
           { "id": "PerennialKing_Dreadnought_DeathFinal_3", "speaker": "Jamanra, the Abomination", "text": "I die a true warrior." }
         ]
       },
-      "evidence": "Bark: PerennialKing_Dreadnought_DeathIntro_Random, PerennialKing_Dreadnought_DeathIntro_2, PerennialKing_Dreadnought_DeathStabbed_Random, PerennialKing_Dreadnought_DeathStabbed_2, PerennialKing_Dreadnought_PostStabDeath, PerennialKing_Dreadnought_DeathBeast_Random, PerennialKing_Dreadnought_DeathBeast_2, PerennialKing_Dreadnought_DeathBeast_3, PerennialKing_Dreadnought_DeathFaridun_Random, PerennialKing_Dreadnought_DeathFaridun_2, PerennialKing_Dreadnought_DeathFinal_Random, PerennialKing_Dreadnought_DeathFinal_2, PerennialKing_Dreadnought_DeathFinal_3. Jamanra's death scene (DeathIntro, DeathStabbed, PostStabDeath, DeathBeast, DeathFaridun, DeathFinal); DeathMisc left out, its timing is not clear. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log. Target: the one 'boss' node in its only layout.",
+      "evidence": "Bark: PerennialKing_Dreadnought_PostStabDeath, PerennialKing_Dreadnought_DeathFinal_Random, PerennialKing_Dreadnought_DeathFinal_2, PerennialKing_Dreadnought_DeathFinal_3. The end of Jamanra's death scene (DeathIntro, DeathStabbed, PostStabDeath, DeathBeast, DeathFaridun, DeathFinal). The earlier lines are left out: 'Give me a warrior's death!' (DeathIntro) opens the scene, possibly before he is down. DeathMisc left out, its timing is not clear. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log. Target: the one 'boss' node in its only layout.",
       "evidenceKind": "bark"
     },
     {

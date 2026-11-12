@@ -40,7 +40,9 @@ pub struct Part {
 }
 
 /// One NPC line a trigger waits for. `text` is kept in its shown form (`shown_text`).
+/// An unknown field fails to load, so a misspelt key is not silently ignored.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct NpcLine {
     pub speaker: String,
     pub text: String,
@@ -97,10 +99,14 @@ impl TryFrom<RawTrigger> for Trigger {
                     (None, None, false) => lines,
                     _ => return Err("npcLine needs either speaker and text, or lines".into()),
                 };
-                let lines = lines
+                let lines: Vec<NpcLine> = lines
                     .into_iter()
                     .map(|l| NpcLine { speaker: shown_text(&l.speaker), text: shown_text(&l.text), id: l.id })
                     .collect();
+                // An empty speaker or text would match nothing real, or an empty log line.
+                if lines.iter().any(|l| l.speaker.is_empty() || l.text.is_empty()) {
+                    return Err("npcLine: a line has an empty speaker or text".into());
+                }
                 Ok(Trigger::NpcLine { area, lines, after })
             }
         }
@@ -206,8 +212,10 @@ pub fn parse_line(line: &str) -> Option<(String, LogEvent)> {
     }
 
     // Dialogue is logged like chat, but without a channel prefix. Player chat
-    // starts with #, &, @, %, $ and player names have no spaces, so an exact
-    // speaker match on names like "Wounded Man" cannot come from a player.
+    // starts with #, &, @, %, $ (and system lines with [), so it is dropped here.
+    // What keeps a player from ticking a step is that prefix and the exact text a
+    // trigger needs, not the speaker: single-word speakers (Renly, Una, Alva) can
+    // be player names too.
     if !tag.starts_with("INFO ") {
         return None;
     }
@@ -975,6 +983,13 @@ mod tests {
             "both forms"
         );
         assert!(parse(r#"{"type":"npcLine","area":"A","speaker":"S","texts":["T"]}"#).is_err(), "unknown field");
+        assert!(
+            parse(r#"{"type":"npcLine","area":"A","lines":[{"speaker":"S","text":"T","kind":"bark"}]}"#).is_err(),
+            "unknown field in a line"
+        );
+        assert!(parse(r#"{"type":"npcLine","area":"A","lines":[{"speaker":"S","text":""}]}"#).is_err(), "empty text");
+        assert!(parse(r#"{"type":"npcLine","area":"A","lines":[{"speaker":" ","text":"T"}]}"#).is_err(), "empty speaker");
+        assert!(parse(r#"{"type":"npcLine","area":"A","speaker":"S","text":"<continue>"}"#).is_err(), "text empty when shown");
         assert!(parse(r#"{"type":"zoneEntered","area":"A","after":"x"}"#).is_ok());
     }
 
