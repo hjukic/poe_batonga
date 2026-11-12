@@ -935,7 +935,8 @@ impl State {
         };
         if let (Some(view), Some(log)) = (&view, session.obs.borrow_mut().as_mut()) {
             let stale = session.fed_at.is_none_or(|t| t.elapsed() > STALE);
-            log.needle(obs::now_ms(), &self.nav_targets(session), view, kept, stale);
+            let way = !kept && session.navigator.as_ref().is_some_and(|n| n.on_map());
+            log.needle(obs::now_ms(), &self.nav_targets(session), view, kept, stale, way);
         }
         view
     }
@@ -1329,6 +1330,13 @@ mod tests {
         let dir = scratch("obs");
         let recorder = Recorder::new(Some(dir.clone()));
         obs_visit(&recorder, 40);
+        // Then towards an exit not seen: the layouts' needle, which the replay gives too.
+        recorder.set_targets(vec![("G1_2".into(), guide::NavTarget { label: "Mud Burrow".into(), exit: Some("G1_3".into()), ..Default::default() })]);
+        for step in 40..46 {
+            recorder.on_icons(&[], false);
+            recorder.on_frame(&frame((step * 4, 0)), [300, 260]);
+            recorder.view();
+        }
         enter(&recorder, "G1_4");
         let text = std::fs::read_to_string(dir.join("G1_2").join("7.obs.jsonl")).unwrap();
         for kind in ["start", "targets", "needle", "move", "icons", "seen", "end"] {
@@ -1340,8 +1348,11 @@ mod tests {
         assert_eq!(visits.len(), 1);
         let v = &visits[0];
         eprint!("{}", obs::replay::report(v));
-        assert_eq!(v.frames, 40);
+        assert_eq!(v.frames, 46);
         assert!(v.logged > 0 && v.agree == v.logged, "{} of {}: {:?}", v.agree, v.logged, v.differ);
+        // The first needles follow the recorded corridor round to the far exit: marked,
+        // and not replayed (the log holds no walls).
+        assert!(text.contains("\"way\":true") && v.mapped > 0, "{}", v.mapped);
         assert_eq!(v.left.as_ref().unwrap().0, "G1_4");
         // A later visit of the same instance appends.
         obs_visit(&recorder, 3);

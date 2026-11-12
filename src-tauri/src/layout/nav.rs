@@ -367,6 +367,8 @@ pub struct Navigator {
     /// The last way through the recorded map: its target's label and cells (the
     /// part's minimap cells), preferred on the next call (hysteresis).
     way: RefCell<Option<(String, Vec<(i32, i32)>)>>,
+    /// The last `guide_on` needle followed that way (for the flight recorder).
+    on_map: Cell<bool>,
 }
 
 /// What the recorder knows of the part being recorded, lent at `guide_on` time.
@@ -471,6 +473,7 @@ impl Navigator {
                 .unwrap_or_default(),
             tuning: Tuning::default(),
             way: RefCell::default(),
+            on_map: Cell::new(false),
         };
         // The player may have walked on since the position was saved.
         if let Some(m) = resume {
@@ -962,8 +965,10 @@ impl Navigator {
         let target = targets.iter().find(|t| self.area.layouts.iter().any(|l| !l.goals(t).is_empty()))?;
         let posterior = self.posterior();
         let (top, p_top) = posterior.iter().enumerate().fold((0, 0.0), |b, (i, &p)| if p > b.1 { (i, p) } else { b });
-        if let Some(view) = place.and_then(|place| self.on_the_map(target, &posterior, place)) {
-            return Some(view);
+        let mapped = place.and_then(|place| self.on_the_map(target, &posterior, place));
+        self.on_map.set(mapped.is_some());
+        if mapped.is_some() {
+            return mapped;
         }
         let mut cache = self.guidance.borrow_mut();
         let (mut vx, mut vy, mut togo, mut weight) = (0.0, 0.0, 0.0, 0.0);
@@ -1098,6 +1103,11 @@ impl Navigator {
             measured: false,
             turned: false,
         })
+    }
+
+    /// The last needle followed a way through the recorded map.
+    pub fn on_map(&self) -> bool {
+        self.on_map.get()
     }
 
     /// Where the target is on the part's map, when known: its icon in view (as

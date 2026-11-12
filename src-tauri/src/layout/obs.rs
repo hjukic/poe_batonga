@@ -212,7 +212,9 @@ pub enum Entry {
         targets: Vec<LoggedTarget>,
     },
     /// The needle shown. `kept`: tracking was lost and the last needle stayed (not the
-    /// navigator's answer); `stale`: no placed frame for 2 s (gold shown gray).
+    /// navigator's answer); `stale`: no placed frame for 2 s (gold shown gray); `way`:
+    /// it followed a way through the recorded map (the log holds no walls, so a
+    /// replay cannot give it).
     Needle {
         #[serde(default, skip_serializing_if = "is_zero")]
         f: u64,
@@ -227,6 +229,8 @@ pub enum Entry {
         kept: bool,
         #[serde(default, skip_serializing_if = "is_false")]
         stale: bool,
+        #[serde(default, skip_serializing_if = "is_false")]
+        way: bool,
     },
     End {
         #[serde(default, skip_serializing_if = "is_zero")]
@@ -435,7 +439,7 @@ impl Log {
     }
 
     /// The needle shown, asked for `targets`; written by the rules above.
-    pub fn needle(&mut self, t: u64, targets: &[NavTarget], view: &GuideView, kept: bool, stale: bool) {
+    pub fn needle(&mut self, t: u64, targets: &[NavTarget], view: &GuideView, kept: bool, stale: bool, way: bool) {
         if !self.active {
             return;
         }
@@ -456,6 +460,7 @@ impl Log {
             distance: view.distance.round(),
             kept,
             stale,
+            way,
         };
         let due = match &self.last_needle {
             None => true,
@@ -659,6 +664,8 @@ pub(super) mod replay {
         /// The app's needles, those the current code gives alike, the first that differ.
         pub logged: usize,
         pub agree: usize,
+        /// The app's needles that followed a way through the recorded map (not compared).
+        pub mapped: usize,
         pub differ: Vec<String>,
         /// Why the visit was not replayed.
         pub skipped: Option<String>,
@@ -843,8 +850,13 @@ pub(super) mod replay {
                     _ => {}
                 },
                 Entry::Targets { targets, .. } => self.targets = targets.iter().map(LoggedTarget::target).collect(),
-                Entry::Needle { target, degrees, source, variant, kept, stale, .. } => {
+                Entry::Needle { target, degrees, source, variant, kept, stale, way, .. } => {
                     if *kept {
+                        return;
+                    }
+                    // Through the recorded map: without its walls the replay cannot give it.
+                    if *way {
+                        self.visit.mapped += 1;
                         return;
                     }
                     self.visit.logged += 1;
@@ -1060,7 +1072,10 @@ pub(super) mod replay {
             }
             None => out += "   exit taken: unknown (no live zone change)\n",
         }
-        out += &format!("   app's needles: {} logged, {} agree with the current code\n", v.logged, v.agree);
+        out += &format!(
+            "   app's needles: {} logged, {} agree with the current code; {} through the recorded map (not replayed)\n",
+            v.logged, v.agree, v.mapped
+        );
         for d in &v.differ {
             out += &format!("     {d}\n");
         }
@@ -1149,7 +1164,7 @@ mod tests {
                 icons.iter().map(|i| ExitIcon { dx: i.x as f64, dy: i.y as f64, to: i.label.clone() }).collect();
             nav.icons(&list);
             if let Some(view) = nav.guide(&targets) {
-                log.needle(t, &targets, &view, false, false);
+                log.needle(t, &targets, &view, false, false, false);
                 needles.push(view);
             }
         }
@@ -1268,13 +1283,13 @@ mod tests {
         for (deg, source) in [(10.0, "rough"), (20.0, "rough"), (30.0, "rough"), (31.0, "estimated"), (31.0, "estimated")] {
             t += 900;
             log.frame();
-            log.needle(t, &targets, &view(deg, source), false, false);
+            log.needle(t, &targets, &view(deg, source), false, false, false);
         }
         // Then the same needle, frames still coming, for 6 s.
         for _ in 0..7 {
             t += 900;
             log.frame();
-            log.needle(t, &targets, &view(31.0, "estimated"), false, false);
+            log.needle(t, &targets, &view(31.0, "estimated"), false, false, false);
         }
         let text = log.text();
         let needles: Vec<u64> = text.lines().filter(|l| l.contains(r#""k":"needle""#)).map(|l| serde_json::from_str::<Line>(l).unwrap().t - T0).collect();
@@ -1388,7 +1403,7 @@ mod tests {
                         source: if frames % 30 < 15 { "rough".into() } else { "estimated".into() },
                         distance: 312.4, confidence: 0.734, measured: false, turned: false,
                     };
-                    log.needle(t, &[NavTarget { label: "Mud Burrow".into(), ..target.clone() }], &view, false, false);
+                    log.needle(t, &[NavTarget { label: "Mud Burrow".into(), ..target.clone() }], &view, false, false, false);
                 }
             }
         }

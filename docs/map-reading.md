@@ -811,7 +811,8 @@ Gold keeps the icon's conditions (named and read the same twice, not against a s
 belief, within 200 cells; or unlabelled with one layout at 90%, measured areas only)
 but no longer needs the graph route to be about straight: the way is the route. The
 way back to the arrival point is gold in every area, dungeons too: walked and recorded.
-Otherwise the needle is as before.
+Otherwise the needle is as before. The flight recorder marks such needles `way`; its
+replay has no walls and does not compare them (it counts them apart).
 
 Before and after, the wall-between case (`a_named_icon_behind_a_wall_is_reached_through_the_doorway`):
 The Grelwood's icon 80 cells up, read twice, a wall across halfway with a 20-cell
@@ -859,7 +860,7 @@ counts, so the replay can hand the navigator every `icons` call the app made.
 | `icons` | `whole` (absent = false), `size` (frame cells, when it changed), `icons`: `kind` (absent = exit), `x`, `y`, `label` | when the exits differ from the last written, on every whole-window scan with an exit or while far exits are kept, for a checkpoint or waypoint not yet written in this part |
 | `seen` | `exit` or `tag`, `left` | each log anchor |
 | `targets` | `targets` (`label`, `exit`, `tag`, `optional`) | when the list asked for changes |
-| `needle` | `target`, `degrees`, `source`, `confidence`, `variant`, `distance`; `kept` (tracking lost, the last needle stayed), `stale` (no frame for 2 s) | when source, target or variant change or it turns more than 15°, else every 5 s while frames come |
+| `needle` | `target`, `degrees`, `source`, `confidence`, `variant`, `distance`; `kept` (tracking lost, the last needle stayed), `stale` (no frame for 2 s), `way` (it followed a way through the recorded map) | when source, target or variant change or it turns more than 15°, else every 5 s while frames come |
 | `end` | | when the zone is left |
 
 Exits are written exactly as handed over (the navigator's input); checkpoints and
@@ -923,7 +924,8 @@ visit it prints:
   (`estimated`), rough, gray (`unconfirmed`), none. Frames aiming at another
   target are counted apart. **Right for good**: the first such frame after which
   every one was within 45°, seconds and cells walked from the start.
-- **app's needles**: the `needle` lines (not `kept`) against what the current code
+- **app's needles**: the `needle` lines (not `kept`, not `way`: the log holds no
+  walls, so a needle through the recorded map is counted apart) against what the current code
   gives at the same point (same target, source, layout, within 5°; a `stale` gold
   counts as gray). With unchanged code they agree; a difference on old visits shows
   a change of the navigator. The one other cause: the needle's switch between
