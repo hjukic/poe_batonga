@@ -715,7 +715,7 @@ impl Recorder {
         }
     }
 
-    /// One analysed minimap frame. Returns an overview for the overlay about once a second.
+    /// One analysed minimap frame. Returns an overview for the overlay, at most every 300 ms.
     pub fn on_frame(&self, frame: &MinimapView, capture_px: [usize; 2]) -> Option<LayoutView> {
         let mut state = self.0.lock().ok()?;
         let icons = std::mem::take(&mut state.icons);
@@ -824,7 +824,8 @@ impl Recorder {
             state.save();
             state.last_save = Some(Instant::now());
         }
-        let due_view = state.last_view.is_none_or(|t| t.elapsed() >= Duration::from_millis(900));
+        // Every frame (about three a second): the needle should turn as the player does.
+        let due_view = state.last_view.is_none_or(|t| t.elapsed() >= Duration::from_millis(300));
         if !due_view {
             return None;
         }
