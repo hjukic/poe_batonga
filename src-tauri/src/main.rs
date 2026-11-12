@@ -647,6 +647,12 @@ fn minimap_state(minimap: State<'_, minimap::Minimap>) -> Result<minimap::Minima
     minimap.last.lock().map(|view| view.clone()).map_err(|e| e.to_string())
 }
 
+/// Whether the player is in a zone (not at the login or character screen).
+#[tauri::command]
+fn in_zone(tracker: State<'_, tracker::Tracker>) -> bool {
+    tracker.0.lock().map(|inner| inner.in_zone).unwrap_or(true)
+}
+
 // Off the UI thread: it waits on a lock the background readers may hold for a while.
 #[tauri::command(async)]
 fn layout_state(recorder: State<'_, layout::Recorder>) -> Option<layout::LayoutView> {
@@ -750,6 +756,7 @@ fn main() {
             set_fight_hide,
             minimap_state,
             layout_state,
+            in_zone,
             restart::restart_latest,
             client_log,
             page_ready,

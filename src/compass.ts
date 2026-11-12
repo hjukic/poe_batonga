@@ -34,6 +34,8 @@ const label = document.querySelector<HTMLSpanElement>('#label')!;
 
 let guide: GuideView | null = null;
 let tracking = false;
+/** False at the login and character screens: no needle before the first zone. */
+let inZone = true;
 let shown: number | null = null;
 
 /** The needle is always shown while there is a target: solid gold when the layout is
@@ -41,8 +43,9 @@ let shown: number | null = null;
  *  no direction yet, or the minimap is not tracking the player (it then keeps its last
  *  direction). */
 function update() {
-  svg.classList.toggle('off', !guide);
-  label.classList.toggle('off', !guide);
+  const hidden = !guide || !inZone;
+  svg.classList.toggle('off', hidden);
+  label.classList.toggle('off', hidden);
   if (!guide) return;
   const known = guide.degrees !== null && Number.isFinite(guide.degrees);
   svg.classList.toggle('rough', tracking && known && guide.source === 'rough');
@@ -97,6 +100,8 @@ async function start() {
       tracking = event.payload.enabled && event.payload.visible && event.payload.player !== null;
       update();
     });
+    await listen<boolean>('in-zone', (event) => { inZone = event.payload; update(); });
+    inZone = await invoke<boolean>('in_zone');
     guide = (await invoke<LayoutView | null>('layout_state'))?.guide ?? null;
     const minimap = await invoke<MinimapView>('minimap_state');
     tracking = minimap.enabled && minimap.visible && minimap.player !== null;

@@ -407,6 +407,22 @@ pub struct Inner {
     pub recent: std::collections::VecDeque<(String, String, String)>,
     /// A boss fight under way (see `Fight`).
     pub fight: Option<Fight>,
+    /// The player is in a zone: false from a game start (login, character selection)
+    /// until the first zone is entered. The compass shows only in a zone.
+    pub in_zone: bool,
+}
+
+/// The log line of a game start.
+const GAME_START: &str = "[STARTUP] Game Start";
+
+/// Whether the log's last game start already led into a zone (true too when the log
+/// shows no game start at all).
+fn zone_since_start(text: &str) -> bool {
+    match (text.rfind(GAME_START), text.rfind("Generating level ")) {
+        (Some(start), Some(zone)) => zone > start,
+        (Some(_), None) => false,
+        (None, _) => true,
+    }
 }
 
 /// A boss fight under way: the overlay stays out of the way until it is over. It starts
@@ -612,6 +628,7 @@ pub fn init(app: &AppHandle) -> Tracker {
         skip_optional: false,
         recent: Default::default(),
         fight: None,
+        in_zone: true,
     }))
 }
 
@@ -663,17 +680,18 @@ fn first_run_offset(file: &mut File, len: u64) -> std::io::Result<u64> {
 }
 
 /// The zone the player is in now: the last zone generation in the last few MB.
-fn current_zone(file: &mut File, len: u64) -> std::io::Result<Option<LogEvent>> {
+fn current_zone(file: &mut File, len: u64) -> std::io::Result<(Option<LogEvent>, bool)> {
     let start = len.saturating_sub(FIRST_RUN_LOOKBACK);
     file.seek(SeekFrom::Start(start))?;
     let mut buf = Vec::new();
     file.take(len - start).read_to_end(&mut buf)?;
     let text = String::from_utf8_lossy(&buf);
-    Ok(text
+    let zone = text
         .lines()
         .rev()
         .filter(|line| line.contains("Generating level "))
-        .find_map(|line| parse_line(line).map(|(_, event)| event)))
+        .find_map(|line| parse_line(line).map(|(_, event)| event));
+    Ok((zone, zone_since_start(&text)))
 }
 
 fn set_log_status(app: &AppHandle, connected: bool, path: Option<&Path>, message: &str) {
@@ -719,9 +737,11 @@ fn follow(app: &AppHandle, path: &Path) -> std::io::Result<()> {
         }
     };
     // The layout recorder needs the current zone even when no new zone is entered.
-    if let Some(zone) = current_zone(&mut file, pos)? {
+    let (zone, in_zone) = current_zone(&mut file, pos)?;
+    if let Some(zone) = zone {
         app.state::<crate::layout::Recorder>().on_log(&zone, false);
     }
+    set_in_zone(app, in_zone);
     set_log_status(app, true, Some(path), "Reading game log (read-only)");
 
     let mut pending: Vec<u8> = Vec::new();
@@ -781,18 +801,25 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
     let tracker = app.state::<Tracker>();
     let Ok(mut inner) = tracker.0.lock() else { return };
     let fighting = inner.fight.is_some();
-    let Inner { routes, progress, recent, fight, .. } = &mut *inner;
+    let was_in_zone = inner.in_zone;
+    let Inner { routes, progress, recent, fight, in_zone, .. } = &mut *inner;
     let mut changed = false;
     // Every line is handled in order; one event never hides the rest of a batch.
     for line in String::from_utf8_lossy(bytes).lines() {
         if live && is_death(line) {
             *fight = None;
         }
+        if line.contains(GAME_START) {
+            *in_zone = false;
+        }
         if let Some((timestamp, event)) = parse_line(line) {
             changed |= apply(routes, progress, &timestamp, &event);
             match &event {
                 // A new zone: whatever fight there was is behind the player.
-                LogEvent::ZoneEntered { .. } => *fight = None,
+                LogEvent::ZoneEntered { .. } => {
+                    *fight = None;
+                    *in_zone = true;
+                }
                 LogEvent::Dialogue { speaker, .. } if live => {
                     let area = progress.current_area.as_deref().unwrap_or_default();
                     if let Some(step) = boss_step(routes, progress, area, speaker) {
@@ -824,10 +851,23 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
     // After the checklist is up to date: a kill ticked in this batch ends the fight.
     inner.settle_fight();
     let now = inner.fight.is_some();
+    let in_zone = inner.in_zone;
     drop(inner);
     if now != fighting {
         crate::set_fight(app, now);
     }
+    if in_zone != was_in_zone {
+        let _ = app.emit("in-zone", in_zone);
+    }
+}
+
+/// Sets whether the player is in a zone and tells the compass.
+fn set_in_zone(app: &AppHandle, in_zone: bool) {
+    let tracker = app.state::<Tracker>();
+    if let Ok(mut inner) = tracker.0.lock() {
+        inner.in_zone = in_zone;
+    }
+    let _ = app.emit("in-zone", in_zone);
 }
 
 /// Between log lines: ends a fight whose boss has gone quiet.
@@ -1271,6 +1311,7 @@ mod tests {
             skip_optional: false,
             recent: Default::default(),
             fight: None,
+            in_zone: true,
         };
         let fight = |ago: Duration| Some(Fight { step: "kill-bloated-miller".into(), last_line: std::time::Instant::now() - ago });
         assert!(!inner.settle_fight(), "no fight");
@@ -1283,6 +1324,17 @@ mod tests {
         inner.fight = fight(Duration::from_secs(1));
         done(&mut inner.progress, "kill-bloated-miller");
         assert!(inner.settle_fight(), "the kill is ticked");
+    }
+
+    #[test]
+    fn the_player_is_in_a_zone_once_the_last_game_start_led_into_one() {
+        let start = line("INFO", "[STARTUP] Game Start");
+        let zone = line("DEBUG", r#"Generating level 2 area "G1_2" with seed 5"#);
+        assert!(zone_since_start(""), "nothing known: as before");
+        assert!(zone_since_start(&zone));
+        assert!(zone_since_start(&format!("{start}\n{zone}")));
+        assert!(!zone_since_start(&start), "at the login screen");
+        assert!(!zone_since_start(&format!("{zone}\n{start}")), "started again: the last zone is not where the player is");
     }
 
     #[test]
