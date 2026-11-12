@@ -1,0 +1,329 @@
+//! Big map (Tab) reading. With the big map open the game hides the corner minimap and
+//! draws the explored map across the screen, centred on the player. This reads the map
+//! lines around the player and hands the recorder frames in the minimap's units, so one
+//! recording continues across both views.
+//!
+//! Measured on Clearfell at 3840x2160 (2026-11-12, `docs/map-reading.md`, "Big map"):
+//! the big map draws at the minimap's scale (1.00 big-map pixels per minimap pixel),
+//! with the same orientation and line colour; its player marker sits 21 px above the
+//! centre of the game window.
+
+use super::{is_marker, is_wall, Image, MinimapView, CELL, CELL_MIN};
+
+/// Big-map pixels per minimap pixel. Fit of the big map's walls onto recorded minimap
+/// walls of the same place: 1.00 (0.995-1.005 score the same), no turn.
+pub const SCALE: f64 = 1.0;
+/// The big map's player marker, as a fraction of the game window (1919, 1059 px of 3840x2160).
+const PLAYER: [f64; 2] = [0.4997, 0.4903];
+/// The minimap's player marker, as a fraction of the game window (about 3556, 284 px of
+/// 3840x2160; read from a quarter-size screenshot, so good to about 4 px).
+const MINIMAP_PLAYER: [f64; 2] = [0.9260, 0.1315];
+/// How far from the expected point the marker is looked for, in pixels at 2160 px height.
+const MARKER_RADIUS: f64 = 16.0;
+const MARKER_MIN: u32 = 4;
+/// Touching wall cells fewer than this are dropped: map lines are long, lit ground
+/// behind the translucent map leaves specks (Clearfell, 600x518 cells around the player:
+/// 226 groups of which 212 under 15 cells; every line cell kept at 12).
+const MIN_GROUP: usize = 12;
+/// Wall cells a frame needs to count as the big map.
+const WALLS_MIN: usize = 40;
+
+/// The frame handed to the recorder: its size in cells and the player's cell.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Frame {
+    pub cols: usize,
+    pub rows: usize,
+    pub player: [f32; 2],
+}
+
+impl Frame {
+    /// The size of a minimap frame, with the player where the minimap draws it, so the
+    /// recorder sees no difference when the view changes. `minimap_px` is the minimap
+    /// capture's size, `window_px` the game window's, `minimap_origin` the capture's
+    /// top-left corner inside the window (all in screen pixels).
+    pub fn like_minimap(minimap_px: [usize; 2], window_px: [f64; 2], minimap_origin: [f64; 2]) -> Frame {
+        let at = |i: usize| ((MINIMAP_PLAYER[i] * window_px[i] - minimap_origin[i]) / CELL as f64) as f32;
+        Frame { cols: minimap_px[0].div_ceil(CELL), rows: minimap_px[1].div_ceil(CELL), player: [at(0), at(1)] }
+    }
+
+    /// A larger frame with the player in the middle (see `WIDE` in minimap.rs).
+    pub fn wide(cols: usize, rows: usize) -> Frame {
+        Frame { cols, rows, player: [cols as f32 / 2.0, rows as f32 / 2.0] }
+    }
+
+    /// The minimap capture size this frame stands for, in minimap pixels.
+    pub fn capture_px(&self) -> [usize; 2] {
+        [self.cols * CELL, self.rows * CELL]
+    }
+}
+
+/// How to read one big-map capture.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Plan {
+    /// Where the player marker is expected inside the capture, in its pixels.
+    pub marker: [f64; 2],
+    /// How far from there the marker may be, in pixels.
+    pub radius: f64,
+    pub frame: Frame,
+}
+
+/// The part of the game window to capture for `frame`, in window pixels
+/// (x, y, width, height, clipped to the window), and where the marker is expected in it.
+pub fn area(window_px: [f64; 2], frame: &Frame) -> ([f64; 4], [f64; 2]) {
+    let marker = [PLAYER[0] * window_px[0], PLAYER[1] * window_px[1]];
+    let margin = radius(window_px) + 2.0;
+    let cell = CELL as f64 * SCALE;
+    let x0 = (marker[0] - frame.player[0] as f64 * cell - margin).max(0.0);
+    let y0 = (marker[1] - frame.player[1] as f64 * cell - margin).max(0.0);
+    let x1 = (marker[0] + (frame.cols as f64 - frame.player[0] as f64) * cell + margin).min(window_px[0]);
+    let y1 = (marker[1] + (frame.rows as f64 - frame.player[1] as f64) * cell + margin).min(window_px[1]);
+    ([x0, y0, x1 - x0, y1 - y0], [marker[0] - x0, marker[1] - y0])
+}
+
+pub fn radius(window_px: [f64; 2]) -> f64 {
+    MARKER_RADIUS * window_px[1] / 2160.0
+}
+
+/// Centre of the orange marker pixels within `radius` of `at` (pixel-centre coordinates),
+/// if there are enough of them.
+pub fn marker_near(image: &Image, at: [f64; 2], radius: f64) -> Option<[f64; 2]> {
+    let clamp = |v: f64, n: usize| (v.max(0.0) as usize).min(n);
+    let (x0, x1) = (clamp(at[0] - radius, image.width), clamp(at[0] + radius + 1.0, image.width));
+    let (y0, y1) = (clamp(at[1] - radius, image.height), clamp(at[1] + radius + 1.0, image.height));
+    let (mut n, mut sx, mut sy) = (0u32, 0f64, 0f64);
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let i = (y * image.width + x) * 3;
+            if is_marker(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]) {
+                n += 1;
+                sx += x as f64 + 0.5;
+                sy += y as f64 + 0.5;
+            }
+        }
+    }
+    (n >= MARKER_MIN).then(|| [sx / n as f64, sy / n as f64])
+}
+
+/// Reads a big-map capture into a frame in minimap units: the walls around the player,
+/// resampled by `SCALE`, with the player at `plan.frame.player`. Visible only when both
+/// the player marker and enough wall lines are found.
+pub fn analyse(image: &Image, plan: &Plan) -> MinimapView {
+    let found = marker_near(image, plan.marker, plan.radius);
+    let walls = walls_in(image, found.unwrap_or(plan.marker), &plan.frame, SCALE);
+    let visible = found.is_some() && walls.len() >= WALLS_MIN;
+    MinimapView {
+        enabled: true,
+        visible,
+        message: if visible { "Reading big map" } else { "Big map not visible" }.into(),
+        cols: plan.frame.cols,
+        rows: plan.frame.rows,
+        walls: if visible { walls } else { vec![] },
+        player: visible.then_some(plan.frame.player),
+    }
+}
+
+/// Wall cells of `frame`, with the image pixel `centre` (the player) on the frame's player
+/// cell and `scale` image pixels per minimap pixel.
+fn walls_in(image: &Image, centre: [f64; 2], frame: &Frame, scale: f64) -> Vec<[u16; 2]> {
+    let Frame { cols, rows, player } = *frame;
+    let cell = CELL as f64;
+    // Image pixel -> minimap pixel: (p - centre) / scale + player * CELL.
+    let to_frame = |p: f64, c: f64, at: f32| (p - c) / scale + at as f64 * cell;
+    let mut counts = vec![0u32; cols * rows];
+    for y in 0..image.height {
+        let v = to_frame(y as f64 + 0.5, centre[1], player[1]);
+        if v < 0.0 || v >= (rows * CELL) as f64 {
+            continue;
+        }
+        let row = (v / cell) as usize * cols;
+        for x in 0..image.width {
+            let i = (y * image.width + x) * 3;
+            if !is_wall(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]) {
+                continue;
+            }
+            let u = to_frame(x as f64 + 0.5, centre[0], player[0]);
+            if u >= 0.0 && u < (cols * CELL) as f64 {
+                counts[row + (u / cell) as usize] += 1;
+            }
+        }
+    }
+    // A minimap cell holds CELL x CELL pixels; scaled, a big-map cell holds scale² as many.
+    let need = ((CELL_MIN as f64 * scale * scale).round() as u32).max(1);
+    let occupied: Vec<bool> = counts.iter().map(|&n| n >= need).collect();
+    lines(&occupied, cols, rows)
+}
+
+/// Occupied cells in groups (touching, diagonals too) of at least `MIN_GROUP`.
+fn lines(occupied: &[bool], cols: usize, rows: usize) -> Vec<[u16; 2]> {
+    let mut seen = vec![false; occupied.len()];
+    let mut walls = Vec::new();
+    let mut group = Vec::new();
+    for start in 0..occupied.len() {
+        if !occupied[start] || seen[start] {
+            continue;
+        }
+        group.clear();
+        group.push(start);
+        seen[start] = true;
+        let mut next = 0;
+        while next < group.len() {
+            let i = group[next];
+            next += 1;
+            let (x, y) = ((i % cols) as i64, (i / cols) as i64);
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    let (nx, ny) = (x + dx, y + dy);
+                    if nx < 0 || ny < 0 || nx >= cols as i64 || ny >= rows as i64 {
+                        continue;
+                    }
+                    let j = ny as usize * cols + nx as usize;
+                    if occupied[j] && !seen[j] {
+                        seen[j] = true;
+                        group.push(j);
+                    }
+                }
+            }
+        }
+        if group.len() >= MIN_GROUP {
+            walls.extend(group.iter().map(|&i| [(i % cols) as u16, (i / cols) as u16]));
+        }
+    }
+    walls.sort_unstable_by_key(|&[x, y]| (y, x));
+    walls
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::minimap::parse_ppm;
+    use std::collections::HashSet;
+
+    fn fixture(name: &str) -> Image {
+        let path = format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
+        parse_ppm(&std::fs::read(&path).unwrap()).unwrap()
+    }
+
+    /// bigmap-player.ppm: 380x300 px of the big map on Clearfell, the player marker at
+    /// about (300.5, 60.7), a frame covering the whole crop.
+    fn player_plan() -> Plan {
+        Plan { marker: [300.0, 60.0], radius: 16.0, frame: Frame { cols: 190, rows: 150, player: [150.0, 30.0] } }
+    }
+
+    /// Recorded minimap walls of the same place, relative to the player.
+    fn recorded() -> Vec<(i32, i32)> {
+        let path = format!("{}/tests/fixtures/clearfell-part14-walls.json", env!("CARGO_MANIFEST_DIR"));
+        let json: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        json["walls"].as_array().unwrap().iter().map(|w| (w[0].as_i64().unwrap() as i32, w[1].as_i64().unwrap() as i32)).collect()
+    }
+
+    /// Share of `of` cells with a `on` cell within one cell, after moving `of` by `shift`.
+    fn share(of: &[(i32, i32)], on: &HashSet<(i32, i32)>, shift: (i32, i32)) -> f64 {
+        let near = |&(x, y): &(i32, i32)| (-1..=1).any(|dy| (-1..=1).any(|dx| on.contains(&(x + shift.0 + dx, y + shift.1 + dy))));
+        of.iter().filter(|c| near(c)).count() as f64 / of.len().max(1) as f64
+    }
+
+    fn relative(walls: &[[u16; 2]], player: [f32; 2]) -> Vec<(i32, i32)> {
+        walls.iter().map(|&[x, y]| (x as i32 - player[0] as i32, y as i32 - player[1] as i32)).collect()
+    }
+
+    #[test]
+    fn finds_the_player_marker_at_the_centre() {
+        let image = fixture("bigmap-player.ppm");
+        let [x, y] = marker_near(&image, [300.0, 60.0], 16.0).unwrap();
+        assert!((x - 300.5).abs() < 1.0 && (y - 60.7).abs() < 1.0, "{x},{y}");
+        // Nothing orange-cross-like where there is no marker.
+        assert!(marker_near(&image, [200.0, 100.0], 16.0).is_none());
+        let view = analyse(&image, &player_plan());
+        assert!(view.visible, "{}", view.message);
+        assert_eq!(view.player, Some([150.0, 30.0]));
+    }
+
+    #[test]
+    fn walls_follow_the_map_lines() {
+        let image = fixture("bigmap-player.ppm");
+        let view = analyse(&image, &player_plan());
+        let found = relative(&view.walls, view.player.unwrap());
+        let found_set: HashSet<_> = found.iter().copied().collect();
+        let recorded = recorded();
+        let recorded_set: HashSet<_> = recorded.iter().copied().collect();
+        // Where both show a line they agree to a cell. The rest (checked by eye): the
+        // recording has the border-strip bars at the right edge and some stitching drift;
+        // the big map has the walk up to the player that this part never recorded.
+        let covered = share(&recorded, &found_set, (0, 0));
+        let explained = share(&found, &recorded_set, (0, 0));
+        println!("{} big-map walls, {} recorded; covered {covered:.3}, explained {explained:.3}", found.len(), recorded.len());
+        assert!(covered > 0.85, "{covered}");
+        assert!(explained > 0.75, "{explained}");
+    }
+
+    #[test]
+    fn plain_scene_has_almost_no_walls() {
+        let image = fixture("bigmap-scene.ppm");
+        let raw = image.pixels.chunks_exact(3).filter(|p| is_wall(p[0], p[1], p[2])).count();
+        let frame = Frame { cols: 128, rows: 80, player: [64.0, 40.0] };
+        let walls = walls_in(&image, [128.0, 80.0], &frame, SCALE);
+        println!("{raw} lavender pixels, {} wall cells", walls.len());
+        // The lit ground behind the translucent map has lavender specks; none survive.
+        assert!(raw > 100);
+        assert!(walls.len() <= 4, "{}", walls.len());
+        let plan = Plan { marker: [128.0, 80.0], radius: 16.0, frame };
+        assert!(!analyse(&image, &plan).visible);
+    }
+
+    #[test]
+    fn scale_one_lines_up_with_recorded_minimap_walls() {
+        let image = fixture("bigmap-player.ppm");
+        let plan = player_plan();
+        let centre = marker_near(&image, plan.marker, plan.radius).unwrap();
+        let recorded = recorded();
+        let score = |scale: f64| {
+            let walls = relative(&walls_in(&image, centre, &plan.frame, scale), plan.frame.player);
+            let set: HashSet<_> = walls.into_iter().collect();
+            // Best shift within 3 cells: the scale must be right across the whole crop.
+            let mut best = (0.0, (0, 0));
+            for dy in -3..=3 {
+                for dx in -3..=3 {
+                    let s = share(&recorded, &set, (dx, dy));
+                    if s > best.0 {
+                        best = (s, (dx, dy));
+                    }
+                }
+            }
+            best
+        };
+        let (at_one, shift) = score(SCALE);
+        let (smaller, _) = score(0.94);
+        let (larger, _) = score(1.06);
+        println!("scale 1.00: {at_one:.3} at {shift:?}; 0.94: {smaller:.3}; 1.06: {larger:.3}");
+        assert_eq!(shift, (0, 0));
+        assert!(at_one > smaller + 0.1 && at_one > larger + 0.1);
+    }
+
+    #[test]
+    fn resamples_by_the_scale() {
+        // A big map drawn twice as large: a line 40 px right of the marker is 20 minimap
+        // pixels, 10 cells, from the player.
+        let (width, height) = (120, 60);
+        let mut pixels = vec![10u8; width * height * 3];
+        for y in 0..height {
+            for x in [80, 81, 82, 83] {
+                pixels[(y * width + x) * 3..][..3].copy_from_slice(&[91, 91, 121]);
+            }
+        }
+        let image = Image { width, height, pixels };
+        let frame = Frame { cols: 40, rows: 20, player: [10.0, 10.0] };
+        let walls = walls_in(&image, [40.0, 30.0], &frame, 2.0);
+        assert!(!walls.is_empty());
+        assert!(walls.iter().all(|&[x, _]| x == 20 || x == 21), "{walls:?}");
+    }
+
+    #[test]
+    fn capture_area_covers_the_frame_around_the_marker() {
+        let frame = Frame { cols: 300, rows: 259, player: [158.0, 142.0] };
+        let ([x, y, w, h], marker) = area([3840.0, 2160.0], &frame);
+        // Marker at 1919, 1059 px; 316 px to its left, 284 above, plus the search margin.
+        assert!((x + marker[0] - 1918.8).abs() < 0.1 && (y + marker[1] - 1059.0).abs() < 0.2);
+        assert!((marker[0] - 316.0 - 18.0).abs() < 0.1 && (marker[1] - 284.0 - 18.0).abs() < 0.1);
+        assert!((w - (600.0 + 36.0)).abs() < 0.1 && (h - (518.0 + 36.0)).abs() < 0.1);
+    }
+}

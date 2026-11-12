@@ -96,3 +96,22 @@ confirmed the checkbox becomes enabled/disabled with interaction state, but this
 does not establish actual mouse routing or visual transparency. No game/compositor
 stacking conclusion is drawn from the limited UI check. No Electron fallback has
 been attempted.
+
+## Big map reading
+
+The reader switches between the corner minimap and the big map (Tab) by itself
+([map reading, "Big map"](map-reading.md#big-map)). Check it on the live game, the
+app running, in a zone with walls nearby:
+
+1. Big map closed: walk for about 10 seconds. The minimap state reads "Reading
+   minimap" and the layout overview grows.
+2. Open the big map and walk on for about 20 seconds, along a corridor and round a
+   corner. The state reads "Reading big map"; the overview keeps growing from where
+   it was, with the same part number and no jump in the trail.
+3. Close the big map and walk back. "Reading minimap" again, still the same part,
+   and the trail runs back over itself.
+4. Change zone, then render the recording (`node scripts/render-layouts.mjs`): one
+   part for the walk, walls without vertical bars at the right edge.
+
+If the trail jumps or a new part starts at a switch, note the zone, the direction
+and whether the big map was zoomed.

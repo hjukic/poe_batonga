@@ -331,3 +331,34 @@ recording and one movement track continue across both views.
   20 live frames): debug build 107 ms (captures 40 + 41, reading 19, recorder 8),
   release 85 ms (captures 39 + 44, reading 0.9, recorder 0.8). With the minimap
   showing it is one capture, as before. Both fit the 330 ms frame interval.
+
+### Reader
+
+`src-tauri/src/bigmap.rs`; the choice per frame is `choose` in `minimap.rs`.
+
+1. Capture the minimap corner. If the minimap is read (walls or marker, as before)
+   and its player marker is where the minimap draws it, use the minimap.
+2. Else capture the big map around the player (a 638x556 px area). If its marker is
+   found within 16 px of where the big map draws it and at least 40 wall cells
+   remain, use the big map: message "Reading big map".
+3. Else the minimap's own reading ("Minimap not visible", or a minimap whose marker
+   was not found, as before).
+
+A big-map frame is built the way a minimap frame is: lavender pixels by the
+minimap's test, 2 px cells at the minimap's scale (`SCALE` 1.0; another value
+resamples), cells with at least two such pixels, then groups under 12 cells
+dropped. It has the minimap frame's size (300x259) with the player on the minimap's
+player cell, and reports the minimap's capture size, so the recorder sees no
+difference.
+
+### Limits
+
+- Measured at 3840x2160 with the owner's settings. Other resolutions use the same
+  fractions of the game window; untested.
+- If the game lets the big map be zoomed, `SCALE` changes and big-map frames stop
+  matching. Not seen; the fit above is at the default zoom.
+- The minimap's player cell comes from a quarter-size screenshot (±2 cells). The
+  recorder follows a reported player cell within 4 cells, so this is enough for one
+  track; a full-size minimap screenshot would pin it.
+- Movement across the two views is tested on synthetic pixels only; the live check
+  is in [the overlay test](overlay-test.md#big-map-reading).

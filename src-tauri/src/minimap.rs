@@ -9,13 +9,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
+#[path = "bigmap.rs"]
+pub mod bigmap;
 #[cfg(target_os = "windows")]
 #[path = "minimap_windows.rs"]
 mod windows_capture;
 #[cfg(target_os = "windows")]
-use windows_capture::{capture, locate_minimap, Region as CaptureRegion};
-#[cfg(not(target_os = "windows"))]
-type CaptureRegion = String;
+use windows_capture::{capture, capture_bigmap, locate_minimap, Region as CaptureRegion};
 
 /// About three frames a second.
 const FRAME_INTERVAL: Duration = Duration::from_millis(330);
@@ -148,9 +148,89 @@ pub fn parse_ppm(bytes: &[u8]) -> Result<Image, String> {
     Ok(Image { width, height, pixels })
 }
 
-/// Screen area of the minimap in logical compositor coordinates: "x,y wxh".
+/// Which size of frame the big map is handed to the recorder in.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum BigFrame {
+    /// The minimap's size, with the player on the minimap's player cell: today's recorder
+    /// keeps its player cell when the frame changes, so this continues one track as is.
+    LikeMinimap,
+    /// A larger frame (cols, rows) centred on the player: more of the explored map per
+    /// frame. Needs the recorder to take a new player cell when the frame size changes.
+    Wide(usize, usize),
+}
+const BIG_FRAME: BigFrame = BigFrame::LikeMinimap;
+
+/// Where the maps are read on screen. On Linux the areas are grim geometry in logical
+/// compositor coordinates ("x,y wxh").
+#[cfg(not(target_os = "windows"))]
+#[derive(Clone, Debug, PartialEq)]
+pub struct CaptureRegion {
+    minimap: String,
+    bigmap: String,
+    /// Where the minimap draws the player, inside the minimap capture, in its pixels.
+    minimap_marker: [f64; 2],
+    plan: bigmap::Plan,
+}
+
+/// The capture areas for a game window at `game` (x, y, width, height) on a monitor at
+/// `monitor`, both in logical coordinates, `scale` pixels per logical unit. Both maps are
+/// placed relative to the game window and clipped to it and the monitor: a floating
+/// window 10 px left of its monitor otherwise let a lavender window border into the
+/// minimap crop, which the recorder took for walls (vertical bars in recordings).
+#[cfg(not(target_os = "windows"))]
+fn regions(game: [f64; 4], monitor: [f64; 4], scale: f64) -> Result<CaptureRegion, String> {
+    let [gx, gy, gw, gh] = game;
+    let left = gx.max(monitor[0]);
+    let top = gy.max(monitor[1]);
+    let right = (gx + gw).min(monitor[0] + monitor[2]);
+    let bottom = (gy + gh).min(monitor[1] + monitor[3]);
+    if right - left < 100.0 || bottom - top < 100.0 {
+        return Err("Game window is not on its monitor".into());
+    }
+    // Whole logical units, kept inside the visible part of the window.
+    let area = |x0: f64, y0: f64, x1: f64, y1: f64| {
+        let (x0, y0) = (x0.max(left.ceil()), y0.max(top.ceil()));
+        let (x1, y1) = (x1.min(right.floor()), y1.min(bottom.floor()));
+        (x0, y0, (x1 - x0).max(1.0), (y1 - y0).max(1.0))
+    };
+    let geometry = |(x, y, w, h): (f64, f64, f64, f64)| format!("{x},{y} {w}x{h}");
+    let minimap = area(
+        (gx + gw * REGION_X).round(),
+        gy.round(),
+        (gx + gw * REGION_X).round() + (gw * REGION_W).round(),
+        gy.round() + (gh * REGION_H).round(),
+    );
+    let window_px = [gw * scale, gh * scale];
+    let origin_px = [(minimap.0 - gx) * scale, (minimap.1 - gy) * scale];
+    let minimap_px = [(minimap.2 * scale).round() as usize, (minimap.3 * scale).round() as usize];
+    let frame = match BIG_FRAME {
+        BigFrame::LikeMinimap => bigmap::Frame::like_minimap(minimap_px, window_px, origin_px),
+        BigFrame::Wide(cols, rows) => bigmap::Frame::wide(cols, rows),
+    };
+    let ([ax, ay, aw, ah], marker) = bigmap::area(window_px, &frame);
+    let big = area(
+        (gx + ax / scale).floor(),
+        (gy + ay / scale).floor(),
+        (gx + (ax + aw) / scale).ceil(),
+        (gy + (ay + ah) / scale).ceil(),
+    );
+    let minimap_marker = bigmap::Frame::like_minimap(minimap_px, window_px, origin_px).player;
+    Ok(CaptureRegion {
+        minimap: geometry(minimap),
+        bigmap: geometry(big),
+        minimap_marker: [minimap_marker[0] as f64 * CELL as f64, minimap_marker[1] as f64 * CELL as f64],
+        plan: bigmap::Plan {
+            marker: [(gx + (ax + marker[0]) / scale - big.0) * scale, (gy + (ay + marker[1]) / scale - big.1) * scale],
+            radius: bigmap::radius(window_px),
+            frame,
+        },
+    })
+}
+
+/// Finds the game window and where to read its maps.
 #[cfg(target_os = "linux")]
-fn locate_minimap() -> Result<String, String> {
+fn locate_minimap() -> Result<CaptureRegion, String> {
     use serde_json::Value;
     let hyprctl = |what: &str| -> Result<Value, String> {
         let reply = crate::layer_shell::hyprland_request(&format!("j/{what}"))
@@ -182,19 +262,16 @@ fn locate_minimap() -> Result<String, String> {
     let scale = num(&monitor["scale"]).max(0.1);
     let (x, y) = (num(&monitor["x"]), num(&monitor["y"]));
     let (w, h) = (num(&monitor["width"]) / scale, num(&monitor["height"]) / scale);
-    Ok(format!(
-        "{},{} {}x{}",
-        (x + w * REGION_X).round(),
-        y.round(),
-        (w * REGION_W).round(),
-        (h * REGION_H).round()
-    ))
+    let game = [num(&game["at"][0]), num(&game["at"][1]), num(&game["size"][0]), num(&game["size"][1])];
+    // Without a usable window size, read the whole monitor as the game (the old behaviour).
+    let game = if game[2] >= 100.0 && game[3] >= 100.0 { game } else { [x, y, w, h] };
+    regions(game, [x, y, w, h], scale)
 }
 
 #[cfg(target_os = "linux")]
-fn capture(region: &str) -> Result<Image, String> {
+fn grim(geometry: &str) -> Result<Image, String> {
     let output = std::process::Command::new("grim")
-        .args(["-t", "ppm", "-g", region, "-"])
+        .args(["-t", "ppm", "-g", geometry, "-"])
         .output()
         .map_err(|e| format!("grim unavailable: {e}"))?;
     if !output.status.success() {
@@ -203,14 +280,59 @@ fn capture(region: &str) -> Result<Image, String> {
     parse_ppm(&output.stdout)
 }
 
+#[cfg(target_os = "linux")]
+fn capture(region: &CaptureRegion) -> Result<Image, String> {
+    grim(&region.minimap)
+}
+
+#[cfg(target_os = "linux")]
+fn capture_bigmap(region: &CaptureRegion) -> Result<Image, String> {
+    grim(&region.bigmap)
+}
+
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-fn locate_minimap() -> Result<String, String> {
+fn locate_minimap() -> Result<CaptureRegion, String> {
     Err("Minimap reading supports Windows and Linux/Hyprland".into())
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-fn capture(_region: &str) -> Result<Image, String> {
+fn capture(_region: &CaptureRegion) -> Result<Image, String> {
     Err("Minimap reading supports Windows and Linux/Hyprland".into())
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
+fn capture_bigmap(_region: &CaptureRegion) -> Result<Image, String> {
+    Err("Minimap reading supports Windows and Linux/Hyprland".into())
+}
+
+/// One frame from whichever map is showing: the corner minimap while it is drawn, else the
+/// big map (Tab), which hides the minimap; else the minimap's "not visible". Returns the
+/// frame and the capture size the recorder stores (minimap pixels).
+fn read(region: &CaptureRegion) -> Result<(MinimapView, [usize; 2]), String> {
+    let image = capture(region)?;
+    choose(&image, region.minimap_marker, &region.plan, || capture_bigmap(region))
+}
+
+fn choose(
+    minimap: &Image,
+    minimap_marker: [f64; 2],
+    plan: &bigmap::Plan,
+    bigmap: impl FnOnce() -> Result<Image, String>,
+) -> Result<(MinimapView, [usize; 2]), String> {
+    let view = analyse(minimap, true);
+    let size = [minimap.width, minimap.height];
+    // The player marker where the minimap draws it: the minimap is showing. Without it,
+    // map lines in the corner may be the big map's, so the big map is checked first.
+    if view.visible && bigmap::marker_near(minimap, minimap_marker, plan.radius * 1.5).is_some() {
+        return Ok((view, size));
+    }
+    if let Ok(image) = bigmap() {
+        let big = bigmap::analyse(&image, plan);
+        if big.visible {
+            return Ok((big, plan.frame.capture_px()));
+        }
+    }
+    Ok((view, size))
 }
 
 pub struct Minimap {
@@ -236,11 +358,10 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
                 match &region {
                     None => MinimapView::status(true, "Starting"),
                     Some((Err(error), _)) => MinimapView::status(true, error),
-                    Some((Ok(area), _)) => match capture(area) {
-                        Ok(image) => {
-                            let view = analyse(&image, true);
+                    Some((Ok(area), _)) => match read(area) {
+                        Ok((view, capture_px)) => {
                             let recorder = app.state::<crate::layout::Recorder>();
-                            if let Some(layout) = recorder.on_frame(&view, [image.width, image.height]) {
+                            if let Some(layout) = recorder.on_frame(&view, capture_px) {
                                 let _ = app.emit("layout-state", layout);
                             }
                             view
@@ -311,12 +432,11 @@ mod tests {
     fn live_minimap() {
         let region = locate_minimap().unwrap();
         let started = Instant::now();
-        let image = capture(&region).unwrap();
-        let view = analyse(&image, true);
+        let (view, capture_px) = read(&region).unwrap();
         println!(
-            "region {region}: {}x{} px in {:?}; {}; {} wall cells of {}x{}; player {:?}",
-            image.width,
-            image.height,
+            "regions {} / {}: {capture_px:?} px in {:?}; {}; {} wall cells of {}x{}; player {:?}",
+            region.minimap,
+            region.bigmap,
             started.elapsed(),
             view.message,
             view.walls.len(),
@@ -334,6 +454,41 @@ mod tests {
         for row in art.iter().step_by(4) {
             println!("{}", row.iter().step_by(2).collect::<String>().trim_end());
         }
+    }
+
+    /// Time per frame on the live game: `cargo test [--release] live_timing -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    #[cfg(target_os = "linux")]
+    fn live_timing() {
+        use crate::layout::Recorder;
+        use crate::tracker::LogEvent;
+        let region = locate_minimap().unwrap();
+        let recorder = Recorder::new(None);
+        recorder.on_log(&LogEvent::ZoneEntered { area: "live-test".into(), level: 0, seed: None }, false);
+        let (mut minimap, mut big, mut analysis, mut record) = (vec![], vec![], vec![], vec![]);
+        let mut message = String::new();
+        for _ in 0..20 {
+            let t = Instant::now();
+            let image = capture(&region).unwrap();
+            minimap.push(t.elapsed());
+            let t = Instant::now();
+            let image_big = capture_bigmap(&region).unwrap();
+            big.push(t.elapsed());
+            let t = Instant::now();
+            let (view, size) = choose(&image, region.minimap_marker, &region.plan, || Ok(image_big)).unwrap();
+            analysis.push(t.elapsed());
+            let t = Instant::now();
+            recorder.on_frame(&view, size);
+            record.push(t.elapsed());
+            message = format!("{}, {} walls", view.message, view.walls.len());
+        }
+        let stat = |v: &[Duration]| {
+            let ms: Vec<f64> = v.iter().map(|d| d.as_secs_f64() * 1000.0).collect();
+            format!("mean {:.1} ms, max {:.1} ms", ms.iter().sum::<f64>() / ms.len() as f64, ms.iter().cloned().fold(0.0, f64::max))
+        };
+        println!("{message}; regions {} / {}", region.minimap, region.bigmap);
+        println!("minimap capture {}; big-map capture {}; analysis {}; recorder {}", stat(&minimap), stat(&big), stat(&analysis), stat(&record));
     }
 
     /// Records the live game for LIVE_SECONDS (default 45) into LIVE_OUT (a layouts folder):
@@ -354,9 +509,8 @@ mod tests {
         while started.elapsed() < Duration::from_secs(seconds) {
             let t = Instant::now();
             let Ok(region) = locate_minimap() else { continue };
-            let Ok(image) = capture(&region) else { continue };
-            let view = analyse(&image, true);
-            recorder.on_frame(&view, [image.width, image.height]);
+            let Ok((view, capture_px)) = read(&region) else { continue };
+            recorder.on_frame(&view, capture_px);
             frames += 1;
             slowest = slowest.max(t.elapsed());
             std::thread::sleep(FRAME_INTERVAL.saturating_sub(t.elapsed()));
@@ -364,6 +518,83 @@ mod tests {
         // A zone change saves and closes the recording.
         recorder.on_log(&LogEvent::ZoneEntered { area: "end".into(), level: 0, seed: None }, false);
         println!("{frames} frames, slowest {slowest:?}");
+    }
+
+    fn fixture(name: &str) -> Image {
+        let path = format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
+        parse_ppm(&std::fs::read(&path).unwrap()).unwrap()
+    }
+
+    /// The big map on Clearfell (bigmap-player.ppm) and how to read it.
+    fn big_map() -> (Image, bigmap::Plan) {
+        let frame = bigmap::Frame { cols: 190, rows: 150, player: [150.0, 30.0] };
+        (fixture("bigmap-player.ppm"), bigmap::Plan { marker: [300.0, 60.0], radius: 16.0, frame })
+    }
+
+    /// A minimap frame: a wall line and the player cross at (60, 50).
+    fn minimap() -> Image {
+        image(120, 100, |x, y| match (x, y) {
+            (_, 20 | 21) => [91, 91, 121],
+            (57..=63, 47..=53) => [230, 110, 30],
+            _ => [10, 14, 20],
+        })
+    }
+
+    #[test]
+    fn minimap_wins_while_it_shows_its_player() {
+        let (_, plan) = big_map();
+        let (view, size) = choose(&minimap(), [60.5, 50.5], &plan, || panic!("big map read")).unwrap();
+        assert_eq!((view.message.as_str(), size), ("Reading minimap", [120, 100]));
+    }
+
+    #[test]
+    fn big_map_is_read_when_the_corner_shows_zone_text() {
+        // The corner while the big map is open: zone name and league text, no minimap.
+        let corner = fixture("corner-bigmap-open.ppm");
+        let (big, plan) = big_map();
+        let (view, size) = choose(&corner, [100.0, 80.0], &plan, || Ok(big)).unwrap();
+        assert_eq!(view.message, "Reading big map");
+        assert_eq!(size, [380, 300]);
+        assert_eq!((view.cols, view.rows, view.player), (190, 150, Some([150.0, 30.0])));
+        assert!(view.walls.len() > 500);
+    }
+
+    #[test]
+    fn minimap_without_its_player_still_counts_when_there_is_no_big_map() {
+        // Walls but no player cross (as today: still read), and the big map shows nothing.
+        let walls_only = image(120, 100, |_, y| if y == 20 || y == 21 { [91, 91, 121] } else { [10, 14, 20] });
+        let (_, plan) = big_map();
+        let scene = fixture("bigmap-scene.ppm");
+        let (view, _) = choose(&walls_only, [60.5, 50.5], &plan, || Ok(scene)).unwrap();
+        assert_eq!(view.message, "Reading minimap, player marker not found");
+        // Neither map: the minimap's "not visible", also when the big map can't be captured.
+        let dark = image(120, 100, |_, _| [12, 13, 18]);
+        let (view, _) = choose(&dark, [60.5, 50.5], &plan, || Err("grim failed".into())).unwrap();
+        assert_eq!(view.message, "Minimap not visible");
+    }
+
+    #[test]
+    fn regions_follow_the_game_window() {
+        // The owner's setup: DP-1 at 1920,0 (3840x2160 px, scale 2), the game window
+        // floating 10 logical px left of it and 1 down.
+        let r = regions([1910.0, 1.0, 1920.0, 1080.0], [1920.0, 0.0, 1920.0, 1080.0], 2.0).unwrap();
+        // The minimap ends at the window's right edge, not the monitor's (whose last
+        // 10 px show a lavender window border).
+        assert_eq!(r.minimap, "3530,1 300x259");
+        assert_eq!(r.bigmap, "2702,379 319x278");
+        assert_eq!(r.plan.frame.cols, 300);
+        assert_eq!(r.plan.frame.rows, 259);
+        let [px, py] = r.plan.frame.player;
+        assert!((px - 157.9).abs() < 0.1 && (py - 142.0).abs() < 0.1, "{px},{py}");
+        // The big-map marker (1919, 1059 window px) inside the big-map capture.
+        let [mx, my] = r.plan.marker;
+        assert!((mx - (1918.8 - (2702.0 - 1910.0) * 2.0)).abs() < 0.2, "{mx}");
+        assert!((my - (1059.0 - (379.0 - 1.0) * 2.0)).abs() < 0.2, "{my}");
+        assert_eq!(r.minimap_marker, [px as f64 * 2.0, py as f64 * 2.0]);
+        // A window filling its monitor reads the same corner as before.
+        let r = regions([1920.0, 0.0, 1920.0, 1080.0], [1920.0, 0.0, 1920.0, 1080.0], 2.0).unwrap();
+        assert_eq!(r.minimap, "3540,0 300x259");
+        assert!(regions([0.0, 0.0, 1920.0, 1080.0], [1920.0, 0.0, 1920.0, 1080.0], 2.0).is_err());
     }
 
     #[test]

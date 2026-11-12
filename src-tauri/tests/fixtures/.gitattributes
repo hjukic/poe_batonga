@@ -1,0 +1,2 @@
+# Real screenshot crops: never convert line endings or diff as text.
+*.ppm binary
