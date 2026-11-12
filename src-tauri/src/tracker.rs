@@ -477,6 +477,32 @@ impl Inner {
         over
     }
 
+    /// Ticks the kill steps of the current zone's bosses the map shows dead
+    /// (`Recorder::dead_bosses`: the boss's own icon seen alive, then grey at the same
+    /// place). True when a step was ticked. A step unticked by hand stays unticked.
+    pub fn tick_dead_bosses(&mut self, dead: &[String]) -> bool {
+        let Inner { routes, progress, .. } = self;
+        let Some(area) = progress.current_area.clone() else { return false };
+        let mut ticked = false;
+        for step in routes.iter().filter(|r| r.zone.id == area).flat_map(|r| &r.steps) {
+            let Some(boss) = step.parts.iter().find(|p| p.style.as_deref() == Some("boss")).map(|p| p.text.trim()) else {
+                continue;
+            };
+            if !dead.iter().any(|name| name == boss)
+                || progress.completed.contains_key(&step.id)
+                || progress.dismissed.contains(&step.id)
+            {
+                continue;
+            }
+            progress.completed.insert(
+                step.id.clone(),
+                Completion { at: now_label(), source: "map".into(), evidence: format!("The map shows {boss}'s icon grey") },
+            );
+            ticked = true;
+        }
+        ticked
+    }
+
     pub fn sync_navigation(&self, app: &AppHandle) {
         let completed = self.routes.iter().flat_map(|r| &r.steps)
             .filter(|s| self.progress.completed.contains_key(&s.id))
@@ -770,6 +796,7 @@ fn follow(app: &AppHandle, path: &Path) -> std::io::Result<()> {
             continue; // more may be waiting beyond MAX_READ
         }
         live = true;
+        tick_map_kills(app);
         settle_quiet_fight(app);
         std::thread::sleep(POLL);
     }
@@ -868,6 +895,28 @@ fn set_in_zone(app: &AppHandle, in_zone: bool) {
         inner.in_zone = in_zone;
     }
     let _ = app.emit("in-zone", in_zone);
+}
+
+/// Between log lines: ticks the kill of a boss the map shows dead (the log has no line
+/// for most kills). Asked twice a second; the recorder's answer is a short list.
+fn tick_map_kills(app: &AppHandle) {
+    let dead = app.state::<crate::layout::Recorder>().dead_bosses();
+    if dead.is_empty() {
+        return;
+    }
+    let tracker = app.state::<Tracker>();
+    let Ok(mut inner) = tracker.0.lock() else { return };
+    if !inner.tick_dead_bosses(&dead) {
+        return;
+    }
+    inner.sync_navigation(app);
+    inner.save();
+    let _ = app.emit("tracker-state", inner.view());
+    let fight_over = inner.settle_fight();
+    drop(inner);
+    if fight_over {
+        crate::set_fight(app, false);
+    }
 }
 
 /// Between log lines: ends a fight whose boss has gone quiet.
@@ -1282,6 +1331,31 @@ mod tests {
         // Later talks in the town's list stay open.
         assert!(!progress.completed.contains_key("renly-runed-spikes"));
         assert!(!progress.completed.contains_key("town-una-roots"));
+    }
+
+    #[test]
+    fn a_boss_the_map_shows_dead_ticks_its_kill_step_in_its_zone() {
+        let mut inner = Inner {
+            routes: load_routes(),
+            progress: Progress::default(),
+            log: LogStatus { connected: false, path: None, message: String::new() },
+            save_path: None,
+            skip_optional: false,
+            recent: Default::default(),
+            fight: None,
+            in_zone: true,
+        };
+        let miller = ["The Bloated Miller".to_string()];
+        assert!(!inner.tick_dead_bosses(&miller), "no zone yet");
+        inner.progress.current_area = Some("G1_2".into());
+        assert!(!inner.tick_dead_bosses(&miller), "not this zone's boss");
+        inner.progress.current_area = Some("G1_1".into());
+        assert!(inner.tick_dead_bosses(&miller));
+        assert_eq!(inner.progress.completed["kill-bloated-miller"].source, "map");
+        assert!(!inner.tick_dead_bosses(&miller), "ticked once");
+        // Unticked by hand: the map does not tick it again.
+        toggle(&inner.routes, &mut inner.progress, "kill-bloated-miller").unwrap();
+        assert!(!inner.tick_dead_bosses(&miller));
     }
 
     #[test]

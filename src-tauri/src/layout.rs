@@ -1165,7 +1165,6 @@ impl Recorder {
     /// dead in this visit (see `Session::see_bosses` for when a grey icon counts). Empty
     /// outside a zone, and whenever no boss icon was read: being wrong about the icons
     /// costs nothing.
-    #[allow(dead_code)] // for the chair to wire to the checklist
     pub fn dead_bosses(&self) -> Vec<String> {
         self.0.lock().ok().and_then(|s| s.session.as_ref().map(|s| s.dead.clone())).unwrap_or_default()
     }
