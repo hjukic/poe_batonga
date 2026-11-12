@@ -22,7 +22,8 @@ document.body.innerHTML = `
   <svg id="compass" viewBox="-230 -230 460 460" aria-hidden="true">
     <circle class="ring" r="${RADIUS}"/>
     <g id="needle">
-      <path class="head" d="M${RADIUS + 22} 0 L${RADIUS - 6} -17 L${RADIUS + 2} 0 L${RADIUS - 6} 17 Z"/>
+      <!-- A dart: long and narrow with a deep notch, so the tip is unmistakable at any angle. -->
+      <path class="head" d="M${RADIUS + 32} 0 L${RADIUS - 12} -13 L${RADIUS - 2} 0 L${RADIUS - 12} 13 Z"/>
     </g>
   </svg>
   <span id="label"></span>`;
@@ -62,7 +63,7 @@ function frame() {
     needle.setAttribute('transform', `rotate(${shown})`);
     const r = (shown * Math.PI) / 180;
     // The label sits just outside the arrow head.
-    label.style.transform = `translate(${Math.cos(r) * (RADIUS + 44)}px, ${Math.sin(r) * (RADIUS + 44)}px) translate(-50%, -50%)`;
+    label.style.transform = `translate(${Math.cos(r) * (RADIUS + 56)}px, ${Math.sin(r) * (RADIUS + 56)}px) translate(-50%, -50%)`;
   }
   requestAnimationFrame(frame);
 }
