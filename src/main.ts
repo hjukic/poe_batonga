@@ -20,11 +20,15 @@ interface StepView {
   /** The compass target this step stands for, if any. */
   target: string | null;
   state: 'done' | 'open' | 'manual' | 'note'; source: string | null;
+  /** Which visit to the zone the step belongs to. */
+  visit: number;
 }
 interface TrackerView {
   zone: { id: string; name: string; level: number };
   currentArea: string | null;
   steps: StepView[];
+  /** The visit under way: only its steps are listed. */
+  visit: number;
   log: { connected: boolean; path: string | null; message: string };
 }
 
@@ -151,6 +155,8 @@ const MAX_ROWS = 9;
 const MAX_OPEN = 6;
 /** Unfolded by a click on the summary line (to untick a hidden step). */
 let unfolded = false;
+/** Steps of the zone's other visits are listed too (a click on their summary line). */
+let allVisits = false;
 let lastTracker: TrackerView | null = null;
 
 function stepRow(step: StepView) {
@@ -190,7 +196,7 @@ function stepRow(step: StepView) {
 }
 
 /** A muted line that stands for folded steps; a click (unlocked) unfolds or folds the list. */
-function summaryRow(text: string, done: boolean) {
+function summaryRow(text: string, done: boolean, onClick = () => { unfolded = !unfolded; }) {
   const row = document.createElement('button');
   row.type = 'button';
   row.className = 'step summary';
@@ -202,20 +208,29 @@ function summaryRow(text: string, done: boolean) {
   label.textContent = text;
   row.append(marker, label);
   row.addEventListener('click', () => {
-    unfolded = !unfolded;
+    onClick();
     if (lastTracker) renderTracker(lastTracker);
   });
   return row;
 }
 
 function renderTracker(view: TrackerView) {
-  if (lastTracker && lastTracker.zone.id !== view.zone.id) unfolded = false;
+  if (lastTracker && lastTracker.zone.id !== view.zone.id) {
+    unfolded = false;
+    allVisits = false;
+  }
   lastTracker = view;
   showMessage('#log-warning', view.log.connected ? null : view.log.message);
-  $('.zone').textContent = `${view.zone.name} · Lv ${view.zone.level}`;
+  // A long name (a town's) takes the room of the level.
+  const zone = $('.zone');
+  zone.title = `${view.zone.name} · Lv ${view.zone.level}`;
+  zone.textContent = view.zone.name.length > 16 ? view.zone.name : zone.title;
   const rows: HTMLElement[] = [];
+  // A zone's list covers every visit of the route; only this visit's steps are shown.
   // Speedrun (the default): optional steps are left out of the list.
-  const steps = optionalContent.checked ? view.steps : view.steps.filter((step) => !step.optional);
+  const wanted = optionalContent.checked ? view.steps : view.steps.filter((step) => !step.optional);
+  const steps = allVisits ? wanted : wanted.filter((step) => step.visit === view.visit);
+  const otherVisits = wanted.filter((step) => step.visit !== view.visit && step.kind === 'objective').length;
   if (steps.length <= MAX_ROWS || unfolded) {
     rows.push(...steps.map(stepRow));
     if (unfolded) rows.push(summaryRow('Show less', false));
@@ -231,6 +246,9 @@ function renderTracker(view: TrackerView) {
       if (next && shown.has(next)) rows.push(stepRow(step));
     });
     if (open.length > shown.size) rows.push(summaryRow(`+${open.length - shown.size} more`, false));
+  }
+  if (otherVisits) {
+    rows.push(summaryRow(allVisits ? 'This visit only' : `${otherVisits} on other visits`, false, () => { allVisits = !allVisits; }));
   }
   $('#route').replaceChildren(...rows);
   markHeading();
@@ -523,19 +541,20 @@ $('#reset-progress').addEventListener('click', () => {
 const browserPreview: TrackerView = {
   zone: { id: 'G1_4', name: 'The Grelwood', level: 4 },
   currentArea: null,
+  visit: 1,
   log: { connected: true, path: null, message: '' },
   steps: [
-    {"id": "grelwood-talk-una", "kind": "objective", "parts": [{"text": "Find and talk to "}, {"text": "Una", "style": "npc"}], "optional": false, "target": null, "state": "done", "source": "log"},
-    {"id": "grelwood-waypoint", "kind": "objective", "parts": [{"text": "Take the waypoint"}], "optional": false, "target": null, "state": "done", "source": "log"},
-    {"id": "grelwood-grim-tangle-wp", "kind": "objective", "parts": [{"text": "Grim Tangle WP, return"}], "optional": false, "target": "The Grim Tangle", "state": "done", "source": "log"},
-    {"id": "grelwood-red-vale-wp", "kind": "objective", "parts": [{"text": "Red Vale WP, return"}], "optional": false, "target": "The Red Vale", "state": "open", "source": null},
-    {"id": "kill-gerung", "kind": "objective", "parts": [{"text": "Kill "}, {"text": "Gerung", "style": "boss"}, {"text": "Skill Gem", "style": "reward"}], "optional": true, "target": "Gerung", "state": "manual", "source": null},
-    {"id": "kill-areagne", "kind": "objective", "parts": [{"text": "Kill "}, {"text": "Areagne", "style": "boss"}, {"text": " at the hut"}, {"text": "Support Gem", "style": "reward"}], "optional": true, "target": "Areagne's hut", "state": "manual", "source": null},
-    {"id": "directions-grelwood", "kind": "note", "parts": [{"text": "Go upstream along the river to The Red Vale", "style": "direction"}], "optional": false, "target": null, "state": "note", "source": null},
-    {"id": "enter-red-vale", "kind": "objective", "parts": [{"text": "Enter The Red Vale"}], "optional": false, "target": "The Red Vale", "state": "open", "source": null},
-    {"id": "runic-seals", "kind": "objective", "parts": [{"text": "Activate 3 Runic Seals"}], "optional": false, "target": null, "state": "manual", "source": null},
-    {"id": "grelwood-una-seals", "kind": "objective", "parts": [{"text": "Talk to "}, {"text": "Una", "style": "npc"}], "optional": false, "target": null, "state": "manual", "source": null},
-    {"id": "grelwood-portal-town", "kind": "objective", "parts": [{"text": "Portal to town"}], "optional": false, "target": null, "state": "manual", "source": null},
+    {"id": "grelwood-talk-una", "kind": "objective", "parts": [{"text": "Find and talk to "}, {"text": "Una", "style": "npc"}], "optional": false, "target": null, "state": "done", "source": "log", "visit": 0},
+    {"id": "grelwood-waypoint", "kind": "objective", "parts": [{"text": "Take the waypoint"}], "optional": false, "target": null, "state": "done", "source": "log", "visit": 0},
+    {"id": "grelwood-grim-tangle-wp", "kind": "objective", "parts": [{"text": "Grim Tangle WP, return"}], "optional": false, "target": "The Grim Tangle", "state": "done", "source": "log", "visit": 0},
+    {"id": "grelwood-red-vale-wp", "kind": "objective", "parts": [{"text": "Red Vale WP, return"}], "optional": false, "target": "The Red Vale", "state": "open", "source": null, "visit": 1},
+    {"id": "kill-gerung", "kind": "objective", "parts": [{"text": "Kill "}, {"text": "Gerung", "style": "boss"}, {"text": "Skill Gem", "style": "reward"}], "optional": true, "target": "Gerung", "state": "manual", "source": null, "visit": 2},
+    {"id": "kill-areagne", "kind": "objective", "parts": [{"text": "Kill "}, {"text": "Areagne", "style": "boss"}, {"text": " at the hut"}, {"text": "Support Gem", "style": "reward"}], "optional": true, "target": "Areagne's hut", "state": "manual", "source": null, "visit": 2},
+    {"id": "directions-grelwood", "kind": "note", "parts": [{"text": "Go upstream along the river to The Red Vale", "style": "direction"}], "optional": false, "target": null, "state": "note", "source": null, "visit": 2},
+    {"id": "enter-red-vale", "kind": "objective", "parts": [{"text": "Enter The Red Vale"}], "optional": false, "target": "The Red Vale", "state": "open", "source": null, "visit": 2},
+    {"id": "runic-seals", "kind": "objective", "parts": [{"text": "Activate 3 Runic Seals"}], "optional": false, "target": null, "state": "manual", "source": null, "visit": 3},
+    {"id": "grelwood-una-seals", "kind": "objective", "parts": [{"text": "Talk to "}, {"text": "Una", "style": "npc"}], "optional": false, "target": null, "state": "manual", "source": null, "visit": 3},
+    {"id": "grelwood-portal-town", "kind": "objective", "parts": [{"text": "Portal to town"}], "optional": false, "target": null, "state": "manual", "source": null, "visit": 3},
   ],
 };
 

@@ -15,7 +15,9 @@ A Tauri overlay is available. It has two parts:
   talks, pick-ups or waypoints: those steps are taken as done when a later step of their list is
   logged, and **a click on a step** marks it done or not done at any time (the rows take the
   mouse also while the panel is locked; the arrow heads for the first open step). With
-  "Optional content" off (the default) optional steps are not listed. A list of more than nine
+  "Optional content" off (the default) optional steps are not listed. A zone the route passes
+  through several times (a town) shows one visit at a time: the steps up to the one that leaves
+  the zone; the rest are behind "N on other visits". A list of more than nine
   rows folds. The overlay hides during a boss fight.
 - **A compass needle** around the character that points to the next step that has a target (a
   zone exit, a boss arena). It reads the corner minimap, or the big map (Tab) while that is

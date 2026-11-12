@@ -346,8 +346,12 @@ pub fn toggle(routes: &[Route], progress: &mut Progress, id: &str) -> Result<(),
     if step.kind != "objective" {
         return Err("Only objectives can be ticked".into());
     }
-    if progress.completed.remove(id).is_some() {
-        progress.dismissed.insert(id.to_string());
+    if let Some(done) = progress.completed.remove(id) {
+        // Unticking what the app ticked tells it not to tick that step again. Taking
+        // back one's own click does not: the step is simply open again.
+        if done.source != "manual" {
+            progress.dismissed.insert(id.to_string());
+        }
     } else {
         progress.dismissed.remove(id);
         progress.completed.insert(
@@ -377,6 +381,8 @@ pub struct StepView {
     /// "done", "open" (watched in the log) or "manual" (no log trigger known).
     state: String,
     source: Option<String>,
+    /// Which visit to the zone the step belongs to (see `Route::visits`).
+    visit: usize,
 }
 
 #[derive(Clone, Serialize)]
@@ -387,12 +393,48 @@ pub struct LogStatus {
     pub message: String,
 }
 
+impl Route {
+    /// Each step's visit to the zone, from 0. A zone's list covers every time the route
+    /// passes through it (the town's: five times). A visit ends with the step that leaves
+    /// the zone (a zone-entry trigger for another area); the steps after it belong to the
+    /// next time the player is there.
+    pub fn visits(&self) -> Vec<usize> {
+        let mut visit = 0;
+        self.steps
+            .iter()
+            .map(|step| {
+                let this = visit;
+                if matches!(&step.trigger, Some(Trigger::ZoneEntered { area, .. }) if *area != self.zone.id) {
+                    visit += 1;
+                }
+                this
+            })
+            .collect()
+    }
+
+    /// The visit under way: the first whose leaving step is not done (the last one when
+    /// all are, or when the list ends without a leaving step).
+    pub fn current_visit(&self, progress: &Progress) -> usize {
+        let visits = self.visits();
+        let last = visits.last().copied().unwrap_or(0);
+        (0..last)
+            .find(|&v| {
+                // A visit's leaving step is its last step.
+                let leaving = visits.iter().rposition(|&x| x == v).map(|i| &self.steps[i]);
+                leaving.is_some_and(|step| !progress.completed.contains_key(&step.id))
+            })
+            .unwrap_or(last)
+    }
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackerView {
     zone: Zone,
     current_area: Option<String>,
     steps: Vec<StepView>,
+    /// The visit under way: the page lists its steps only (`StepView::visit`).
+    visit: usize,
     log: LogStatus,
 }
 
@@ -509,7 +551,12 @@ impl Inner {
             .filter_map(|s| s.navigation_target.as_ref())
             .map(|t| (t.area.clone(), t.label.clone())).collect();
         // Open steps with a target, in checklist order: what the compass may head for.
-        let targets = self.routes.iter().flat_map(|r| &r.steps)
+        // Only steps of each zone's visit under way: what the list shows.
+        let targets = self.routes.iter()
+            .flat_map(|r| {
+                let now = r.current_visit(&self.progress);
+                r.steps.iter().zip(r.visits()).filter(move |(_, visit)| *visit == now).map(|(step, _)| step)
+            })
             .filter(|s| !self.progress.completed.contains_key(&s.id))
             .filter(|s| !(self.skip_optional && s.optional))
             .filter_map(|s| s.navigation_target.as_ref().map(|t| (t.area.clone(), crate::layout::guide::NavTarget {
@@ -553,10 +600,12 @@ impl Inner {
 
     pub fn view(&self) -> TrackerView {
         let route = self.shown();
+        let visits = route.visits();
         let steps = route
             .steps
             .iter()
-            .map(|step| {
+            .zip(visits)
+            .map(|(step, visit)| {
                 let done = self.progress.completed.get(&step.id);
                 let state = if step.kind != "objective" {
                     "note"
@@ -575,6 +624,7 @@ impl Inner {
                     target: step.navigation_target.as_ref().map(|t| t.label.clone()),
                     state: state.into(),
                     source: done.map(|c| c.source.clone()),
+                    visit,
                 }
             })
             .collect();
@@ -582,6 +632,7 @@ impl Inner {
             zone: route.zone.clone(),
             current_area: self.progress.current_area.clone(),
             steps,
+            visit: route.current_visit(&self.progress),
             log: self.log.clone(),
         }
     }
@@ -1356,6 +1407,48 @@ mod tests {
         // Unticked by hand: the map does not tick it again.
         toggle(&inner.routes, &mut inner.progress, "kill-bloated-miller").unwrap();
         assert!(!inner.tick_dead_bosses(&miller));
+    }
+
+    #[test]
+    fn a_list_is_split_into_visits_at_the_steps_that_leave_the_zone() {
+        let routes = load_routes();
+        let town = routes.iter().find(|r| r.zone.id == "G1_town").unwrap();
+        let visit_of = |id: &str| town.visits()[town.steps.iter().position(|s| s.id == id).unwrap()];
+        // First visit: Renly, then out to Clearfell. The spikes are for the second.
+        assert_eq!((visit_of("talk-renly"), visit_of("enter-clearfell")), (0, 0));
+        assert_eq!((visit_of("renly-runed-spikes"), visit_of("town-to-grelwood")), (1, 1));
+        assert_eq!(visit_of("town-una-roots"), 2);
+        assert_eq!(visit_of("enter-vastiri-outskirts"), 4);
+        let mut progress = Progress::default();
+        assert_eq!(town.current_visit(&progress), 0);
+        // The visit ends when its leaving step is done, whatever else is open.
+        enter_zone(&routes, &mut progress, "G1_town");
+        enter_zone(&routes, &mut progress, "G1_2");
+        assert_eq!(town.current_visit(&progress), 1);
+        // A zone left once: one visit.
+        let riverbank = routes.iter().find(|r| r.zone.id == "G1_1").unwrap();
+        assert!(riverbank.visits().iter().all(|&v| v == 0));
+        assert_eq!(riverbank.current_visit(&progress), 0);
+    }
+
+    #[test]
+    fn taking_back_a_click_leaves_the_step_open_for_the_log() {
+        let routes = load_routes();
+        let mut progress = Progress::default();
+        // Ticked by a click, then unticked by a click: open again, not held back.
+        toggle(&routes, &mut progress, "enter-clearfell").unwrap();
+        toggle(&routes, &mut progress, "enter-clearfell").unwrap();
+        assert!(progress.dismissed.is_empty());
+        enter_zone(&routes, &mut progress, "G1_2");
+        assert_eq!(progress.completed["enter-clearfell"].source, "log");
+        // Unticking what the log ticked holds it back.
+        toggle(&routes, &mut progress, "enter-clearfell").unwrap();
+        assert!(progress.dismissed.contains("enter-clearfell"));
+        enter_zone(&routes, &mut progress, "G1_2");
+        assert!(!progress.completed.contains_key("enter-clearfell"));
+        // A click ticks it again and lifts the hold.
+        toggle(&routes, &mut progress, "enter-clearfell").unwrap();
+        assert!(progress.dismissed.is_empty());
     }
 
     #[test]
