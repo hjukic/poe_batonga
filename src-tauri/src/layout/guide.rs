@@ -35,6 +35,8 @@ const NEAR_WALL: i32 = 2;
 const SCALE_MIN: f64 = 0.55;
 const SCALE_MAX: f64 = 1.3;
 const SCALE_STEP: f64 = 1.04;
+/// Scale for the rough arrow before any visit has been measured.
+const DEFAULT_SCALE: f64 = 0.8;
 /// Fewer recorded walls than this say too little about the layout.
 const MIN_WALLS: usize = 150;
 /// At most this many recorded walls are scored per hypothesis.
@@ -430,7 +432,8 @@ pub struct GuideView {
     pub target: String,
     /// Screen direction in degrees: 0 = right, 90 = down.
     pub degrees: Option<f32>,
-    /// "estimated" (walls match the terrain) or "unconfirmed".
+    /// "estimated" (walls match the terrain), "rough" (poe2way's layout assumed
+    /// as is, or an ambiguous match) or "unconfirmed" (no direction).
     pub source: String,
     /// Walking distance in minimap cells.
     pub distance: f32,
@@ -545,9 +548,7 @@ pub fn guide(catalog: &Catalog, ev: &Evidence) -> Option<GuideView> {
         measured: ev.scale.is_some(),
         turned: false,
     };
-    if ev.walls.len() < MIN_WALLS || anchors(zone, ev.arrived_from).is_empty() {
-        return Some(view);
-    }
+    let Some(&anchor) = anchors(zone, ev.arrived_from).first() else { return Some(view) };
 
     let dist = zone.distances(&goals);
     let player = (ev.player.0 as f64, ev.player.1 as f64);
@@ -564,11 +565,27 @@ pub fn guide(catalog: &Catalog, ev: &Evidence) -> Option<GuideView> {
         Some((screen_bearing(dx, dy)?, length * fit.scale))
     };
 
+    // Until the walls confirm a placement: poe2way's layout as is, entered at the arrival exit.
+    let assumed = Fit { anchor, turn: 0, scale: ev.scale.unwrap_or(DEFAULT_SCALE), score: 0.0 };
+    let rough = |view: &mut GuideView, fit: &Fit| {
+        if let Some((degrees, distance)) = heading(fit) {
+            view.degrees = Some(degrees);
+            view.distance = distance as f32;
+            view.turned = fit.turn != 0;
+            view.source = "rough".into();
+        }
+    };
+    if ev.walls.len() < MIN_WALLS {
+        rough(&mut view, &assumed);
+        return Some(view);
+    }
+
     let all = fits(zone, ev);
     let best = *all.first()?;
-    let Some((degrees, distance)) = heading(&best) else { return Some(view) };
-    view.distance = distance as f32;
-    view.turned = best.turn != 0;
+    let Some((degrees, distance)) = heading(&best) else {
+        rough(&mut view, &assumed);
+        return Some(view);
+    };
     // The best placement pointing another way, among the clearly different ones.
     let rival = all
         .iter()
@@ -580,7 +597,12 @@ pub fn guide(catalog: &Catalog, ev: &Evidence) -> Option<GuideView> {
     view.confidence = (1.0 - rival / best.score.max(1e-9)) as f32;
     if best.score >= MIN_FIT && view.confidence >= MIN_CONFIDENCE {
         view.degrees = Some(degrees);
+        view.distance = distance as f32;
+        view.turned = best.turn != 0;
         view.source = "estimated".into();
+    } else {
+        // A good but ambiguous match still beats assuming poe2way's layout.
+        rough(&mut view, if best.score >= MIN_FIT { &best } else { &assumed });
     }
     Some(view)
 }
@@ -673,11 +695,12 @@ mod tests {
     }
 
     #[test]
-    fn no_walls_yet_names_the_target_without_a_direction() {
+    fn no_walls_yet_gives_a_rough_direction() {
         let view = guide(&Catalog::load(), &ev("G1_2", "G1_town", &[])).unwrap();
         assert_eq!(view.target, "Mud Burrow");
-        assert_eq!(view.degrees, None);
-        assert_eq!(view.source, "unconfirmed");
+        assert!(view.degrees.is_some(), "{view:?}");
+        assert_eq!(view.source, "rough");
+        assert!(!view.turned);
     }
 
     #[test]
@@ -706,12 +729,12 @@ mod tests {
     }
 
     #[test]
-    fn walls_of_another_layout_do_not_give_a_direction() {
+    fn walls_of_another_layout_give_only_a_rough_direction() {
         // A plain grid of walls fits no part of Clearfell well.
         let walls: Vec<(i32, i32)> = (0..40).flat_map(|i| [(i * 7 - 140, 0), (0, i * 7 - 140)]).chain(
             (0..120).map(|i| ((i * 37 % 200) - 100, (i * 53 % 200) - 100))).collect();
         let view = guide(&Catalog::load(), &ev("G1_2", "G1_town", &walls)).unwrap();
-        assert_eq!(view.degrees, None, "{view:?}");
+        assert_eq!(view.source, "rough", "{view:?}");
     }
 
     #[test]

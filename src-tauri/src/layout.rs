@@ -760,8 +760,8 @@ mod tests {
         }
         let guide = recorder.view().unwrap().guide.unwrap();
         assert_eq!(guide.target, "Mud Burrow");
-        // A corridor that is not Clearfell gives no direction.
-        assert_eq!(guide.degrees, None);
+        // A corridor that is not Clearfell gives only the rough direction.
+        assert_eq!(guide.source, "rough");
 
         let guide = recorder.set_completed(vec![("G1_2".into(), "Mud Burrow".into())]).unwrap().guide.unwrap();
         assert_eq!(guide.target, "The Grelwood");

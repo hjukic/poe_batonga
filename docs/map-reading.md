@@ -217,10 +217,14 @@ no terrain there and shows no arrow.
   8 turns in 45° steps x mirror x scale 0.55-1.3 minimap cells per game unit) is scored by how many recorded walls lie within two
   6-unit cells of the outline, above the share chance would give for the area they
   cover. Squeezing walls into a narrow corridor therefore scores nothing.
-- **Arrow:** shown only with at least 150 recorded walls, a best score of 0.5 and a
-  30% lead over the best placement pointing more than 45° elsewhere; otherwise
-  "Direction not confirmed". It points 12 cells (72 units) along the shortest
-  walkable path, so it bends around walls; the distance is the path length.
+- **Arrow:** "estimated" with at least 150 recorded walls, a best score of 0.5 and a
+  30% lead over the best placement pointing more than 45° elsewhere. Before that
+  (v0.1.11) a **rough** arrow shows right away: poe2way's layout as is (no turn,
+  measured scale or 0.8), entered at the arrival exit; with an ambiguous but good
+  match (score 0.5, no lead) the best placement instead. It points 12 cells
+  (72 units) along the shortest walkable path, so it bends around walls; the
+  distance is the path length. The arrow is only the compass around the character;
+  the panel shows the target and how sure the direction is, without an arrow.
 - **Scale:** a finished visit that clearly matches stores minimap cells per game
   unit in `terrain-scales.json`; later visits use it (or the median of all areas).
 

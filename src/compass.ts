@@ -9,6 +9,8 @@ interface GuideView {
   target: string;
   /** Screen direction: 0 = right, 90 = down; null while not confirmed. */
   degrees: number | null;
+  /** "rough" until the recorded walls confirm the layout. */
+  source: string;
 }
 interface LayoutView { guide: GuideView | null }
 interface MinimapView { enabled: boolean; visible: boolean; player: [number, number] | null }
@@ -38,6 +40,7 @@ function update() {
   svg.classList.toggle('off', target === null);
   label.classList.toggle('off', target === null);
   if (target === null || !guide) return;
+  svg.classList.toggle('rough', guide.source === 'rough');
   label.textContent = guide.target || (guide.targetKind === 'entrance' ? 'Exit' : guide.targetKind);
 }
 
@@ -58,7 +61,7 @@ function frame() {
 
 async function start() {
   if (!isTauri()) {
-    guide = { targetKind: 'boss', target: 'Miller', degrees: -40 };
+    guide = { targetKind: 'boss', target: 'Miller', degrees: -40, source: 'rough' };
     tracking = true;
   } else {
     await listen<LayoutView | null>('layout-state', (event) => { guide = event.payload?.guide ?? null; update(); });

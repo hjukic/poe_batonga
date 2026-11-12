@@ -46,14 +46,14 @@ interface LayoutView {
   guide: GuideView | null;
 }
 
-/** The arrow: direction along the walkable path to the next exit, from poe2way's terrain. */
+/** The compass arrow (its own window): direction along the walkable path to the next exit, from poe2way's terrain. */
 interface GuideView {
   variant: string;
   targetKind: string;
   target: string;
   /** Screen direction: 0 = right, 90 = down. */
   degrees: number | null;
-  source: 'estimated' | 'unconfirmed' | 'encounter';
+  source: 'estimated' | 'rough' | 'unconfirmed' | 'encounter';
   /** Minimap cells. */
   distance: number;
   /** 0-1, lead over the best hypothesis pointing elsewhere. */
@@ -81,7 +81,6 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     </header>
     <div class="route" id="route"></div>
     <div class="guide" id="guide" hidden>
-      <svg class="arrow" id="guide-arrow" viewBox="-12 -12 24 24" aria-hidden="true"><path d="M-8 -5 L8 0 L-8 5 L-4 0 Z"/></svg>
       <span id="guide-text"></span>
     </div>
     <div class="minimap" id="minimap" hidden>
@@ -193,13 +192,11 @@ function renderGuide(guide: GuideView | null) {
   if (!guide) return;
   const name = guide.target || (guide.targetKind === 'entrance' ? 'Exit' : guide.targetKind);
   const bearing = guide.degrees !== null && Number.isFinite(guide.degrees);
-  const arrow = $('#guide-arrow');
-  arrow.hidden = !bearing;
-  box.classList.toggle('unsure', guide.source === 'unconfirmed');
-  if (bearing) arrow.style.transform = `rotate(${guide.degrees}deg)`;
+  box.classList.toggle('unsure', guide.source !== 'estimated' && guide.source !== 'encounter');
   const how = guide.source === 'encounter'
     ? (bearing ? 'Back to encounter area' : 'Encounter area · defeat boss')
-    : guide.source === 'unconfirmed' ? 'Direction not confirmed' : 'Estimated';
+    : guide.source === 'unconfirmed' ? 'Direction not confirmed'
+    : guide.source === 'rough' ? 'Rough, layout not matched yet' : 'Estimated';
   $('#guide-text').textContent = `${name} · ${how}${bearing ? ` · ${screenDirection(guide.degrees!)}` : ''}`;
   box.title = guide.source === 'encounter'
     ? 'The player location when the boss spoke, not the moving boss position. Dialogue does not confirm a kill.'
