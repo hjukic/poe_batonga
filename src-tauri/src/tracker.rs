@@ -397,14 +397,16 @@ impl Route {
     /// Each step's visit to the zone, from 0. A zone's list covers every time the route
     /// passes through it (the town's: five times). A visit ends with the step that leaves
     /// the zone (a zone-entry trigger for another area); the steps after it belong to the
-    /// next time the player is there.
+    /// next time the player is there. An optional step that leaves (a side trip such as
+    /// the Mud Burrow) ends nothing: what follows it is still this visit.
     pub fn visits(&self) -> Vec<usize> {
         let mut visit = 0;
         self.steps
             .iter()
             .map(|step| {
                 let this = visit;
-                if matches!(&step.trigger, Some(Trigger::ZoneEntered { area, .. }) if *area != self.zone.id) {
+                let leaves = matches!(&step.trigger, Some(Trigger::ZoneEntered { area, .. }) if *area != self.zone.id);
+                if leaves && !step.optional {
                     visit += 1;
                 }
                 this
@@ -1429,6 +1431,10 @@ mod tests {
         let riverbank = routes.iter().find(|r| r.zone.id == "G1_1").unwrap();
         assert!(riverbank.visits().iter().all(|&v| v == 0));
         assert_eq!(riverbank.current_visit(&progress), 0);
+        // The optional trip into the Mud Burrow does not end Clearfell's visit: the way
+        // on to the Grelwood stays in the list (and for the compass).
+        let clearfell = routes.iter().find(|r| r.zone.id == "G1_2").unwrap();
+        assert!(clearfell.visits().iter().all(|&v| v == 0), "{:?}", clearfell.visits());
     }
 
     #[test]
