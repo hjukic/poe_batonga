@@ -51,6 +51,26 @@ function update() {
   label.textContent = guide.target || (guide.targetKind === 'entrance' ? 'Exit' : guide.targetKind);
 }
 
+/** Half the window's side, in CSS pixels. */
+const HALF = 230;
+
+/** Where the label's centre goes for a needle at angle `r`: past the arrow head, its box
+ *  (half-width `hw`, half-height `hh`) clear of the tip. A long name has no room beside
+ *  a level needle: it then goes under the head (over it when the needle points up), kept
+ *  inside the window, so it is never cut off. */
+function labelPlace(r: number, hw: number, hh: number): [number, number] {
+  const [c, s] = [Math.cos(r), Math.sin(r)];
+  const tip = RADIUS + 32;
+  const reach = tip + 6 + Math.abs(c) * hw + Math.abs(s) * hh;
+  const [maxX, maxY] = [HALF - hw - 4, HALF - hh - 4];
+  let [x, y] = [c * reach, s * reach];
+  if (Math.abs(x) > maxX) {
+    x = Math.sign(x) * maxX;
+    y = s * tip + (s < -0.1 ? -1 : 1) * (hh + 16);
+  }
+  return [x, Math.max(-maxY, Math.min(maxY, y))];
+}
+
 /** Turns the needle smoothly, always the short way round. */
 function frame() {
   const known = guide?.degrees;
@@ -61,9 +81,8 @@ function frame() {
     const delta = ((target - shown + 540) % 360) - 180;
     shown += Math.abs(delta) < 0.5 ? delta : delta * 0.18;
     needle.setAttribute('transform', `rotate(${shown})`);
-    const r = (shown * Math.PI) / 180;
-    // The label sits just outside the arrow head.
-    label.style.transform = `translate(${Math.cos(r) * (RADIUS + 56)}px, ${Math.sin(r) * (RADIUS + 56)}px) translate(-50%, -50%)`;
+    const [x, y] = labelPlace((shown * Math.PI) / 180, label.offsetWidth / 2, label.offsetHeight / 2);
+    label.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
   }
   requestAnimationFrame(frame);
 }

@@ -104,3 +104,10 @@ within 45° at least as often as the shown needle, and would-be gold off in at m
   reading exit names on the minimap.
 - The auto-hide was checked with the game closed (the overlay stays hidden); its return when the game starts
   was not.
+
+### v0.1.50: boss lines
+
+The owner asked for bosses. A zone boss's first line in the log now tells the navigator the player is near the
+boss's place in the layout: soft evidence, never an anchor, never gold on its own. 58 of the 74 boss steps
+have a place in the layout graphs. When a boss speaks, the app saves a capture of the minimap and the big map
+(`samples/boss-*.ppm`), to see what the map draws for a boss.
