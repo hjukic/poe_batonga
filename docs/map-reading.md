@@ -718,3 +718,106 @@ truth.
   `Riverbed_4` at most 0.54 (0.93 before), where a batch fit of its long part
   prefers `Riverbed_6`; there is no truth for these instances.
 
+
+## Flight recorder (2026-11-12, day build)
+
+Every zone visit with layout graphs leaves behind exactly what the navigator was fed,
+as JSON lines in `layouts/<area>/<seed>.obs.jsonl` beside the recording
+(`src-tauri/src/layout/obs.rs`). A later visit of the same instance appends (a new
+`start`). Writes are buffered and reach the file at most once a second and at the
+visit's end; a write error is printed once and never stops the frame loop. A visit
+without a placed frame (a log catch-up at start) writes nothing. Files older than
+30 days are deleted when the app starts.
+
+Each line has `t` (unix ms) and `k`. After `start`, lines have a frame `f` (placed
+minimap frames of the visit so far), left out where it follows: a `move` or `lost`
+line starts the frame after the last line's, any other line is in the last line's
+frame. A frame without a line (no movement, the same exits as last written) still
+counts, so the replay can hand the navigator every `icons` call the app made.
+
+| `k` | fields | written |
+|---|---|---|
+| `start` | `area`, `seed`, `from` (arrival area id, `""` = a live arrival from no zone, `null` = unknown), `scale`, `version` (package.json's), `memory`, `resumed` | at the zone change |
+| `move` | `dx`, `dy` (cells, as passed to `Navigator::moved`) | every non-zero move |
+| `lost` | `seconds` | first frame of a new part |
+| `icons` | `whole` (absent = false), `size` (frame cells, when it changed), `icons`: `kind` (absent = exit), `x`, `y`, `label` | when the exits differ from the last written, on every whole-window scan with an exit or while far exits are kept, for a checkpoint or waypoint not yet written in this part |
+| `seen` | `exit` or `tag`, `left` | each log anchor |
+| `targets` | `targets` (`label`, `exit`, `tag`, `optional`) | when the list asked for changes |
+| `needle` | `target`, `degrees`, `source`, `confidence`, `variant`, `distance`; `kept` (tracking lost, the last needle stayed), `stale` (no frame for 2 s) | when source, target or variant change or it turns more than 15°, else every 5 s while frames come |
+| `end` | | when the zone is left |
+
+Exits are written exactly as handed over (the navigator's input); checkpoints and
+waypoints, which the navigator does not use and which don't move, only the first time
+each is seen in a part.
+
+From the synthetic visit (`a_simulated_visit_replays_as_it_was_fed`, 152 lines,
+14 KB for 69 frames) and its run with losses:
+
+```
+{"t":1762945000000,"k":"start","area":"G1_2","seed":11,"from":"G1_town","scale":0.78,"version":"0.1.44","memory":false,"resumed":false}
+{"t":1762945000333,"k":"move","dx":24,"dy":7}
+{"t":1762945000333,"k":"icons","whole":true,"size":[100000,100000],"icons":[{"x":-24.458593,"y":16.249884,"label":"G1_town"},{"x":-338.5581,"y":-952.7067,"label":"G1_4"},{"x":746.6004,"y":-519.0581,"label":"G1_3"}]}
+{"t":1762945000333,"k":"targets","targets":[{"label":"Mud Burrow","exit":"G1_3"}]}
+{"t":1762945000333,"k":"needle","target":"Mud Burrow","degrees":-34.8,"source":"rough","confidence":1.0,"variant":"ClearFell_W_S_N","distance":909.0}
+{"t":1762945000666,"k":"move","dx":25,"dy":4}
+{"t":1762945000666,"k":"icons","icons":[{"x":-51.398148,"y":11.930754},{"x":-365.62192,"y":-957.4076},{"x":722.2359,"y":-528.5994}]}
+{"t":1762945000999,"k":"lost","seconds":3.0}
+{"t":1762945000999,"k":"icons","icons":[]}
+{"t":1762945022977,"k":"seen","exit":"G1_3","left":true}
+{"t":1762945023077,"k":"end"}
+```
+
+Size: a simulated hour (the walker moves on 99% of frames, a needle line every 1.6 s)
+is 1.18 MB with the big map open 70% of the time and 1.31 MB with it always open
+(`an_hour_of_play_stays_near_a_megabyte`); moves are 45%, needles 25%. Real hours
+stand, fight and read more, and towns write nothing. Cost: 801 µs a frame with the
+recorder against 808 without (`obs_cost`, noise ±25 µs).
+
+### Replay
+
+`OBS=<file or folder> cargo test --release replay_obs -- --ignored --nocapture`
+replays every `.obs.jsonl` (folders recursively): each `start` makes a fresh
+`Navigator` (no memory), then every line goes to it as the app gave it (`moved`,
+`lost`, the frame's exits through the recorder's own `exit_list` with its far
+icons, `seen`); the needle is asked with the logged targets after every frame. Per
+visit it prints:
+
+```
+== G1_2 seed Some(11) (from G1_town, v0.1.44, scale 0.780): 69 frames, 1 part(s), 23 s, walked 1979 cells (2538 units)
+   top layout: 0s ClearFell_W_S_N 1.00
+   truth layout (3 exits read by name): ClearFell_W_S_N 1.00; the replay's last top agrees
+   left through G1_3 at (748, -434); no exit icon seen there (a portal or waypoint is possible)
+   needle within 45° of the exit taken (last part): gold 80% of 5, rough 98% of 62; 1 samples to another target
+   never right for good
+   app's needles: 12 logged, 12 agree with the current code
+```
+
+- **top layout**: each time the replay's top layout changed, seconds from the start
+  and its share then.
+- **truth layout**: the layouts whose exits lie as the exits read by name do (two
+  or more names in one part; relative places by dead reckoning, the navigator's
+  named-fit formula, summed over parts); "do not fix" below 0.9. Layouts with the
+  same exit places tie (`A = B`).
+- **left through**: the `seen` … `left` line, where the player stood (cells in the
+  last part), and whether an exit icon (with that name) was seen within 30 cells of
+  it; leaving by portal or waypoint shows as "no exit icon".
+- **needle within 45°**: in the part the player left from, every frame's needle to
+  the exit taken against the straight line from the dead-reckoned place to the
+  leaving spot (frames within 10 cells of it left out), by source: gold
+  (`estimated`), rough, gray (`unconfirmed`), none. Frames aiming at another
+  target are counted apart. **Right for good**: the first such frame after which
+  every one was within 45°, seconds and cells walked from the start.
+- **app's needles**: the `needle` lines (not `kept`) against what the current code
+  gives at the same point (same target, source, layout, within 5°; a `stale` gold
+  counts as gray). With unchanged code they agree; a difference on old visits shows
+  a change of the navigator. The one other cause: the needle's switch between
+  pointing at an icon and along the route has hysteresis, and the app asked about
+  once a second where the replay asks every frame.
+- A last line: visits, how many have a truth and an exit, the needle's shares over
+  all visits and the agreement.
+
+The synthetic visit above is `a_simulated_visit_replays_as_it_was_fed` (the
+simulator's walker on `ClearFell_W_S_N`, exits named on every third frame);
+`the_flight_recorder_logs_what_the_navigator_is_fed` runs the recorder itself and
+replays its file. In the simulation the last steps count as wrong: the walker ends
+at the exit's graph node, its icon lies up to 100 units off.

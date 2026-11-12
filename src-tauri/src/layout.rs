@@ -9,13 +9,15 @@
 //!
 //! In zones with layout graphs the navigator (`nav.rs`) is fed every measured
 //! step and log anchor and gives the needle; it carries on across new parts. What
-//! it learnt is kept beside the recording, `layouts/<area>/<seed>.nav.json`.
+//! it learnt is kept beside the recording, `layouts/<area>/<seed>.nav.json`, and
+//! what it was fed in `<seed>.obs.jsonl` (the flight recorder, `obs.rs`).
 
 mod graph;
 pub mod guide;
 mod nav;
 #[cfg(test)]
 mod nav_sim;
+mod obs;
 
 use crate::minimap::MinimapView;
 use crate::tracker::LogEvent;
@@ -171,6 +173,8 @@ struct Session {
     far_age: u32,
     /// The last arrow of this visit, kept while a new one cannot be worked out.
     last_guide: std::cell::RefCell<Option<guide::GuideView>>,
+    /// The flight recorder: what the navigator is fed (with a folder only).
+    obs: std::cell::RefCell<Option<obs::Log>>,
 }
 
 /// The zone an exit icon's label names (as in the area's connectionNames), when the
@@ -179,38 +183,64 @@ fn icon_label(icon: &crate::minimap::bigmap::Icon) -> Option<String> {
     icon.label.clone().filter(|l| !l.is_empty())
 }
 
-impl Session {
-    /// Hands the navigator the frame's exit icons. Every third big-map frame lists
-    /// every icon on screen, the frames between only those inside the wall frame:
-    /// icons outside it are kept from the last whole scan for a few frames.
-    fn feed_icons(&mut self, icons: &[crate::minimap::bigmap::Icon], whole: bool, pos: (i32, i32), size: (usize, usize)) {
-        let Some(nav) = self.navigator.as_mut() else { return };
-        let (hw, hh) = (size.0 as f32 / 2.0, size.1 as f32 / 2.0);
-        let outside = |x: f32, y: f32| x.abs() > hw || y.abs() > hh;
-        let exits: Vec<&crate::minimap::bigmap::Icon> = icons.iter().filter(|i| i.kind == "exit").collect();
-        let mut list: Vec<nav::ExitIcon> =
-            exits.iter().map(|i| nav::ExitIcon { dx: i.x as f64, dy: i.y as f64, to: icon_label(i) }).collect();
-        if whole {
-            // A whole-window scan (marked by the reader): its far exits replace the
-            // kept ones, none if it saw none.
-            self.far_icons = exits
-                .iter()
-                .filter(|i| outside(i.x, i.y))
-                .map(|i| (pos.0 as f32 + i.x, pos.1 as f32 + i.y, icon_label(i)))
-                .collect();
-            self.far_age = 0;
-        } else if self.far_age < FAR_FRAMES {
-            self.far_age += 1;
-            for (x, y, to) in &self.far_icons {
-                let (dx, dy) = (x - pos.0 as f32, y - pos.1 as f32);
-                // Not when this frame shows it already (an icon in the capture's margin).
-                let shown = exits.iter().any(|i| (i.x - dx).abs() <= 10.0 && (i.y - dy).abs() <= 10.0);
-                if outside(dx, dy) && !shown {
-                    list.push(nav::ExitIcon { dx: dx as f64, dy: dy as f64, to: to.clone() });
-                }
+/// Exits kept from the last whole-window scan: place in the part's cells, label.
+type FarIcons = Vec<(f32, f32, Option<String>)>;
+
+/// The exits handed to the navigator with one frame (`Session::feed_icons`; the
+/// replay of a flight recording builds them the same way). Every third big-map frame
+/// lists every icon on screen, the frames between only those inside the wall frame:
+/// icons outside it are kept from the last whole scan for a few frames.
+fn exit_list(
+    icons: &[crate::minimap::bigmap::Icon],
+    whole: bool,
+    pos: (i32, i32),
+    size: (usize, usize),
+    far_icons: &mut FarIcons,
+    far_age: &mut u32,
+) -> Vec<nav::ExitIcon> {
+    let (hw, hh) = (size.0 as f32 / 2.0, size.1 as f32 / 2.0);
+    let outside = |x: f32, y: f32| x.abs() > hw || y.abs() > hh;
+    let exits: Vec<&crate::minimap::bigmap::Icon> = icons.iter().filter(|i| i.kind == "exit").collect();
+    let mut list: Vec<nav::ExitIcon> =
+        exits.iter().map(|i| nav::ExitIcon { dx: i.x as f64, dy: i.y as f64, to: icon_label(i) }).collect();
+    if whole {
+        // A whole-window scan (marked by the reader): its far exits replace the
+        // kept ones, none if it saw none.
+        *far_icons = exits
+            .iter()
+            .filter(|i| outside(i.x, i.y))
+            .map(|i| (pos.0 as f32 + i.x, pos.1 as f32 + i.y, icon_label(i)))
+            .collect();
+        *far_age = 0;
+    } else if *far_age < FAR_FRAMES {
+        *far_age += 1;
+        for (x, y, to) in far_icons.iter() {
+            let (dx, dy) = (x - pos.0 as f32, y - pos.1 as f32);
+            // Not when this frame shows it already (an icon in the capture's margin).
+            let shown = exits.iter().any(|i| (i.x - dx).abs() <= 10.0 && (i.y - dy).abs() <= 10.0);
+            if outside(dx, dy) && !shown {
+                list.push(nav::ExitIcon { dx: dx as f64, dy: dy as f64, to: to.clone() });
             }
         }
+    }
+    list
+}
+
+impl Session {
+    /// Hands the navigator the frame's exit icons (see `exit_list`).
+    fn feed_icons(&mut self, icons: &[crate::minimap::bigmap::Icon], whole: bool, pos: (i32, i32), size: (usize, usize)) {
+        let Some(nav) = self.navigator.as_mut() else { return };
+        if let Some(log) = self.obs.get_mut() {
+            // Far exits this frame uses or replaces: the replay needs this frame's icons.
+            let far = !self.far_icons.is_empty() && (whole || self.far_age < FAR_FRAMES);
+            log.icons(obs::now_ms(), icons, whole, size, far);
+        }
+        let list = exit_list(icons, whole, pos, size, &mut self.far_icons, &mut self.far_age);
         nav.icons(&list);
+    }
+
+    fn obs_file(&self) -> Option<PathBuf> {
+        Some(self.file.as_ref()?.with_extension("obs.jsonl"))
     }
 
     fn nav_file(&self) -> Option<PathBuf> {
@@ -222,12 +252,26 @@ impl Session {
     /// only a new part is a loss.
     fn feed(&mut self, pos: (i32, i32)) {
         let Some(nav) = self.navigator.as_mut() else { return };
+        let mut log = self.obs.get_mut().as_mut();
+        let t = if log.is_some() { obs::now_ms() } else { 0 };
+        if let Some(log) = log.as_deref_mut() {
+            log.frame();
+        }
         let gap = self.fed_at.map(|t| t.elapsed().as_secs_f64());
         match self.fed {
-            Some(prev) => nav.moved((pos.0 - prev.0) as f64, (pos.1 - prev.1) as f64),
+            Some(prev) => {
+                let (dx, dy) = (pos.0 - prev.0, pos.1 - prev.1);
+                if let Some(log) = log {
+                    log.moved(t, dx, dy);
+                }
+                nav.moved(dx as f64, dy as f64)
+            }
             // A new part: where it starts relative to the last one is unknown.
             None => {
                 if let Some(gap) = gap {
+                    if let Some(log) = log {
+                        log.lost(t, gap);
+                    }
                     nav.lost(gap);
                 }
             }
@@ -473,6 +517,10 @@ impl Recorder {
             .and_then(|d| std::fs::read(d.join(SCALES_FILE)).ok())
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
             .unwrap_or_default();
+        // Flight recordings are kept for a month.
+        if let Some(dir) = &dir {
+            obs::prune(dir);
+        }
         Recorder(Mutex::new(State {
             catalog: guide::Catalog::load(),
             completed: HashMap::new(),
@@ -505,6 +553,9 @@ impl Recorder {
                     // a waypoint or a death leave from anywhere: soft evidence only.
                     if live && *area != session.recording.area {
                         if let Some(nav) = session.navigator.as_mut() {
+                            if let Some(log) = session.obs.get_mut() {
+                                log.seen(obs::now_ms(), nav::Seen::Left(area));
+                            }
                             nav.seen(nav::Seen::Left(area));
                         }
                     }
@@ -538,8 +589,12 @@ impl Recorder {
                     far_icons: Vec::new(),
                     far_age: FAR_FRAMES,
                     last_guide: Default::default(),
+                    obs: Default::default(),
                 };
-                session.navigator = state.navigator(&session);
+                if let Some((navigator, start)) = state.navigator(&session) {
+                    session.navigator = Some(navigator);
+                    *session.obs.get_mut() = session.obs_file().map(|path| obs::Log::new(path, &start, obs::now_ms()));
+                }
                 state.session = Some(session);
             }
             LogEvent::Dialogue { speaker, .. } if live => {
@@ -666,6 +721,11 @@ impl Recorder {
     pub fn save_now(&self) {
         if let Ok(state) = self.0.lock() {
             state.save();
+            if let Some(session) = &state.session {
+                if let Some(log) = session.obs.borrow_mut().as_mut() {
+                    log.flush_now();
+                }
+            }
         }
     }
 
@@ -760,7 +820,8 @@ impl State {
     /// what an earlier visit of the same instance learnt.
     /// Instances are told apart by area and seed; towns share seed 1 but have no
     /// graph, so no two instances share a `.nav.json` while that holds.
-    fn navigator(&self, session: &Session) -> Option<nav::Navigator> {
+    /// With it, how it was made (the flight recorder's start).
+    fn navigator(&self, session: &Session) -> Option<(nav::Navigator, obs::Start)> {
         let area = self.catalog.graph(&session.recording.area)?;
         let memory: Option<nav::Memory> = session
             .nav_file()
@@ -771,7 +832,20 @@ impl State {
             None => nav::Arrival::Unknown,
         };
         let scale = self.scale(&session.recording.area).unwrap_or(graph::SCALE);
-        Some(nav::Navigator::new(&area, arrival, memory.as_ref(), scale, session.recording.seed.unwrap_or(0)))
+        // As `Navigator::new` decides (a position at most `RESUME`, 600 s, old).
+        let kept = memory.as_ref().filter(|m| m.version == nav::MEMORY_VERSION);
+        let resumed = kept.is_some_and(|m| {
+            matches!(arrival, nav::Arrival::Unknown) && !m.positions.is_empty() && now().saturating_sub(m.at) <= 600
+        });
+        let start = obs::Start {
+            area: session.recording.area.clone(),
+            seed: session.recording.seed,
+            from: session.arrived_from.clone(),
+            scale,
+            memory: kept.is_some(),
+            resumed,
+        };
+        Some((nav::Navigator::new(&area, arrival, memory.as_ref(), scale, session.recording.seed.unwrap_or(0)), start))
     }
 
     /// Measured minimap cells per game unit: this area's median, else all areas'.
@@ -798,11 +872,15 @@ impl State {
         let by_log = |l: &String| self.log_completed.contains(&(area.to_string(), l.clone()));
         for label in self.completed.get(area).into_iter().flatten().filter(|l| !was.contains(l) && by_log(l)) {
             let Some(target) = known.iter().find(|t| &t.label == label) else { continue };
-            if let Some(exit) = &target.exit {
-                nav.seen(nav::Seen::Exit(exit));
-            } else if let Some(tag) = &target.tag {
-                nav.seen(nav::Seen::Tag(tag));
+            let seen = match (&target.exit, &target.tag) {
+                (Some(exit), _) => nav::Seen::Exit(exit),
+                (None, Some(tag)) => nav::Seen::Tag(tag),
+                (None, None) => continue,
+            };
+            if let Some(log) = session.obs.get_mut() {
+                log.seen(obs::now_ms(), seen);
             }
+            nav.seen(seen);
         }
     }
 
@@ -810,6 +888,9 @@ impl State {
     fn finish(&mut self) {
         self.save();
         let Some(session) = self.session.take() else { return };
+        if let Some(log) = session.obs.borrow_mut().as_mut() {
+            log.end(obs::now_ms());
+        }
         let pois = &session.live.part.pois;
         let Some(arrival) = pois.iter().filter(|p| p.kind == "arrived").min_by_key(|p| p.at) else { return };
         let area = &session.recording.area;
@@ -837,13 +918,31 @@ impl State {
         if !self.catalog.guided(&session.recording.area) {
             return None;
         }
-        match self.fresh_guide(session) {
+        let fresh = self.fresh_guide(session);
+        let kept = fresh.is_none();
+        let view = match fresh {
             Some(view) => {
                 *session.last_guide.borrow_mut() = Some(view.clone());
                 Some(view)
             }
             None => session.last_guide.borrow().clone().map(|view| guide::GuideView { source: "unconfirmed".into(), ..view }),
+        };
+        if let (Some(view), Some(log)) = (&view, session.obs.borrow_mut().as_mut()) {
+            let stale = session.fed_at.is_none_or(|t| t.elapsed() > STALE);
+            log.needle(obs::now_ms(), &self.nav_targets(session), view, kept, stale);
         }
+        view
+    }
+
+    /// The targets the navigator's needle is asked for, as `fresh_guide` builds them.
+    fn nav_targets(&self, session: &Session) -> Vec<guide::NavTarget> {
+        let area = session.recording.area.as_str();
+        let completed = self.completed.get(area).map(Vec::as_slice).unwrap_or_default();
+        let mut targets = self.targets.get(area).cloned().unwrap_or_default();
+        if let Some(graph) = self.catalog.graph(area) {
+            targets.extend(graph::target(&graph, &session.came_from, completed));
+        }
+        targets
     }
 
     fn fresh_guide(&self, session: &Session) -> Option<guide::GuideView> {
@@ -1186,6 +1285,85 @@ mod tests {
         assert!(anchored(&recorder));
     }
 
+    /// A visit with a whole-window scan every third frame (a far, named exit and a
+    /// checkpoint), only the frame's own icons between, the needle asked after every
+    /// frame, leaving through the exit: the flight recording replays to the same needles.
+    fn obs_visit(recorder: &Recorder, frames: i32) {
+        use crate::minimap::bigmap::Icon;
+        enter(recorder, "G1_town");
+        enter(recorder, "G1_2");
+        recorder.set_targets(vec![("G1_2".into(), guide::NavTarget { label: "The Grelwood".into(), exit: Some("G1_4".into()), ..Default::default() })]);
+        for step in 0..frames {
+            let whole = step % 3 == 0;
+            let x = step * 4;
+            let icons = if whole {
+                vec![
+                    Icon { kind: "exit", x: -136.0 - x as f32, y: 83.0, label: Some("The Grelwood".into()) },
+                    Icon { kind: "checkpoint", x: 20.0 - x as f32, y: 10.0, label: None },
+                ]
+            } else {
+                vec![]
+            };
+            recorder.on_icons(&icons, whole);
+            recorder.on_frame(&frame((x, 0)), [300, 260]);
+            recorder.view();
+        }
+    }
+
+    #[test]
+    fn the_flight_recorder_logs_what_the_navigator_is_fed() {
+        let dir = scratch("obs");
+        let recorder = Recorder::new(Some(dir.clone()));
+        obs_visit(&recorder, 40);
+        enter(&recorder, "G1_4");
+        let text = std::fs::read_to_string(dir.join("G1_2").join("7.obs.jsonl")).unwrap();
+        for kind in ["start", "targets", "needle", "move", "icons", "seen", "end"] {
+            assert!(text.contains(&format!("\"k\":\"{kind}\"")), "{kind}: {text}");
+        }
+        // The town has no layout graphs: no flight recording.
+        assert!(!dir.join("G1_town").join("7.obs.jsonl").exists());
+        let visits = obs::replay::replay(&text, &graph::Graphs::default());
+        assert_eq!(visits.len(), 1);
+        let v = &visits[0];
+        eprint!("{}", obs::replay::report(v));
+        assert_eq!(v.frames, 40);
+        assert!(v.logged > 0 && v.agree == v.logged, "{} of {}: {:?}", v.agree, v.logged, v.differ);
+        assert_eq!(v.left.as_ref().unwrap().0, "G1_4");
+        // A later visit of the same instance appends.
+        obs_visit(&recorder, 3);
+        enter(&recorder, "G1_3");
+        let text = std::fs::read_to_string(dir.join("G1_2").join("7.obs.jsonl")).unwrap();
+        assert_eq!(text.matches("\"k\":\"start\"").count(), 2);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The frame loop's cost with and without the flight recorder:
+    /// `cargo test --release obs_cost -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn obs_cost() {
+        let dir = scratch("obs-cost");
+        let mut times = Vec::new();
+        for round in 0..6 {
+            let on = round % 2 == 0;
+            let recorder = Recorder::new(Some(dir.clone()));
+            enter(&recorder, "G1_town");
+            enter(&recorder, "G1_2");
+            if !on {
+                *recorder.0.lock().unwrap().session.as_mut().unwrap().obs.get_mut() = None;
+            }
+            let started = Instant::now();
+            obs_visit(&recorder, 300);
+            times.push((on, started.elapsed().as_secs_f64() * 1e6 / 300.0));
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+        let mean = |on: bool| {
+            let t: Vec<f64> = times.iter().filter(|x| x.0 == on).map(|x| x.1).collect();
+            t.iter().sum::<f64>() / t.len() as f64
+        };
+        eprintln!("per frame (on_icons, on_frame, view): with the flight recorder {:.0} µs, without {:.0} µs; {times:?}", mean(true), mean(false));
+    }
+
     #[test]
     fn completion_untick_and_tracking_loss_update_guidance() {
         let recorder = Recorder::new(None);
@@ -1236,6 +1414,7 @@ fn join_real_recording() {
     let mut session = Session {
         recording, live, arrived_from: None, came_from: String::new(), started: true, file: None, navigator: None,
         fed: None, fed_at: None, far_icons: Vec::new(), far_age: FAR_FRAMES, last_guide: Default::default(),
+        obs: Default::default(),
     };
     let started = Instant::now();
     while merge_pieces(&mut session) {}
