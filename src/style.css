@@ -39,13 +39,16 @@ body:not([data-interactive="true"]) #exit { opacity: .25; background: transparen
 .route > .step + .step { margin-top: 4px; }
 .direction { color: #8edce8; font-style: italic; }
 .boss { color: #ce7832; }
+.npc { color: #c9a7ff; }
+.reward { color: #8bd17c; }
+.optional { color: #a8a2b8; }
 /* Finished steps stay in place, struck out and greyed, so the route keeps its shape. */
 .step { transition: color .3s, opacity .3s; }
 button.step { display: block; width: 100%; padding: 0; border: 0; background: transparent; text-align: left; font: inherit; color: inherit; line-height: inherit; text-shadow: inherit; }
 button.step:disabled { cursor: default; }
 button.step:enabled:hover { background: rgb(239 235 255 / .06); }
 .step.done { color: #8d8899; opacity: .55; text-decoration: line-through; text-decoration-thickness: 1px; }
-.step.done .boss { color: inherit; }
+.step.done .boss, .step.done .npc, .step.done .reward, .step.done .optional { color: inherit; }
 
 /* ---- Arrow to the next objective ---- */
 .guide { display: flex; align-items: center; gap: 10px; padding: 0 20px 10px; font-size: 15px; transition: opacity .3s; }

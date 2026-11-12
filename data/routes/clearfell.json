@@ -1,0 +1,49 @@
+{
+  "formatVersion": 1,
+  "zone": { "id": "G1_2", "name": "Clearfell", "level": 2 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); zone level from the live log",
+  "steps": [
+    {
+      "id": "kill-beira",
+      "kind": "objective",
+      "parts": [{ "text": "Kill " }, { "text": "Beira of the Rotten Pack", "style": "boss" }, { "text": " (north) · +10% Cold Res", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line captured yet. Tick by hand."
+    },
+    {
+      "id": "directions-mud-burrow",
+      "kind": "note",
+      "parts": [{ "text": "Directions: Mud Burrow is next to the waypoint; the bridge beyond leads to The Grelwood", "style": "direction" }]
+    },
+    {
+      "id": "enter-mud-burrow",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_2", "label": "Mud Burrow" },
+      "parts": [{ "text": "(Optional) Enter Mud Burrow", "style": "optional" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_3" },
+      "evidence": "Zone-generation line for G1_3 (data/observations/campaign-zones.json)."
+    },
+    {
+      "id": "kill-devourer",
+      "kind": "objective",
+      "parts": [{ "text": "(Optional) Kill ", "style": "optional" }, { "text": "The Devourer", "style": "boss" }, { "text": " · Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No kill line captured yet. Tick by hand."
+    },
+    {
+      "id": "abandoned-stash",
+      "kind": "objective",
+      "parts": [{ "text": "(Optional) Abandoned Stash in the Mysterious Campsite · Skill Gem", "style": "optional" }],
+      "trigger": null,
+      "evidence": "No log line known. Tick by hand."
+    },
+    {
+      "id": "enter-grelwood",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_2", "label": "The Grelwood" },
+      "parts": [{ "text": "Enter The Grelwood" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_4" },
+      "evidence": "Zone-generation line for G1_4 (data/observations/campaign-zones.json)."
+    }
+  ]
+}

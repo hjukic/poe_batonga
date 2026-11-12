@@ -6,9 +6,11 @@ product scope. Existing Early Access guides are research references; rules and
 objectives must be validated for 1.0, including new Act 5 and Act 6 coverage.
 The target experience includes automatic progress tracking and layout-based
 navigation, conditional on GGG compliance and technical feasibility.
-An initial Tauri overlay is available. For The Riverbank it ticks objectives
-automatically by reading the game's `Client.txt` locally (read-only); the route
-and its triggers are in [data/routes/riverbank.json](data/routes/riverbank.json).
+An initial Tauri overlay is available. It shows a checklist for the zone you are in
+(The Riverbank, Clearfell Encampment, Clearfell) and ticks objectives automatically
+by reading the game's `Client.txt` locally (read-only); steps without a known log
+line are ticked by hand. The checklists and their triggers are in
+[data/routes/](data/routes/), one file per zone (steps from Domistae's Act 1 guide).
 Set `POE2_CLIENT_LOG` if the log is not found in a default Steam or standalone path.
 
 ## Run the overlay experiment

@@ -1,4 +1,4 @@
-//! Read-only Client.txt tracking for the Riverbank route.
+//! Read-only Client.txt tracking for the campaign checklists (one per zone).
 //!
 //! The game's log is only read, never written. Lines become events (zone entered,
 //! NPC dialogue), and events complete route steps whose trigger they match exactly.
@@ -14,8 +14,15 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 use tauri::{AppHandle, Emitter, Manager};
 
-const ROUTE_JSON: &str = include_str!("../../data/routes/riverbank.json");
-const PROGRESS_FILE: &str = "riverbank-progress.json";
+/// Checklists in campaign order, one per zone.
+const ROUTES: [&str; 3] = [
+    include_str!("../../data/routes/riverbank.json"),
+    include_str!("../../data/routes/encampment.json"),
+    include_str!("../../data/routes/clearfell.json"),
+];
+const PROGRESS_FILE: &str = "progress.json";
+/// Progress saved before there was more than one checklist.
+const OLD_PROGRESS_FILE: &str = "riverbank-progress.json";
 /// On first run, look this far back for the latest game start to replay from.
 const FIRST_RUN_LOOKBACK: u64 = 8 * 1024 * 1024;
 /// Upper bound on bytes read per poll, so a huge backlog can't stall the UI.
@@ -68,8 +75,8 @@ pub struct Route {
     pub steps: Vec<Step>,
 }
 
-pub fn load_route() -> Route {
-    serde_json::from_str(ROUTE_JSON).expect("bundled route data is valid")
+pub fn load_routes() -> Vec<Route> {
+    ROUTES.iter().map(|json| serde_json::from_str(json).expect("bundled route data is valid")).collect()
 }
 
 // ---------- Log parsing ----------
@@ -133,6 +140,9 @@ pub struct Completion {
 pub struct Progress {
     #[serde(default)]
     pub current_area: Option<String>,
+    /// Zone of the checklist on show: the last zone entered that has one.
+    #[serde(default)]
+    pub shown_zone: Option<String>,
     #[serde(default)]
     pub completed: BTreeMap<String, Completion>,
     /// Steps the player unticked by hand; the log won't tick them again.
@@ -145,15 +155,19 @@ pub struct Progress {
 }
 
 /// Applies one event to progress. Returns true if anything visible changed.
-pub fn apply(route: &Route, progress: &mut Progress, timestamp: &str, event: &LogEvent) -> bool {
+pub fn apply(routes: &[Route], progress: &mut Progress, timestamp: &str, event: &LogEvent) -> bool {
     let mut changed = false;
     if let LogEvent::ZoneEntered { area, .. } = event {
         if progress.current_area.as_deref() != Some(area) {
             progress.current_area = Some(area.clone());
             changed = true;
         }
+        if routes.iter().any(|r| &r.zone.id == area) && progress.shown_zone.as_deref() != Some(area) {
+            progress.shown_zone = Some(area.clone());
+            changed = true;
+        }
     }
-    for step in &route.steps {
+    for step in routes.iter().flat_map(|r| &r.steps) {
         let Some(trigger) = &step.trigger else { continue };
         if progress.completed.contains_key(&step.id) || progress.dismissed.contains(&step.id) {
             continue;
@@ -181,8 +195,8 @@ pub fn apply(route: &Route, progress: &mut Progress, timestamp: &str, event: &Lo
 }
 
 /// Ticks or unticks a step by hand.
-pub fn toggle(route: &Route, progress: &mut Progress, id: &str) -> Result<(), String> {
-    let step = route.steps.iter().find(|s| s.id == id).ok_or("Unknown step")?;
+pub fn toggle(routes: &[Route], progress: &mut Progress, id: &str) -> Result<(), String> {
+    let step = routes.iter().flat_map(|r| &r.steps).find(|s| s.id == id).ok_or("Unknown step")?;
     if step.kind != "objective" {
         return Err("Only objectives can be ticked".into());
     }
@@ -234,7 +248,7 @@ pub struct TrackerView {
 }
 
 pub struct Inner {
-    pub route: Route,
+    pub routes: Vec<Route>,
     pub progress: Progress,
     pub log: LogStatus,
     pub save_path: Option<PathBuf>,
@@ -242,7 +256,8 @@ pub struct Inner {
 
 impl Inner {
     pub fn sync_navigation(&self, app: &AppHandle) {
-        let completed = self.route.steps.iter().filter(|s| self.progress.completed.contains_key(&s.id))
+        let completed = self.routes.iter().flat_map(|r| &r.steps)
+            .filter(|s| self.progress.completed.contains_key(&s.id))
             .filter_map(|s| s.navigation_target.as_ref())
             .map(|t| (t.area.clone(), t.label.clone())).collect();
         if let Some(view) = app.state::<crate::layout::Recorder>().set_completed(completed) {
@@ -250,9 +265,15 @@ impl Inner {
         }
     }
 
+    /// The checklist on show: the last zone entered that has one, else the first.
+    fn shown(&self) -> &Route {
+        let zone = self.progress.shown_zone.as_deref();
+        self.routes.iter().find(|r| Some(r.zone.id.as_str()) == zone).unwrap_or(&self.routes[0])
+    }
+
     pub fn view(&self) -> TrackerView {
-        let steps = self
-            .route
+        let route = self.shown();
+        let steps = route
             .steps
             .iter()
             .map(|step| {
@@ -276,7 +297,7 @@ impl Inner {
             })
             .collect();
         TrackerView {
-            zone: self.route.zone.clone(),
+            zone: route.zone.clone(),
             current_area: self.progress.current_area.clone(),
             steps,
             log: self.log.clone(),
@@ -302,14 +323,25 @@ impl Inner {
 pub struct Tracker(pub Mutex<Inner>);
 
 pub fn init(app: &AppHandle) -> Tracker {
-    let save_path = app.path().app_data_dir().ok().map(|dir| dir.join(PROGRESS_FILE));
-    let progress = save_path
-        .as_ref()
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default();
+    let dir = app.path().app_data_dir().ok();
+    let save_path = dir.as_ref().map(|dir| dir.join(PROGRESS_FILE));
+    let read = |name: &str| {
+        let bytes = std::fs::read(dir.as_ref()?.join(name)).ok()?;
+        serde_json::from_slice::<Progress>(&bytes).ok()
+    };
+    let routes = load_routes();
+    let mut progress = read(PROGRESS_FILE).or_else(|| read(OLD_PROGRESS_FILE)).unwrap_or_default();
+    if progress.shown_zone.is_none() {
+        progress.shown_zone =
+            progress.current_area.clone().filter(|area| routes.iter().any(|r| &r.zone.id == area));
+    }
+    // Being in a zone proves it was entered, even if its entry line was read before
+    // that zone's checklist existed.
+    if let Some(area) = progress.current_area.clone() {
+        apply(&routes, &mut progress, "on start", &LogEvent::ZoneEntered { area, level: 0, seed: None });
+    }
     Tracker(Mutex::new(Inner {
-        route: load_route(),
+        routes,
         progress,
         log: LogStatus { connected: false, path: None, message: "Looking for Client.txt".into() },
         save_path,
@@ -459,12 +491,12 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
     let recorder = app.state::<crate::layout::Recorder>();
     let tracker = app.state::<Tracker>();
     let Ok(mut inner) = tracker.0.lock() else { return };
-    let Inner { route, progress, .. } = &mut *inner;
+    let Inner { routes, progress, .. } = &mut *inner;
     let mut changed = false;
     // Every line is handled in order; one event never hides the rest of a batch.
     for line in String::from_utf8_lossy(bytes).lines() {
         if let Some((timestamp, event)) = parse_line(line) {
-            changed |= apply(route, progress, &timestamp, &event);
+            changed |= apply(routes, progress, &timestamp, &event);
             recorder.on_log(&event, live);
         }
     }
@@ -495,21 +527,21 @@ mod tests {
 
     #[test]
     fn miller_dialogue_is_not_completion_and_manual_completion_has_a_navigation_target() {
-        let route = load_route();
+        let routes = load_routes();
         let mut progress = Progress::default();
-        apply(&route, &mut progress, "now", &LogEvent::ZoneEntered {
+        apply(&routes, &mut progress, "now", &LogEvent::ZoneEntered {
             area: "G1_1".into(), level: 1, seed: Some(7),
         });
-        apply(&route, &mut progress, "now", &LogEvent::Dialogue {
+        apply(&routes, &mut progress, "now", &LogEvent::Dialogue {
             speaker: "The Bloated Miller".into(), text: "Fight starts".into(),
         });
         assert!(!progress.completed.contains_key("kill-bloated-miller"));
-        apply(&route, &mut progress, "now", &LogEvent::Dialogue {
+        apply(&routes, &mut progress, "now", &LogEvent::Dialogue {
             speaker: "Mortimer".into(), text: "You there! Please, aid us!".into(),
         });
         assert!(!progress.completed.contains_key("kill-bloated-miller"));
-        toggle(&route, &mut progress, "kill-bloated-miller").unwrap();
-        let step = route.steps.iter().find(|s| s.id == "kill-bloated-miller").unwrap();
+        toggle(&routes, &mut progress, "kill-bloated-miller").unwrap();
+        let step = routes[0].steps.iter().find(|s| s.id == "kill-bloated-miller").unwrap();
         let target = step.navigation_target.as_ref().unwrap();
         assert_eq!(target.area, "G1_1");
         assert_eq!(target.label, "The Bloated Miller");
@@ -530,10 +562,10 @@ mod tests {
     }
 
     fn feed(progress: &mut Progress, lines: &[String]) {
-        let route = load_route();
+        let routes = load_routes();
         for l in lines {
             if let Some((ts, event)) = parse_line(l) {
-                apply(&route, progress, &ts, &event);
+                apply(&routes, progress, &ts, &event);
             }
         }
     }
@@ -585,16 +617,40 @@ mod tests {
     }
 
     #[test]
-    fn unticked_steps_stay_unticked() {
-        let route = load_route();
+    fn the_checklist_follows_the_zone_and_zone_entries_tick() {
+        let routes = load_routes();
+        let ids: Vec<&str> = routes.iter().flat_map(|r| &r.steps).map(|s| s.id.as_str()).collect();
+        let mut unique = ids.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(unique.len(), ids.len(), "step ids are unique across checklists");
+
         let mut progress = Progress::default();
         feed(&mut progress, &[line("DEBUG", r#"Generating level 15 area "G1_town" with seed 1"#)]);
-        toggle(&route, &mut progress, "enter-clearfell-encampment").unwrap();
+        assert_eq!(progress.shown_zone.as_deref(), Some("G1_town"));
+        feed(&mut progress, &[line("DEBUG", r#"Generating level 2 area "G1_2" with seed 5"#)]);
+        assert_eq!(progress.shown_zone.as_deref(), Some("G1_2"));
+        assert!(progress.completed.contains_key("enter-clearfell"));
+        feed(&mut progress, &[line("DEBUG", r#"Generating level 3 area "G1_3" with seed 6"#)]);
+        // Mud Burrow has no checklist yet: Clearfell's stays on show.
+        assert_eq!(progress.shown_zone.as_deref(), Some("G1_2"));
+        assert_eq!(progress.current_area.as_deref(), Some("G1_3"));
+        assert!(progress.completed.contains_key("enter-mud-burrow"));
+        toggle(&routes, &mut progress, "kill-beira").unwrap();
+        assert_eq!(progress.completed["kill-beira"].source, "manual");
+    }
+
+    #[test]
+    fn unticked_steps_stay_unticked() {
+        let routes = load_routes();
+        let mut progress = Progress::default();
+        feed(&mut progress, &[line("DEBUG", r#"Generating level 15 area "G1_town" with seed 1"#)]);
+        toggle(&routes, &mut progress, "enter-clearfell-encampment").unwrap();
         feed(&mut progress, &[line("DEBUG", r#"Generating level 15 area "G1_town" with seed 2"#)]);
         assert!(!progress.completed.contains_key("enter-clearfell-encampment"));
-        toggle(&route, &mut progress, "enter-clearfell-encampment").unwrap();
+        toggle(&routes, &mut progress, "enter-clearfell-encampment").unwrap();
         assert_eq!(progress.completed["enter-clearfell-encampment"].source, "manual");
-        assert!(toggle(&route, &mut progress, "directions-river").is_err());
+        assert!(toggle(&routes, &mut progress, "directions-river").is_err());
     }
 
     #[test]

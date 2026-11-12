@@ -440,8 +440,8 @@ fn tracker_state(tracker: State<'_, tracker::Tracker>) -> Result<tracker::Tracke
 fn toggle_step(app: AppHandle, id: String) -> Result<tracker::TrackerView, String> {
     let tracker = app.state::<tracker::Tracker>();
     let mut inner = tracker.0.lock().map_err(|e| e.to_string())?;
-    let tracker::Inner { route, progress, .. } = &mut *inner;
-    tracker::toggle(route, progress, &id)?;
+    let tracker::Inner { routes, progress, .. } = &mut *inner;
+    tracker::toggle(routes, progress, &id)?;
     inner.sync_navigation(&app);
     inner.save();
     let view = inner.view();

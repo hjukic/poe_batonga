@@ -1,0 +1,29 @@
+{
+  "formatVersion": 1,
+  "zone": { "id": "G1_town", "name": "Clearfell Encampment", "level": 15 },
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); zone level from the live log",
+  "steps": [
+    {
+      "id": "talk-renly",
+      "kind": "objective",
+      "parts": [{ "text": "Talk to " }, { "text": "Renly", "style": "npc" }, { "text": " · Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No quest line captured yet; \"Renly: What would you like?\" is his shop greeting and also appears later. Tick by hand."
+    },
+    {
+      "id": "enter-clearfell",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_town", "label": "Clearfell" },
+      "parts": [{ "text": "Enter Clearfell" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_2" },
+      "evidence": "Zone-generation line for G1_2 (live log 2026-11-12)."
+    },
+    {
+      "id": "renly-support-gem",
+      "kind": "objective",
+      "parts": [{ "text": "(Optional) After The Devourer, talk to ", "style": "optional" }, { "text": "Renly", "style": "npc" }, { "text": " · Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "No log line known yet. Tick by hand."
+    }
+  ]
+}
