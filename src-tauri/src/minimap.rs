@@ -464,9 +464,10 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
                     Some((Ok(area), _)) => match read(&mut memory, area) {
                         Ok(Reading { view, capture_px, icons }) => {
                             if let Ok(mut last) = last_icons.lock() {
-                                *last = icons;
+                                last.clone_from(&icons);
                             }
                             let recorder = app.state::<crate::layout::Recorder>();
+                            recorder.on_icons(&icons);
                             if let Some(layout) = recorder.on_frame(&view, capture_px) {
                                 let _ = app.emit("layout-state", layout);
                             }

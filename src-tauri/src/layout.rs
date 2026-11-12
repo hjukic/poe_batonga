@@ -103,6 +103,8 @@ struct Live {
     lost_streak: u32,
     /// Player cell inside the frame (the minimap is centred on the player).
     centre: Option<(i32, i32)>,
+    /// Size of the last frame: another size is another view (minimap or big map).
+    frame_size: (usize, usize),
     part: Part,
 }
 
@@ -114,6 +116,7 @@ impl Live {
             velocity: (0, 0),
             lost_streak: 0,
             centre: None,
+            frame_size: (0, 0),
             part: Part { started_at: now(), ..Part::default() },
         }
     }
@@ -184,6 +187,12 @@ impl Session {
 }
 
 struct State {
+    /// Map icons of the latest frame, in minimap cells from the player.
+    #[allow(dead_code)]
+    icons: Vec<crate::minimap::bigmap::Icon>,
+    /// (area, label) of targets whose step the log completed.
+    #[allow(dead_code)]
+    log_completed: std::collections::HashSet<(String, String)>,
     catalog: guide::Catalog,
     completed: HashMap<String, Vec<String>>,
     /// Open checklist targets per area, in checklist order.
@@ -412,6 +421,8 @@ impl Recorder {
             completed: HashMap::new(),
             targets: HashMap::new(),
             known_targets: HashMap::new(),
+            icons: Vec::new(),
+            log_completed: Default::default(),
             scales,
             dir,
             session: None,
@@ -497,8 +508,11 @@ impl Recorder {
         let live = &mut session.live;
         if let Some([x, y]) = frame.player {
             let found = (x.round() as i32, y.round() as i32);
+            // A frame of another size comes from the other view: its player cell is new.
+            let same_view = live.frame_size == (frame.cols, frame.rows);
+            live.frame_size = (frame.cols, frame.rows);
             live.centre = match live.centre {
-                Some(c) if (c.0 - found.0).abs() > 4 || (c.1 - found.1).abs() > 4 => Some(c),
+                Some(c) if same_view && ((c.0 - found.0).abs() > 4 || (c.1 - found.1).abs() > 4) => Some(c),
                 _ => Some(found),
             };
         }
@@ -553,6 +567,7 @@ impl Recorder {
                     // The navigator carries on; the new part's coordinates are new.
                     let finished = std::mem::replace(&mut session.live, Live::new());
                     session.live.centre = finished.centre;
+                    session.live.frame_size = finished.frame_size;
                     session.fed = None;
                     if finished.part.matched > 0 {
                         session.recording.parts.push(finished.snapshot());
@@ -601,6 +616,22 @@ impl Recorder {
                 known.push(target.clone());
             }
             state.targets.entry(area).or_default().push(target);
+        }
+    }
+
+    /// The map icons of the frame about to be handed to `on_frame` (zone exits,
+    /// checkpoints, the waypoint), in minimap cells from the player. Not used yet.
+    pub fn on_icons(&self, icons: &[crate::minimap::bigmap::Icon]) {
+        if let Ok(mut state) = self.0.lock() {
+            state.icons = icons.to_vec();
+        }
+    }
+
+    /// Targets whose step the log completed (not a hand tick), as (area, label). Call
+    /// before `set_completed`. Not used yet.
+    pub fn set_log_completed(&self, done: Vec<(String, String)>) {
+        if let Ok(mut state) = self.0.lock() {
+            state.log_completed = done.into_iter().collect();
         }
     }
 

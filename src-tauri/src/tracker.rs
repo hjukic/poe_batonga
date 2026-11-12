@@ -304,8 +304,14 @@ impl Inner {
                 optional: s.optional,
             })))
             .collect();
+        // Which targets the log completed (the player was there at that moment).
+        let by_log = self.routes.iter().flat_map(|r| &r.steps)
+            .filter(|s| self.progress.completed.get(&s.id).is_some_and(|c| c.source == "log"))
+            .filter_map(|s| s.navigation_target.as_ref())
+            .map(|t| (t.area.clone(), t.label.clone())).collect();
         let recorder = app.state::<crate::layout::Recorder>();
         recorder.set_targets(targets);
+        recorder.set_log_completed(by_log);
         if let Some(view) = recorder.set_completed(completed) {
             let _ = app.emit("layout-state", view);
         }
