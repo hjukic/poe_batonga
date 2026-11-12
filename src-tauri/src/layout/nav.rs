@@ -1144,12 +1144,12 @@ impl Navigator {
     }
 
     /// The last needle followed a way through the recorded map.
+    #[cfg(test)]
     pub fn on_map(&self) -> bool {
         self.last_way.get().is_some()
     }
 
     /// What the last needle took from the recorded map, if it followed a way.
-    #[allow(dead_code)] // for the flight recorder
     pub fn last_way(&self) -> Option<WayNote> {
         self.last_way.get()
     }

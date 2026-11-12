@@ -970,8 +970,11 @@ impl State {
         };
         if let (Some(view), Some(log)) = (&view, session.obs.borrow_mut().as_mut()) {
             let stale = session.fed_at.is_none_or(|t| t.elapsed() > STALE);
-            // `ahead` and `fog` (see `obs::Way`) wait for the navigator to give them.
-            let way = (!kept && session.navigator.as_ref().is_some_and(|n| n.on_map())).then(obs::Way::default);
+            // A needle through the recorded map: where it looked and how much fog the way crossed.
+            let way = session.navigator.as_ref().and_then(|n| n.last_way()).filter(|_| !kept).map(|w| obs::Way {
+                ahead: Some([w.ahead.0 as f32, w.ahead.1 as f32]),
+                fog: Some(w.unrecorded as f32),
+            });
             log.needle(obs::now_ms(), &self.nav_targets(session), view, kept, stale, way);
         }
         view
