@@ -327,6 +327,29 @@ struct CameIn {
 const ARRIVAL_WAYPOINT: f32 = 15.0;
 const ARRIVAL_EXIT: f32 = 40.0;
 
+/// Seconds after the zone entry within which the first placed frame is the arrival.
+const ARRIVAL_SOON: f64 = 5.0;
+/// The arrival exit counts beside another named exit at least this far from it (cells).
+const ARRIVAL_APART: f32 = 80.0;
+
+/// The exit the player came in by, as an icon of this frame: where they appeared (the
+/// part's cells), named after the zone they came from. Only when they came by the exit
+/// (placed soon after the entry, an exit icon by them, no waypoint), and only beside
+/// another exit read by name far enough away: the pair is what tells layouts apart
+/// (the owner's Clearfell, 2026-11-12: the town's exit and the Mud Burrow's name fit two
+/// of 33 layouts, and the navigator held a third at 90%).
+fn arrival_icon(came_in: Option<&CameIn>, icons: &[crate::minimap::bigmap::Icon], pos: (i32, i32)) -> Option<crate::minimap::bigmap::Icon> {
+    let c = came_in.filter(|c| !c.from.is_empty() && c.delay <= ARRIVAL_SOON && !c.waypoint && !c.exits.is_empty())?;
+    let (x, y) = ((c.at.0 - pos.0) as f32, (c.at.1 - pos.1) as f32);
+    // The name read at the arrival, else the zone's id (the navigator takes either).
+    let name = c.exits.iter().flatten().next().cloned().unwrap_or_else(|| c.from.clone());
+    let other = |i: &&crate::minimap::bigmap::Icon| {
+        i.kind == "exit" && icon_label(i).is_some_and(|l| l != name) && (i.x - x).hypot(i.y - y) >= ARRIVAL_APART
+    };
+    icons.iter().find(other)?;
+    Some(crate::minimap::bigmap::Icon { kind: "exit", x, y, label: Some(name), sprite: None })
+}
+
 /// The zone an exit icon's label names (as in the area's connectionNames), when the
 /// reader could read it: a named anchor. None is "some exit".
 fn icon_label(icon: &crate::minimap::bigmap::Icon) -> Option<String> {
@@ -625,7 +648,10 @@ impl Session {
     /// Hands the navigator the frame's exit and boss icons (see `exit_list`) and its new
     /// checkpoints; the named kinds only once seen in two frames (`confirm_named`).
     fn feed_icons(&mut self, icons: &[crate::minimap::bigmap::Icon], whole: bool, pos: (i32, i32), size: (usize, usize), bosses: &[Boss]) {
-        let icons = self.confirm_named(icons, pos);
+        let mut icons = self.confirm_named(icons, pos);
+        // The exit the player came in by is a named exit at a known place of this map:
+        // with another exit read by name it fixes the layout as two named icons do.
+        icons.extend(arrival_icon(self.came_in.as_ref(), &icons, pos));
         let icons = icons.as_slice();
         self.see_bosses(icons, pos, bosses);
         let checkpoints = self.new_checkpoints(icons, pos);
@@ -1667,6 +1693,26 @@ mod tests {
         assert!(only_exit_guide(&target("Clearfell", None), &places, (0, 0)).is_none());
         note_exit_places(&mut places, &[exit(-200.0, 0.0, None)], (0, 0));
         assert!(only_exit_guide(&target("Clearfell", Some("G1_2")), &places, (0, 0)).is_none());
+        // The exit come in by counts as a named icon beside another named exit.
+        let came = CameIn { from: "G1_town".into(), at: (0, 0), delay: 2.0, waypoint: false, exits: vec![None] };
+        let mud = [exit(54.0, -88.0, Some("Mud Burrow"))];
+        let arrival = arrival_icon(Some(&came), &mud, (400, -610)).unwrap();
+        assert_eq!((arrival.kind, arrival.x, arrival.y, arrival.label.as_deref()), ("exit", -400.0, 610.0, Some("G1_town")));
+        // Its name read at the arrival is used; not alone, not beside an unread exit, not
+        // after a late first frame, not by a waypoint, not without an exit icon there.
+        let read = CameIn { exits: vec![Some("Clearfell Encampment".into())], ..CameIn { from: "G1_town".into(), at: (0, 0), delay: 2.0, waypoint: false, exits: vec![] } };
+        assert_eq!(arrival_icon(Some(&read), &mud, (400, -610)).unwrap().label.as_deref(), Some("Clearfell Encampment"));
+        assert!(arrival_icon(Some(&came), &[], (400, -610)).is_none());
+        assert!(arrival_icon(Some(&came), &[exit(54.0, -88.0, None)], (400, -610)).is_none());
+        assert!(arrival_icon(Some(&came), &[exit(10.0, -30.0, Some("Mud Burrow"))], (20, 0)).is_none(), "the other exit is by the arrival");
+        for bad in [
+            CameIn { delay: 30.0, from: "G1_town".into(), at: (0, 0), waypoint: false, exits: vec![None] },
+            CameIn { waypoint: true, from: "G1_town".into(), at: (0, 0), delay: 2.0, exits: vec![None] },
+            CameIn { exits: vec![], from: "G1_town".into(), at: (0, 0), delay: 2.0, waypoint: false },
+            CameIn { from: String::new(), at: (0, 0), delay: 2.0, waypoint: false, exits: vec![None] },
+        ] {
+            assert!(arrival_icon(Some(&bad), &mud, (400, -610)).is_none());
+        }
         // A step that leads to the waypoint: its icon, once seen.
         let waypoint = guide::NavTarget { label: "Waypoint".into(), exit: None, tag: Some(WAYPOINT_TARGET.into()), optional: false };
         assert!(is_icon_target(&waypoint) && !is_icon_target(&target("Clearfell", Some("G1_2"))));

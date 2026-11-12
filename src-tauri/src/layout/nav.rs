@@ -2428,6 +2428,38 @@ mod tests {
         check(&nav, "no memory");
     }
 
+    /// The owner's Clearfell of 2026-11-12 (seed 2192959438), measured on the big map: the
+    /// town's exit 402 cells left of and 612 below the Mud Burrow's, the player by the
+    /// Mud Burrow. The navigator held ClearFell_N_S_W at 90% (town 825 cells west of the
+    /// Mud Burrow) and pointed east into a wall.
+    #[test]
+    fn the_exit_come_in_by_and_one_named_exit_fix_the_layout() {
+        let area = graph::load("G1_2");
+        let target = [exit("G1_4", "The Grelwood")];
+        // What the recorder hands over: the Mud Burrow's icon read by name, and the exit
+        // the player came in by at its place on the recorded map.
+        let frame = [
+            ExitIcon { dx: 54.0, dy: -88.0, to: Some("Mud Burrow".into()), boss: vec![] },
+            ExitIcon { dx: 54.0 - 402.0, dy: -88.0 + 612.0, to: Some("G1_town".into()), boss: vec![] },
+        ];
+        // Belief as the app had it: arrived from the town, walked, memory of earlier visits.
+        let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 2192959438);
+        for _ in 0..40 {
+            nav.moved(8.0, 14.0);
+        }
+        for _ in 0..3 {
+            nav.icons(&frame);
+        }
+        let ranking = nav.ranking();
+        eprintln!("top {:?}", &ranking[..4]);
+        let share = |id: &str| ranking.iter().find(|(l, _)| *l == id).map_or(0.0, |r| r.1);
+        // The two layouts whose exits lie that way (187 and 203 cells off; the next 257).
+        assert!(share("ClearFell_W_N_E") + share("ClearFell_W_N_S") >= 0.8, "{:?}", &ranking[..4]);
+        assert!(share("ClearFell_N_S_W") < 0.02, "{:?}", &ranking[..4]);
+        let view = nav.guide(&target).unwrap();
+        eprintln!("needle {view:?}");
+    }
+
     #[test]
     fn leaving_is_soft_evidence() {
         let json = r#"{"connections": ["A", "B"], "topologies": [
