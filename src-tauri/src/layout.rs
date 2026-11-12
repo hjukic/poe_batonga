@@ -495,20 +495,25 @@ fn is_icon_target(target: &guide::NavTarget) -> bool {
     target.tag.as_deref().is_some_and(|tag| tag.starts_with("icon:"))
 }
 
+/// A needle straight from the player at `pos` to `at` (the part's cells): sure ("estimated",
+/// confidence 1) or likely ("rough", 0.5).
+fn straight_needle(variant: &str, kind: &str, target: &guide::NavTarget, (x, y): (f32, f32), pos: (i32, i32), sure: bool) -> guide::GuideView {
+    let (dx, dy) = (x - pos.0 as f32, y - pos.1 as f32);
+    guide::GuideView {
+        variant: variant.into(),
+        target_kind: kind.into(),
+        target: target.label.clone(),
+        degrees: Some(dy.atan2(dx).to_degrees()),
+        source: if sure { "estimated" } else { "rough" }.into(),
+        distance: dx.hypot(dy),
+        confidence: if sure { 1.0 } else { 0.5 },
+    }
+}
+
 /// The needle straight to a target's icon at `at` (the part's cells), sure: the icon is
 /// the thing. None until the map has shown it.
 fn icon_guide(target: &guide::NavTarget, at: Option<(f32, f32)>, pos: (i32, i32)) -> Option<guide::GuideView> {
-    let (x, y) = at?;
-    let (dx, dy) = (x - pos.0 as f32, y - pos.1 as f32);
-    Some(guide::GuideView {
-        variant: "icon".into(),
-        target_kind: "waypoint".into(),
-        target: target.label.clone(),
-        degrees: Some(dy.atan2(dx).to_degrees()),
-        source: "estimated".into(),
-        distance: dx.hypot(dy),
-        confidence: 1.0,
-    })
+    Some(straight_needle("icon", "waypoint", target, at?, pos, true))
 }
 
 /// Remembers where the frame's exit icons are, one place per exit (icons within
@@ -528,17 +533,8 @@ fn note_exit_places(places: &mut Vec<(f32, f32)>, icons: &[crate::minimap::bigma
 /// no name: with two or more there is no telling which.
 fn only_exit_guide(target: &guide::NavTarget, places: &[(f32, f32)], pos: (i32, i32)) -> Option<guide::GuideView> {
     target.exit.as_ref()?;
-    let [(x, y)] = places else { return None };
-    let (dx, dy) = (x - pos.0 as f32, y - pos.1 as f32);
-    Some(guide::GuideView {
-        variant: "only exit".into(),
-        target_kind: "entrance".into(),
-        target: target.label.clone(),
-        degrees: Some(dy.atan2(dx).to_degrees()),
-        source: "rough".into(),
-        distance: dx.hypot(dy),
-        confidence: 0.5,
-    })
+    let [at] = places else { return None };
+    Some(straight_needle("only exit", "entrance", target, *at, pos, false))
 }
 
 /// The needle straight to `target`'s exit when the map has shown that exit by name:
@@ -546,16 +542,7 @@ fn only_exit_guide(target: &guide::NavTarget, places: &[(f32, f32)], pos: (i32, 
 fn named_exit_guide(target: &guide::NavTarget, named: &[(f32, f32, String)], pos: (i32, i32)) -> Option<guide::GuideView> {
     target.exit.as_ref()?;
     let (x, y, _) = named.iter().find(|(_, _, name)| name.eq_ignore_ascii_case(&target.label))?;
-    let (dx, dy) = (x - pos.0 as f32, y - pos.1 as f32);
-    Some(guide::GuideView {
-        variant: "named exit".into(),
-        target_kind: "entrance".into(),
-        target: target.label.clone(),
-        degrees: Some(dy.atan2(dx).to_degrees()),
-        source: "estimated".into(),
-        distance: dx.hypot(dy),
-        confidence: 1.0,
-    })
+    Some(straight_needle("named exit", "entrance", target, (*x, *y), pos, true))
 }
 
 impl Session {
@@ -1490,7 +1477,8 @@ impl State {
         view
     }
 
-    /// The targets the navigator's needle is asked for, as `fresh_guide` builds them.
+    /// The targets the navigator's needle is asked for: the checklist's open targets (not
+    /// icons), then the onward exit (zones without a checklist, or targets no layout has).
     fn nav_targets(&self, session: &Session) -> Vec<guide::NavTarget> {
         let area = session.recording.area.as_str();
         let completed = self.completed.get(area).map(Vec::as_slice).unwrap_or_default();
@@ -1508,24 +1496,15 @@ impl State {
         if live.lost_streak > 0 {
             return None;
         }
-        let completed = self.completed.get(area).map(Vec::as_slice).unwrap_or_default();
         // A step that leads to the waypoint: straight to its icon once the map showed it.
         let first = self.targets.get(area).and_then(|targets| targets.first());
         if let Some(target) = first.filter(|t| t.tag.as_deref() == Some(WAYPOINT_TARGET)) {
             return icon_guide(target, session.waypoint_at, live.pos);
         }
         if let Some(nav) = &session.navigator {
-            // The checklist's open targets, then the onward exit (zones without a
-            // checklist, or targets no layout has).
-            let mut targets = self.targets.get(area).cloned().unwrap_or_default();
-            targets.retain(|t| !is_icon_target(t));
-            if let Some(graph) = self.graphs.get(area) {
-                targets.extend(graph::target(&graph, &session.came_from, completed));
-            }
-            return nav.guide(&targets).map(|view| not_stale(view, session.fed_at));
+            return nav.guide(&self.nav_targets(session)).map(|view| not_stale(view, session.fed_at));
         }
         // No layout graphs here (a town): the exit the map shows by name is where to go.
-        let first = self.targets.get(area).and_then(|targets| targets.first());
         if let Some(view) = first.and_then(|target| named_exit_guide(target, &session.named_exits, live.pos)) {
             return Some(view);
         }
