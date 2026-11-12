@@ -43,7 +43,7 @@
     {
       "id": "ignite-water-goddess",
       "kind": "objective",
-      "parts": [{ "text": "Ignite the " }, { "text": "Water Goddess", "style": "npc" }, { "text": "Essence of Water", "style": "reward" }],
+      "parts": [{ "text": "Ignite the " }, { "text": "Water Goddess", "style": "npc" }, { "text": "Essence (Water)", "style": "reward" }],
       "trigger": null,
       "evidence": "Talk to her, take the Everburning Cinders, ignite her. No log line known. Tick by hand."
     },
