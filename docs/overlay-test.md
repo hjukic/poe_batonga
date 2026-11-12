@@ -116,6 +116,11 @@ app running, in a zone with walls nearby:
 If the trail jumps or a new part starts at a switch, note the zone, the direction
 and whether the big map was zoomed.
 
+If the game lets the big map be zoomed (mouse wheel or a setting), zoom it in and out
+once with the big map open and note the minimap state: "map lines … px wide" means
+the zoom was caught; "Reading big map" at another zoom means it was not, and the
+trail should be checked for a jump or a new part.
+
 The big map's line colour also fits some floors seen through the map. Repeat step 2
 in scenes unlike Clearfell and note any "too much of the view looks like map lines"
 or a trail that wanders while standing still: a cold or icy zone, a dungeon with

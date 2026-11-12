@@ -76,9 +76,8 @@ fn is_marker(r: u8, g: u8, b: u8) -> bool {
 }
 
 /// Reads a minimap capture: its wall cells, and the player cross near `marker` (pixels, the
-/// spot where the minimap draws it) within `radius`. Orange elsewhere (an exit icon, fire)
-/// does not move the player. Without the cross this is not a minimap (with the big map
-/// open the corner shows big-map lines): not visible.
+/// spot where the minimap draws it) within `radius`. Without the cross this is not a
+/// minimap (with the big map open the corner shows big-map lines): not visible.
 pub fn analyse(image: &Image, marker: [f64; 2], radius: f64) -> MinimapView {
     let cols = image.width.div_ceil(CELL);
     let rows = image.height.div_ceil(CELL);
@@ -356,42 +355,50 @@ impl Memory {
 }
 
 /// One frame from whichever map is showing: the corner minimap while it shows its player
-/// cross, else the big map (Tab), which hides the minimap; else not visible.
+/// cross, else the big map (Tab), which hides the minimap; else not visible, with why the
+/// big map was not read.
 fn read(memory: &mut Memory, region: &CaptureRegion) -> Result<Reading, String> {
-    let image = capture(region)?;
-    choose(memory, &image, region.minimap_marker, &region.plan, || capture_bigmap(region))
+    choose(memory, capture(region), region.minimap_marker, &region.plan, || capture_bigmap(region))
 }
 
-/// The corner counts as the minimap only with its cross where the minimap's cross was
-/// last seen (`estimate` until one is seen); corner lines without it are the big map's.
+/// `minimap` is the corner's capture; when it failed (on Windows: covered by a window) the
+/// big map is still tried, and the error is returned only if that is not read either.
 fn choose(
     memory: &mut Memory,
-    minimap: &Image,
+    minimap: Result<Image, String>,
     estimate: [f64; 2],
     plan: &bigmap::Plan,
     bigmap: impl FnOnce() -> Result<Image, String>,
 ) -> Result<Reading, String> {
     let search = plan.radius * bigmap::LEARN_LIMIT;
-    let mut view = analyse(minimap, memory.minimap_marker(estimate), search);
-    if let Some(seen) = view.player {
-        memory.learn(estimate, seen.map(|v| v as f64 * CELL as f64), search);
-        // Both views report the learnt spot, so the player cell does not step at a switch.
-        let at = memory.minimap_marker(estimate);
-        view.player = Some(at.map(|v| (v / CELL as f64) as f32));
-        let icons = bigmap::icons(minimap, at, 1.0, bigmap::size(plan));
-        return Ok(Reading { view, capture_px: [minimap.width, minimap.height], icons });
+    if let Ok(image) = &minimap {
+        let mut view = analyse(image, memory.minimap_marker(estimate), search);
+        if let Some(seen) = view.player {
+            memory.learn(estimate, seen.map(|v| v as f64 * CELL as f64), search);
+            // Both views report the learnt spot, so the player cell does not step at a switch.
+            let at = memory.minimap_marker(estimate);
+            view.player = Some(at.map(|v| (v / CELL as f64) as f32));
+            let icons = bigmap::icons(image, at, 1.0, bigmap::size(plan));
+            return Ok(Reading { view, capture_px: [image.width, image.height], icons });
+        }
     }
     let mut frame = plan.frame;
     if frame.follows_minimap {
         frame.player = memory.minimap_marker(estimate).map(|v| (v / CELL as f64) as f32);
     }
-    if let Ok(image) = bigmap() {
-        let (view, icons) = bigmap::read(&image, &bigmap::Plan { frame, ..*plan });
-        if view.visible {
-            return Ok(Reading { view, capture_px: frame.capture_px(), icons });
+    let why = match bigmap() {
+        Ok(image) => {
+            let (view, icons) = bigmap::read(&image, &bigmap::Plan { frame, ..*plan });
+            if view.visible {
+                return Ok(Reading { view, capture_px: frame.capture_px(), icons });
+            }
+            view.message
         }
-    }
-    Ok(Reading { view, capture_px: [minimap.width, minimap.height], icons: vec![] })
+        Err(error) => format!("Big map not read: {error}"),
+    };
+    let image = minimap?;
+    let view = MinimapView { cols: image.width.div_ceil(CELL), rows: image.height.div_ceil(CELL), ..MinimapView::status(true, &format!("Minimap not visible. {why}")) };
+    Ok(Reading { view, capture_px: [image.width, image.height], icons: vec![] })
 }
 
 pub struct Minimap {
@@ -564,13 +571,13 @@ mod tests {
         let mut message = String::new();
         for _ in 0..20 {
             let t = Instant::now();
-            let image = capture(&region).unwrap();
+            let image = capture(&region);
             minimap.push(t.elapsed());
             let t = Instant::now();
-            let image_big = capture_bigmap(&region).unwrap();
+            let image_big = capture_bigmap(&region);
             big.push(t.elapsed());
             let t = Instant::now();
-            let Reading { view, capture_px, .. } = choose(&mut memory, &image, region.minimap_marker, &region.plan, || Ok(image_big)).unwrap();
+            let Reading { view, capture_px, .. } = choose(&mut memory, image, region.minimap_marker, &region.plan, || image_big).unwrap();
             analysis.push(t.elapsed());
             let t = Instant::now();
             recorder.on_frame(&view, capture_px);
@@ -638,7 +645,7 @@ mod tests {
     #[test]
     fn minimap_wins_while_it_shows_its_player() {
         let (_, plan) = big_map();
-        let reading = choose(&mut Memory::default(), &minimap(), [60.5, 50.5], &plan, || panic!("big map read")).unwrap();
+        let reading = choose(&mut Memory::default(), Ok(minimap()), [60.5, 50.5], &plan, || panic!("big map read")).unwrap();
         assert_eq!((reading.view.message.as_str(), reading.capture_px), ("Reading minimap", [120, 100]));
     }
 
@@ -647,12 +654,12 @@ mod tests {
         // The corner while the big map is open: zone name and league text, no minimap.
         let corner = fixture("corner-bigmap-open.ppm");
         let (big, plan) = big_map();
-        let Reading { view, capture_px: size, icons } = choose(&mut Memory::default(), &corner, [100.0, 80.0], &plan, || Ok(big)).unwrap();
+        let Reading { view, capture_px, icons } = choose(&mut Memory::default(), Ok(corner), [100.0, 80.0], &plan, || Ok(big)).unwrap();
         assert_eq!(view.message, "Reading big map");
         // The Grelwood exit and its checkpoint, in cells from the player.
         let icons: Vec<_> = icons.iter().map(|i| (i.kind, i.x.round() as i32, i.y.round() as i32)).collect();
         assert_eq!(icons, [("exit", -136, 83), ("checkpoint", -97, 102)]);
-        assert_eq!(size, [380, 300]);
+        assert_eq!(capture_px, [380, 300]);
         assert_eq!((view.cols, view.rows, view.player), (190, 150, Some([150.0, 30.0])));
         assert!(view.walls.len() > 500);
     }
@@ -665,13 +672,16 @@ mod tests {
     #[test]
     fn corner_lines_without_the_cross_are_not_a_minimap() {
         let (_, plan) = big_map();
-        assert!(analyse(&corner_lines([120, 100]), [60.5, 50.5], 24.0).walls.is_empty());
-        // The big map not readable (capture failed, or only scene): not visible.
-        let reading = choose(&mut Memory::default(), &corner_lines([120, 100]), [60.5, 50.5], &plan, || Err("grim failed".into())).unwrap();
+        let lines = corner_lines([120, 100]);
+        assert!(analyse(&lines, [0.0, 0.0], 0.0).walls.is_empty());
+        // The big map not readable (capture failed, or only scene): not visible, with why.
+        let reading = choose(&mut Memory::default(), Ok(corner_lines([120, 100])), [60.5, 50.5], &plan, || Err("grim failed".into())).unwrap();
         assert!(!reading.view.visible && reading.view.walls.is_empty());
+        assert_eq!(reading.view.message, "Minimap not visible. Big map not read: grim failed");
         let scene = fixture("bigmap-scene.ppm");
-        let reading = choose(&mut Memory::default(), &corner_lines([120, 100]), [60.5, 50.5], &plan, || Ok(scene)).unwrap();
-        assert!(!reading.view.visible && reading.view.walls.is_empty());
+        let reading = choose(&mut Memory::default(), Ok(corner_lines([120, 100])), [60.5, 50.5], &plan, || Ok(scene)).unwrap();
+        assert!(!reading.view.visible);
+        assert_eq!(reading.view.message, "Minimap not visible. Big map not read: player marker not found");
         // An exit icon (or fire) in the corner is no cross.
         let mut with_exit = corner_lines([120, 100]);
         for y in 41..61 {
@@ -679,7 +689,7 @@ mod tests {
                 with_exit.pixels[(y * 120 + x) * 3..][..3].copy_from_slice(&[205, 96, 38]);
             }
         }
-        let reading = choose(&mut Memory::default(), &with_exit, [60.5, 50.5], &plan, || Err("grim failed".into())).unwrap();
+        let reading = choose(&mut Memory::default(), Ok(with_exit), [60.5, 50.5], &plan, || Err("grim failed".into())).unwrap();
         assert!(!reading.view.visible && reading.view.player.is_none());
     }
 
@@ -688,13 +698,25 @@ mod tests {
         let (_, plan) = big_map();
         let mut memory = Memory::default();
         // Expected at (75, 50), seen at (60, 50): learnt.
-        let reading = choose(&mut memory, &minimap(), [75.5, 50.5], &plan, || panic!("big map read")).unwrap();
+        let reading = choose(&mut memory, Ok(minimap()), [75.5, 50.5], &plan, || panic!("big map read")).unwrap();
         assert_eq!(reading.view.player, Some([30.25, 25.25]));
         assert_eq!(memory.minimap_marker([75.5, 50.5]), [60.5, 50.5]);
         // A new estimate (the window moved) starts over; the spot stays near the estimate.
         assert_eq!(memory.minimap_marker([80.0, 50.0]), [80.0, 50.0]);
         memory.learn([0.0, 0.0], [100.0, 0.0], 24.0);
         assert_eq!(memory.minimap_marker([0.0, 0.0]), [24.0, 0.0]);
+    }
+
+    #[test]
+    fn a_covered_minimap_does_not_stop_the_big_map() {
+        let (big, plan) = big_map();
+        let covered = || Err::<Image, String>("Minimap covered by another window; capture paused".into());
+        let reading = choose(&mut Memory::default(), covered(), [60.5, 50.5], &plan, || Ok(big)).unwrap();
+        assert_eq!(reading.view.message, "Reading big map");
+        // Neither: the minimap's own error, so the reader locates the game again.
+        let scene = fixture("bigmap-scene.ppm");
+        let error = choose(&mut Memory::default(), covered(), [60.5, 50.5], &plan, || Ok(scene)).err().unwrap();
+        assert!(error.starts_with("Minimap covered"), "{error}");
     }
 
     #[test]
@@ -750,8 +772,9 @@ mod tests {
     }
 
     /// Paints wall cells and the player cross as the game would: 2 px a cell at the
-    /// minimap's scale, the player (world cell `pos`) on the pixel `marker`.
-    fn screen(size: [usize; 2], pos: (i32, i32), marker: (i32, i32)) -> Image {
+    /// minimap's scale, lines `line` px wide, the player (world cell `pos`) on the pixel
+    /// `marker`.
+    fn screen(size: [usize; 2], pos: (i32, i32), marker: (i32, i32), line: i32) -> Image {
         let [width, height] = size;
         let mut img = image(width, height, |_, _| [14, 16, 22]);
         let mut put = |x: i32, y: i32, rgb: [u8; 3]| {
@@ -761,8 +784,10 @@ mod tests {
         };
         for (wx, wy) in world() {
             let (x, y) = (marker.0 + (wx - pos.0) * 2, marker.1 + (wy - pos.1) * 2);
-            for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
-                put(x + dx, y + dy, [91, 91, 121]);
+            for dy in 0..line {
+                for dx in 0..line {
+                    put(x + dx - (line - 2) / 2, y + dy - (line - 2) / 2, [91, 91, 121]);
+                }
             }
         }
         for dy in -5i32..=5 {
@@ -783,6 +808,8 @@ mod tests {
         minimap_size: [usize; 2],
         plan: bigmap::Plan,
         big_size: [usize; 2],
+        /// Line width in pixels (about 4 at 2160 px height).
+        line: i32,
     }
 
     /// The recorder's overview as JSON, which view each frame was read from, and the walk.
@@ -799,9 +826,9 @@ mod tests {
             let pos = (60 + step * 2, 80 + (step as f32 / 9.0).sin() as i32 * 6 + step / 3);
             path.push(pos);
             let big_open = (30..60).contains(&step);
-            let corner = if big_open { corner_lines(walk.minimap_size) } else { screen(walk.minimap_size, pos, mini_marker) };
-            let big = screen(walk.big_size, pos, big_marker);
-            let reading = choose(&mut memory, &corner, walk.estimate, &walk.plan, || Ok(big)).unwrap();
+            let corner = if big_open { corner_lines(walk.minimap_size) } else { screen(walk.minimap_size, pos, mini_marker, walk.line) };
+            let big = screen(walk.big_size, pos, big_marker, walk.line);
+            let reading = choose(&mut memory, Ok(corner), walk.estimate, &walk.plan, || Ok(big)).unwrap();
             seen.push(if reading.view.message == "Reading big map" { "big" } else { "minimap" });
             recorder.on_frame(&reading.view, reading.capture_px);
         }
@@ -846,7 +873,7 @@ mod tests {
     fn owner(painted_off: [f64; 2]) -> Walk {
         let (estimate, plan, big_size) = plan_for([3840.0, 2160.0], [3240.0, 0.0], [600, 518], None);
         let painted = [estimate[0] + painted_off[0], estimate[1] + painted_off[1]];
-        Walk { estimate, painted, minimap_size: [600, 518], plan, big_size }
+        Walk { estimate, painted, minimap_size: [600, 518], plan, big_size, line: 4 }
     }
 
     #[test]
@@ -875,7 +902,7 @@ mod tests {
         // 3440x1440 px: minimap capture 400x346 px at the right edge.
         let (estimate, plan, big_size) = plan_for([3440.0, 1440.0], [3040.0, 0.0], [400, 346], None);
         let painted = [estimate[0] + 2.0, estimate[1] + 2.0];
-        let (json, seen, path) = walk(&Walk { estimate, painted, minimap_size: [400, 346], plan, big_size });
+        let (json, seen, path) = walk(&Walk { estimate, painted, minimap_size: [400, 346], plan, big_size, line: 3 });
         assert_eq!(seen.iter().filter(|&&v| v == "big").count(), 30);
         assert_one_track(&json, &path);
     }
@@ -887,7 +914,7 @@ mod tests {
     #[ignore]
     fn one_track_with_wide_big_map_frames() {
         let (estimate, plan, big_size) = plan_for([3840.0, 2160.0], [3240.0, 0.0], [600, 518], Some(bigmap::Frame::wide(600, 518)));
-        let (json, _, path) = walk(&Walk { estimate, painted: estimate, minimap_size: [600, 518], plan, big_size });
+        let (json, _, path) = walk(&Walk { estimate, painted: estimate, minimap_size: [600, 518], plan, big_size, line: 4 });
         assert_one_track(&json, &path);
     }
 

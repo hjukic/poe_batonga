@@ -39,6 +39,12 @@ const MAX_INSIDE: f64 = 0.25;
 /// cover (Clearfell: 1.7%).
 const WALLS_MIN: usize = 40;
 const WALLS_MAX: f64 = 0.15;
+/// Width of the map lines in pixels at 2160 px height (wall pixels per edge pixel, times
+/// two). At the default zoom 15 places of a Clearfell screenshot gave 3.41-4.54; the
+/// fixture drawn 0.8 times as large gives 3.08, 1.5 times 4.96 (1.25 times: 4.31, which
+/// this cannot tell from the default). Outside the range the big map is taken to be
+/// zoomed, and its frames would not match the minimap's.
+const LINE_WIDTH: [f64; 2] = [3.25, 4.75];
 
 /// The frame handed to the recorder: its size in cells and the player's cell.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -108,8 +114,7 @@ pub fn area(window_px: [f64; 2], frame: &Frame) -> ([f64; 4], [f64; 2]) {
     ([x0, y0, x1 - x0, y1 - y0], [marker[0] - x0, marker[1] - y0])
 }
 
-/// The minimap's cross is looked for within this many marker radii of where it was last
-/// seen, and that spot stays within as many radii of the estimate.
+/// The learnt minimap marker stays within this many marker radii of the estimate.
 pub const LEARN_LIMIT: f64 = 1.5;
 
 pub fn radius(window_px: [f64; 2]) -> f64 {
@@ -202,18 +207,21 @@ fn blobs(mask: &mut [bool], w: usize, h: usize) -> Vec<Blob> {
 
 /// Reads a big-map capture into a frame in minimap units: the walls around the player,
 /// resampled by `SCALE`, with the player at `plan.frame.player`. Visible only with the
-/// player marker, enough map lines and not too much of the frame covered; else the
-/// message says which failed.
+/// player cross where the big map draws it, enough map lines, not too much of the frame
+/// covered, and lines as wide as at the default zoom; else the message says which failed.
 /// Also returns the map icons around the player while the big map is read.
 pub fn read(image: &Image, plan: &Plan) -> (MinimapView, Vec<Icon>) {
     let Some(centre) = marker_near(image, plan.marker, plan.radius) else {
         return (not_visible(plan, "player marker not found".into()), vec![]);
     };
-    let walls = walls_in(image, centre, &plan.frame, SCALE);
+    let (walls, width) = walls_in(image, centre, &plan.frame, SCALE);
+    let width = width / size(plan);
     let problem = if walls.len() < WALLS_MIN {
         Some("too few map lines".to_string())
     } else if walls.len() as f64 > WALLS_MAX * (plan.frame.cols * plan.frame.rows) as f64 {
         Some("too much of the view looks like map lines".to_string())
+    } else if !(LINE_WIDTH[0]..=LINE_WIDTH[1]).contains(&width) {
+        Some(format!("map lines {width:.1} px wide, not {:.2}-{:.2} (zoomed?)", LINE_WIDTH[0], LINE_WIDTH[1]))
     } else {
         None
     };
@@ -250,34 +258,59 @@ pub fn size(plan: &Plan) -> f64 {
 }
 
 /// Wall cells of `frame`, with the image pixel `centre` (the player) on the frame's player
-/// cell and `scale` image pixels per minimap pixel.
-fn walls_in(image: &Image, centre: [f64; 2], frame: &Frame, scale: f64) -> Vec<[u16; 2]> {
+/// cell and `scale` image pixels per minimap pixel; and the mean width in image pixels of
+/// the lines kept (wall pixels per edge pixel, times two).
+fn walls_in(image: &Image, centre: [f64; 2], frame: &Frame, scale: f64) -> (Vec<[u16; 2]>, f64) {
     let Frame { cols, rows, player, .. } = *frame;
+    let (w, h) = (image.width, image.height);
     let cell = CELL as f64;
     // Image pixel -> minimap pixel: (p - centre) / scale + player * CELL.
     let to_frame = |p: f64, c: f64, at: f32| (p - c) / scale + at as f64 * cell;
+    // The frame cell of each wall pixel (u32::MAX: not a wall or outside the frame).
+    let mut cell_of = vec![u32::MAX; w * h];
     let mut counts = vec![0u32; cols * rows];
-    for y in 0..image.height {
+    for y in 0..h {
         let v = to_frame(y as f64 + 0.5, centre[1], player[1]);
         if v < 0.0 || v >= (rows * CELL) as f64 {
             continue;
         }
         let row = (v / cell) as usize * cols;
-        for x in 0..image.width {
-            let i = (y * image.width + x) * 3;
+        for x in 0..w {
+            let i = (y * w + x) * 3;
             if !is_wall(image.pixels[i], image.pixels[i + 1], image.pixels[i + 2]) {
                 continue;
             }
             let u = to_frame(x as f64 + 0.5, centre[0], player[0]);
             if u >= 0.0 && u < (cols * CELL) as f64 {
-                counts[row + (u / cell) as usize] += 1;
+                let c = row + (u / cell) as usize;
+                counts[c] += 1;
+                cell_of[y * w + x] = c as u32;
             }
         }
     }
     // A minimap cell holds CELL x CELL pixels; scaled, a big-map cell holds scale² as many.
     let need = ((CELL_MIN as f64 * scale * scale).round() as u32).max(1);
     let occupied: Vec<bool> = counts.iter().map(|&n| n >= need).collect();
-    lines(&occupied, cols, rows)
+    let walls = lines(&occupied, cols, rows);
+    let mut kept = vec![false; cols * rows];
+    for &[x, y] in &walls {
+        kept[y as usize * cols + x as usize] = true;
+    }
+    let is_kept = |x: usize, y: usize| cell_of[y * w + x] != u32::MAX && kept[cell_of[y * w + x] as usize];
+    let (mut pixels, mut edges) = (0u32, 0u32);
+    for y in 1..h.saturating_sub(1) {
+        for x in 1..w.saturating_sub(1) {
+            if !is_kept(x, y) {
+                continue;
+            }
+            pixels += 1;
+            let wall = |x: usize, y: usize| cell_of[y * w + x] != u32::MAX;
+            if !(wall(x - 1, y) && wall(x + 1, y) && wall(x, y - 1) && wall(x, y + 1)) {
+                edges += 1;
+            }
+        }
+    }
+    (walls, 2.0 * pixels as f64 / edges.max(1) as f64)
 }
 
 /// A map icon, in minimap cells from the player (x right, y down).
@@ -440,6 +473,19 @@ mod tests {
         }
     }
 
+    /// `image` drawn `factor` times as large (nearest pixel), as a zoomed big map would be.
+    fn zoomed(image: &Image, factor: f64) -> Image {
+        let (width, height) = ((image.width as f64 * factor) as usize, (image.height as f64 * factor) as usize);
+        let mut pixels = Vec::with_capacity(width * height * 3);
+        for y in 0..height {
+            for x in 0..width {
+                let (sx, sy) = ((x as f64 / factor) as usize, (y as f64 / factor) as usize);
+                pixels.extend_from_slice(&image.pixels[(sy * image.width + sx) * 3..][..3]);
+            }
+        }
+        Image { width, height, pixels }
+    }
+
     fn fixture(name: &str) -> Image {
         let path = format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
         parse_ppm(&std::fs::read(&path).unwrap()).unwrap()
@@ -503,7 +549,7 @@ mod tests {
         let image = fixture("bigmap-scene.ppm");
         let raw = image.pixels.chunks_exact(3).filter(|p| is_wall(p[0], p[1], p[2])).count();
         let frame = frame(128, 80, [64.0, 40.0]);
-        let walls = walls_in(&image, [128.0, 80.0], &frame, SCALE);
+        let (walls, _) = walls_in(&image, [128.0, 80.0], &frame, SCALE);
         println!("{raw} lavender pixels, {} wall cells", walls.len());
         // The lit ground behind the translucent map has lavender specks; none survive.
         assert!(raw > 100);
@@ -519,7 +565,7 @@ mod tests {
         let centre = marker_near(&image, plan.marker, plan.radius).unwrap();
         let recorded = recorded();
         let score = |scale: f64| {
-            let walls = relative(&walls_in(&image, centre, &plan.frame, scale), plan.frame.player);
+            let walls = relative(&walls_in(&image, centre, &plan.frame, scale).0, plan.frame.player);
             let set: HashSet<_> = walls.into_iter().collect();
             // Best shift within 3 cells: the scale must be right across the whole crop.
             let mut best = (0.0, (0, 0));
@@ -554,7 +600,7 @@ mod tests {
         }
         let image = Image { width, height, pixels };
         let frame = frame(40, 20, [10.0, 10.0]);
-        let walls = walls_in(&image, [40.0, 30.0], &frame, 2.0);
+        let (walls, _) = walls_in(&image, [40.0, 30.0], &frame, 2.0);
         assert!(!walls.is_empty());
         assert!(walls.iter().all(|&[x, _]| x == 20 || x == 21), "{walls:?}");
     }
@@ -639,14 +685,15 @@ mod tests {
         // A 60x60 px area in the line colour (a bluish floor showing through the map).
         let mut image = fixture("bigmap-scene.ppm");
         paint(&mut image, [95, 96, 128], |x, y| (40..100).contains(&x) && (50..110).contains(&y));
-        let walls = walls_in(&image, [128.0, 80.0], &frame(128, 80, [64.0, 40.0]), SCALE);
+        let (walls, _) = walls_in(&image, [128.0, 80.0], &frame(128, 80, [64.0, 40.0]), SCALE);
         assert!(walls.is_empty(), "{} cells", walls.len());
         // Its outline drawn as a line is kept.
         let mut outline = fixture("bigmap-scene.ppm");
         let ring = |x: usize, y: usize| (40..100).contains(&x) && (50..110).contains(&y) && !((43..97).contains(&x) && (53..107).contains(&y));
         paint(&mut outline, [95, 96, 128], ring);
-        let walls = walls_in(&outline, [128.0, 80.0], &frame(128, 80, [64.0, 40.0]), SCALE);
+        let (walls, width) = walls_in(&outline, [128.0, 80.0], &frame(128, 80, [64.0, 40.0]), SCALE);
         assert!(walls.len() > 100, "{}", walls.len());
+        assert!((width - 3.0).abs() < 0.3, "{width}");
     }
 
     #[test]
@@ -658,6 +705,48 @@ mod tests {
         let (view, _) = read(&image, &player_plan());
         assert!(!view.visible);
         assert_eq!(view.message, "Big map not read: too much of the view looks like map lines");
+    }
+
+    #[test]
+    fn a_zoomed_big_map_is_not_read() {
+        let image = fixture("bigmap-player.ppm");
+        let plan = player_plan();
+        let centre = marker_near(&image, plan.marker, plan.radius).unwrap();
+        let (_, width) = walls_in(&image, centre, &plan.frame, SCALE);
+        // Drawn 1.5 and 0.8 times as large: lines wider or thinner than at the default zoom.
+        let mut widths = vec![width];
+        for factor in [1.5, 0.8] {
+            let zoomed = zoomed(&image, factor);
+            let plan = Plan { marker: plan.marker.map(|v| v * factor), radius: plan.radius * factor.max(1.0), ..plan };
+            let centre = marker_near(&zoomed, plan.marker, plan.radius).unwrap();
+            let (_, width) = walls_in(&zoomed, centre, &plan.frame, SCALE);
+            widths.push(width);
+            let (view, _) = read(&zoomed, &Plan { radius: 16.0, ..plan });
+            assert!(!view.visible, "at {factor}: {}", view.message);
+            assert!(view.message.contains("px wide"), "at {factor}: {}", view.message);
+        }
+        println!("line width at zoom 1, 1.5, 0.8: {widths:.2?}");
+        assert!((LINE_WIDTH[0]..=LINE_WIDTH[1]).contains(&width));
+    }
+
+    #[test]
+    #[ignore]
+    fn line_widths_by_zoom() {
+        let image = fixture("bigmap-player.ppm");
+        let plan = player_plan();
+        for factor in [0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5] {
+            let zoomed = zoomed(&image, factor);
+            let marker = plan.marker.map(|v| v * factor);
+            let Some(centre) = marker_near(&zoomed, marker, 16.0 * factor.max(1.0)) else { println!("{factor}: no marker"); continue };
+            let (walls, width) = walls_in(&zoomed, centre, &plan.frame, SCALE);
+            println!("{factor}: width {width:.2}, {} walls", walls.len());
+        }
+        for name in ["bigmap-icons.ppm", "bigmap-scene.ppm"] {
+            let image = fixture(name);
+            let f = frame(image.width / 2, image.height / 2, [0.0, 0.0]);
+            let (walls, width) = walls_in(&image, [0.0, 0.0], &f, SCALE);
+            println!("{name}: width {width:.2}, {} walls", walls.len());
+        }
     }
 
     #[test]

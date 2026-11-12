@@ -39,8 +39,13 @@ a second crop of the client area, about 637x555 px at 3840x2160, centred on wher
 the big map draws the player (49.97%, 49.03% of the client area). It gets the same
 focus, geometry and desktop-bounds checks as the minimap crop. In the occlusion
 check, windows of this application are skipped for the big-map crop only: the
-compass window sits on the player, and its gold and gray needle is ignored by the
-big-map reader. Other windows over the crop still pause it.
+compass window sits on the player, and its gold and gray needle passes neither the
+line nor the cross test, so it does no harm if it is in the copy. The copy uses
+`BitBlt` with `SRCCOPY` and without `CAPTUREBLT`, which leaves layered windows out of
+GDI copies on older Windows; whether the compass shows in the copy on Windows 10/11 is
+not verified. Other windows over the crop still pause it. A covered minimap corner no
+longer stops the big map from being tried: the corner's error counts only when the big
+map is not read either, and the minimap state then says why the big map was not read.
 
 Not run on Windows: the code is compile-checked for `x86_64-pc-windows-gnu` (the
 module, with `bigmap.rs` and its tests), and the crop arithmetic has a unit test

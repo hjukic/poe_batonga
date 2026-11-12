@@ -349,7 +349,12 @@ recording and one movement track continue across both views.
 3. Else not visible. With the big map open the corner shows big-map lines, which
    earlier went to the recorder as a minimap whenever the big map was not read (the
    same way the window-border strip did); a corner without its cross is never a
-   minimap now.
+   minimap now. The message says why the big map was not read either, for example
+   "Minimap not visible. Big map not read: player marker not found".
+
+When the corner cannot be captured at all (on Windows: another window covers it),
+the big map is still tried; only when that is not read either does the corner's
+error count (and the game is located again).
 
 A big-map frame is built the way a minimap frame is: lavender pixels by the
 minimap's test, 2 px cells at the minimap's scale (`SCALE` 1.0; another value
@@ -373,6 +378,17 @@ the cell it reports, and the recorder follows a reported cell within 4 cells), b
 larger error (another aspect ratio, a misplaced estimate) made the recorder keep one
 view's cell for the other's walls: with the cross painted 6 and 5 cells off the
 estimate, the trail jumped by that at the first switch. Now it does not (test).
+
+**Zoom.** A big map drawn at another scale than the minimap's would not match the
+recorded walls. Big-map frames whose lines are not about as wide as at the default
+zoom are not read ("map lines 5.0 px wide, not 3.25-4.75 (zoomed?)"). The width is wall
+pixels per edge pixel times two, per 2160 px of height. At the default zoom 15 places
+of a Clearfell screenshot gave 3.41–4.54; the fixture drawn 0.8 times as large gives
+3.08 and 1.5 times 4.96, outside the accepted 3.25–4.75. Drawn 1.25 times as large it
+gives 4.31, which cannot be told from the default this way: a zoom of 1.1–1.4 is not
+caught. Whether the game draws zoomed lines wider at all, and whether the big map can
+be zoomed, is not known (the morning check). A better check compares a big-map
+frame's scale with the recorded walls; that belongs in the recorder.
 
 **Filled areas are not walls.** The line colour also passes for bluish-grey floors,
 ice or snow showing through the translucent map. Lines are at most two cells thick,
@@ -428,7 +444,7 @@ corner's zone text give none.
   of the window's height (minimap, from the right edge) and of its size (big map);
   untested on a real game.
 - If the game lets the big map be zoomed, `SCALE` changes and big-map frames stop
-  matching. Not seen; the fit above is at the default zoom.
+  matching. The line-width check catches 0.8 or 1.5 times, not 1.25 (see "Zoom").
 - The minimap's estimate comes from a quarter-size screenshot (±2 cells); the reader
   learns the real spot from the minimap. A full-size minimap screenshot would pin it.
 - Movement across the two views is tested on synthetic pixels only; the live check
