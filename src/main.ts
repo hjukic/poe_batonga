@@ -381,11 +381,18 @@ function renderPicture(picture: LayoutPicture | undefined) {
   }
 }
 
+/** The last full layout view, for drawing the map preview when it is switched on. */
+let lastFullView: LayoutView | null = null;
 function renderLayout(view: LayoutView | null) {
   // With the compass parked the bright arrow marks the first open step, not its target.
   setGuideTarget(compassEnabled.checked ? view?.guide?.target || null : null);
   if (view?.light) return;
   renderPicture(view?.layout);
+  lastFullView = view;
+  // The preview (up to 300x260 cells) is drawn only while it is shown.
+  if (mapPreview.checked) drawPreview(view);
+}
+function drawPreview(view: LayoutView | null) {
   const context = minimapCanvas.getContext('2d');
   if (!context) return;
   context.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
@@ -474,7 +481,12 @@ autoHide.addEventListener('change', () => { keep('auto-hide', autoHide.checked);
 // window reads the same stored value at start and follows this event.
 const compassEnabled = $<HTMLInputElement>('#compass-enabled');
 compassEnabled.checked = stored('compass-enabled', false);
-const sendCompassEnabled = () => isTauri() && void emit('compass-enabled', compassEnabled.checked).catch(console.error);
+// Off, the app also hides the compass window and stops sending the needle every frame.
+const sendCompassEnabled = () => {
+  if (!isTauri()) return;
+  void emit('compass-enabled', compassEnabled.checked).catch(console.error);
+  void invoke('set_compass_enabled', { enabled: compassEnabled.checked }).catch(console.error);
+};
 compassEnabled.addEventListener('change', () => { keep('compass-enabled', compassEnabled.checked); sendCompassEnabled(); });
 const fightHide = $<HTMLInputElement>('#fight-hide');
 fightHide.checked = stored('fight-hide', true);
@@ -484,7 +496,11 @@ const mapPreview = $<HTMLInputElement>('#map-preview');
 mapPreview.checked = stored('map-preview', false);
 const showMapPreview = () => { document.body.dataset.mapPreview = String(mapPreview.checked); };
 showMapPreview();
-mapPreview.addEventListener('change', () => { keep('map-preview', mapPreview.checked); showMapPreview(); });
+mapPreview.addEventListener('change', () => {
+  keep('map-preview', mapPreview.checked);
+  showMapPreview();
+  if (mapPreview.checked) drawPreview(lastFullView);
+});
 
 // ---- Show / hide shortcut ----
 function acceleratorFrom(event: KeyboardEvent): string | null {

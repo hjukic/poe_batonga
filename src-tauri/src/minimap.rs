@@ -558,6 +558,28 @@ pub fn init() -> Minimap {
     }
 }
 
+/// The page's "Compass (parked)" setting, off until the page says otherwise: the views
+/// with only the needle (`LayoutView::light`, one a frame) are sent only while it is on.
+static COMPASS_ON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_compass_on(on: bool) {
+    COMPASS_ON.store(on, std::sync::atomic::Ordering::SeqCst);
+}
+
+pub fn compass_on() -> bool {
+    COMPASS_ON.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// A view from `Recorder::on_frame` as it goes to the pages, or None when it is not sent:
+/// the full views (about one a second, the panel draws them) always, the needle-only ones
+/// only for the compass. `LayoutView::light` is private to `layout`, so it is read from
+/// the serialised view (sent as that value, so it is serialised once).
+fn worth_sending(view: &crate::layout::LayoutView, compass: bool) -> Option<serde_json::Value> {
+    let value = serde_json::to_value(view).ok()?;
+    let light = value.get("light").and_then(|l| l.as_bool()).unwrap_or(false);
+    (!light || compass).then_some(value)
+}
+
 /// Set when something worth a picture happened (a boss spoke); the reader takes it.
 static SAMPLE_WANTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -714,7 +736,7 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
                         Ok(Reading { view, capture_px, icons, whole }) => {
                             let recorder = app.state::<crate::layout::Recorder>();
                             recorder.on_icons(&icons, whole);
-                            if let Some(layout) = recorder.on_frame(&view, capture_px) {
+                            if let Some(layout) = recorder.on_frame(&view, capture_px).and_then(|v| worth_sending(&v, compass_on())) {
                                 let _ = app.emit("layout-state", layout);
                             }
                             samples.maybe(&view, &icons, area);
@@ -966,6 +988,20 @@ mod tests {
             _ if cross(x, y, 60, 50) => [230, 110, 30],
             _ => [10, 14, 20],
         })
+    }
+
+    #[test]
+    fn needle_only_views_go_out_only_for_the_compass() {
+        let recorder = crate::layout::Recorder::new(None);
+        recorder.on_log(&crate::tracker::LogEvent::ZoneEntered { area: "test".into(), level: 0, seed: None }, false);
+        // A room's outline: enough walls for the recorder to take the frame.
+        let walls = (0..40u16).flat_map(|i| [[10 + i, 10], [10 + i, 50], [10, 10 + i], [50, 10 + i]]).collect();
+        let frame = MinimapView { visible: true, cols: 60, rows: 60, walls, player: Some([30.0, 30.0]), ..MinimapView::status(true, "Reading minimap") };
+        let full = recorder.on_frame(&frame, [120, 100]).unwrap();
+        let light = recorder.on_frame(&frame, [120, 100]).unwrap();
+        assert_eq!(worth_sending(&full, false).unwrap()["light"], false);
+        assert!(worth_sending(&light, false).is_none());
+        assert_eq!(worth_sending(&light, true).unwrap()["light"], true);
     }
 
     #[test]

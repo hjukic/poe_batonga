@@ -98,14 +98,33 @@ fn overlay(app: &AppHandle) -> Result<WebviewWindow, String> {
     app.get_webview_window("overlay").ok_or_else(|| "Overlay window missing".into())
 }
 
-/// The compass around the player: shown and hidden with the overlay, never takes input.
+/// The compass around the player: shown and hidden with the overlay while the page's
+/// "Compass (parked)" setting is on (`set_compass_enabled`), never takes input. Hidden, its
+/// page draws nothing.
 fn show_compass(app: &AppHandle, visible: bool) {
+    use std::sync::atomic::{AtomicBool, Ordering};
     let Some(window) = app.get_webview_window("compass") else { return };
-    if !visible {
+    if !visible || !minimap::compass_on() {
         let _ = window.hide();
         return;
     }
     let _ = window.show();
+    // A layer surface mapped for the first time stays blank until hidden and shown again
+    // (`first_show`). With the compass off at start its first show comes later, so it
+    // gets the same step here. Assumed for the compass alone: seen for both at start.
+    static COMPASS_MAPPED: AtomicBool = AtomicBool::new(false);
+    if !COMPASS_MAPPED.swap(true, Ordering::SeqCst) {
+        let handle = app.clone();
+        std::thread::spawn(move || {
+            let pause = std::time::Duration::from_millis(250);
+            std::thread::sleep(pause);
+            if let Some(window) = handle.get_webview_window("compass") {
+                let _ = window.hide();
+            }
+            std::thread::sleep(pause);
+            show_compass(&handle, snapshot(&handle).is_ok_and(|status| status.visible));
+        });
+    }
     #[cfg(target_os = "linux")]
     if snapshot(app).is_ok_and(|s| s.layer_shell) {
         let shown = window.clone();
@@ -685,6 +704,14 @@ fn toggle_step(app: AppHandle, id: String) -> Result<tracker::TrackerView, Strin
     Ok(view)
 }
 
+/// The page's "Compass (parked)" setting. Off, the compass window stays hidden and the
+/// minimap reader sends no needle-only views.
+#[tauri::command]
+fn set_compass_enabled(app: AppHandle, enabled: bool) {
+    minimap::set_compass_on(enabled);
+    show_compass(&app, snapshot(&app).is_ok_and(|status| status.visible));
+}
+
 /// Whether the compass also heads for optional steps (on by default).
 #[tauri::command]
 fn set_compass_optional(app: AppHandle, follow: bool) -> Result<(), String> {
@@ -814,6 +841,7 @@ fn main() {
             toggle_step,
             reset_progress,
             set_compass_optional,
+            set_compass_enabled,
             set_auto_hide,
             set_fight_hide,
             minimap_state,

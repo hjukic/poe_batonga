@@ -48,12 +48,15 @@ function update() {
   const hidden = !guide || !inZone || !enabled;
   svg.classList.toggle('off', hidden);
   label.classList.toggle('off', hidden);
+  needleShown = !hidden;
   if (!guide) return;
   const known = guide.degrees !== null && Number.isFinite(guide.degrees);
   svg.classList.toggle('rough', tracking && known && guide.source === 'rough');
   svg.classList.toggle('unsure', !tracking || !known || guide.source === 'unconfirmed');
   label.classList.toggle('unsure', !tracking || !known || guide.source === 'unconfirmed');
   label.textContent = guide.target || (guide.targetKind === 'entrance' ? 'Exit' : guide.targetKind);
+  // One more frame at least: the label may have changed its size.
+  animate();
 }
 
 /** Half the window's side, in CSS pixels. */
@@ -76,20 +79,33 @@ function labelPlace(r: number, hw: number, hh: number): [number, number] {
   return [x, Math.max(-maxY, Math.min(maxY, y))];
 }
 
-/** Turns the needle smoothly, always the short way round. */
-function frame() {
-  const known = guide?.degrees;
-  // Without a direction the needle stays where it was (up at first).
-  const target = known !== null && known !== undefined && Number.isFinite(known) ? known : (shown ?? -90);
-  if (guide) {
-    if (shown === null) shown = target;
-    const delta = ((target - shown + 540) % 360) - 180;
-    shown += Math.abs(delta) < 0.5 ? delta : delta * 0.18;
-    needle.setAttribute('transform', `rotate(${shown})`);
-    const [x, y] = labelPlace((shown * Math.PI) / 180, label.offsetWidth / 2, label.offsetHeight / 2);
-    label.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
-  }
+/** Whether the needle is on show: the animation runs only then. */
+let needleShown = false;
+/** A frame is booked (`requestAnimationFrame`). */
+let animating = false;
+
+/** Starts turning the needle towards its target, unless it is already turning. */
+function animate() {
+  if (animating || !needleShown) return;
+  animating = true;
   requestAnimationFrame(frame);
+}
+
+/** Turns the needle smoothly, always the short way round. Stops when the needle is hidden
+ *  or has reached its target; `update` starts it again on the next guide. */
+function frame() {
+  animating = false;
+  if (!needleShown || !guide) return;
+  const known = guide.degrees;
+  // Without a direction the needle stays where it was (up at first).
+  const target = known !== null && Number.isFinite(known) ? known : (shown ?? -90);
+  if (shown === null) shown = target;
+  const delta = ((target - shown + 540) % 360) - 180;
+  shown += Math.abs(delta) < 0.5 ? delta : delta * 0.18;
+  needle.setAttribute('transform', `rotate(${shown})`);
+  const [x, y] = labelPlace((shown * Math.PI) / 180, label.offsetWidth / 2, label.offsetHeight / 2);
+  label.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
+  if (Math.abs(delta) >= 0.5) animate();
 }
 
 async function start() {
@@ -110,6 +126,5 @@ async function start() {
     tracking = minimap.enabled && minimap.visible && minimap.player !== null;
   }
   update();
-  requestAnimationFrame(frame);
 }
 void start().catch(console.error);
