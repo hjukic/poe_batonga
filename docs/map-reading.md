@@ -529,176 +529,174 @@ it; Clearfell Encampment keeps poe2way's terrain arrow. The compass shows a need
 in every area that has graphs or terrain.
 
 - **Belief:** per layout ~200 weighted particles (x, y in the file's units, a scale
-  error around 1), the walked line's log evidence and the anchors' log evidence.
-  Layout posterior `p_k ∝ prior_k · exp(path_k + anchors_k)`.
+  error around 1) and three kinds of log evidence: the walked line's (`path`), the
+  anchors' and exit sightings' (`anchors`), and the fit of the last whole scan's
+  named exits (`named`). Layout posterior `p_k ∝ prior_k · exp(path_k + anchors_k +
+  named_k)`.
 - **Start:** at the nodes of the exit the player came through (spread 40 units), else
   the layout's start nodes, else along all corridors; 10% always along all corridors
   (30% when coming from a town: portals and waypoints are the usual way back).
 - **Movement:** each frame's move (minimap cells, turned to world units, divided by
   scale and the particle's scale error) moves the particles, with noise of 20% of
   the distance; moves under 2 cells (registration jitter) do not count as walked.
-  Every 15 units walked they are weighted by their distance `d` to the nearest
-  corridor: full weight within 60 units (the walkable width), a Gaussian of 60
-  beyond, over a floor of 0.1 (the distance is not capped: far off costs the
-  floor). Resampled when the effective sample size drops below half; when nothing
-  fits, 10% are redrawn along the corridors.
-- **What the walked line may claim:** each weighing adds half its log mean weight
-  (successive weighings see the same stretch), and the path's lead of any layout
-  over another is capped so the path alone gives the top layout at most 60% of the
-  belief. Why: on Clearfell 2693856399 the walk prefers `W_S_N` while the big map
-  shows `W_E_N`; the graph's straight corridors differ from the real ones in ways
-  that do not average out, so more walking only made the wrong answer surer (1.00
-  before). Anchors and exit icons can go beyond the cap.
+  Every 15 units walked they are weighted by their distance to the nearest corridor:
+  full weight within 60 units, a Gaussian of 60 beyond, over a floor of 0.1.
+  Resampled when the effective sample size drops below half; when nothing fits, 10%
+  are redrawn along the corridors.
+- **What the walked line may claim:** each weighing counts half, and the path's lead
+  of any layout over another is capped so the path alone gives the top layout at
+  most 60%. On Clearfell 2693856399 the walk prefers a wrong layout (`W_S_N`; the big
+  map shows `W_E_N`): the graph's straight corridors differ from the real ones in
+  ways that do not average out.
 - **Tracking lost:** `lost(seconds)` spreads the particles by what a player walks in
-  that time (60 units/s, at most 2,400): 80% walk on along their corridor (mostly the
-  way the player was heading, 25-100% of the reach, random branches), 20% anywhere
-  within reach near a corridor. After 20 s or more 30% are redrawn along all
-  corridors (waypoint, checkpoint, portal). The evidence stays. The recorder calls it
-  only for a new part: within a part a pause is no loss (the move is measured).
-- **Log anchors:** `seen(Exit | Tag)` adds how well the particles agree with being
-  at a matching node (Gaussian of 80 units, 150 for a tag: a boss arena's centre)
-  to the anchor evidence, then places them there (10% stay). A layout without such a
-  node loses 7 nats. Fed by the recorder for a checklist step with a target that the
-  tracker marks as completed by the log. Leaving the zone is `seen(Left)`: soft
-  (floor 0.3, nothing moved, no penalty for a missing exit, not an anchor), since a
-  portal, waypoint or death leaves from anywhere.
-- **Needle:** the target is the first open checklist target some layout has (exit
-  nodes, or nodes whose tag or keys match), then the onward exit by area order
-  (zones without a checklist). For every layout and particle: the route along the
-  corridors to the target (precomputed per corridor point: the point 120 units ahead
-  and the distance to go; a few graphs leave an exit unconnected, then straight to
-  it), its screen bearing as a unit vector. The needle points where most of the
-  belief points (the densest 90° sector of the weighted directions: with layouts
-  pointing different ways the mean of all falls between them); `confidence = |V|`,
-  `V = Σ p_k Σ w_i u_i`. "estimated" (gold) needs absolute evidence this visit (a
-  log anchor or an exit icon the belief predicted), one layout at 90% and `|V| ≥
-  0.9`: the walked line alone is never gold. "rough" at 0.5, else "unconfirmed"
-  (gray); gold only
-  in areas replayed against a known truth (The Riverbank, Clearfell), elsewhere at
-  most rough, and unconfirmed wherever a dungeon layout carries belief; gray again
-  after 2 s without a placed frame. `variant` names the top layout once its
-  probability is 0.5. A target no layout has gives no needle.
-- **Memory:** `layouts/<area>/<seed>.nav.json` beside the recording: the posterior,
-  the path and anchor evidence per layout, the units walked and, for layouts above
-  1%, 32 particles with the time of the last data. Written only when the navigator
-  got data (a log catch-up leaves it untouched). A re-entry starts from the kept
-  evidence; an app restart inside the instance (no zone change, data under 10
-  minutes old) resumes the particles, spread by what the player could have walked
-  since. Gold waits for this visit's own 100 units or an anchor.
-- **Dungeons (`.dgr`):** one file unit is `roomUnitSize − 1` world units (from the
-  room files, not checked in play; no dungeon has been recorded yet); their particles
-  get a scale prior from 1/2.5 to 2.5 so the direction still works. Never gold.
+  that time (60 units/s, at most 2,400): 80% along their corridor, mostly the way the
+  player was heading, 20% anywhere within reach; after 20 s, 30% are redrawn along all
+  corridors. Evidence stays; the exit sightings and icons in hand are dropped. The
+  recorder calls it only for a new part (within a part a pause is a measured move).
+- **Log anchors:** a checklist step with a target that the tracker marks as completed
+  by the log is `seen(Exit | Tag)`: agreement with being at a matching node
+  (Gaussian of 80 units, 150 for a tag) adds to `anchors`, then the particles are
+  placed there (10% stay); a layout without such a node loses 7 nats. Leaving the
+  zone is `seen(Left)`: soft (floor 0.3, nothing moved, not an anchor).
+
+### Exit icons
+
+The reader finds the exit icons in every frame (minimap cells from the player);
+every third big-map frame scans the whole window and reads the exits' labels (the
+zone they lead to). `Recorder::on_icons(icons, whole)` hands them over before
+`on_frame`; exits outside the wall frame from the last whole scan are kept in the
+part's coordinates for the 3 frames until the next one (a scan without them clears
+them).
+
+- **Sightings:** an icon's place is the player's dead-reckoned track since the last
+  loss plus its offset; icons within 40 units are one exit. A new sighting counts in
+  full; a label read for one already counted is an upgrade, counted once at half
+  weight; the same sightings again count only after 60 units walked, at half weight.
+  A sighting keeps its label in the unlabelled frames between scans. Only a new
+  sighting that the belief held before it predicted (50%) is absolute evidence.
+- **Evidence:** an icon at offset `d` says the player stands at (an exit) − `d`. Each
+  particle is weighed by how well every icon lands on an exit node of its layout
+  (Gaussian of 100 world units, floor 0.05; a labelled icon only on the exit to
+  that area, an unlabelled one on any exit). Two unlabelled icons also test the
+  vector between two of the layout's exits. The update adds to `anchors` the log of
+  the better of the two (at least 0.005, the same for every layout). When the belief
+  does not explain the icons, 30% of the particles are redrawn where they put the
+  player; a layout already at 50% or more is not redrawn and only half-follows.
+- **Named exits decide:** two or more exits read by name give a position-free fit
+  per layout (do its named exits lie as the icons do), which replaces the last one
+  in `named` (one scan counts once); a pair that does not fit costs ln(1e-4). This
+  overrides whatever was believed before: the owner's Clearfell ends at `W_E_N`.
+- **Remembered exits:** where an icon put an exit is kept per layout (within 100
+  units of the node, blended) and used only for the way to a target icon, never as
+  evidence: learnt under each layout's own belief, it had made every layout agree
+  with its own past sightings (the v0.1.41 regression).
+- **Two unlabelled icons are not enough** in Clearfell: with three exits a layout has
+  six pairings, and other layouts fit the owner's pair as well as the true one.
+
+### Needle
+
+- **Target:** the first open checklist target some layout has (exit nodes, or nodes
+  whose tag or keys match), then the onward exit by area order. A target no layout
+  has gives no needle.
+- **Along the route:** for every layout and particle the route along the corridors to
+  the target (per corridor point: the point 120 units ahead and the distance to go;
+  straight to an exit the graph leaves unconnected). The needle points where most of
+  the belief points (the densest 90° sector of the weighted directions);
+  `confidence = |V|`, `V = Σ p_k Σ w_i u_i`.
+- **At the target's icon:** when the label (or 95% of the belief) says an icon is the
+  target's exit (of equally good icons the nearest; a name maps to all its area ids),
+  the route starts where the icon puts the player in each layout. The needle points
+  at the icon once that route is under 1.2 times the straight line, and back along
+  the route above 1.5 (hysteresis). The distance shown is the icon's.
+- **Gold ("estimated"):**
+  - at the icon: within 200 cells, when its label was read the same in two scans and
+    no layout at 90% or more puts it on another exit (then gold in every area, also
+    unmeasured ones and dungeons), or unlabelled with one layout at 90%;
+  - along the route: `|V| ≥ 0.9`, one layout at 90%, and absolute evidence this visit
+    (a log anchor or a confirming sighting); the walked line alone is never gold;
+  - inferred gold only in the areas replayed against a known truth (The Riverbank,
+    Clearfell): elsewhere at most rough, and unconfirmed wherever a dungeon layout
+    carries belief; any gold turns gray after 2 s without a placed frame.
+  - "rough" at `|V| ≥ 0.5`, else "unconfirmed" (gray). `variant` names the top layout
+    at 50%.
+- **Live (v0.1.43, the owner's screen):** Clearfell 2693856399, app restarted, big map
+  open, The Grelwood (−136, 83) and Mud Burrow (823, 110) read by name: `W_E_N` 0.997,
+  the needle gold at the Grelwood exit. The test
+  `two_named_exits_win_whatever_was_believed_before` replays it from the file v0.1.41
+  wrote (W_E_N was 0.006 there): 0.999, gold at 148.6° (the icon's bearing), also with
+  the same stale beliefs in a current file and with no memory.
+
+### Memory
+
+`layouts/<area>/<seed>.nav.json` beside the recording, version 1 (older files are
+ignored: their anchors and exits were counted the old way): the posterior, the
+`path`, `anchors` and `named` evidence per layout, remembered exits, the units
+walked, and for layouts above 1% 32 particles, with the time of the last data.
+Written only when the navigator got data (a log catch-up leaves it untouched). A
+re-entry starts from the kept evidence (anchors capped on load like the path's); an
+app restart inside the instance (no zone change, data under 10 minutes old) resumes
+the particles, spread by what the player could have walked since. Gold waits for
+this visit's own evidence.
+
+**Dungeons (`.dgr`):** one file unit is `roomUnitSize − 1` world units (derived, not
+checked in play); their particles get a scale prior from 1/2.5 to 2.5. Inferred
+needles there are never gold.
 
 ### Simulation (`src-tauri/src/layout/nav_sim.rs`)
 
-The walker is meant to be harder than the owner and independent of the navigator:
-sideways wander with heavy tails (σ 35, stretches of σ 120 a third of the time: its
-distance to the corridors, percentiles 25/50/75/90/95, is 13/29/55/90/121 against
-the recorded 14/38/63/91/115 and 9/26/67/120/150), speed 0.6-1.4 times 60 u/s,
-standing still 2-10 s, backing up 50-150 units, a wrong turn at one junction in
-three (150-300 units out and back), start offset up to 40, scale error up to ±6%,
-whole minimap cells, tracking losses of 5-30 frames (one per ~33 s), and in 30% of
-the runs a wrong arrival (told an exit, starting elsewhere). Its route is its own
-shortest path; the truth is the point 120 units ahead on its own plan, not the
-navigator's route code. Runs: every layout of G1_1 and G1_2, from each exit to each
-other exit (Riverbank: start ↔ Miller exit); unwalkable runs and steps without a
-needle are counted. `cargo test` runs one seed; `cargo test --release
-nav_sim::tests::report -- --ignored --nocapture` three; `mutations` runs broken
-navigators.
+A walker harder than the owner and independent of the navigator: heavy-tailed
+sideways wander (σ 35, stretches of σ 120 a third of the time; its distance to the
+corridors, percentiles 25/50/75/90/95, is 13/29/55/90/121 against the recorded
+14/38/63/91/115 and 9/26/67/120/150), speed 0.6-1.4 times 60 u/s, standing still 2-10
+s, backing up 50-150 units, a wrong turn at one junction in three, start offset up to
+40, scale error up to ±6%, whole minimap cells, tracking losses of 5-30 frames (one
+per ~33 s), and in 30% of the runs a wrong arrival. Its route is its own shortest
+path; the truth is the point 120 units ahead on its own plan. Exit icons: the exits
+sit up to 100 units from their nodes, are seen within the minimap's view (±150 x
+±130 cells) or twice that (wide), 20% missed, 2-cell noise, a false icon in 1% of
+frames; labels, when on, are always right and on every frame (the live every-third-
+frame pattern and misreads are covered by unit tests, not here). Runs: every layout
+of G1_1 and G1_2, from each exit to each other exit (Riverbank: start ↔ Miller exit).
+`cargo test` runs one seed; `cargo test --release nav_sim::tests::report -- --ignored
+--nocapture` three.
 
-The first pass's walker (σ 35 only, constant speed, always told right, truth from
-the navigator's own guidance) and its numbers (gold on 5.5% of the steps, 0.16% of
-them wrong, 55% within 45° at 60%) are superseded: they came from a posterior the
-walked line had made overconfident.
+`report` at three seeds on the final build (v0.1.43; 30% of runs told a wrong
+arrival unless noted). Gold steps out of all steps; "off" = gold more than 60° from
+the truth:
 
-Without exit icons (3 seeds; 30% of the runs told a wrong arrival unless noted):
-
-| Case | Runs (not walkable) | Gold steps | Gold > 60° off | Within 45° at 60% | Top layout true for good |
+| Case | Runs (not walkable) | Gold steps | Gold off | Within 45° at 60% | Top layout true for good |
 | --- | --- | ---: | ---: | ---: | ---: |
-| Arrival known | 579 (45) | 4 of 58,025 | 4 of 4 | 28% | 25% of runs |
-| Arrival told right | 588 (36) | 4 | 4 of 4 | 33% | 32% |
-| Arrival unknown | 588 (36) | 5 | 2 of 5 | 12% | 12% |
-| 30 s loss from 40% | 579 (45) | 4 | 4 of 4 | 23% | 13% |
-| Movement turned 90° (planted) | 579 (45) | 206 | 116 (56%) | 21% | 4% |
+| No icons, arrival known | 579 (45) | 0 of 57,321 | — | 30% | 22% |
+| No icons, arrival told right | 588 (36) | 0 | — | 32% | 30% |
+| No icons, arrival unknown | 588 (36) | 0 | — | 13% | 11% |
+| No icons, 30 s loss at 40% | 579 (45) | 0 | — | 26% | 12% |
+| No icons, movement turned 90° | 579 (45) | 0 | — | 20% | 3% |
+| No icons, no tracking losses | 579 (45) | 0 | — | 32% | 28% |
+| Icons unlabelled, minimap view | 579 (45) | 16 | 0 | 35% | 34% |
+| Icons unlabelled, wide view | 579 (45) | 387 (0.7%) | 8 (2.1%) | 52% | 42% |
+| Icons labelled, minimap view | 579 (45) | 2,347 (4.0%) | **202 (8.6%)** | 38% | 37% |
+| Icons unlabelled, arrival unknown | 588 (36) | 8 | 0 | 24% | 30% |
+| Icons unlabelled, 30 s loss at 40% | 579 (45) | 0 | — | 47% | 17% |
+| Icons unlabelled, movement turned 90° | 579 (45) | 0 | — | 23% | 3% |
 
-The walked line alone almost never gives gold now, and the 4 gold steps it gave (one
-Riverbank walk) were all wrong: Gate A fails on them at three seeds, though it
-holds at one. So gold needs absolute evidence this visit (an anchor or an exit
-icon): see the exit icons below.
+- **Gate A (at most 3% of gold off, no layout over 10%):** met where there is gold
+  without labels (0 of 16, 8 of 387). **Not met with labelled icons: 8.6% of gold
+  off** at three seeds (one seed, wide view: 3.9%, which `cargo test` pins at 4%).
+  Without icons there is no gold at all, so nothing to check, and the planted 90°
+  turn gives no gold either (the bite test runs with labelled wide icons: 82% off).
+  Likely cause: a labelled icon pins the position to the exit's node, and the real
+  exit sits up to 100 units from it; near junctions and walls the way from there
+  differs from the walker's. Note the simulation's labels are perfect and on every
+  frame, unlike the live ones (read on every third frame, twice before gold).
+- **Gate B (85% within 45° at 60%): not met** in any case (13-52%); see below.
 
-- **Gate B (85% within 45° at 60%) is not reachable on these graphs:** with the
-  arrival known, another layout still has corridors under the walk (entered at its
-  own exit of the same name, 80 units) until a median 59% of the walk (75th
-  percentile 75%, 90th 89%), and in 186 walks 112 rival layouts fit the whole walk
-  (league variants of the same layout, mostly).
-- **Mutations:** `GOLD` 0.5 and `GOLD` 0.3 with `GOLD_WALK` 0 fail Gate A (63-65% of
-  their gold needles wrong); `FLAT` 120 fails the coverage pin (18%); `GOLD_WALK` 0
-  and `MISSING` 0 change nothing in the simulation (the path alone gives no gold, the
-  walker sees no anchors).
-
-### Exit icons (N6)
-
-The map reader finds the exit icons in every frame (orange, in minimap cells from
-the player; every third big-map frame scans the whole window, and the exits there
-may carry their label, the zone they lead to). `Recorder::on_icons` hands them over
-before `on_frame`; exits outside the wall frame from the last whole scan are kept in
-the part's coordinates for the 3 frames between scans.
-
-- **Evidence:** an icon at offset `d` says the player stands at (an exit) − `d`. Per
-  layout, each particle is weighed by how well every icon lands on an exit node
-  (Gaussian of 100 world units over a floor of 0.05: Clearfell's two exits sit 130
-  units off the graph's vector). A labelled icon can only be the exit to that area
-  (matched through the area's names); an unlabelled one is any exit. Two icons
-  also test the vector between two exits, with no position belief needed. The
-  layout's evidence adds the log of the better of the two (at least 0.005, the same
-  for all), in full for a new set of icons, at half weight for the same set again
-  after 60 units walked (frames three a second are one sighting). When the belief
-  does not explain the icons, 30% of the particles are redrawn where they put the
-  player. An icon update counts as absolute evidence only when the belief predicted
-  it (50%). Exits seen are remembered per layout in the memory.
-- **Needle:** when 90% of the belief (or the label) says an icon is the target's exit
-  and the route there is at most 1.3 times the straight line, the needle points at
-  the icon, gold within 200 cells if the label says so or one layout carries 90%. A
-  labelled icon of the target is direct evidence: gold in every area, also where
-  the belief is capped (unmeasured areas, dungeons); the needle at an unlabelled
-  icon keeps the cap.
-  Across a river or a wall the route bends: pointing straight at the icon was wrong
-  in the simulation (8.6% of such gold needles over 60° off), so the route's needle
-  stays, from the position the icon pinned.
-- **One unlabelled icon is not enough:** it can be any exit of any layout. Two
-  unlabelled icons are not enough either in Clearfell: with three exits a layout has
-  six pairings, and other layouts fit the owner's pair as well as the true one. A
-  label, a known arrival, or the walk decide it.
-
-**The live case (N7, test `the_live_clearfell_case`):** Clearfell 2693856399, app
-restarted (arrival unknown, no memory), big map open, the Grelwood exit at
-(−136, 83) cells (bearing 149°). One unlabelled icon: gray needle at 144°. With
-Mud Burrow's icon too (823, 110), unlabelled: still gray, `W_E_N` 4th (0.08).
-Both labelled: `W_E_N` 0.80, the needle along the route at 156° (7° from the icon),
-rough, 224 cells. One labelled icon: rough at 148°.
-
-Simulation with icons (the walker sees exits displaced up to 100 units from their
-nodes, 20% missed, 2-cell noise, a false icon in 1% of frames; 3 seeds, 30% of the
-runs told a wrong arrival):
-
-| Case | Gold steps | Gold > 60° off | Worst layout | Within 45° at 60% | Top true for good |
-| --- | ---: | ---: | --- | ---: | ---: |
-| No icons | 0 of 57,321 | — | — | 30% | 22% |
-| Unlabelled, minimap view | 4 | 0 | — | 34% | 32% |
-| Unlabelled, wide view | 375 (0.7%) | 6.1% | Riverbed_6 50% of 16 | 48% | 44% |
-| Labelled, minimap view | 1,119 (1.9%) | 4.2% | W_N_S 41% of 42 | 38% | 39% |
-| Unlabelled, arrival unknown | 0 | — | — | 25% | 28% |
-| Unlabelled, 30 s loss at 40% | 0 | — | — | 46% | 19% |
-
-At one seed, labelled icons in the wide view: gold on 5.0% of the steps, 2.5% of
-them wrong, 57% within 45° at 60%. **Gate A does not hold with icons at three
-seeds** (4-6% of gold wrong, and single layouts far over 10%): the exits sit up to
-100 units from their nodes, so a position pinned by an icon is that far off, and
-near junctions or a wall the route from it (and the straight line to the icon)
-differs from the walker's. What would help: remember each exit where its icon put
-it (kept already, not yet used in the route), so the second sighting of an exit
-pins the position to the real exit, not to its node; a tighter gold rule near
-junctions.
+- **Gate B (85% within 45° at 60%) is not reachable on these graphs:** another layout
+  still has corridors under the walk until a median 59% of it (75th percentile 75%),
+  and in 186 walks 112 rival layouts fit the whole walk (league variants, mostly).
+- **Mutations** (`mutations`, one seed, labelled wide icons, before S7): `GOLD` 0.5
+  with the top layout at 0.5 (16.5% of gold wrong) and gold from the walk (7.5%) fail
+  Gate A's share; `FLAT` 120 and no top-layout requirement pass the share but fail per
+  layout; `MISSING` 0 changes nothing (the walker sees no anchors).
 
 ### Real recordings
 
