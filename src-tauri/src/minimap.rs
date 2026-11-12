@@ -573,12 +573,15 @@ pub fn request_sample() {
 /// Keeps a few real captures for later work on the reader (exit labels on the corner
 /// minimap, wall colours in zones not seen yet), under `samples/` in the app's data
 /// folder: a minimap that shows an exit at most once a minute (8 in all), the big map
-/// once every ten minutes; only the newest 40 files stay.
+/// once per zone (a zone instance keeps its layout: more captures of it while the player
+/// stands in town added nothing); only the newest 40 files stay.
 struct Samples {
     dir: Option<std::path::PathBuf>,
     minimap_exits: usize,
     last_minimap: Option<Instant>,
     last_big: Option<Instant>,
+    /// The zone of the last big-map capture.
+    big_area: Option<String>,
     /// Captures with an icon the sprite matcher named (a boss, a dead one, a rare): the
     /// first real ones check what is only drawn so far. Counted over restarts.
     named_icons: usize,
@@ -599,7 +602,7 @@ impl Samples {
                 .map_or(0, |files| files.flatten().filter(|f| f.file_name().to_string_lossy().starts_with(prefix)).count())
         };
         let (minimap_exits, named_icons) = (count("minimap-exit-"), count("icon-"));
-        Samples { dir, minimap_exits, last_minimap: None, last_big: None, named_icons, last_icon: None }
+        Samples { dir, minimap_exits, last_minimap: None, last_big: None, big_area: None, named_icons, last_icon: None }
     }
 
     /// A capture of a named icon (at most one a minute): the minimap corner it was read
@@ -644,9 +647,15 @@ impl Samples {
                     self.minimap_exits += 1;
                 }
             }
-        } else if due(self.last_big, 600) {
-            self.last_big = Some(Instant::now());
-            self.save("bigmap", capture_bigmap(region));
+        } else {
+            // Once per zone, half a minute in (the map is drawn by then), not in towns.
+            let area = bigmap::icon_area();
+            let new_zone = area.is_some() && area != self.big_area && !area.as_deref().is_some_and(|a| a.to_lowercase().contains("town"));
+            if new_zone && due(self.last_big, 30) {
+                self.last_big = Some(Instant::now());
+                self.big_area = area;
+                self.save("bigmap", capture_bigmap(region));
+            }
         }
     }
 

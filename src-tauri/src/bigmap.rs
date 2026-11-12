@@ -640,7 +640,7 @@ pub fn set_icon_area(area: Option<&str>) {
     ICON_AREA_T.with(|a| *a.borrow_mut() = area.map(String::from));
 }
 
-fn icon_area() -> Option<String> {
+pub(crate) fn icon_area() -> Option<String> {
     #[cfg(not(test))]
     return ICON_AREA.lock().ok().and_then(|a| a.clone());
     #[cfg(test)]
