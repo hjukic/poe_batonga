@@ -93,6 +93,10 @@ const ANCHOR_SPREAD: f64 = 25.0;
 const GOLD: f64 = 0.8;
 const ROUGH: f64 = 0.5;
 const GOLD_WALK: f64 = 100.0;
+/// Areas whose needle was checked against a replayed recording with a known
+/// truth: only there can it be gold. Elsewhere it is at most "rough", and in
+/// dungeons (room grids, scale not measured) "unconfirmed".
+const MEASURED: [&str; 2] = ["G1_1", "G1_2"];
 /// The top layout is named once it has at least this probability.
 const SURE: f64 = 0.5;
 /// Layouts below this probability are left out of the needle.
@@ -218,6 +222,8 @@ pub struct Navigator {
     anchored: bool,
     /// Per (layout, goal nodes): which way the corridors lead.
     guidance: RefCell<HashMap<(usize, Vec<usize>), Guidance>>,
+    /// Gold allowed (the area is measured; tests may say so for made-up areas).
+    trusted: bool,
 }
 
 fn unix_now() -> u64 {
@@ -278,6 +284,7 @@ impl Navigator {
             heading: (0.0, 0.0),
             anchored: false,
             guidance: RefCell::default(),
+            trusted: MEASURED.contains(&area.id.as_str()),
         };
         // The player may have walked on since the position was saved.
         if let Some(m) = resume {
@@ -434,6 +441,13 @@ impl Navigator {
         }
     }
 
+    /// Treats a made-up area as measured.
+    #[cfg(test)]
+    pub fn trusted(mut self) -> Self {
+        self.trusted = true;
+        self
+    }
+
     /// World units walked with tracking, and whether a log anchor was seen.
     #[cfg(test)]
     pub fn progress(&self) -> (f64, bool) {
@@ -498,13 +512,20 @@ impl Navigator {
         }
         let confidence = vx.hypot(vy);
         let (top, p_top) = posterior.iter().enumerate().fold((0, 0.0), |b, (i, &p)| if p > b.1 { (i, p) } else { b });
-        let source = if confidence >= GOLD && (self.walked >= GOLD_WALK || self.anchored) {
+        let mut source = if confidence >= GOLD && (self.walked >= GOLD_WALK || self.anchored) {
             "estimated"
         } else if confidence >= ROUGH {
             "rough"
         } else {
             "unconfirmed"
         };
+        // Gold only where it was measured.
+        let dungeon = self.area.layouts.iter().zip(&posterior).any(|(l, &p)| l.dungeon && p >= NEGLIGIBLE);
+        if dungeon {
+            source = "unconfirmed";
+        } else if source == "estimated" && !self.trusted {
+            source = "rough";
+        }
         Some(GuideView {
             variant: if p_top >= SURE { self.area.layouts[top].id.clone() } else { String::new() },
             target_kind: if target.exit.is_some() { "entrance".into() } else { target.tag.clone().unwrap_or_default() },
@@ -846,7 +867,7 @@ mod tests {
             {"id": "both", "nodes": [{"x": 0, "y": 0, "exit": "A"}, {"x": 600, "y": 0, "exit": "B"}], "edges": [{"a": 0, "b": 1}]},
             {"id": "one", "nodes": [{"x": 0, "y": 0, "exit": "A"}, {"x": 600, "y": 0}], "edges": [{"a": 0, "b": 1}]}]}"#;
         let area = Area::parse("T", json).unwrap();
-        let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 3);
+        let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 3).trusted();
         nav.seen(Seen::Exit("B"));
         let ranking = nav.ranking();
         assert_eq!(ranking[0].0, "both");
@@ -860,6 +881,25 @@ mod tests {
         let before = nav.ranking()[0].1;
         nav.seen(Seen::Tag("nothing"));
         assert_eq!(nav.ranking()[0].1, before);
+    }
+
+    #[test]
+    fn gold_only_where_measured() {
+        let both = r#"{"connections": ["A", "B"], "topologies": [
+            {"id": "both", "format": "FORMAT", "roomUnitSize": 9, "nodes": [{"x": 0, "y": 0, "exit": "A"}, {"x": 600, "y": 0, "exit": "B"}], "edges": [{"a": 0, "b": 1}]}]}"#;
+        let source = |format: &str, trusted: bool| {
+            let area = Area::parse("X", &both.replace("FORMAT", format)).unwrap();
+            let mut nav = Navigator::new(&area, Arrival::Unknown, None, SCALE, 3);
+            if trusted {
+                nav = nav.trusted();
+            }
+            nav.seen(Seen::Exit("B"));
+            nav.guide(&[exit("A", "A")]).unwrap().source
+        };
+        assert_eq!(source("tgr", true), "estimated");
+        assert_eq!(source("tgr", false), "rough", "an area without a replayed recording");
+        assert_eq!(source("dgr", false), "unconfirmed", "a dungeon");
+        assert_eq!(source("dgr", true), "unconfirmed", "a dungeon, until its scale is measured");
     }
 
     #[test]
