@@ -178,6 +178,20 @@ const ICON_SURE: f64 = 0.95;
 /// probably goes round the outside of what is recorded.
 const ABSURD: f64 = 4.0;
 const ABSURD_SLACK: f64 = 150.0;
+/// A way with less than this share by recorded ground (within 15 cells of a wall
+/// seen twice or of the walk) is mostly a guess across fog: never gold, and when it
+/// is also about the straight line it says nothing the map knows, so the needle is
+/// as without the map (the layouts' route then still counts).
+const RECORDED: f64 = 0.5;
+
+/// What the last `guide_on` needle took from the recorded map (for the flight
+/// recorder): where it looked, in minimap cells from the player, and the share of
+/// the way over unrecorded ground.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WayNote {
+    pub ahead: (f64, f64),
+    pub unrecorded: f64,
+}
 
 /// The memory format; older files are ignored.
 pub(super) const MEMORY_VERSION: u32 = 1;
@@ -368,7 +382,7 @@ pub struct Navigator {
     /// part's minimap cells), preferred on the next call (hysteresis).
     way: RefCell<Option<(String, Vec<(i32, i32)>)>>,
     /// The last `guide_on` needle followed that way (for the flight recorder).
-    on_map: Cell<bool>,
+    last_way: Cell<Option<WayNote>>,
 }
 
 /// What the recorder knows of the part being recorded, lent at `guide_on` time.
@@ -473,7 +487,7 @@ impl Navigator {
                 .unwrap_or_default(),
             tuning: Tuning::default(),
             way: RefCell::default(),
-            on_map: Cell::new(false),
+            last_way: Cell::new(None),
         };
         // The player may have walked on since the position was saved.
         if let Some(m) = resume {
@@ -966,9 +980,9 @@ impl Navigator {
         let posterior = self.posterior();
         let (top, p_top) = posterior.iter().enumerate().fold((0, 0.0), |b, (i, &p)| if p > b.1 { (i, p) } else { b });
         let mapped = place.and_then(|place| self.on_the_map(target, &posterior, place));
-        self.on_map.set(mapped.is_some());
-        if mapped.is_some() {
-            return mapped;
+        self.last_way.set(mapped.as_ref().map(|m| m.1));
+        if let Some((view, _)) = mapped {
+            return Some(view);
         }
         let mut cache = self.guidance.borrow_mut();
         let (mut vx, mut vy, mut togo, mut weight) = (0.0, 0.0, 0.0, 0.0);
@@ -1107,7 +1121,13 @@ impl Navigator {
 
     /// The last needle followed a way through the recorded map.
     pub fn on_map(&self) -> bool {
-        self.on_map.get()
+        self.last_way.get().is_some()
+    }
+
+    /// What the last needle took from the recorded map, if it followed a way.
+    #[allow(dead_code)] // for the flight recorder
+    pub fn last_way(&self) -> Option<WayNote> {
+        self.last_way.get()
     }
 
     /// Where the target is on the part's map, when known: its icon in view (as
@@ -1115,8 +1135,10 @@ impl Navigator {
     /// cleared at every loss, and a new part starts with one), else the place the
     /// player arrived through it. Then the way there through the recorded map, if
     /// there is one and it is not absurdly long: the needle looks `route::LOOK`
-    /// along it and the distance is its length. None leaves the needle to `guide`.
-    fn on_the_map(&self, target: &NavTarget, posterior: &[f64], place: &Place) -> Option<GuideView> {
+    /// along it and the distance is its length. A way that is about the straight
+    /// line and lies mostly over unrecorded ground is not taken, and none over
+    /// unrecorded ground is gold. None leaves the needle to `guide`.
+    fn on_the_map(&self, target: &NavTarget, posterior: &[f64], place: &Place) -> Option<(GuideView, WayNote)> {
         let (top, p_top) = posterior.iter().enumerate().fold((0, 0.0), |b, (i, &p)| if p > b.1 { (i, p) } else { b });
         // Of the icons the belief (or the label) says are the target's exit, the
         // most certain, then the nearest, then by place.
@@ -1169,6 +1191,11 @@ impl Navigator {
         if way.length > (ABSURD * straight).max(straight + ABSURD_SLACK) {
             return None;
         }
+        // The straight line across ground nobody has recorded: the map changes
+        // nothing and knows nothing there.
+        if way.straight() && way.recorded < RECORDED {
+            return None;
+        }
         *self.way.borrow_mut() = Some((target.label.clone(), way.cells.clone()));
         let source = if arrival {
             // The way back to where the player came in: walked and recorded.
@@ -1183,7 +1210,10 @@ impl Navigator {
             let sure = if near && !against && (named || p_top >= GOLD_LAYOUT) { "estimated" } else { "rough" };
             if named && near { "estimated" } else { self.cap_source(sure, posterior) }
         };
-        Some(GuideView {
+        // Mostly across fog: a guess, however the target is known.
+        let source = if source == "estimated" && way.recorded < RECORDED { "rough" } else { source };
+        let note = WayNote { ahead: (way.ahead.0 - from.0, way.ahead.1 - from.1), unrecorded: 1.0 - way.recorded };
+        let view = GuideView {
             variant: if p_top >= SURE { self.area.layouts[top].id.clone() } else { String::new() },
             target_kind: if target.exit.is_some() { "entrance".into() } else { target.tag.clone().unwrap_or_default() },
             target: target.label.clone(),
@@ -1193,7 +1223,8 @@ impl Navigator {
             confidence: share.min(1.0) as f32,
             measured: false,
             turned: false,
-        })
+        };
+        Some((view, note))
     }
 
     /// Gold only where it was measured: at most rough in other areas, unconfirmed
@@ -2013,7 +2044,9 @@ mod tests {
         // After: to the doorway first, the way's length, still gold.
         assert!(angle_between(after.degrees.unwrap(), doorway) < 10.0, "{after:?}");
         assert!((150.0..175.0).contains(&after.distance), "{after:?}");
-        assert_eq!(after.source, "estimated");
+        // Most of the way lies over ground nothing was recorded on (no walk here,
+        // the wall alone): rough.
+        assert_eq!(after.source, "rough");
         // The icon goes out of view and the player walks 30 cells right: the
         // sighting keeps its place, the way still goes through the doorway.
         nav.icons(&[]);
@@ -2021,7 +2054,7 @@ mod tests {
         let later = nav.guide_on(&target, Some(&lent(&map, &[], (30, 0), vec![]))).unwrap();
         assert!(angle_between(later.degrees.unwrap(), bearing(40.0, -40.0)) < 10.0, "{later:?}");
         assert!((125.0..150.0).contains(&later.distance), "{later:?}");
-        assert_eq!(later.source, "estimated");
+        assert_eq!(later.source, "rough");
         // Without the map the needle is the layouts' (no icon in view).
         assert_ne!(nav.guide(&target).unwrap().distance, later.distance);
         // A loss ends the sighting and the kept way.
@@ -2100,5 +2133,64 @@ mod tests {
         times.sort();
         println!("guide_on on the real map: {} calls, median {:?}, slowest {:?}", times.len(), times[times.len() / 2], times[times.len() - 1]);
         assert!(times[times.len() - 1].as_millis() < 100);
+    }
+
+    /// A named exit icon, read in two scans.
+    fn named_icon(nav: &mut Navigator, dx: f64, dy: f64, to: &str) {
+        let icon = ExitIcon { dx, dy, to: Some(to.into()) };
+        nav.icons(std::slice::from_ref(&icon));
+        nav.icons(std::slice::from_ref(&icon));
+    }
+
+    #[test]
+    fn a_straight_way_across_unrecorded_ground_leaves_the_layout_needle() {
+        // A U-shaped layout: the exit to A lies 200 units east of B, the corridor
+        // there goes 400 south, 200 east and 400 north (5 times the straight line).
+        let json = r#"{"connections": ["A", "B"], "topologies": [
+            {"id": "u", "nodes": [{"x": 0, "y": 0, "exit": "B"}, {"x": 0, "y": -400}, {"x": 200, "y": -400}, {"x": 200, "y": 0, "exit": "A"}],
+             "edges": [{"a": 0, "b": 1}, {"a": 1, "b": 2}, {"a": 2, "b": 3}]}]}"#;
+        let area = Area::parse("U", json).unwrap();
+        let mut nav = Navigator::new(&area, Arrival::From("B"), None, SCALE, 3).trusted();
+        let (dx, dy) = super::super::guide::to_screen((200.0 * SCALE, 0.0));
+        named_icon(&mut nav, dx, dy, "A");
+        let target = [exit("A", "A")];
+        let before = nav.guide(&target).unwrap();
+        // The layout says round the U, not straight at the icon.
+        assert!(angle_between(before.degrees.unwrap(), bearing(dx, dy)) > 45.0, "{before:?}");
+        // Nothing recorded: the way would be the straight line across fog. Not taken.
+        let empty = HashMap::new();
+        let view = nav.guide_on(&target, Some(&lent(&empty, &[], (0, 0), vec![])));
+        assert_eq!(view.as_ref(), Some(&before));
+        assert!(!nav.on_map() && nav.last_way().is_none());
+    }
+
+    #[test]
+    fn a_way_mostly_across_fog_is_never_gold() {
+        let area = graph::load("G1_2");
+        let mut nav = Navigator::new(&area, Arrival::From("G1_town"), None, SCALE, 3);
+        named_icon(&mut nav, 0.0, -120.0, "The Grelwood");
+        let target = [exit("G1_4", "The Grelwood")];
+        // One short recorded wall across the straight line, nothing else: the way
+        // bends round its end, so the map changes the answer, but most of it lies
+        // over ground nothing was recorded on.
+        let stub = walls(line((-20, -60), (20, -60)));
+        let view = nav.guide_on(&target, Some(&lent(&stub, &[], (0, 0), vec![]))).unwrap();
+        let note = nav.last_way().expect("the map's way");
+        println!("{view:?} {note:?}");
+        assert!(note.unrecorded > 0.5, "{note:?}");
+        assert!(angle_between(view.degrees.unwrap(), -90.0) > 10.0, "{view:?}");
+        assert_eq!(view.source, "rough");
+        // The look-ahead, as the flight recorder gets it: from the player.
+        assert!(angle_between(bearing(note.ahead.0, note.ahead.1), view.degrees.unwrap()) < 0.01);
+        // Walked up a recorded corridor 50 cells wide, a pillar ahead: the way goes
+        // round it over recorded ground, gold.
+        let trail: Vec<[i32; 2]> = (0..=6).map(|k| [0, 60 - 10 * k]).collect();
+        let corridor = walls([line((-25, 60), (-25, -160)), line((25, 60), (25, -160)), outline(-8, -50, 8, -34)].concat());
+        let view = nav.guide_on(&target, Some(&lent(&corridor, &trail, (0, 0), vec![]))).unwrap();
+        let note = nav.last_way().unwrap();
+        println!("{view:?} {note:?}");
+        assert!(note.unrecorded < 0.2, "{note:?}");
+        assert!(angle_between(view.degrees.unwrap(), -90.0) > 5.0, "round the pillar: {view:?}");
+        assert_eq!(view.source, "estimated");
     }
 }

@@ -807,6 +807,17 @@ when (in this order):
 
 Then the way there. If one is found and is at most 4 times the straight line (or 150
 cells more), the needle looks 40 cells along it and the distance shown is its length.
+
+**Recorded ground** (fix pass 1, review B-1): a way's search cells count as recorded
+within 15 cells of a wall cell seen twice or of the walked trail. A way that is about
+the straight line (no corner a search cell off it, at most 5% longer) and lies less
+than half over recorded ground is not taken: across fog the map knows nothing, and the
+layouts' route (which may say "round the river") stays the needle, as without a map
+(`a_straight_way_across_unrecorded_ground_leaves_the_layout_needle`: a U-shaped layout,
+an empty map). A way less than half over recorded ground is never gold. The navigator
+reports what the last needle took from the map (`Navigator::last_way`: the look-ahead
+offset from the player and the share over unrecorded ground) for the flight recorder.
+
 Gold keeps the icon's conditions (named and read the same twice, not against a sure
 belief, within 200 cells; or unlabelled with one layout at 90%, measured areas only)
 but no longer needs the graph route to be about straight: the way is the route. The
@@ -818,8 +829,10 @@ Before and after, the wall-between case (`a_named_icon_behind_a_wall_is_reached_
 The Grelwood's icon 80 cells up, read twice, a wall across halfway with a 20-cell
 doorway 70 cells to the right. Before: −87° (the layout's corridors from where the icon
 puts the player: through the wall), rough, 80 cells. After: −28°, at the doorway (−30°),
-gold, 157 cells. Walked 30 cells right with the icon out of view: −45° to the doorway,
-gold, from the sighting.
+157 cells; rough since fix pass 1 (no walk recorded, so most of the way lies over
+unrecorded ground). Walked 30 cells right with the icon out of view: −45° to the
+doorway, from the sighting. In a recorded corridor with a pillar ahead (way 88% over
+recorded ground) the needle goes round the pillar, gold.
 
 **Simulation.** The walker's world has no walls, so the 4-9% of gold needles more than 60°
 off the walkable route (above) cannot be checked against this there. It would need a

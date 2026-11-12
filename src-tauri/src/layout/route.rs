@@ -52,6 +52,9 @@ const MAX_EXPAND: usize = 60_000;
 const ESCAPE: i32 = 3;
 /// The needle looks this far ahead along the way (minimap cells).
 pub const LOOK: f64 = 40.0;
+/// Ground counts as recorded within this many search cells (15 minimap cells)
+/// of a cell seen twice or walked.
+const RECORDED_NEAR: i32 = 5;
 /// Cells of the way kept from the last call cost this share (percent): the
 /// needle stays on its way unless another is clearly shorter.
 const KEEP: u32 = 90;
@@ -64,6 +67,8 @@ const NEAR: u8 = 2;
 const WALKED: u8 = 4;
 const KEPT: u8 = 8;
 const GOAL: u8 = 16;
+/// The search cell holds a wall cell seen twice (a line or a speck).
+const SEEN: u8 = 32;
 
 /// Costs per search step (hundredths of a search cell).
 const STRAIGHT: u32 = 100;
@@ -92,6 +97,27 @@ pub struct Way {
     /// Search cells expanded (for the time bound).
     #[allow(dead_code)] // tests and measurements
     pub expanded: usize,
+    /// Share of its search cells within 15 minimap cells of recorded ground (a
+    /// wall cell seen twice, or the walked trail), and of the walked trail alone.
+    pub recorded: f64,
+    #[allow(dead_code)] // used by the way back's gold rule
+    pub walked: f64,
+}
+
+impl Way {
+    /// Nearly the straight line from the player to the target: no corner more than
+    /// a search cell off it, and at most 5% longer.
+    pub fn straight(&self) -> bool {
+        let (a, b) = (self.points[0], self.points[self.points.len() - 1]);
+        let d = (b.0 - a.0).hypot(b.1 - a.1);
+        let off = |p: &(f64, f64)| {
+            if d < 1e-9 {
+                return 0.0;
+            }
+            ((b.0 - a.0) * (a.1 - p.1) - (a.0 - p.0) * (b.1 - a.1)).abs() / d
+        };
+        self.length <= 1.05 * d + 1.0 && self.points.iter().all(|p| off(p) <= COARSE as f64)
+    }
 }
 
 struct Grid {
@@ -212,6 +238,7 @@ fn build(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> Gr
         if let Some(k) = index(x, y) {
             if count[k] == 0 {
                 held.push(k);
+                grid.flags[k] |= SEEN;
             }
             count[k] = count[k].saturating_add(1);
         }
@@ -404,12 +431,21 @@ pub fn way(map: &Map, from: (f64, f64), to: (f64, f64), keep: &[(i32, i32)]) -> 
         a = best;
     }
     let length = points.windows(2).map(|p| (p[1].0 - p[0].0).hypot(p[1].1 - p[0].1)).sum();
+    // How much of the way lies by recorded ground: the rest is a guess across fog.
+    let near = |c: (i32, i32), mask: u8| {
+        let r = RECORDED_NEAR;
+        (-r..=r).any(|dj| (-r..=r).any(|di| grid.index((c.0 + di, c.1 + dj)).is_some_and(|k| grid.flags[k] & mask != 0)))
+    };
+    let share = |mask: u8| cells.iter().filter(|&&c| near(c, mask)).count() as f64 / cells.len().max(1) as f64;
+    let (recorded, walked) = (share(SEEN | WALKED), share(WALKED));
     Some(Way {
         ahead: point_along(&points, LOOK),
         cells: cells.iter().map(|&c| grid.centre(c)).map(|(x, y)| (x.round() as i32, y.round() as i32)).collect(),
         points,
         length,
         expanded,
+        recorded,
+        walked,
     })
 }
 
