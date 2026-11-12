@@ -267,15 +267,6 @@ pub struct Boss {
 }
 
 impl Boss {
-    /// Where the layout graphs put it.
-    fn place(&self) -> nav::BossAt {
-        match (&self.exit, &self.tag) {
-            (Some(exit), _) => nav::BossAt::Exit(exit.clone()),
-            (None, Some(tag)) => nav::BossAt::Tag(tag.clone()),
-            (None, None) => nav::BossAt::Tag("boss".into()),
-        }
-    }
-
     /// The log names the speaker in full ("Beira of the Rotten Pack"); the checklist
     /// may shorten it.
     fn speaks_as(&self, speaker: &str) -> bool {
@@ -358,12 +349,6 @@ const SAME_ICON: f32 = 4.0;
 const NAMED_FRAMES: u32 = 33;
 /// A grey twin this close (cells) to where this part saw the pair alive is that boss, dead.
 const SAME_PLACE: f32 = 12.0;
-/// Bosses' own icons are evidence for the navigator. Off (shadow: read, logged, used for
-/// `dead_bosses` and the reader's hints): in the simulation, even only a pair's icon read
-/// in two frames, kept off the particles and out of gold's share, made gold worse: 2 seeds,
-/// more than 60° off, minimap view 0 of 14 → 2 of 6, wide view 1.7% → 4.3%
-/// (`nav_sim::boss_icons_report`; the review allowed half a point).
-const BOSS_EVIDENCE: bool = false;
 
 /// The arrival point and what tells whether the player came in by the exit there.
 struct CameIn {
@@ -411,11 +396,10 @@ fn icon_label(icon: &crate::minimap::bigmap::Icon) -> Option<String> {
     icon.label.clone().filter(|l| !l.is_empty())
 }
 
-/// Exits (and bosses) kept from the last whole-window scan: place in the part's cells,
-/// label, the boss places of a boss's icon.
-type FarIcons = Vec<(f32, f32, Option<String>, Vec<nav::BossAt>)>;
+/// Exits kept from the last whole-window scan: place in the part's cells, label.
+type FarIcons = Vec<(f32, f32, Option<String>)>;
 
-/// Which of the zone's bosses a map icon may be (see `nav::ExitIcon::boss`): only a boss
+/// Which of the zone's bosses a map icon may be (for `Recorder::dead_bosses`): only a boss
 /// pair's own icon, alive or grey (it carries its place's name: the Miller's, the
 /// Riverbank), in its own area, for the boss the pair names, else (unnamed) for any of the
 /// zone's bosses; never a pair known to be no checklist boss's (the Grelwood's plant). An
@@ -443,24 +427,10 @@ fn checkpoint_list(icons: &[crate::minimap::bigmap::Icon]) -> Vec<(f64, f64)> {
     icons.iter().filter(|i| i.kind == "checkpoint").map(|i| (i.x as f64, i.y as f64)).collect()
 }
 
-/// The places of `boss_candidates`, each once.
-fn boss_places(icon: &crate::minimap::bigmap::Icon, area: &str, bosses: &[Boss]) -> Vec<nav::BossAt> {
-    let mut places: Vec<nav::BossAt> = Vec::new();
-    for boss in boss_candidates(icon, area, bosses) {
-        let place = boss.place();
-        if !places.contains(&place) {
-            places.push(place);
-        }
-    }
-    places
-}
-
-/// The exits (and bosses' icons, with the places of the zone's `bosses` in `area` they
-/// may be) handed to the navigator with one frame (`Session::feed_icons`; the replay of
-/// a flight recording builds them the same way). Every third big-map frame lists every
+/// The exits handed to the navigator with one frame (`Session::feed_icons`; the replay
+/// of a flight recording builds them the same way). Every third big-map frame lists every
 /// icon on screen, the frames between only those inside the wall frame: icons outside it
 /// are kept from the last whole scan for a few frames.
-#[allow(clippy::too_many_arguments)]
 fn exit_list(
     icons: &[crate::minimap::bigmap::Icon],
     whole: bool,
@@ -468,38 +438,24 @@ fn exit_list(
     size: (usize, usize),
     far_icons: &mut FarIcons,
     far_age: &mut u32,
-    area: &str,
-    bosses: &[Boss],
 ) -> Vec<nav::ExitIcon> {
     let (hw, hh) = (size.0 as f32 / 2.0, size.1 as f32 / 2.0);
     let outside = |x: f32, y: f32| x.abs() > hw || y.abs() > hh;
-    let fed: Vec<(&crate::minimap::bigmap::Icon, Vec<nav::BossAt>)> = icons
-        .iter()
-        .filter_map(|i| match i.kind {
-            "exit" => Some((i, vec![])),
-            _ if BOSS_EVIDENCE => Some((i, boss_places(i, area, bosses))).filter(|(_, places)| !places.is_empty()),
-            _ => None,
-        })
-        .collect();
-    let mut list: Vec<nav::ExitIcon> =
-        fed.iter().map(|(i, boss)| nav::ExitIcon { dx: i.x as f64, dy: i.y as f64, to: icon_label(i), boss: boss.clone() }).collect();
+    let fed: Vec<&crate::minimap::bigmap::Icon> = icons.iter().filter(|i| i.kind == "exit").collect();
+    let mut list: Vec<nav::ExitIcon> = fed.iter().map(|i| nav::ExitIcon { dx: i.x as f64, dy: i.y as f64, to: icon_label(i) }).collect();
     if whole {
         // A whole-window scan (marked by the reader): its far icons replace the
         // kept ones, none if it saw none.
-        *far_icons = fed
-            .iter()
-            .filter(|(i, _)| outside(i.x, i.y))
-            .map(|(i, boss)| (pos.0 as f32 + i.x, pos.1 as f32 + i.y, icon_label(i), boss.clone()))
-            .collect();
+        *far_icons = fed.iter().filter(|i| outside(i.x, i.y)).map(|i| (pos.0 as f32 + i.x, pos.1 as f32 + i.y, icon_label(i))).collect();
         *far_age = 0;
     } else if *far_age < FAR_FRAMES {
         *far_age += 1;
-        for (x, y, to, boss) in far_icons.iter() {
+        for (x, y, to) in far_icons.iter() {
             let (dx, dy) = (x - pos.0 as f32, y - pos.1 as f32);
             // Not when this frame shows it already (an icon in the capture's margin).
-            let shown = fed.iter().any(|(i, b)| b == boss && (i.x - dx).abs() <= 10.0 && (i.y - dy).abs() <= 10.0);
+            let shown = fed.iter().any(|i| (i.x - dx).abs() <= 10.0 && (i.y - dy).abs() <= 10.0);
             if outside(dx, dy) && !shown {
-                list.push(nav::ExitIcon { dx: dx as f64, dy: dy as f64, to: to.clone(), boss: boss.clone() });
+                list.push(nav::ExitIcon { dx: dx as f64, dy: dy as f64, to: to.clone() });
             }
         }
     }
@@ -707,7 +663,7 @@ impl Session {
         new
     }
 
-    /// Hands the navigator the frame's exit and boss icons (see `exit_list`) and its new
+    /// Hands the navigator the frame's exit icons (see `exit_list`) and its new
     /// checkpoints; the named kinds only once seen in two frames (`confirm_named`).
     fn feed_icons(&mut self, icons: &[crate::minimap::bigmap::Icon], whole: bool, pos: (i32, i32), size: (usize, usize), bosses: &[Boss]) {
         let mut icons = self.confirm_named(icons, pos);
@@ -726,7 +682,7 @@ impl Session {
             let far = !self.far_icons.is_empty() && (whole || self.far_age < FAR_FRAMES);
             log.icons(obs::now_ms(), icons, whole, size, far);
         }
-        let list = exit_list(icons, whole, pos, size, &mut self.far_icons, &mut self.far_age, &self.recording.area, bosses);
+        let list = exit_list(icons, whole, pos, size, &mut self.far_icons, &mut self.far_age);
         nav.icons(&list);
         nav.checkpoints(&checkpoints, &list);
     }
@@ -1468,7 +1424,6 @@ impl State {
             memory: kept.cloned(),
             age: kept.map(|m| now().saturating_sub(m.at)),
             resumed,
-            bosses: self.bosses.get(&session.recording.area).cloned().unwrap_or_default(),
         };
         Some((nav::Navigator::new(&area, arrival, memory.as_ref(), scale, session.recording.seed.unwrap_or(0)), start))
     }
@@ -2142,9 +2097,6 @@ mod tests {
         assert_eq!(names(&icon("boss-dead", Some("GargoyleInactive"), 0.0, 0.0), "G1_15", &manor), ["Candlemass"]);
         // An unnamed pair (the Count's, read by hand as Count Geonor): either of the zone's.
         assert_eq!(names(&icon("boss", Some("CountActive"), 0.0, 0.0), "G1_15", &manor), ["Candlemass", "Count Geonor"]);
-        // Its places for the navigator, each once.
-        assert_eq!(boss_places(&icon("boss", Some("CountActive"), 0.0, 0.0), "G1_15", &manor), [nav::BossAt::Tag("boss".into())]);
-        assert_eq!(boss_places(&icon("boss", Some("MillerActive"), 0.0, 0.0), "G1_1", &miller), [nav::BossAt::Exit("G1_town".into())]);
     }
 
     #[test]
@@ -2297,7 +2249,7 @@ mod tests {
     }
 
     #[test]
-    fn boss_icons_are_logged_and_replayed_as_fed() {
+    fn boss_icons_reach_neither_the_navigator_nor_the_flight_recorder() {
         use crate::minimap::bigmap::Icon;
         let dir = scratch("boss-icons");
         let recorder = Recorder::new(Some(dir.clone()));
@@ -2320,11 +2272,8 @@ mod tests {
         }
         recorder.save_now();
         let text = std::fs::read_to_string(dir.join("G1_2").join("7.obs.jsonl")).unwrap();
-        let first = text.lines().find(|l| !l.is_empty()).unwrap();
-        assert!(first.contains(r#""bosses":[{"name":"Beira"}]"#), "{first}");
-        // Read on the scans (every third frame): written from its second, at 400 - 12 cells.
-        assert!(text.contains(r#""kind":"boss","x":388.0,"y":-60.0,"sprite":"CroneActive""#), "{text}");
-        // The grey skull is no navigator input: written once, as a mark.
+        assert!(!text.contains("bosses") && !text.contains(r#""kind":"boss""#), "{text}");
+        // The grey skull is written once, as a mark.
         assert_eq!(text.matches(r#""kind":"dead""#).count(), 1, "{text}");
         let visits = obs::replay::replay(&text, &graph::Graphs::default());
         assert!(visits[0].agree == visits[0].logged && visits[0].logged > 0, "{:?}", visits[0].differ);

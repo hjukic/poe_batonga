@@ -536,7 +536,7 @@ matcher named: `boss` (an orange skull, a unique monster alive; or a boss's own 
 `boss-dead` (a boss's own grey icon, `…Inactive`), `dead` (a grey skull), `rare` (a yellow skull),
 `portal`, `npc`, `quest`. `sprite` carries the sprite's id (`GrimTangleBossActive`), so a boss's own icon
 is known by name; `data/icons/index.json` says whose. Rares, portals and the rest are read only so they
-are not taken for anything else: the navigator uses exits and, from I5 on, bosses.
+are not taken for anything else: the navigator uses exits and checkpoints; bosses' icons tell kills.
 
 **The corner minimap** goes through the same reading (every pixel, `bigmap::icons`), with the same
 scales: the table gives every icon taken here `MinimapIconRadius` = `LargemapIconRadius` (2), which is
@@ -930,105 +930,23 @@ When a boss speaks, the reader also keeps one capture of the minimap corner and 
 (`samples/boss-minimap-*.ppm`, `boss-bigmap-*.ppm`): nobody has yet looked at whether the map draws a boss
 icon that could be read like the exits.
 
-## Boss icons as evidence and as kills (third build)
-
-*Changed by the review's fix pass: boss icons are in shadow and one dead rule is left; see
-[fix pass 1](#fix-pass-1-review-ri). What follows is the first version, kept for its measurements.*
+## Boss icons as kills (third build; evidence removed in v0.1.74)
 
 What the reader names a boss icon ([icons by their sprite](#icons-by-their-sprite-2026-11-12-third-build))
-goes to the navigator like an exit icon, and a grey one can tell the checklist that a boss is dead. Nothing
-of this has been seen on a real screen: no boss icon has been read yet.
+can tell the checklist that a boss is dead (`Recorder::dead_bosses`; the rule is in
+[fix pass 1](#fix-pass-1-review-ri)). `layout::boss_candidates` says which of the zone's bosses
+(`Recorder::set_bosses`, from the checklists) an icon may be: a boss pair's own icon, alive or grey, only
+in its own area, for the boss the pair names (`data/icons/index.json`, `boss`), else (pair unnamed) any of
+the zone's bosses; never a pair known to be no checklist boss's (`CarnivorousPlant` in The Grelwood). An
+orange skull, a grey skull or a rare is none. Each frame the recorder tells the reader where this part saw
+each boss pair (`set_icon_hints`), so a boss's dark grey icon, which has no label and little colour, is
+looked for there.
 
-### Evidence for the navigator
-
-`layout::boss_candidates` says which of the zone's bosses (`Recorder::set_bosses`, from the checklists) an
-icon may be:
-
-- a boss's own icon (`MillerActive`, `GrimTangleBossInactive`) only in its own area, and then the boss its
-  pair names (`data/icons/index.json`, `boss`), else (pair unnamed) any of the zone's bosses; never a pair
-  known to be no checklist boss's (`CarnivorousPlant` in The Grelwood);
-- an orange skull (a unique monster alive): any of the zone's bosses that has no icon of its own (a pair
-  that names it, or its zone's one boss with a pair): the Miller showed his own icon, not a skull;
-- a grey skull, a rare, anything else: none (a grey skull is a dead unique or a dead rare).
-
-Each place (`Boss::place`: the exit to an area, a tagged node, else a node tagged `boss`) becomes
-`nav::BossAt`, and the icon an `ExitIcon` with `boss` set: its candidate nodes are those places' nodes
-instead of the exits. One place is an exact sighting (as an exit icon is); several are weighed as an
-unlabelled exit icon is over the exits (the nearest candidate counts). A tagged place is an arena's centre:
-the icon may stand 150 units from it (`BOSS_TOL`, as a log anchor at a tag), an exit place 100 (`ICON_TOL`).
-An exit and a boss's icon at one place (the Miller by his exit) are two sightings. Boss icons are never
-labelled, so they never make the "named exits" fit and never the label's gold. Two choices go further
-than "as an unlabelled exit icon", because the simulation said so (below): a new boss sighting the belief
-predicted does **not** confirm it (`BOSS_CONFIRMS`, no anchor from a boss icon), and what bosses' icons add
-to a layout is kept apart (`Bank::boss`): it is in the posterior and the needle, **not** in the 90% share
-gold needs (`BOSS_GOLD`). They move the particles as exit icons do (`BOSS_PARTICLES`). A needle to a boss
-target points at its icon once the belief says it is the target's (`icon_is_target`).
-
-**Simulation** (`nav_sim::what_boss_icons_add`, one seed in `cargo test`; `boss_icons_report`, two seeds,
-release): the same walks, unlabelled exit icons, with and without the boss's icon (the Miller by the
-Riverbank's way to the encampment; Beira at one of Clearfell's boss nodes, up to 100 units off it):
-
-| View | Boss icons | Within 45° at 60% | Top layout true for good | Gold steps | Gold > 60° off |
-| --- | --- | ---: | ---: | ---: | ---: |
-| Minimap, 2 seeds | no | 36.2% | 35% | 14 | 0 |
-| Minimap, 2 seeds | yes | 38.0% | 45% | 10 | 2 (20%) |
-| Wide, 2 seeds | no | 51.9% | 46% | 295 | 5 (1.7%) |
-| Wide, 2 seeds | yes | 61.5% | 54% | 412 | 11 (2.7%) |
-| Wide, 1 seed | no | 52.8% | 50% | 173 | 1 (0.6%) |
-| Wide, 1 seed | yes | 61.1% | 54% | 183 | 7 (3.8%) |
-
-Boss icons help the needle (+9 points within 45° in the wide view) and the layout (+8–10 points), and make
-gold worse: Gate A's 3% holds at two seeds, not at one. Letting them count for gold's share made it worse
-still (minimap view 5 of 22 off), letting them confirm changed nothing more, keeping them off the
-particles was no better (wide view 6 of 145 off, 58.5% within 45°). The test pins the numbers above so
-they cannot get worse unnoticed; the simulation's labels are perfect and its boss is always where the
-checklist says.
-
-Recorder: `exit_list` hands the navigator exits and boss icons (kept from whole-window scans for 3 frames
-like far exits). Flight recorder: boss icons are written with exits (`kind`, `sprite`), the `start` line
-carries the zone's `bosses`, and the replay places them the same way
-(`boss_icons_are_logged_and_replayed_as_fed`). Grey skulls are written once per part, as checkpoints are.
-
-Each frame the recorder tells the reader where this part saw each boss pair (`set_icon_hints`), so a
-boss's dark grey icon, which has no label and little colour, is looked for there.
-
-Tests: `a_boss_icon_is_weighed_at_the_boss_places_not_the_exits` (Clearfell `W_E_N`, just arrived from the
-encampment, Beira's icon in view: the layout gains more than from the walk; the same place read as an
-exit says something else), `a_boss_icon_never_confirms_the_belief` (alone, six frames: no anchor, no
-gold; after two named exits fixed the layout, a boss icon where the belief expects it confirms only with
-`BOSS_CONFIRMS` switched on; the needle to Beira points at it), `a_boss_icon_counts_only_for_the_bosses_it_may_be`.
-
-### "This boss is dead" (`Recorder::dead_bosses`)
-
-The current zone's bosses (names as `set_bosses` gave them) the map showed dead in this visit, for the
-checklist (the chair wires it). Strict: a false "dead" ticks a step not done. A boss is dead when
-
-- **a**: its own pair's grey icon is read and the zone has one boss;
-- **b**: the grey icon's pair names it;
-- **c**: a grey icon (its own or a grey skull) lies within 12 cells of where this part saw it alive by its
-  own icon (a or b);
-- **d**: with a trusted layout (the top one at 90%), a grey skull lies at its node in at least 90% of the
-  belief, and at no other boss's node in 50%.
-
-A grey skull alone, an orange skull turning grey (an unrelated unique, as far as the map can tell), a pair
-of another area or of no checklist boss count for nothing
-(`the_map_names_a_boss_dead_only_when_the_grey_icon_is_its`). Places are per part: a new part starts
-without them; the names stay for the visit.
-
-Which of the 74 boss steps each rule can attribute (from `data/icons/index.json`, the checklists and the
-layout graphs; c applies wherever a or b does):
-
-| Rule | Steps | Bosses |
-| --- | ---: | --- |
-| b (own icon names it) | 24 | The Bloated Miller, The Devourer, Draven, Asinia, The Crowbell, The Executioner, Candlemass, Rathbreaker, Balbala, Kabala, Tor Gul, Rudja, Rootdredge, Xyclucian, Blackjaw, Zicoatl, Ignagduk, Queen of Filth, Viper Napuatzi, Doryani, Blind Beast, Captain Hartlin, Great White One, Clawcrunch |
-| a (its area's pair, one boss) | 17 | Beira, Ervig, Lachlann, Jamanra (×2), Azarian, Iktab & Ekbab, Zalmarath, Mighty Silverfist, Ketzuli, Diamora, Yama the White, The Prisoner, Scourge of the Skies, Torvian, Benedictus, Tavakai |
-| d only (grey skull at its node, trusted layout) | 24 | Gerung, Areagne, Count Geonor, Magma Twins, Krutog, Omniphobia, Tombgrowl, Doran, Ninth Treasure, Narag, Mektul, 2 Vultures, Mad Butcher, Forael, the interludes' Godwin & Sigbert, Oswin, Akthi & Anundr, Elzarah, Bloodbilge, Azmadi, Rakkar, the Yeti, Stormgore, Zolin & Zelina |
-| none | 9 | King in the Mists, The Rust King, The Rotten Druid, Noxious Behemoth, Mimok, Vornas, Lythara, Isolde & Heldra, Wulfric & Elswyth |
-
-"d" needs the navigator at 90% on one layout, which outside the two measured areas is rare; in practice
-those 24 stay hand-ticked. Two pairs are in zones with two bosses and name neither (the Count's in Ogham
-Manor, the Volcanic Warrens'): by elimination the Count's is Count Geonor's (the Gargoyle's names
-Candlemass), not built.
+Boss icons were also tried as navigator evidence (an icon at a boss's node, as an exit icon at an exit). In
+the simulation they helped the layout and the needle and made gold worse; from fix pass 1 they ran in
+shadow, and v0.1.74 removed them. Measured (simulation, unlabelled exit icons, with and without the boss's
+icon, read in two frames, off the particles, out of gold's share; three seeds): wide view within 45° at 60%
+51.8% → 59.1%, gold more than 60° off 2.1% → 4.1%; minimap view 0 of 16 → 2 of 6.
 
 ## Scene pixels read as map (third build, I9)
 
@@ -1186,10 +1104,9 @@ without a name after the kill.
 - **Two frames.** A boss's icon, a grey one, a skull or a rare is used (fed, logged, kept for the dead rule)
   only once read with the same sprite at the same map place (4 cells) in two frames within 12
   (`confirm_named`): an icon stays where it is; scene a sprite was matched on does not.
-- **Boss icons in shadow** (`BOSS_EVIDENCE` false). Only a pair's own icon could count (the orange skull never:
-  an ordinary unique walks about, and no campaign boss was seen as one), read in two frames, off the particles
-  (`BOSS_PARTICLES` false), out of gold's share. Still, two seeds (`boss_icons_report`, the simulated icon also
-  needs two frames):
+- **Boss icons in shadow** (removed in v0.1.74). Only a pair's own icon could count (the orange skull never:
+  an ordinary unique walks about, and no campaign boss was seen as one), read in two frames, off the particles,
+  out of gold's share. Still, two seeds (the simulated icon also needs two frames):
 
   | View | Boss icons | Within 45° at 60% | Top layout true for good | Gold | Gold > 60° off |
   | --- | --- | ---: | ---: | ---: | ---: |
@@ -1198,8 +1115,8 @@ without a name after the kill.
   | Minimap, 3 seeds | no / yes | 35.4% / 37.1% | 34% / 40% | 16 / 6 | 0 / 2 (33%) |
   | Wide, 3 seeds | no / yes | 51.8% / 59.1% | 42% / 50% | 387 / 443 | 2.1% / 4.1% |
 
-  The review allowed half a point: they stay in shadow (read, logged, the dead rule, the reader's hints; the
-  navigator gets nothing; the replay does the same).
+  The review allowed half a point: they stayed in shadow (read, the dead rule, the reader's hints; the
+  navigator got nothing). v0.1.74 removed them as evidence and from the flight recorder.
 - **One dead rule** (`dead_bosses`): this part saw the pair's live icon at a place, and now reads its grey twin
   within 12 cells and no live icon of that pair; the boss is the one the pair names, or the zone's only boss.
   No grey twin never seen alive, no grey skull, no layout rule. The real pair of captures, through the reader
@@ -1214,9 +1131,8 @@ without a name after the kill.
   checkpoint on the frame of its line, feeds exactly what the app fed. Logs now say on their `start` line that
   their checkpoints were checked against their sprite (`sprites`); older logs' checkpoints (scene ones among
   them) are not fed. On the owner's live folder the replay agrees with `main` on 400 of 400 needles.
-- **Kept cells**: `Live::kept` holds the cells not held back, so the map's ways borrow it instead of a copy
-  of all cells each frame. The hold's comment says what holds the character out (its small patches, not its
-  height).
+- **Kept cells**: `Live::kept` holds the cells not held back. The hold's comment says what holds the
+  character out (its small patches, not its height).
 - The flight recorder marks only checkpoints, waypoints and grey skulls (not rares, portals, NPCs, quest icons).
 
 **Navigator, checkpoints** (`checkpoints_take_at_most_the_cap_and_count_once`): what checkpoints take from a
