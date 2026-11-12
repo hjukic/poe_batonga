@@ -48,7 +48,6 @@ static STATE: Mutex<Option<State>> = Mutex::new(None);
 /// The names the exits of the current zone can have (its connections' zone names); until
 /// this is called, or with an empty list, no label is read. To be called from the
 /// recorder's zone entry.
-#[allow(dead_code)]
 pub fn set_label_candidates(names: Vec<String>) {
     if let Ok(mut state) = STATE.lock() {
         let (rendered, generation) = state.take().map(|s| (s.rendered, s.generation + 1)).unwrap_or_default();

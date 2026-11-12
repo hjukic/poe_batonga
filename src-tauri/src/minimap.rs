@@ -15,7 +15,6 @@ pub mod bigmap;
 pub mod labels;
 /// The zone names the current zone's exits lead to, for reading the big map's exit labels
 /// (call on zone entry with the zone's `connectionNames`; nothing is read before).
-#[allow(unused_imports)]
 pub use labels::set_label_candidates;
 #[cfg(target_os = "windows")]
 #[path = "minimap_windows.rs"]
@@ -166,18 +165,10 @@ pub fn parse_ppm(bytes: &[u8]) -> Result<Image, String> {
     Ok(Image { width, height, pixels })
 }
 
-/// Which size of frame the big map is handed to the recorder in.
-#[allow(dead_code)]
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum BigFrame {
-    /// The minimap's size, with the player on the minimap's player cell.
-    LikeMinimap,
-    /// A larger frame (cols, rows) centred on the player: more of the explored map per
-    /// frame, so the recorder finds its place again after a gap. The recorder takes the
-    /// new player cell when the frame size changes.
-    Wide(usize, usize),
-}
-const BIG_FRAME: BigFrame = BigFrame::Wide(600, 518);
+/// The big map is handed to the recorder in frames of this many cells (cols, rows), centred
+/// on the player: more of the explored map per frame than the minimap's, so the recorder
+/// finds its place again after a gap. It takes the new player cell when the frame size changes.
+const BIG_FRAME: (usize, usize) = (600, 518);
 
 /// Where the maps are read on screen. On Linux the areas are grim geometry in logical
 /// compositor coordinates ("x,y wxh").
@@ -302,10 +293,7 @@ struct BigLayout {
 
 fn big_layout(window_px: [f64; 2], minimap_origin: [f64; 2], minimap_px: [usize; 2]) -> BigLayout {
     let like_minimap = bigmap::Frame::like_minimap(minimap_px, window_px, minimap_origin);
-    let frame = match BIG_FRAME {
-        BigFrame::LikeMinimap => like_minimap,
-        BigFrame::Wide(cols, rows) => bigmap::Frame::wide(cols, rows, minimap_px),
-    };
+    let frame = bigmap::Frame::wide(BIG_FRAME.0, BIG_FRAME.1, minimap_px);
     let (area, marker) = bigmap::area(window_px, &frame);
     BigLayout {
         frame,

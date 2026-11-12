@@ -39,12 +39,12 @@ interface MinimapView {
   player: [number, number] | null;
 }
 
-/** The stitched map of the current zone visit, scaled to a cols x rows grid. */
 /** The layout the app recognised: its paths and exits in the map's screen axes. */
 interface LayoutPicture {
   known: boolean; id: string; share: number; sure: boolean; candidates: number;
   paths: [number, number][][]; exits: [string, [number, number]][]; player: [number, number] | null;
 }
+/** The stitched map of the current zone visit, scaled to a cols x rows grid. */
 interface LayoutView {
   area: string;
   seed: number | null;

@@ -519,7 +519,7 @@ mod tests {
         }
         // Tags stay on the nodes.
         assert!(clearfell.layouts.iter().any(|l| l.nodes.iter().any(|n| n.has_tag("boss"))));
-        // The encampment's graph is a single node: no usable layout, its terrain map stays.
+        // The encampment's graph is a single node: no usable layout.
         assert!(Graphs::default().get("G1_town").is_none());
         assert!(Graphs::default().get("G9_none").is_none());
     }

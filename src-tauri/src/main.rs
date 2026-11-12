@@ -14,7 +14,6 @@ use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 const DEFAULT_TOGGLE_SHORTCUT: &str = "Ctrl+Space";
-/// Ticks the checklist's current step (most steps have no log line to tick them).
 const SETTINGS_FILE: &str = "settings.json";
 
 #[derive(Clone, serde::Serialize)]
