@@ -500,15 +500,17 @@ pub fn icons_in(image: &Image, centre: [f64; 2], scale: f64, size: f64, stride: 
 static SPRITE_INDEX: &str = include_str!("../../data/icons/index.json");
 static SPRITE_PIXELS: &[u8] = include_bytes!("../../data/icons/sprites.rgba");
 const SPRITE_PX: usize = 32;
-/// Screen pixels per pixel of a 64 px sprite cell at 2160 px height, by kind: the best fit
-/// of each sprite on the real icons of the Clearfell screenshot (`sprite_scores_on_the_screenshot`):
-/// `Entrance` 0.48 (the exit icon 18-19 x 26-27 px, the sprite's opaque box 39 x 56; 0.46-0.50
-/// score within 0.01), `Checkpoint` 0.52-0.54, `Waypoint` 0.52. Kinds not seen on a real
-/// screen yet are tried at both.
-fn sprite_scales(kind: &str) -> &'static [f64] {
-    match kind {
+/// Screen pixels per pixel of a 64 px sprite cell at 2160 px height: the best fit of each
+/// sprite on real icons (`sprite_scores_on_the_screenshot`, `live_capture`): `Entrance` 0.48
+/// (the exit icon 18-19 x 26-27 px, the sprite's opaque box 39 x 56; 0.46-0.50 score within
+/// 0.01), `Checkpoint` 0.52-0.54, `Waypoint` 0.52 (Clearfell), the Bloated Miller's own icon
+/// 0.52-0.53 (the Riverbank, his first line): bosses' own icons are tried at 0.53. Skulls,
+/// portals and the rest, not seen on a real screen yet, at both.
+fn sprite_scales(sprite: &Sprite) -> &'static [f64] {
+    match sprite.kind {
         "exit" => &[0.48],
         "checkpoint" | "waypoint" => &[0.53],
+        _ if sprite.pair.is_some() => &[0.53],
         _ => &[0.48, 0.53],
     }
 }
@@ -879,12 +881,12 @@ fn best_match(image: &Image, at: [f64; 2], index: usize, size: f64, scale: f64, 
 }
 
 /// An icon is named by its sprite when that sprite's ranking value is at least `ACCEPT`
-/// and leads the best sprite of any other kind by `LEAD`. Real icons on the Clearfell
-/// screenshot: `Entrance` 0.98, `Checkpoint` 0.72-0.83 (so a checkpoint is never named,
-/// only kept), `Waypoint` 0.80; the best wrong sprite at a real icon 0.63, at any other
-/// candidate place of the screenshot and the fixtures in `ACCEPT`'s test. A sprite drawn
-/// onto real pixels scores 0.95-1.0.
-const ACCEPT: f64 = 0.85;
+/// and leads the best sprite of any other kind by `LEAD`. Real icons: exits 0.95,
+/// checkpoints 0.55-0.66, the waypoint 0.67 (Clearfell); the Bloated Miller's own icon
+/// 0.78, the next sprite 0.45 (the Riverbank). The best sprite of a kind that is not there,
+/// of all 108, at any place tried on the Clearfell screenshot: 0.64. A sprite drawn onto
+/// real pixels scores 0.95-1.0.
+const ACCEPT: f64 = 0.72;
 const LEAD: f64 = 0.15;
 /// A colour-found icon keeps the name of its own kind's best sprite from this value.
 const OWN: f64 = 0.5;
@@ -909,7 +911,7 @@ fn rank(image: &Image, at: [f64; 2], among: &[usize], size: f64, reach: i64) -> 
     let mut out = Vec::with_capacity(among.len());
     for &i in among {
         // The first scale searches; the others look only around where it found the sprite.
-        let scales = sprite_scales(sprites()[i].kind);
+        let scales = sprite_scales(&sprites()[i]);
         let mut best = best_match(image, at, i, size, scales[0], reach);
         for &scale in &scales[1..] {
             let Some((m, c)) = best else { break };
@@ -1538,11 +1540,49 @@ mod tests {
     }
 
     #[test]
+    fn the_first_real_boss_icon_is_the_millers_own() {
+        // The Riverbank, the Bloated Miller's first line (a capture the app kept): right by
+        // the player's cross his own icon under its place name, "Besieged Encampment", no
+        // skull; a checkpoint to the left. The old reader saw only the checkpoint.
+        let image = fixture("bigmap-boss-miller.ppm");
+        let cross = marker_near(&image, [203.0, 82.0], 16.0).unwrap();
+        let read = |stride: usize| -> Vec<(&'static str, Option<&'static str>, i64, i64)> {
+            let mut found: Vec<_> = icons_in(&image, cross, SCALE, 1.0, stride, &[], false)
+                .into_iter()
+                .map(|i| (i.kind, i.sprite, (cross[0] + i.x as f64 * 2.0).round() as i64, (cross[1] + i.y as f64 * 2.0).round() as i64))
+                .collect();
+            found.sort();
+            found
+        };
+        set_icon_area(Some("G1_1"));
+        for stride in [1, 2] {
+            let found = read(stride);
+            let kinds: Vec<_> = found.iter().map(|i| (i.0, i.1)).collect();
+            assert_eq!(kinds, [("boss", Some("MillerActive")), ("checkpoint", Some("Checkpoint"))], "every {stride} px: {found:?}");
+            let (x, y) = (found[0].2, found[0].3);
+            assert!((x - 229).abs() <= 2 && (y - 86).abs() <= 2, "{found:?}");
+            assert_eq!(without_matching(|| read(stride)).len(), 1);
+        }
+        // How it scores: 0.78 at 0.53; its grey twin next, 0.58; every other sprite lower.
+        let all: Vec<usize> = (0..sprites().len()).collect();
+        let ranked = rank(&image, [228.5, 86.0], &all, 1.0, 4);
+        let value = |id: &str| ranked.iter().find(|(i, _, _)| sprites()[*i].id == id).unwrap().1.value();
+        println!("MillerActive {:.3}, next {} {:.3}, MillerInactive {:.3}", value("MillerActive"), sprites()[ranked[1].0].id, ranked[1].1.value(), value("MillerInactive"));
+        assert_eq!(sprites()[ranked[0].0].id, "MillerActive");
+        assert!(value("MillerActive") >= ACCEPT && value("MillerActive") - ranked[1].1.value() >= LEAD);
+        // In another area the Miller's pair is not compared: no boss.
+        set_icon_area(Some("G1_2"));
+        assert!(read(2).iter().all(|i| i.0 != "boss"));
+        set_icon_area(None);
+    }
+
+    #[test]
     fn a_boss_icon_is_known_by_name_only_in_its_area() {
         // The Grim Tangle's boss icon (tan and brown: warm pixels point the matcher at it).
         let at = PLACES[0];
         let mut image = fixture("bigmap-player.ppm");
-        draw(&mut image, "GrimTangleBossActive", at, 0.48);
+        // Bosses' own icons are drawn at 0.53, as the Miller's is (`sprite_scales`).
+        draw(&mut image, "GrimTangleBossActive", at, 0.53);
         set_icon_area(Some("G1_6"));
         assert_eq!(read_near(&image, PLAYER, at, 2), [("boss", Some("GrimTangleBossActive"))]);
         // In another area its sprite is not compared: nothing there is sure.
@@ -1558,7 +1598,7 @@ mod tests {
         set_icon_area(Some("G1_1"));
         let at = PLACES[0];
         let mut image = fixture("bigmap-player.ppm");
-        draw(&mut image, "MillerActive", at, 0.48);
+        draw(&mut image, "MillerActive", at, 0.53);
         assert_eq!(read_near(&image, PLAYER, at, 2), []);
         // With its place name above it (pale letters, the label's top 25 px above the
         // icon's centre; drawn here as 9 letter-sized boxes).
@@ -1572,7 +1612,7 @@ mod tests {
         // Grey (killed), with no label: found where this visit saw the pair, though the
         // player moved 4 px since.
         let mut dead = fixture("bigmap-player.ppm");
-        draw(&mut dead, "MillerInactive", at, 0.48);
+        draw(&mut dead, "MillerInactive", at, 0.53);
         let cells = |v: f64, c: f64| ((v - c + 4.0) / 2.0) as f32;
         set_icon_hints(vec![("Miller".into(), [cells(at[0], PLAYER[0]), cells(at[1], PLAYER[1])])]);
         assert_eq!(read_near(&dead, PLAYER, at, 2), [("boss-dead", Some("MillerInactive"))]);
@@ -1606,6 +1646,38 @@ mod tests {
         for (p, reach) in TRIED.with(|t| t.take()) {
             let ranked = rank(&image, p, &all, 1.0, reach);
             println!("{p:?} r{reach}: {:?}", ranked.iter().take(4).map(|(i, m, c)| (sprites()[*i].id.as_str(), (m.value() * 1000.0).round() / 1000.0, (m.chroma * 1000.0).round() / 1000.0, c)).collect::<Vec<_>>());
+        }
+    }
+
+    /// What the reader makes of a real capture (`LIVE_SHOT`, a PPM; `LIVE_AREA` the area id;
+    /// `LIVE_AT` "x,y" a place to rank every sprite at): `cargo test live_capture -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn live_capture() {
+        let image = parse_ppm(&std::fs::read(std::env::var("LIVE_SHOT").unwrap()).unwrap()).unwrap();
+        set_icon_area(std::env::var("LIVE_AREA").ok().as_deref());
+        let centre = marker_near(&image, [image.width as f64 / 2.0, image.height as f64 / 2.0 - 21.0], 60.0).unwrap_or([0.0, 0.0]);
+        println!("cross at {centre:?}");
+        for stride in [1, 2] {
+            let icons = icons_in(&image, centre, SCALE, 1.0, stride, &[], false);
+            for i in &icons {
+                println!("every {stride}: {} {:?} at {:.0},{:.0}", i.kind, i.sprite, centre[0] + i.x as f64 * 2.0, centre[1] + i.y as f64 * 2.0);
+            }
+            let old = without_matching(|| icons_in(&image, centre, SCALE, 1.0, stride, &[], false));
+            println!("every {stride}, old reader: {:?}", old.iter().map(|i| (i.kind, (centre[0] + i.x as f64 * 2.0).round(), (centre[1] + i.y as f64 * 2.0).round())).collect::<Vec<_>>());
+        }
+        if let Ok(at) = std::env::var("LIVE_AT") {
+            let v: Vec<f64> = at.split(',').map(|v| v.parse().unwrap()).collect();
+            let all: Vec<usize> = (0..sprites().len()).collect();
+            for (i, m, c) in rank(&image, [v[0], v[1]], &all, 1.0, 8).iter().take(6) {
+                println!("  {} {:.3} (ncc {:.3}, colour {:.3}, hue {:.3}) at {:.1},{:.1}", sprites()[*i].id, m.value(), m.ncc, m.colour, m.chroma, c[0], c[1]);
+            }
+            for scale in [0.40, 0.44, 0.48, 0.52, 0.56] {
+                let i = sprite_index("MillerActive");
+                if let Some((m, c)) = best_match(&image, [v[0], v[1]], i, 1.0, scale, 8) {
+                    println!("  MillerActive at {scale}: {:.3} (ncc {:.3}) at {:.1},{:.1}", m.value(), m.ncc, c[0], c[1]);
+                }
+            }
         }
     }
 

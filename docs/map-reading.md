@@ -524,10 +524,23 @@ sheet cell, at 2160 px height) onto the real icons of the Clearfell screenshot
 | Exit (`Entrance`), both | 0.48 (0.46–0.50 within 0.01) | 0.98 (correlation 0.99, colour off 0.001–0.004) | 0.98 |
 | Checkpoints, three | 0.52–0.54 | 0.73–0.83 | 0.72–0.78 |
 | Waypoint | 0.52 | 0.80 | 0.47 |
+| The Bloated Miller's own icon (`MillerActive`, the Riverbank) | 0.52–0.53 | 0.78 (correlation 0.93) | 0.63 |
 
-(Scores before the hue term below.) So the exit icon is drawn at 0.48 of its sprite and checkpoints and
-the waypoint larger, at about 0.53; the reader tries exits at 0.48, checkpoints and waypoints at 0.53,
-and every kind not seen on a screen yet (skulls, boss icons, portals) at both.
+(Scores before the hue term below, the Miller's with it.) So the exit icon is drawn at 0.48 of its sprite
+and checkpoints, the waypoint and a boss's own icon larger, at about 0.53; the reader tries exits at 0.48,
+checkpoints, waypoints and bosses' own icons at 0.53, and what has not been seen on a screen yet (skulls,
+portals) at both.
+
+**The first real boss icon (2026-11-12, live).** When the Bloated Miller first spoke, the app kept a
+capture of the big map (`samples/boss-bigmap-*.ppm`; fixture `bigmap-boss-miller.ppm`): the player in his
+arena, and right by the player's cross (13 cells) **his own icon, `MillerActive`, under its place name
+"Besieged Encampment"** (the table's `Name` of `MillerActive`), no skull. The label's top sits 24 px above
+the icon's centre, as for exits. So a campaign boss with a pair of its own shows that pair with its place
+name, at least while alive and near; whether the icon is shown before the player gets there, follows the
+boss, or turns grey after the kill is still not seen. The matcher names it at both strides
+(`the_first_real_boss_icon_is_the_millers_own`): `MillerActive` 0.78, its grey twin 0.58, every other
+sprite lower; the old reader saw nothing there. The threshold was lowered from 0.85 to **0.72** for it:
+real icons other than exits score like checkpoints, not like exits.
 
 **What the old reader made of other icons (drawn, I2).** Each sprite drawn onto the real big-map
 fixture (alpha-blended, at a dark spot, on a map line, on the lit ground by the player) at 0.40–0.96,
@@ -556,7 +569,7 @@ searched.
 
 **Where it looks.**
 1. Every icon colour found: compared with the generic sprites and the area's boss pairs. When another
-   kind's sprite scores at least 0.85 and leads every other kind by 0.15 it takes that kind (never an
+   kind's sprite scores at least 0.72 and leads every other kind by 0.15 it takes that kind (never an
    exit, checkpoint or waypoint made from something else); else it stays as it was and carries its
    own best sprite's id from 0.5 (`Entrance`, `Checkpoint`, `Waypoint`). Two colour icons of one
    object (the portal) become one.
@@ -570,19 +583,20 @@ searched.
    label (the table gives inactive icons no name), so neither colour nor a label finds them.
 
 A new place is named only as a kind colour cannot make (boss, boss-dead, dead, rare, portal, npc,
-quest), at 0.85 with a lead of 0.15.
+quest), at 0.72 with a lead of 0.15.
 
 **Scores (measured, Clearfell screenshot, `matcher_on_the_screenshot`).** With the area's pairs
 (Clearfell) the reader finds the same six icons as before and nothing else; each carries its sprite.
 Real icons now: exits 0.95, checkpoints 0.55–0.66, the waypoint 0.67 (at 0.53). At the 22 places tried
 on the whole screenshot (the six icons, colour groups by the player and the zone's name label), the best
 of **all 108 sprites** of a kind that is not there scored at most **0.64** (`G4_10_BossInactive` by the
-player's name label; skulls at most 0.59). The threshold 0.85 lies between that and what a sprite drawn
-onto real pixels scores (0.95–1.0) and the real exits (0.95). The fixtures with every area's pairs give no
+player's name label; skulls at most 0.59). The threshold 0.72 lies between that and the real Miller's
+icon (0.78); drawn sprites score 0.95–1.0, real exits 0.95. On the four Riverbank captures it names
+nothing but the Miller. The fixtures with every area's pairs give no
 boss, dead, rare or portal (`no_boss_or_monster_on_the_real_fixtures_in_any_area`).
 
 **Drawn, not seen (pinned in tests).** The orange skull is a boss at 0.48 and 0.52 at every place and both
-strides; the yellow skull a rare; both grey skulls "dead"; the portal a portal; the Grim Tangle's icon is
+strides (drawn bosses' own icons at 0.53); the yellow skull a rare; both grey skulls "dead"; the portal a portal; the Grim Tangle's icon is
 `GrimTangleBossActive` in G1_6 and nothing elsewhere; the Miller's dark icon is found below a label or at a
 hint, and its grey icon at a hint 2 px off.
 
@@ -1211,7 +1225,8 @@ icon may be:
 - a boss's own icon (`MillerActive`, `GrimTangleBossInactive`) only in its own area, and then the boss its
   pair names (`data/icons/index.json`, `boss`), else (pair unnamed) any of the zone's bosses; never a pair
   known to be no checklist boss's (`CarnivorousPlant` in The Grelwood);
-- an orange skull (a unique monster alive): any of the zone's bosses;
+- an orange skull (a unique monster alive): any of the zone's bosses that has no icon of its own (a pair
+  that names it, or its zone's one boss with a pair): the Miller showed his own icon, not a skull;
 - a grey skull, a rare, anything else: none (a grey skull is a dead unique or a dead rare).
 
 Each place (`Boss::place`: the exit to an area, a tagged node, else a node tagged `boss`) becomes

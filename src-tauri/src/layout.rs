@@ -270,20 +270,33 @@ type FarIcons = Vec<(f32, f32, Option<String>, Vec<nav::BossAt>)>;
 /// Which of the zone's bosses a map icon may be (see `nav::ExitIcon::boss`): none but for
 /// a live or grey boss icon. A boss's own icon counts only in its own area, for the boss
 /// its pair names, else (pair unnamed) for any of the zone's bosses, never when the pair
-/// is known to be no checklist boss's (the Grelwood's carnivorous plant); an orange skull
-/// (a unique monster) for any of them. A grey skull is a dead unique or a dead rare: none.
+/// is known to be no checklist boss's (the Grelwood's carnivorous plant). An orange skull
+/// (a unique monster) counts only for the zone's bosses that have no icon of their own:
+/// the first real boss icon (the Bloated Miller, the Riverbank) was his own face with his
+/// place's name, no skull. A grey skull is a dead unique or a dead rare: none.
 pub(crate) fn boss_candidates<'b>(icon: &crate::minimap::bigmap::Icon, area: &str, bosses: &'b [Boss]) -> Vec<&'b Boss> {
     if !matches!(icon.kind, "boss" | "boss-dead") {
         return vec![];
     }
-    let sprite = icon.sprite.and_then(|id| crate::minimap::bigmap::sprites().iter().find(|s| s.id == id));
-    match sprite.filter(|s| s.pair.is_some()) {
-        Some(s) if s.area.as_deref() != Some(area) || !s.checklist => vec![],
-        Some(s) => match &s.boss {
+    let sprites = crate::minimap::bigmap::sprites();
+    let sprite = icon.sprite.and_then(|id| sprites.iter().find(|s| s.id == id));
+    // The pairs of this area that are a checklist boss's.
+    let pairs = || sprites.iter().filter(|s| s.kind == "boss" && s.area.as_deref() == Some(area) && s.checklist);
+    let own = |s: &crate::minimap::bigmap::Sprite| -> Vec<&'b Boss> {
+        match &s.boss {
             Some(name) => bosses.iter().filter(|b| b.name.eq_ignore_ascii_case(name)).collect(),
             None => bosses.iter().collect(),
-        },
-        None if icon.kind == "boss" => bosses.iter().collect(),
+        }
+    };
+    match sprite.filter(|s| s.pair.is_some()) {
+        Some(s) if s.area.as_deref() != Some(area) || !s.checklist => vec![],
+        Some(s) => own(s),
+        None if icon.kind == "boss" => {
+            // A boss is someone's own when a pair names it, or the zone's one boss has a pair.
+            let covered: Vec<&Boss> = pairs().flat_map(own).collect();
+            let sure = |b: &Boss| pairs().any(|s| s.boss.as_ref().is_some_and(|n| n.eq_ignore_ascii_case(&b.name))) || (bosses.len() == 1 && !covered.is_empty());
+            bosses.iter().filter(|b| !sure(b)).collect()
+        }
         None => vec![],
     }
 }
@@ -1727,8 +1740,11 @@ mod tests {
         let names = |icon: &crate::minimap::bigmap::Icon, area: &str, bosses: &[Boss]| -> Vec<String> {
             boss_candidates(icon, area, bosses).into_iter().map(|b| b.name.clone()).collect()
         };
-        // An orange skull may be any of the zone's bosses; a grey skull is none (a dead rare too).
+        // An orange skull may be any of the zone's bosses without an icon of their own; a
+        // grey skull is none (a dead rare too).
         assert_eq!(names(&icon("boss", Some("UniqueMonsterAlive"), 0.0, 0.0), "G1_4", &grelwood), ["Gerung", "Areagne"]);
+        assert!(names(&icon("boss", Some("UniqueMonsterAlive"), 0.0, 0.0), "G1_1", &miller).is_empty());
+        assert_eq!(names(&icon("boss", Some("UniqueMonsterAlive"), 0.0, 0.0), "G1_15", &manor), ["Count Geonor"]);
         assert!(names(&icon("dead", Some("UniqueMonsterDead"), 0.0, 0.0), "G1_4", &grelwood).is_empty());
         assert!(names(&icon("rare", Some("RareMonsterAlive"), 0.0, 0.0), "G1_4", &grelwood).is_empty());
         // The Grelwood's carnivorous plant is no checklist boss.
