@@ -336,6 +336,19 @@ mod tests {
         assert_eq!(read.as_deref(), Some("Mud Burrow"));
     }
 
+    /// labels-town-minimap.ppm: the corner minimap in the Clearfell Encampment (the
+    /// owner's capture, 2026-11-12), the exit to Clearfell with its name above it.
+    #[test]
+    fn an_exits_name_is_read_on_the_corner_minimap_too() {
+        let town = fixture("labels-town-minimap.ppm");
+        let names: Vec<String> = ["The Riverbank", "Clearfell", "Vastiri Outskirts"].map(String::from).to_vec();
+        let exits = icons(&town, "exit");
+        assert_eq!(exits.len(), 1, "{exits:?}");
+        let (read, scored) = read_with(&town, exits[0], &names);
+        println!("The town's exit on the minimap: {scored:.3?}");
+        assert_eq!(read.as_deref(), Some("Clearfell"));
+    }
+
     #[test]
     fn checkpoint_and_waypoint_labels_are_no_zone() {
         let grelwood = fixture("labels-grelwood.ppm");

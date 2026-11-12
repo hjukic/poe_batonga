@@ -508,7 +508,9 @@ fn choose(
             // Both views report the learnt spot, so the player cell does not step at a switch.
             let at = memory.minimap_marker(estimate);
             view.player = Some(at.map(|v| (v / CELL as f64) as f32));
-            let icons = bigmap::icons(image, at, 1.0, bigmap::size(plan));
+            // With the exits' names: the minimap draws them as the big map does (read
+            // on the owner's capture of the Clearfell Encampment, 0.97 against 0.71).
+            let icons = bigmap::icons_in(image, at, 1.0, bigmap::size(plan), 1, &[], true);
             return Ok(Reading { view, capture_px: [image.width, image.height], icons, whole: false });
         }
     }
