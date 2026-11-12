@@ -170,6 +170,21 @@ struct Bank {
     particles: Vec<Particle>,
 }
 
+/// The constants a test may change, to check that the gates catch a broken navigator.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Tuning {
+    pub gold: f64,
+    pub gold_walk: f64,
+    pub missing: f64,
+    pub flat: f64,
+}
+
+impl Default for Tuning {
+    fn default() -> Self {
+        Tuning { gold: GOLD, gold_walk: GOLD_WALK, missing: MISSING, flat: FLAT }
+    }
+}
+
 /// SplitMix64: small, fast and repeatable.
 struct Rng(u64);
 
@@ -224,6 +239,7 @@ pub struct Navigator {
     guidance: RefCell<HashMap<(usize, Vec<usize>), Guidance>>,
     /// Gold allowed (the area is measured; tests may say so for made-up areas).
     trusted: bool,
+    tuning: Tuning,
 }
 
 fn unix_now() -> u64 {
@@ -285,6 +301,7 @@ impl Navigator {
             anchored: false,
             guidance: RefCell::default(),
             trusted: MEASURED.contains(&area.id.as_str()),
+            tuning: Tuning::default(),
         };
         // The player may have walked on since the position was saved.
         if let Some(m) = resume {
@@ -393,10 +410,11 @@ impl Navigator {
         self.anchored = true;
         self.since_weigh = 0.0;
         self.touched();
+        let missing = self.tuning.missing;
         let Navigator { area, banks, rng, .. } = self;
         for ((layout, bank), goals) in area.layouts.iter().zip(banks.iter_mut()).zip(&goals) {
             if goals.is_empty() {
-                bank.evidence += MISSING;
+                bank.evidence += missing;
                 continue;
             }
             // How much of the belief sits at each matching node.
@@ -439,6 +457,13 @@ impl Navigator {
             bank.particles.iter_mut().for_each(|p| p.w = 1.0);
             normalise(&mut bank.particles);
         }
+    }
+
+    /// Other constants (mutation tests).
+    #[cfg(test)]
+    pub fn tuned(mut self, tuning: Tuning) -> Self {
+        self.tuning = tuning;
+        self
     }
 
     /// Treats a made-up area as measured.
@@ -512,7 +537,8 @@ impl Navigator {
         }
         let confidence = vx.hypot(vy);
         let (top, p_top) = posterior.iter().enumerate().fold((0, 0.0), |b, (i, &p)| if p > b.1 { (i, p) } else { b });
-        let mut source = if confidence >= GOLD && (self.walked >= GOLD_WALK || self.anchored) {
+        let t = self.tuning;
+        let mut source = if confidence >= t.gold && (self.walked >= t.gold_walk || self.anchored) {
             "estimated"
         } else if confidence >= ROUGH {
             "rough"
@@ -604,11 +630,12 @@ impl Navigator {
 
     /// Weights the particles by their closeness to a corridor.
     fn weigh(&mut self) {
+        let flat = self.tuning.flat;
         let Navigator { area, banks, rng, .. } = self;
         for (layout, bank) in area.layouts.iter().zip(banks.iter_mut()) {
             let mut fit = 0.0;
             for p in &mut bank.particles {
-                let like = closeness(layout.corridor((p.x, p.y)).0);
+                let like = closeness(layout.corridor((p.x, p.y)).0, flat);
                 fit += p.w * like;
                 p.w *= like;
             }
@@ -662,8 +689,8 @@ fn mode(bins: &[f64; BINS]) -> Option<f32> {
 /// How well a point `d` world units from the nearest corridor fits: a steady
 /// sideways offset inside the corridor costs nothing, so weighing often does not
 /// count the same offset again and again; far off costs the floor.
-fn closeness(d: f64) -> f64 {
-    let out = (d - FLAT).max(0.0);
+fn closeness(d: f64, flat: f64) -> f64 {
+    let out = (d - flat).max(0.0);
     FLOOR + (1.0 - FLOOR) * (-out * out / (2.0 * SIGMA * SIGMA)).exp()
 }
 
@@ -786,7 +813,7 @@ mod tests {
         let l = area.layouts.iter().find(|l| l.id == layout).unwrap();
         let goals = l.goals(&exit(to, to));
         let start = l.goals(&exit(from, from))[0];
-        walk(l, &l.guidance(&goals), start, &goals, seed, &Options { losses: false, ..Default::default() })
+        walk(l, start, &goals, seed, &Options { losses: false, ..Default::default() }).unwrap()
     }
 
     fn feed(nav: &mut Navigator, events: &[Event]) {
@@ -807,8 +834,8 @@ mod tests {
         }
         // Far off costs the floor, not a capped distance.
         let far = nav.banks[0].particles[0];
-        assert_eq!(closeness(area.layouts[0].corridor((far.x, far.y)).0), FLOOR);
-        assert_eq!(closeness(10.0), 1.0);
+        assert_eq!(closeness(area.layouts[0].corridor((far.x, far.y)).0, FLAT), FLOOR);
+        assert_eq!(closeness(10.0, FLAT), 1.0);
         nav.weigh();
         // A share of every layout's particles is redrawn near its corridors.
         let near: usize = area.layouts.iter().zip(&nav.banks)
