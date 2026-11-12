@@ -104,6 +104,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
       </div>
     </header>
     <p class="restart-status" id="restart-status" role="status" hidden></p>
+    <p class="warning" id="start-error" role="alert" hidden></p>
     <div class="route" id="route"></div>
     <div class="layout-pick" id="layout-pick" hidden>
       <p class="layout-name" id="layout-name"></p>
@@ -665,21 +666,39 @@ async function start() {
     renderPicture(JSON.parse('{"known":true,"id":"ClearFell_W_E_N","share":0.93,"sure":true,"candidates":1,"paths":[[[-7481,-16101],[-81,-1090]],[[13466,-21338],[-81,-1090]],[[15710,-23582],[13466,-21338]],[[-14588,-17971],[-17581,-23956]],[[-6359,-32185],[-10848,-21712]],[[-3367,-26949],[-10848,-21712]],[[-14588,-33682],[-19825,-26200],[-17581,-23956]],[[-6359,-32185],[-1496,-34056]],[[-1496,-34056],[2992,-38544]],[[17337,-17597],[13466,-21338]],[[-6359,-32185],[-10100,-35926]],[[-5611,-38170],[-1496,-34056]],[[-10100,-35926],[-14588,-33682]],[[-20947,-21338],[-17581,-23956]],[[-10100,-35926],[-5611,-38170]],[[-10848,-21712],[-7481,-16101]],[[5611,-22460],[-81,-1090]],[[-6359,-32185],[-3367,-26949]],[[11222,-31063],[15710,-23582]],[[-10848,-21712],[-14588,-17971]],[[5611,-22460],[-7481,-16101]],[[2992,-38544],[11222,-31063]],[[11222,-31063],[-4489,-21338]]],"exits":[["Clearfell Encampment",[-81,-1090]],["The Grelwood",[-14588,-33682]],["Mud Burrow",[11222,-31063]]],"player":[-14588,-33682],"places":[["bridge",[-10848,-21712]],["bridge",[-6359,-32185]],["boss",[-17581,-23956]],["campsite",[-3367,-26949]]]}') as LayoutPicture);
     return;
   }
-  await listen<{ step: string; error: string | null }>('restart-status', (event) => renderRestart(event.payload.step, event.payload.error));
-  await listen<Status>('overlay-status', (event) => render(event.payload));
-  await listen<TrackerView>('tracker-state', (event) => renderTracker(event.payload));
-  await listen<MinimapView>('minimap-state', (event) => renderMinimap(event.payload));
-  renderMinimap(await invoke<MinimapView>('minimap_state'));
-  await listen<LayoutView>('layout-state', (event) => renderLayout(event.payload));
-  renderLayout(await invoke<LayoutView | null>('layout_state'));
-  render(await invoke<Status>('overlay_status'));
-  renderTracker(await invoke<TrackerView>('tracker_state'));
-  sendCompassOptional();
-  sendAutoHide();
-  sendFightHide();
-  sendCompassEnabled();
-  fitWindow();
-  // The window is first shown now that the page has something to draw.
-  await invoke('page_ready');
+  // Each startup call on its own: one that fails is named in the panel, the others still
+  // run, and the window is shown whatever happened (it stayed hidden for good before).
+  const failed: string[] = [];
+  const step = async (name: string, run: () => Promise<unknown>) => {
+    try { await run(); } catch (error) { failed.push(`${name}: ${String(error)}`); }
+  };
+  try {
+    await step('restart-status', () => listen<{ step: string; error: string | null }>('restart-status', (event) => renderRestart(event.payload.step, event.payload.error)));
+    await step('overlay-status', () => listen<Status>('overlay-status', (event) => render(event.payload)));
+    await step('tracker-state', () => listen<TrackerView>('tracker-state', (event) => renderTracker(event.payload)));
+    await step('minimap-state', () => listen<MinimapView>('minimap-state', (event) => renderMinimap(event.payload)));
+    await step('minimap_state', async () => renderMinimap(await invoke<MinimapView>('minimap_state')));
+    await step('layout-state', () => listen<LayoutView>('layout-state', (event) => renderLayout(event.payload)));
+    await step('layout_state', async () => renderLayout(await invoke<LayoutView | null>('layout_state')));
+    await step('overlay_status', async () => render(await invoke<Status>('overlay_status')));
+    await step('tracker_state', async () => renderTracker(await invoke<TrackerView>('tracker_state')));
+    sendCompassOptional();
+    sendAutoHide();
+    sendFightHide();
+    sendCompassEnabled();
+    fitWindow();
+  } catch (error) {
+    failed.push(String(error));
+  } finally {
+    if (failed.length) {
+      showMessage('#start-error', `Start: ${failed.join('; ')}`);
+      report(`start: ${failed.join('; ')}`);
+    }
+    // The window is first shown now that the page has something to draw.
+    await invoke('page_ready').catch((error) => {
+      showMessage('#start-error', `Start: page_ready: ${String(error)}`);
+      report(`start: page_ready: ${String(error)}`);
+    });
+  }
 }
-void start().catch((error) => showMessage('#error', String(error)));
+void start().catch((error) => showMessage('#start-error', String(error)));
