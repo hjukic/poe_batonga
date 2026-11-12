@@ -542,6 +542,15 @@ fn note_named_exits(named: &mut Vec<(f32, f32, String)>, icons: &[crate::minimap
     }
 }
 
+/// A zone's map scale (minimap cells per world unit across), measured on a visit whose
+/// named exits made the layout sure.
+#[derive(Serialize, Deserialize)]
+struct ZoneScale {
+    scale: f64,
+    seed: Option<u64>,
+    at: u64,
+}
+
 /// The named exits as points of the part ("exit", their name), so they are saved with the
 /// map and a return to the instance (or an app restart in it) has them again.
 fn keep_named_exits(pois: &mut Vec<Poi>, named: &[(f32, f32, String)]) {
@@ -1441,6 +1450,17 @@ impl State {
         Some(self.dir.as_ref()?.join(safe(area)).join(format!("{name}.json")))
     }
 
+    /// A zone's map scale as its named exits showed it on an earlier visit
+    /// (`Navigator::zone_scale`), beside its recordings: zones are drawn at different scales.
+    fn scale_file(&self, area: &str) -> Option<PathBuf> {
+        Some(self.path(area, Some(0))?.with_file_name("scale.json"))
+    }
+
+    fn learnt_scale(&self, area: &str) -> Option<f64> {
+        let bytes = std::fs::read(self.scale_file(area)?).ok()?;
+        serde_json::from_slice::<ZoneScale>(&bytes).ok().map(|kept| kept.scale).filter(|s| s.is_finite())
+    }
+
     /// An earlier recording of the same instance, to add a part to.
     fn load(&self, area: &str, seed: Option<u64>) -> Option<Recording> {
         seed?;
@@ -1457,6 +1477,9 @@ impl State {
             write_json(&path, &memory);
             if let Some(log) = session.obs.borrow_mut().as_mut() {
                 log.history(obs::now_ms(), &memory);
+            }
+            if let (Some(scale), Some(file)) = (nav.zone_scale(), self.scale_file(&session.recording.area)) {
+                write_json(&file, &ZoneScale { scale, seed: session.recording.seed, at: now() });
             }
         }
         let mut parts = session.recording.parts.clone();
@@ -1480,7 +1503,8 @@ impl State {
         write_json(&path, &out);
     }
 
-    /// A navigator for a new visit, in areas with layout graphs; it starts from
+    /// A navigator for a new visit, in areas with layout graphs, at the zone's learnt map
+    /// scale (`scale.json`); it starts from
     /// what an earlier visit of the same instance learnt.
     /// Instances are told apart by area and seed; towns share seed 1 but have no
     /// graph, so no two instances share a `.nav.json` while that holds.
@@ -1495,7 +1519,8 @@ impl State {
             Some(from) => nav::Arrival::From(from),
             None => nav::Arrival::Unknown,
         };
-        let scale = graph::SCALE;
+        // The zone's own scale where a visit measured it.
+        let scale = self.learnt_scale(&session.recording.area).unwrap_or(graph::SCALE);
         // As `Navigator::new` decides (a position at most `RESUME`, 600 s, old).
         let kept = memory.as_ref().filter(|m| m.version == nav::MEMORY_VERSION);
         let resumed = kept.is_some_and(|m| {
@@ -1899,6 +1924,25 @@ mod tests {
         assert_eq!(session.live.pos, (156, 0), "the first visit's coordinates");
         assert!(session.live.walls.len() <= first + 2, "the same corridor drawn again: {} -> {}", first, session.live.walls.len());
         assert_eq!(session.named_exits.iter().map(|e| e.2.as_str()).collect::<Vec<_>>(), ["The Grelwood"], "named before, known again");
+        drop(state);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_zones_measured_scale_is_kept_and_expected_next_visit() {
+        let dir = scratch("scale");
+        let recorder = Recorder::new(Some(dir.clone()));
+        enter(&recorder, "G1_2");
+        {
+            let state = recorder.0.lock().unwrap();
+            assert_eq!(state.learnt_scale("G1_4"), None);
+            write_json(&state.scale_file("G1_4").unwrap(), &ZoneScale { scale: 1.17, seed: Some(7), at: now() });
+        }
+        enter(&recorder, "G1_4");
+        let state = recorder.0.lock().unwrap();
+        assert_eq!(state.learnt_scale("G1_4"), Some(1.17));
+        let (_, start) = state.navigator(state.session.as_ref().unwrap()).unwrap();
+        assert_eq!(start.scale, 1.17);
         drop(state);
         let _ = std::fs::remove_dir_all(dir);
     }
@@ -2757,7 +2801,7 @@ fn navigator_on_recordings() {
         .flatten()
         .flat_map(|area| std::fs::read_dir(area.path()).into_iter().flatten().flatten())
         .map(|f| f.path())
-        .filter(|p| p.extension().is_some_and(|e| e == "json") && !p.to_string_lossy().ends_with(".nav.json"))
+        .filter(|p| p.extension().is_some_and(|e| e == "json") && !p.to_string_lossy().ends_with(".nav.json") && !p.ends_with("scale.json"))
         .collect();
     files.sort();
     let graphs = graph::Graphs::default();

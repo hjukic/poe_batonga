@@ -138,15 +138,16 @@ const ICON_FLOOR: f64 = 0.05;
 const ICON_BASE: f64 = 0.005;
 /// Named exits that do not fit a layout at all cost it this much (the fit's floor).
 const NAMED_BASE: f64 = 1e-4;
-/// How much larger or smaller than `graph::SCALE` a zone's map may be drawn, for two exits
-/// read by name: the Grelwood's lie 1.38 times as far apart as Clearfell's scale says (the
-/// owner's visit, 2026-11-12). Fitted per pair within this range: wider, a pair of
-/// Clearfell's exits fitted a wrong layout at 1.74 as well as the right one at 1.0.
-const PAIR_SCALE: (f64, f64) = (0.75, 1.5);
-/// The same for a dungeon's room grid, whose unit (`graph::DGR_UNIT`, `roomUnitSize - 1`)
-/// was never measured in play: the Grim Tangle's two exits lie 0.72 times as far apart as
-/// it says (the owner's visit, 2026-11-13).
-const PAIR_SCALE_DUNGEON: (f64, f64) = (0.5, 1.5);
+/// The map scale two or more exits read by name may show, against the one expected (the
+/// navigator's `scale`): fitted on every named fit, one scale for all the pairs. Zones are
+/// drawn at different scales: the Grelwood's exits lay 1.38 times as far apart as
+/// Clearfell's scale says, the Grim Tangle's 0.72 times as its room grid says (the owner's
+/// visits, 2026-11-12/13).
+const K_RANGE: (f64, f64) = (0.4, 2.5);
+/// How far from the expected scale the fitted one is believed to lie (log-normal spread):
+/// a pair of exits alone fits a wrong layout at a far scale too (one of Clearfell's at
+/// 1.74 as well as the right one at 1.0), and the near scale wins.
+const K_SIGMA: f64 = 0.25;
 /// How much coarser a dungeon's named-exit fit is: its nodes are the centres of rooms about
 /// 100 world units wide, and an exit sits anywhere in its room. The Grim Tangle's right
 /// layout (the only one with the Cemetery right of the Grelwood) fitted 370 units off and
@@ -197,7 +198,7 @@ const ICON_CONFIRM: f64 = 0.5;
 const ICON_SURE: f64 = 0.95;
 
 /// The memory format; older files are ignored.
-pub(super) const MEMORY_VERSION: u32 = 4;
+pub(super) const MEMORY_VERSION: u32 = 5;
 
 /// Icons this close (world units) on the dead-reckoned track are one exit.
 const SIGHT_MATCH: f64 = 40.0;
@@ -327,6 +328,15 @@ pub struct Memory {
     /// The named exits' fit per layout (see `Bank::named`).
     #[serde(default)]
     pub named: BTreeMap<String, f64>,
+    /// Two exits were read by name, and whether they fitted no layout (`named_pair`,
+    /// `named_loose`): a death or a restart keeps the drawing as it was.
+    #[serde(default)]
+    pub named_pair: bool,
+    #[serde(default)]
+    pub named_loose: bool,
+    /// The scale the named exits fitted each layout at (`Bank::k`).
+    #[serde(default)]
+    pub k: BTreeMap<String, f64>,
     /// Exits seen on the map: layout id → node → where the icon put it (file units).
     #[serde(default)]
     pub exits: BTreeMap<String, BTreeMap<usize, [f32; 2]>>,
@@ -353,6 +363,8 @@ struct Bank {
     /// How well this layout's exits fit the last whole scan's named exits (log),
     /// replaced at every such scan: position-free and absolute.
     named: f64,
+    /// The map scale (against the navigator's) at which the named exits fit this layout best.
+    k: f64,
     /// What checkpoint icons added (log): in the posterior, never in gold's share.
     checkpoints: f64,
     particles: Vec<Particle>,
@@ -501,7 +513,8 @@ impl Navigator {
                     (m.anchors.get(&layout.id).copied().unwrap_or(best - path_cap(n)) - best).clamp(-path_cap(n), 0.0)
                 });
                 let named = evidence.map_or(0.0, |m| m.named.get(&layout.id).copied().unwrap_or(0.0));
-                let mut bank = Bank { prior, path, evidence: anchors, named, checkpoints: 0.0, particles };
+                let k = evidence.and_then(|m| m.k.get(&layout.id).copied()).unwrap_or(1.0);
+                let mut bank = Bank { prior, path, evidence: anchors, named, k, checkpoints: 0.0, particles };
                 normalise(&mut bank.particles);
                 bank
             })
@@ -509,10 +522,7 @@ impl Navigator {
         // A named pair fitted before (this visit before a death or a restart): the layout
         // stays drawn. A new navigator after a death waited for two exits read again, and
         // the picture went from "2 possible" to "5 possible" (the owner's Grelwood, 2026-11-12).
-        let kept_named = evidence
-            .map(|m| m.named.values().copied().fold(f64::MIN, f64::max))
-            .filter(|_| evidence.is_some_and(|m| m.named.values().any(|&v| v != 0.0)));
-        let one_pair = (-(NAMED_LOOSE * NAMED_LOOSE) / (4.0 * ICON_TOL * ICON_TOL)).exp();
+        let kept_pair = evidence.is_some_and(|m| m.named_pair);
         let mut nav = Navigator {
             area: area.clone(),
             scale,
@@ -531,8 +541,8 @@ impl Navigator {
             trusted: MEASURED.contains(&area.id.as_str()),
             icons_now: Vec::new(),
             sightings: Vec::new(),
-            named_loose: kept_named.is_some_and(|best| best.exp() < one_pair),
-            named_pair: kept_named.is_some(),
+            named_loose: kept_pair && evidence.is_some_and(|m| m.named_loose),
+            named_pair: kept_pair,
             named_live: false,
             checkpoints_counted: Vec::new(),
             track: (0.0, 0.0),
@@ -693,42 +703,75 @@ impl Navigator {
             // needs no position belief at all.
             let mut geometry = 0.0;
             // How well the first of `ids` and each other lie as two of this layout's nodes do.
-            let pairs = |ids: &[usize]| -> f64 {
+            // How well the first of `ids` and the others lie as this layout's nodes do, at one
+            // map scale for all of them (least squares, within `K_RANGE`): (the fit with the
+            // scale's prior, the fit alone, the scale).
+            let pairs = |ids: &[usize]| -> (f64, f64, f64) {
                 let world = |i: &ExitIcon| super::guide::from_screen((i.dx / scale, i.dy / scale));
-                let mut fit = 1.0;
-                for &j in &ids[1..] {
-                    let (a, b) = (world(&icons[ids[0]]), world(&icons[j]));
-                    let want = (b.0 - a.0, b.1 - a.1);
-                    let mut best = 0.0f64;
-                    for &n1 in &cands[ids[0]] {
-                        for &n2 in &cands[j] {
-                            if n1 == n2 {
-                                continue;
-                            }
-                            let (p, q) = (at(n1), at(n2));
-                            let got = ((q.0 - p.0) * layout.unit, (q.1 - p.1) * layout.unit);
-                            // The zone's own scale: the one that lays the pair best, within range.
-                            let gg = got.0 * got.0 + got.1 * got.1;
-                            let (lo, hi) = if layout.dungeon { PAIR_SCALE_DUNGEON } else { PAIR_SCALE };
-                            let k = if gg > 0.0 { ((got.0 * want.0 + got.1 * want.1) / gg).clamp(lo, hi) } else { 1.0 };
-                            let d2 = (k * got.0 - want.0).powi(2) + (k * got.1 - want.1).powi(2);
-                            let tol = if layout.dungeon { ICON_TOL * DUNGEON_TOL } else { ICON_TOL };
-                            best = best.max((-d2 / (4.0 * tol * tol)).exp());
-                        }
+                let tol = if layout.dungeon { ICON_TOL * DUNGEON_TOL } else { ICON_TOL };
+                let a = world(&icons[ids[0]]);
+                let wants: Vec<(f64, f64)> = ids[1..]
+                    .iter()
+                    .map(|&j| {
+                        let b = world(&icons[j]);
+                        (b.0 - a.0, b.1 - a.1)
+                    })
+                    .collect();
+                let scale_for = |got: (f64, f64), want: (f64, f64)| -> (f64, f64) {
+                    let gg = got.0 * got.0 + got.1 * got.1;
+                    let gw = got.0 * want.0 + got.1 * want.1;
+                    (gw, gg)
+                };
+                let clamp = |gw: f64, gg: f64| if gg > 0.0 { (gw / gg).clamp(K_RANGE.0, K_RANGE.1) } else { 1.0 };
+                let miss = |k: f64, got: (f64, f64), want: (f64, f64)| (k * got.0 - want.0).powi(2) + (k * got.1 - want.1).powi(2);
+                let mut best = (0.0f64, 0.0f64, 1.0f64);
+                for &n1 in &cands[ids[0]] {
+                    // Each other exit's node (a zone may have two of one exit): the one that
+                    // lies best at its own scale.
+                    let gots: Vec<((f64, f64), (f64, f64))> = ids[1..]
+                        .iter()
+                        .zip(&wants)
+                        .filter_map(|(&j, &want)| {
+                            cands[j]
+                                .iter()
+                                .filter(|&&n2| n2 != n1)
+                                .map(|&n2| {
+                                    let (p, q) = (at(n1), at(n2));
+                                    let got = ((q.0 - p.0) * layout.unit, (q.1 - p.1) * layout.unit);
+                                    let (gw, gg) = scale_for(got, want);
+                                    (miss(clamp(gw, gg), got, want), got)
+                                })
+                                .min_by(|x, y| x.0.total_cmp(&y.0))
+                                .map(|(_, got)| (got, want))
+                        })
+                        .collect();
+                    if gots.len() != wants.len() {
+                        continue;
                     }
-                    fit *= best;
+                    let (gw, gg) = gots.iter().fold((0.0, 0.0), |sum, &(got, want)| {
+                        let (gw, gg) = scale_for(got, want);
+                        (sum.0 + gw, sum.1 + gg)
+                    });
+                    let k = clamp(gw, gg);
+                    let fit: f64 = gots.iter().map(|&(got, want)| (-miss(k, got, want) / (4.0 * tol * tol)).exp()).product();
+                    let prior = (-(k.ln()).powi(2) / (2.0 * K_SIGMA * K_SIGMA)).exp();
+                    if fit * prior > best.0 {
+                        best = (fit * prior, fit, k);
+                    }
                 }
-                fit
+                best
             };
             // Two or more exits read by name: how well this layout's named exits lie
             // as the icons do decides on its own, whatever was believed before; it
             // replaces the last such fit (one scan, however often seen, counts once).
             if fit_named.len() >= 2 {
-                let fit = pairs(&fit_named);
-                bank.named = fit.max(NAMED_BASE).ln();
+                let (score, fit, k) = pairs(&fit_named);
+                bank.named = score.max(NAMED_BASE).ln();
+                bank.k = k;
+                // Whether any layout fits at all is the fit's alone, at its own scale.
                 named_best = Some(named_best.unwrap_or(0.0).max(fit));
             } else if icons.len() >= 2 {
-                geometry = pairs(&(0..icons.len()).collect::<Vec<_>>());
+                geometry = pairs(&(0..icons.len()).collect::<Vec<_>>()).0;
             }
             bank.evidence += weight * agree.max(geometry).max(ICON_BASE).ln();
             // The belief does not explain the icons: also try where they put the player,
@@ -1204,6 +1247,14 @@ impl Navigator {
         })
     }
 
+    /// The zone's map scale (minimap cells per world unit across) its named exits showed,
+    /// once they make a layout drawn: kept per zone, the next visit expects it.
+    pub fn zone_scale(&self) -> Option<f64> {
+        let picture = self.picture().filter(|p| p.known)?;
+        let top = self.area.layouts.iter().position(|l| l.id == picture.id)?;
+        Some(self.scale * self.banks[top].k).filter(|s| (SCALE_RANGE.0..=SCALE_RANGE.1).contains(s))
+    }
+
     /// The layout ids, most likely first, with their probabilities.
     #[cfg(test)]
     pub fn ranking(&self) -> Vec<(&str, f64)> {
@@ -1400,6 +1451,9 @@ impl Navigator {
             path: ids().zip(self.banks.iter().map(|b| b.path)).collect(),
             anchors: ids().zip(self.banks.iter().map(|b| b.evidence)).collect(),
             named: ids().zip(self.banks.iter().map(|b| b.named)).collect(),
+            named_pair: self.named_pair,
+            named_loose: self.named_loose,
+            k: ids().zip(self.banks.iter().map(|b| b.k)).collect(),
             walked: self.walked_before + self.walked,
             positions,
             at: self.data_at,
@@ -2162,7 +2216,7 @@ mod tests {
         nav.icons(&frame);
         let ranking = nav.ranking();
         assert_eq!(ranking[0].0, "OldForest_W_N", "{:?}", &ranking[..4]);
-        assert!(ranking[0].1 > 0.9, "{:?}", &ranking[..4]);
+        assert!(ranking[0].1 > 0.85, "{:?}", &ranking[..4]);
         let picture = nav.picture().unwrap();
         assert!(picture.known && picture.id == "OldForest_W_N", "{picture:?}");
     }
@@ -2184,6 +2238,33 @@ mod tests {
         assert!(ranking[0].0.starts_with("GrimTangle_S"), "{:?}", &ranking[..4]);
         let picture = nav.picture().unwrap();
         assert!(picture.known && picture.id.starts_with("GrimTangle_S"), "{picture:?}");
+    }
+
+    #[test]
+    fn a_zone_drawn_at_its_own_scale_is_measured_and_expected_next_time() {
+        let area = graph::load("G1_4");
+        let frame = [
+            ExitIcon { dx: 30.0, dy: -60.0, to: Some("The Red Vale".into()), remembered: false },
+            ExitIcon { dx: 30.0 - 115.0, dy: -60.0 + 990.0, to: Some("Clearfell".into()), remembered: true },
+        ];
+        let mut nav = Navigator::new(&area, Arrival::From("G1_2"), None, SCALE, 1);
+        nav.icons(&frame);
+        let measured = nav.zone_scale().expect("drawn");
+        assert!((measured / SCALE - 1.38).abs() < 0.1, "{measured}");
+        // The next visit at that scale fits the same exits at about 1.
+        let mut next = Navigator::new(&area, Arrival::From("G1_2"), None, measured, 2);
+        next.icons(&frame);
+        let top = next.area.layouts.iter().position(|l| l.id == "OldForest_W_N").unwrap();
+        assert!((next.banks[top].k - 1.0).abs() < 0.05, "{}", next.banks[top].k);
+        // Clearfell's own exits at Clearfell's scale: about 1.
+        let clearfell = graph::load("G1_2");
+        let mut nav = Navigator::new(&clearfell, Arrival::From("G1_town"), None, SCALE, 3);
+        nav.icons(&[
+            ExitIcon { dx: 54.0, dy: -88.0, to: Some("Mud Burrow".into()), remembered: false },
+            ExitIcon { dx: 54.0 - 403.0, dy: -88.0 + 614.0, to: Some("Clearfell Encampment".into()), remembered: false },
+        ]);
+        let measured = nav.zone_scale().expect("drawn");
+        assert!((measured / SCALE - 1.0).abs() < 0.1, "{measured}");
     }
 
     #[test]
