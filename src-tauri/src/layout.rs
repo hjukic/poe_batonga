@@ -480,6 +480,18 @@ fn note_named_exits(named: &mut Vec<(f32, f32, String)>, icons: &[crate::minimap
     }
 }
 
+/// The named exits as points of the part ("exit", their name), so they are saved with the
+/// map and a return to the instance (or an app restart in it) has them again.
+fn keep_named_exits(pois: &mut Vec<Poi>, named: &[(f32, f32, String)]) {
+    for (x, y, name) in named {
+        let (x, y) = (x.round() as i32, y.round() as i32);
+        match pois.iter_mut().find(|p| p.kind == "exit" && p.label == *name) {
+            Some(poi) => (poi.x, poi.y) = (x, y),
+            None => pois.push(Poi { kind: "exit".into(), label: name.clone(), x, y, at: now() }),
+        }
+    }
+}
+
 /// Exits read by name earlier in this part (`Session::named_exits`, the part's cells) that
 /// this frame does not show, as icons from the player at `pos`.
 fn remembered_exits(named: &[(f32, f32, String)], icons: &[crate::minimap::bigmap::Icon], pos: (i32, i32)) -> Vec<crate::minimap::bigmap::Icon> {
@@ -1046,6 +1058,9 @@ impl Recorder {
                     _ => Live::new(),
                 };
                 let file = state.path(area, *seed);
+                // The exits the continued map knows by name.
+                let known_exits: Vec<(f32, f32, String)> =
+                    live.part.pois.iter().filter(|p| p.kind == "exit").map(|p| (p.x as f32, p.y as f32, p.label.clone())).collect();
                 let mut session = Session {
                     recording,
                     live,
@@ -1058,7 +1073,7 @@ impl Recorder {
                     fed_at: None,
                     far_icons: Vec::new(),
                     far_age: FAR_FRAMES,
-                    named_exits: Vec::new(),
+                    named_exits: known_exits,
                     exit_places: Vec::new(),
                     waypoint_at: None,
                     last_guide: Default::default(),
@@ -1178,6 +1193,7 @@ impl Recorder {
                 session.feed(pos);
                 session.feed_icons(&icons, whole, pos, (frame.cols, frame.rows), bosses);
                 note_named_exits(&mut session.named_exits, &icons, pos);
+                keep_named_exits(&mut session.live.part.pois, &session.named_exits);
                 note_exit_places(&mut session.exit_places, &icons, pos);
                 if let Some(icon) = icons.iter().find(|i| i.kind == "waypoint") {
                     session.waypoint_at = Some((pos.0 as f32 + icon.x, pos.1 as f32 + icon.y));
@@ -1717,6 +1733,10 @@ mod tests {
         enter(&recorder, "G1_town");
         enter(&recorder, "G1_2");
         for step in 0..40 {
+            if step == 10 {
+                let grelwood = crate::minimap::bigmap::Icon { kind: "exit", x: -100.0, y: 40.0, label: Some("The Grelwood".into()), sprite: None };
+                recorder.on_icons(&[grelwood], true);
+            }
             recorder.on_frame(&frame((step * 4, 0)), [300, 260]);
         }
         let first = recorder.0.lock().unwrap().session.as_ref().unwrap().live.walls.len();
@@ -1733,6 +1753,7 @@ mod tests {
         assert!(!session.live.unplaced);
         assert_eq!(session.live.pos, (156, 0), "the first visit's coordinates");
         assert!(session.live.walls.len() <= first + 2, "the same corridor drawn again: {} -> {}", first, session.live.walls.len());
+        assert_eq!(session.named_exits.iter().map(|e| e.2.as_str()).collect::<Vec<_>>(), ["The Grelwood"], "named before, known again");
         drop(state);
         let _ = std::fs::remove_dir_all(dir);
     }
