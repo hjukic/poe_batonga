@@ -594,6 +594,23 @@ unique or a dead rare, never by itself a dead boss.
 19 ms with; the area around the player (685 x 603 px): 0.3 ms and 5.7 ms. About +12 ms on every third
 frame and +5.5 ms on the others; the frame interval is 330 ms.
 
+**Kinds (`bigmap::Icon`).** `kind` is `exit`, `checkpoint`, `waypoint` (colour, as before), or what the
+matcher named: `boss` (an orange skull, a unique monster alive; or a boss's own icon, `…Active`),
+`boss-dead` (a boss's own grey icon, `…Inactive`), `dead` (a grey skull), `rare` (a yellow skull),
+`portal`, `npc`, `quest`. `sprite` carries the sprite's id (`GrimTangleBossActive`), so a boss's own icon
+is known by name; `data/icons/index.json` says whose. Rares, portals and the rest are read only so they
+are not taken for anything else: the navigator uses exits and, from I5 on, bosses.
+
+**The corner minimap** goes through the same reading (every pixel, `bigmap::icons`), with the same
+scales: the table gives every icon taken here `MinimapIconRadius` = `LargemapIconRadius` (2), which is
+read as "drawn the same size". Not measured: no full-size minimap capture with an icon exists yet
+(`the_corner_minimap_names_icons_too` pins the reading on a synthetic minimap).
+
+**Captures to check it on.** Besides the boss-line captures, the reader keeps a picture whenever it names
+a boss, a dead one or a rare (`samples/icon-<kind>-<sprite>-<view>-<time>.ppm`, at most one a minute, 12
+in all, counted over restarts): the minimap corner it was read in, or 400 x 400 px of the whole window
+around the icon on the big map.
+
 **Assumed.** That campaign bosses show these icons at all, when, and that the grey one stays after the
 kill (the icon table's word); that skulls and boss icons are drawn at 0.48–0.53 like exits and
 checkpoints; that a boss's place name is drawn above its icon like the exit labels; that the corner

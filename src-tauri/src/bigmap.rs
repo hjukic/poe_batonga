@@ -1041,6 +1041,30 @@ fn identify(image: &Image, icons: &mut Vec<(Icon, [f64; 2])>, found: &[(u8, Blob
     *icons = kept;
 }
 
+/// Draws sprite `index` over `image`, its centre at pixel `at`, `scale` screen px per 64 px
+/// sprite pixel (alpha blended, as the game is assumed to draw it): tests only.
+#[cfg(test)]
+pub fn draw_for_tests(image: &mut Image, index: usize, at: [f64; 2], scale: f64) {
+    let k = 2.0 * scale;
+    let n = (SPRITE_PX as f64 * k).ceil() as usize + 3;
+    let corner = [(at[0] - n as f64 / 2.0).round(), (at[1] - n as f64 / 2.0).round()];
+    let phase = [at[0] - corner[0] - n as f64 / 2.0, at[1] - corner[1] - n as f64 / 2.0];
+    let t = Template::new(&sprites()[index], k, phase);
+    for ty in 0..t.h {
+        for tx in 0..t.w {
+            let (x, y) = (corner[0] as i64 + tx as i64, corner[1] as i64 + ty as i64);
+            if x < 0 || y < 0 || x as usize >= image.width || y as usize >= image.height {
+                continue;
+            }
+            let (i, a) = ((y as usize * image.width + x as usize) * 3, t.alpha[ty * t.w + tx]);
+            for j in 0..3 {
+                let v = t.rgb[ty * t.w + tx][j] * a + image.pixels[i + j] as f32 * (1.0 - a);
+                image.pixels[i + j] = v.round().clamp(0.0, 255.0) as u8;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 thread_local! {
     /// Off: the reader as it was before the sprite matcher (for tests that compare).
@@ -1346,24 +1370,7 @@ mod tests {
     /// `scale` screen pixels per 64 px sprite pixel: the way the game would draw it (an
     /// assumption: alpha blended, the sheet's half-size level resampled).
     fn draw(image: &mut Image, id: &str, at: [f64; 2], scale: f64) {
-        let k = 2.0 * scale;
-        let n = (SPRITE_PX as f64 * k).ceil() as usize + 3;
-        let corner = [(at[0] - n as f64 / 2.0).round(), (at[1] - n as f64 / 2.0).round()];
-        let phase = [at[0] - corner[0] - n as f64 / 2.0, at[1] - corner[1] - n as f64 / 2.0];
-        let t = Template::new(&sprites()[sprite_index(id)], k, phase);
-        for ty in 0..t.h {
-            for tx in 0..t.w {
-                let (x, y) = (corner[0] as i64 + tx as i64, corner[1] as i64 + ty as i64);
-                if x < 0 || y < 0 || x as usize >= image.width || y as usize >= image.height {
-                    continue;
-                }
-                let (i, a) = ((y as usize * image.width + x as usize) * 3, t.alpha[ty * t.w + tx]);
-                for j in 0..3 {
-                    let v = t.rgb[ty * t.w + tx][j] * a + image.pixels[i + j] as f32 * (1.0 - a);
-                    image.pixels[i + j] = v.round().clamp(0.0, 255.0) as u8;
-                }
-            }
-        }
+        draw_for_tests(image, sprite_index(id), at, scale);
     }
 
     /// I3: the matcher on the whole Clearfell screenshot (`BIGMAP_FULL`, a PPM): what it

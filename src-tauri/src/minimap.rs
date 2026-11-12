@@ -576,18 +576,49 @@ struct Samples {
     minimap_exits: usize,
     last_minimap: Option<Instant>,
     last_big: Option<Instant>,
+    /// Captures with an icon the sprite matcher named (a boss, a dead one, a rare): the
+    /// first real ones check what is only drawn so far. Counted over restarts.
+    named_icons: usize,
+    last_icon: Option<Instant>,
 }
 
 impl Samples {
     const MINIMAP_EXITS: usize = 8;
+    const NAMED_ICONS: usize = 12;
     const KEEP: usize = 40;
+    /// Side of the piece of the whole window kept around a named icon (px).
+    const ICON_CROP: usize = 400;
 
     fn new(dir: Option<std::path::PathBuf>) -> Samples {
-        let minimap_exits = dir
-            .as_ref()
-            .and_then(|d| std::fs::read_dir(d).ok())
-            .map_or(0, |files| files.flatten().filter(|f| f.file_name().to_string_lossy().starts_with("minimap-exit-")).count());
-        Samples { dir, minimap_exits, last_minimap: None, last_big: None }
+        let count = |prefix: &str| {
+            dir.as_ref()
+                .and_then(|d| std::fs::read_dir(d).ok())
+                .map_or(0, |files| files.flatten().filter(|f| f.file_name().to_string_lossy().starts_with(prefix)).count())
+        };
+        let (minimap_exits, named_icons) = (count("minimap-exit-"), count("icon-"));
+        Samples { dir, minimap_exits, last_minimap: None, last_big: None, named_icons, last_icon: None }
+    }
+
+    /// A capture of a named icon (at most one a minute): the minimap corner it was read
+    /// in, or a square of the whole window around it. Named `icon-<kind>-<sprite>-<view>-<time>.ppm`.
+    fn named_icon(&mut self, view: &MinimapView, icons: &[bigmap::Icon], region: &CaptureRegion) {
+        let Some(icon) = icons.iter().find(|i| matches!(i.kind, "boss" | "boss-dead" | "dead" | "rare")) else { return };
+        if self.named_icons >= Self::NAMED_ICONS || self.last_icon.is_some_and(|t| t.elapsed() < Duration::from_secs(60)) {
+            return;
+        }
+        self.last_icon = Some(Instant::now());
+        let name = |view: &str| format!("icon-{}-{}-{view}", icon.kind, icon.sprite.unwrap_or("unknown"));
+        let saved = if view.message == "Reading minimap" {
+            self.save(&name("minimap"), capture(region))
+        } else {
+            // The big map draws at the minimap's scale: a cell is CELL pixels from the marker.
+            let marker = region.scan.plan.marker;
+            let at = [marker[0] + icon.x as f64 * CELL as f64, marker[1] + icon.y as f64 * CELL as f64];
+            self.save(&name("bigmap"), capture_window(region).map(|image| crop_around(&image, at, Self::ICON_CROP)))
+        };
+        if saved {
+            self.named_icons += 1;
+        }
     }
 
     /// Called after a frame was read; captures again and saves when a sample is due.
@@ -600,6 +631,7 @@ impl Samples {
         if self.dir.is_none() || !view.visible {
             return;
         }
+        self.named_icon(view, icons, region);
         let due = |last: Option<Instant>, secs: u64| last.is_none_or(|t| t.elapsed() >= Duration::from_secs(secs));
         if view.message == "Reading minimap" {
             let exit = icons.iter().any(|icon| icon.kind == "exit");
@@ -637,6 +669,19 @@ impl Samples {
         }
         true
     }
+}
+
+/// The `side` x `side` piece of `image` centred on `at` (clipped to the image).
+fn crop_around(image: &Image, at: [f64; 2], side: usize) -> Image {
+    let clamp = |v: f64, n: usize| (v.max(0.0) as usize).min(n);
+    let half = side as f64 / 2.0;
+    let (x0, y0) = (clamp(at[0] - half, image.width), clamp(at[1] - half, image.height));
+    let (x1, y1) = (clamp(at[0] + half, image.width), clamp(at[1] + half, image.height));
+    let mut pixels = Vec::with_capacity((x1 - x0) * (y1 - y0) * 3);
+    for y in y0..y1 {
+        pixels.extend_from_slice(&image.pixels[(y * image.width + x0) * 3..(y * image.width + x1) * 3]);
+    }
+    Image { width: x1 - x0, height: y1 - y0, pixels }
 }
 
 pub fn spawn(app: AppHandle, minimap: &Minimap) {
@@ -719,6 +764,35 @@ mod tests {
         assert!(view.walls.iter().all(|[_, row]| *row == 10));
         let [px, py] = view.player.unwrap();
         assert!((px - 15.75).abs() < 0.01 && (py - 20.75).abs() < 0.01, "{px},{py}");
+    }
+
+    #[test]
+    fn a_named_icon_is_kept_as_a_piece_around_it() {
+        let image = image(100, 80, |x, y| [x as u8, y as u8, 0]);
+        let piece = crop_around(&image, [90.0, 10.0], 40);
+        // Clipped at the right and top edges.
+        assert_eq!((piece.width, piece.height), (30, 30));
+        assert_eq!(&piece.pixels[..3], &[70, 0, 0]);
+    }
+
+    #[test]
+    fn the_corner_minimap_names_icons_too() {
+        // The corner reader uses the same icon reading (every pixel); the minimap is assumed
+        // to draw icons at the big map's size (the table's MinimapIconRadius equals
+        // LargemapIconRadius for every icon taken). A synthetic minimap: lines, the cross,
+        // an orange skull and a yellow one.
+        let mut frame = image(240, 160, |x, y| match (x, y) {
+            (_, 20 | 21) => [91, 91, 121],
+            _ if cross(x, y, 120, 80) => [230, 110, 30],
+            _ => [14, 16, 20],
+        });
+        let skull = |at: [f64; 2], id: &str| bigmap::sprites().iter().position(|s| s.id == id).map(|i| (at, i)).unwrap();
+        for (at, i) in [skull([60.0, 110.0], "UniqueMonsterAlive"), skull([190.0, 110.0], "RareMonsterAlive")] {
+            bigmap::draw_for_tests(&mut frame, i, at, 0.48);
+        }
+        let mut kinds: Vec<_> = bigmap::icons(&frame, [120.5, 80.5], 1.0, 1.0).into_iter().map(|i| (i.kind, i.sprite)).collect();
+        kinds.sort();
+        assert_eq!(kinds, [("boss", Some("UniqueMonsterAlive")), ("rare", Some("RareMonsterAlive"))]);
     }
 
     #[test]
