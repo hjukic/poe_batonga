@@ -41,6 +41,59 @@ unverified; full six-act support is a release goal, not an implemented capabilit
   Matching is an estimate, not knowledge of the current unexplored map. Hide
   directional guidance when evidence is ambiguous, stale or unavailable.
 
+## Overlay behaviour (owner, 2026-11-13)
+
+- Outside an active game zone, show the application's working name instead of
+  the last saved zone and its checklist. Saved log history alone is not live presence.
+- On zone entry, show that zone's checklist. An area without a route must not
+  reuse another area's checklist.
+- Keep completed and manually corrected objectives per character, across zone
+  revisits and application restarts. A checked objective stays struck through
+  until that character's progress is reset or the objective is manually reopened.
+- Once all objectives selected by the optional-content setting are complete
+  across that zone's visits, replace the list with the working completion message.
+- **Automatic character identity is required** (owner clarification, 2026-11-13):
+  creating a character or logging into an existing one must identify the actual
+  character and select its own quest progress without a repeated manual choice.
+  The profile selector in v0.1.88 is a temporary fallback and does not complete
+  this requirement. Never substitute the last saved name, class, level, zone or
+  seed for verified identity. Until identity is established, keep observations
+  unassigned instead of updating another character's profile.
+- **Recognition order** (owner's latest clarification, 2026-11-13): for a new
+  character, read the final name from the creation screen's name field before
+  the transition into the opening animation. For an existing character, read
+  the selected character on the selection/Continue screen. C is a recovery
+  source only, not the first check or a mandatory step in the normal flow.
+  Treat the screen read as a candidate; bind progress when that entry reaches a
+  game zone. Returning to the main menu clears the previous binding/candidate
+  and starts recognition again. An edited/rejected name or cancelled creation
+  must not create or select a quest profile.
+- On the existing-character screen, a league tooltip may hide the name. Complete
+  the selected row's visible prefix only from a unique known same-league name;
+  ambiguous/unknown fragments remain unresolved. Preserve whether a name was
+  read completely or completed from history, and never store a clipped fragment
+  as a newly verified character name.
+- Preserve pre-profile progress separately and assign it to a profile only by
+  the owner's explicit choice. Source feasibility and the outstanding dependency:
+  [character identity investigation](character-identity.md).
+
+Implementation status: v0.1.89 adds the Windows creation/selection OCR route,
+input-triggered capture and entry-gated profile binding. All four supplied image
+references pass native OCR. Live transitions and return-to-menu paths still need
+gameplay acceptance; C-screen recovery and other UI configurations remain open.
+
+## Scope TODO: choose later
+
+- [ ] **Application name:** choose the final name. Working overlay title:
+  `Leveling batonge`. Branding, native window titles and package names can be
+  aligned once the name is chosen.
+- [ ] **Message wording:** choose final status text. The working completion
+  message is `quests completed`; wording choices are separate from its behaviour.
+- [ ] **Windows VSync compatibility:** the visible overlay stutters with VSync
+  on the owner's setup; VSync Off is the confirmed workaround. Start with a
+  bounded `noRedirectionBitmap` A/B test. Broader rendering changes remain
+  deferred. See [evidence and checks](overlay-test.md#windows-overlay-and-vsync-deferred-investigation).
+
 ## Hard boundaries and feasibility
 
 GGG compliance takes priority over every feature. No game memory access, code

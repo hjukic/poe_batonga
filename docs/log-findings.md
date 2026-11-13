@@ -88,3 +88,33 @@ assuming they identify a known template. The automatic arrow still needs a
 separate permitted source of visible map geometry and player position.
 Step 4 has substantial historical evidence but remains open for labelled item
 pickup/turn-in tests and current-patch validation. Raw logs remain outside Git.
+
+## Labelled new-character test (2026-11-13, 01:09–01:10 local)
+
+The owner created a new character and reported entering the game around 01:09,
+picking up a Voltaic Staff, Channeling Talisman and Volcano skill, and activating
+a checkpoint around 01:10. A byte offset was recorded before the test; the
+unmodified new bytes were exported locally under `artifacts/log-review/` as a
+`.log` file (ignored by Git). The reviewed excerpt has 53 lines, from 01:08:51
+through 01:11:22; no raw chat, account/character names or addresses are copied here.
+
+Observed in the excerpt:
+
+- 01:08:51: connection to the login server.
+- 01:09:38: an instance ID, generation of level 1 area `G1_1` with a seed,
+  tile/doodad hashes, and scene name `The Riverbank`.
+- 01:09:44: the Riverbank loading screen finished (reported duration about 5.9 s).
+- 01:09:56, 01:10:01 and 01:10:08: the Wounded Man's three lines. The last line
+  matches our existing `talk-wounded-man` trigger.
+- 01:10:47: the game window lost focus.
+
+No record naming the reported items/skill, their pickup, the checkpoint/waypoint,
+or the new character's name/ID was found in this excerpt. The item-class errors
+name unrelated types and are not pickup events. There are chat and guild
+messages, which must not be mistaken for local-character identity.
+
+The number in `[Client …]` was checked against the live OS process and is its
+process ID. `Client-Safe Instance ID` identifies the instance, and the generation
+seed is map metadata; neither establishes character identity. This labelled
+trial supports the absence of those events in this specific sequence, not a
+claim that no game version or other situation can ever log them.

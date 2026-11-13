@@ -2,6 +2,8 @@
 
 Start with [architecture](architecture.md): the parts of the app and where each lives.
 
+For the latest checkpoint and the next live test, read [session handoff](SESSION.md).
+
 - [Map reading](map-reading.md): minimap and big-map reading, the recorder, layout
   recognition, the navigator behind the (parked) compass, the flight recorder, and what
   was measured.

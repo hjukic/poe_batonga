@@ -2,6 +2,8 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import './style.css';
+import { panelMode } from './checklist';
+import { recognizeScreen, learnKnownCharacters, type OcrFrame, type KnownCharacter } from './character-screen.mjs';
 
 interface Status {
   visible: boolean;
@@ -24,8 +26,14 @@ interface StepView {
   visit: number;
 }
 interface TrackerView {
-  zone: { id: string; name: string; level: number };
+  zone: { id: string; name: string; level: number } | null;
   currentArea: string | null;
+  inZone: boolean;
+  character: string | null;
+  recognizedCharacter: string | null;
+  characters: string[];
+  legacyAvailable: boolean;
+  identityNote: string;
   steps: StepView[];
   /** The visit under way: only its steps are listed. */
   visit: number;
@@ -92,11 +100,15 @@ const STEP_ARROW = mark('M1.5 6h8M6.2 2.6 9.6 6 6.2 9.4');
 const STEP_DONE = mark('M2 6.5 4.8 9.2 10 3.2');
 const CLOSE = icon('<path d="M18 6 6 18M6 6l12 12"/>');
 
+// Working copy; final application name and status wording are in the scope TODO.
+const APP_NAME = 'Leveling batonge';
+const COMPLETED_MESSAGE = 'quests completed';
 document.body.className = 'overlay';
+document.body.dataset.inZone = 'false';
 document.querySelector<HTMLElement>('#app')!.innerHTML = `
   <section class="panel" aria-label="Campaign guide">
     <header id="drag">
-      <span class="zone"></span>
+      <span class="zone">${APP_NAME}</span>
       <div class="header-actions">
         <button id="lock" class="icon" type="button"></button>
         <button id="restart" class="icon" type="button" title="Restart with the latest version" aria-label="Restart with the latest version">${RESTART}</button>
@@ -104,6 +116,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
         <button id="exit" class="icon" type="button" title="Quit" aria-label="Quit">${CLOSE}</button>
       </div>
     </header>
+    <p id="character-display" class="character-display" role="status" hidden></p>
     <p class="restart-status" id="restart-status" role="status" hidden></p>
     <p class="warning" id="start-error" role="alert" hidden></p>
     <div class="route" id="route"></div>
@@ -117,6 +130,16 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <div class="version" title="App version: goes up with every update">v${__APP_VERSION__}</div>
   </section>
   <div id="settings" class="dropdown" aria-label="Settings" hidden>
+    <form id="character-form" class="character-form">
+      <label for="character-name">Character</label>
+      <input id="character-name" list="characters" maxlength="80" autocomplete="off" placeholder="Character name" />
+      <datalist id="characters"></datalist>
+      <label id="legacy-option" class="legacy-option" hidden><input id="import-legacy" type="checkbox" />Use previous saved progress</label>
+      <button id="use-character" type="submit">Use character</button>
+      <p id="character-hint" class="character-hint">Enter a zone to choose your character.</p>
+    </form>
+    <label class="row" title="Keep the active or recognized character name visible above the checklist, including when quests are completed."><span>Always show character name</span><input id="show-character-name" type="checkbox" checked /></label>
+    <hr />
     <label class="row"><span>Opacity</span><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></label>
     <div class="row"><span>Show / hide</span><button id="shortcut" class="keycap" type="button" title="Click, then press a new shortcut"></button></div>
     <label class="row" title="Off (speedrun): only the steps needed to progress are listed. On: side steps marked optional are listed too."><span>Optional content</span><input id="optional-content" type="checkbox" /></label>
@@ -231,20 +254,39 @@ function summaryRow(text: string, done: boolean, onClick = () => { unfolded = !u
 }
 
 function renderTracker(view: TrackerView) {
-  if (lastTracker && lastTracker.zone.id !== view.zone.id) {
+  if (lastTracker && (lastTracker.currentArea !== view.currentArea || lastTracker.character !== view.character || lastTracker.inZone !== view.inZone)) {
     unfolded = false;
     allVisits = false;
+    renderLayout(null);
   }
   lastTracker = view;
+  document.body.dataset.inZone = String(view.inZone);
   showMessage('#log-warning', view.log.connected ? null : view.log.message);
   // A long name (a town's) takes the room of the level.
   const zone = $('.zone');
-  zone.title = `${view.zone.name} · Lv ${view.zone.level}`;
-  zone.textContent = view.zone.name.length > 16 ? view.zone.name : zone.title;
+  zone.title = view.inZone && view.zone ? `${view.zone.name} · Lv ${view.zone.level}` : APP_NAME;
+  zone.textContent = view.inZone && view.zone ? (view.zone.name.length > 16 ? view.zone.name : zone.title) : APP_NAME;
+  renderCharacter(view);
   const rows: HTMLElement[] = [];
   // A zone's list covers every visit of the route; only this visit's steps are shown.
   // Speedrun (the default): optional steps are left out of the list.
   const wanted = optionalContent.checked ? view.steps : view.steps.filter((step) => !step.optional);
+  const mode = panelMode(view, optionalContent.checked);
+  const message = (mode === 'choose-character' || mode === 'idle') ? (view.identityNote || null)
+    : mode === 'unknown-zone' ? 'No campaign checklist for this area.'
+    : mode === 'completed' ? COMPLETED_MESSAGE : null;
+  if (mode !== 'checklist') {
+    if (message) {
+      const line = document.createElement('p');
+      line.className = 'route-status';
+      line.role = 'status';
+      line.textContent = message;
+      rows.push(line);
+    }
+    $('#route').replaceChildren(...rows);
+    syncStepControls();
+    return;
+  }
   const steps = allVisits ? wanted : wanted.filter((step) => step.visit === view.visit);
   const otherVisits = wanted.filter((step) => step.visit !== view.visit && step.kind === 'objective').length;
   if (steps.length <= MAX_ROWS || unfolded) {
@@ -294,7 +336,7 @@ function setGuideTarget(target: string | null) {
  *  the first step that is still open. */
 function syncStepControls() {
   document.querySelectorAll<HTMLButtonElement>('#route button.step').forEach((row) => {
-    row.disabled = false;
+    row.disabled = !lastTracker?.inZone || !lastTracker.character;
     if (!row.classList.contains('summary')) row.title = 'Click: done / not done';
   });
   syncInput();
@@ -306,7 +348,7 @@ const minimapCanvas = $<HTMLCanvasElement>('#minimap-canvas');
 let minimapTracking = false;
 function renderMinimap(view: MinimapView) {
   minimapTracking = view.enabled && view.visible && view.player !== null;
-  minimapBox.hidden = !view.enabled;
+  minimapBox.hidden = !view.enabled || !lastTracker?.inZone;
   // The preview is the map recorded so far: a frame without the player (a fight, the map
   // closed) leaves it as it is. Cleared here, it blinked: wiped up to 8 times a second and
   // drawn again with the next full view (the owner, 2026-11-12).
@@ -406,6 +448,7 @@ let lastFullView: LayoutView | null = null;
 let drawnPicture = '';
 let drawnPreview = '';
 function renderLayout(view: LayoutView | null) {
+  if (view && (!lastTracker?.inZone || view.area !== lastTracker.currentArea)) return;
   // With the compass parked the bright arrow marks the first open step, not its target.
   setGuideTarget(compassEnabled.checked ? view?.guide?.target || null : null);
   if (view?.light) return;
@@ -495,6 +538,12 @@ function keep(key: string, value: boolean) {
 // Optional content: off is the speedrun default (optional steps not listed, the arrow
 // passes over them); on lists them and lets the arrow lead to them.
 optionalContent.checked = stored('optional-content', false);
+const showCharacterName = $<HTMLInputElement>('#show-character-name');
+showCharacterName.checked = stored('show-character-name', true);
+showCharacterName.addEventListener('change', () => {
+  keep('show-character-name', showCharacterName.checked);
+  if (lastTracker) renderCharacter(lastTracker);
+});
 const sendCompassOptional = () =>
   isTauri() && void invoke('set_compass_optional', { follow: optionalContent.checked }).catch(console.error);
 optionalContent.addEventListener('change', () => {
@@ -675,10 +724,53 @@ $('#reset-progress').addEventListener('click', () => {
   void invoke<TrackerView>('reset_progress').then(renderTracker).catch((error) => showMessage('#error', String(error)));
 });
 
+const characterInput = $<HTMLInputElement>('#character-name');
+let shownCharacter: string | null = null;
+function renderCharacter(view: TrackerView) {
+  const nameDisplay = $('#character-display');
+  nameDisplay.hidden = !showCharacterName.checked;
+  nameDisplay.textContent = view.character ? `Character: ${view.character}`
+    : view.recognizedCharacter ? `Recognized: ${view.recognizedCharacter} (awaiting zone)`
+    : 'Character: not recognized';
+  if (view.character !== shownCharacter) {
+    characterInput.value = view.character ?? '';
+    shownCharacter = view.character;
+  }
+  const options = view.characters.map((name) => {
+    const option = document.createElement('option');
+    option.value = name;
+    return option;
+  });
+  $('#characters').replaceChildren(...options);
+  characterInput.disabled = !view.inZone;
+  $<HTMLButtonElement>('#use-character').disabled = !view.inZone;
+  $('#legacy-option').hidden = !view.legacyAvailable;
+  $('#character-hint').textContent = view.identityNote || (view.character ? `Tracking: ${view.character}`
+    : 'Character creation and selection are read automatically. Manual choice is available after zone entry.');
+  $<HTMLButtonElement>('#reset-progress').disabled = !view.character;
+}
+$('#character-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  void invoke<TrackerView>('select_character', {
+    name: characterInput.value,
+    importLegacy: $<HTMLInputElement>('#import-legacy').checked,
+  }).then((view) => {
+    $<HTMLInputElement>('#import-legacy').checked = false;
+    showMessage('#error', null);
+    renderTracker(view);
+  }).catch((error) => showMessage('#error', String(error)));
+});
+
 // Shown only in a plain browser (npm run dev without Tauri), where no log can be read.
 const browserPreview: TrackerView = {
   zone: { id: 'G1_4', name: 'The Grelwood', level: 4 },
-  currentArea: null,
+  currentArea: 'G1_4',
+  inZone: true,
+  character: 'Preview',
+  recognizedCharacter: null,
+  characters: ['Preview'],
+  legacyAvailable: false,
+  identityNote: 'Tracking: Preview',
   visit: 1,
   log: { connected: true, path: null, message: '' },
   steps: [
@@ -721,6 +813,15 @@ async function start() {
     await step('restart-status', () => listen<{ step: string; error: string | null }>('restart-status', (event) => renderRestart(event.payload.step, event.payload.error)));
     await step('overlay-status', () => listen<Status>('overlay-status', (event) => render(event.payload)));
     await step('tracker-state', () => listen<TrackerView>('tracker-state', (event) => renderTracker(event.payload)));
+    await step('identity-frame', () => listen<{ epoch: number; seq: number; full: OcrFrame; focused: OcrFrame; known: KnownCharacter[]; dryRun: boolean }>('identity-frame', (event) => {
+      const { epoch, seq, full, focused, known, dryRun } = event.payload;
+      try {
+        const result = recognizeScreen(full, focused, known);
+        const learned = learnKnownCharacters(full, focused);
+        void invoke('identity_observed', { epoch, seq, result, learned, dryRun: dryRun ?? false }).catch((error) => report(`Character recognition: ${String(error)}`));
+      } catch (error) { report(`Character recognition frame: ${String(error)}`); }
+    }));
+    await step('identity-ready', () => invoke('identity_ready'));
     await step('minimap-state', () => listen<MinimapView>('minimap-state', (event) => renderMinimap(event.payload)));
     await step('minimap_state', async () => renderMinimap(await invoke<MinimapView>('minimap_state')));
     await step('layout-state', () => listen<LayoutView>('layout-state', (event) => renderLayout(event.payload)));

@@ -22,6 +22,11 @@ mod windows_capture;
 #[cfg(target_os = "windows")]
 use windows_capture::{capture, capture_bigmap, capture_window, locate_minimap, Region as CaptureRegion};
 
+#[cfg(target_os = "windows")]
+pub fn capture_identity_frame() -> Result<Image, String> {
+    capture_window(&locate_minimap()?)
+}
+
 /// Four frames a second. Each frame is a screenshot, and a screenshot makes the compositor
 /// copy the screen's pixels back from the GPU: at eight a second (for the compass's
 /// needle, now parked) the owner saw the game stutter (2026-11-13). Before the compass
@@ -153,7 +158,6 @@ pub fn analyse(image: &Image, marker: [f64; 2], radius: f64) -> MinimapView {
 }
 
 /// Parses binary PPM (P6, 8-bit), which is what `grim -t ppm` writes.
-#[cfg(any(target_os = "linux", test))]
 pub fn parse_ppm(bytes: &[u8]) -> Result<Image, String> {
     let mut fields = Vec::with_capacity(4);
     let mut pos = 0;

@@ -7,6 +7,9 @@ mod layout;
 mod minimap;
 mod restart;
 mod tracker;
+mod characters;
+mod game;
+mod identity;
 
 use std::str::FromStr;
 use std::sync::Mutex;
@@ -715,6 +718,9 @@ fn tracker_state(tracker: State<'_, tracker::Tracker>) -> Result<tracker::Tracke
 fn toggle_step(app: AppHandle, id: String) -> Result<tracker::TrackerView, String> {
     let tracker = app.state::<tracker::Tracker>();
     let mut inner = relock(&tracker.0);
+    if !inner.in_zone || inner.characters.active.is_none() {
+        return Err("Enter a zone and choose your character in settings first".into());
+    }
     let tracker::Inner { routes, progress, .. } = &mut *inner;
     tracker::toggle(routes, progress, &id)?;
     if inner.progress.completed.contains_key(&id) {
@@ -730,6 +736,29 @@ fn toggle_step(app: AppHandle, id: String) -> Result<tracker::TrackerView, Strin
     if fight_over {
         set_fight(&app, false);
     }
+    Ok(view)
+}
+
+#[tauri::command]
+fn select_character(app: AppHandle, name: String, import_legacy: bool) -> Result<tracker::TrackerView, String> {
+    let tracker = app.state::<tracker::Tracker>();
+    let mut inner = relock(&tracker.0);
+    if !inner.in_zone {
+        return Err("Enter a zone before selecting your character".into());
+    }
+    let tracker::Inner { characters, progress, .. } = &mut *inner;
+    characters.select(progress, &name, import_legacy)?;
+    inner.identity.invalidate();
+    inner.identity.note = format!("Tracking: {}", inner.characters.active.as_deref().unwrap_or(&name));
+    identity::set_context(inner.in_zone, true);
+    inner.fight = None;
+    inner.recent.clear();
+    inner.sync_navigation(&app);
+    inner.save();
+    let view = inner.view();
+    let _ = app.emit("tracker-state", view.clone());
+    drop(inner);
+    set_fight(&app, false);
     Ok(view)
 }
 
@@ -756,6 +785,9 @@ fn set_compass_optional(app: AppHandle, follow: bool) -> Result<(), String> {
 fn reset_progress(app: AppHandle) -> Result<tracker::TrackerView, String> {
     let tracker = app.state::<tracker::Tracker>();
     let mut inner = relock(&tracker.0);
+    if inner.characters.active.is_none() {
+        return Err("Choose a character before resetting progress".into());
+    }
     inner.progress.completed.clear();
     inner.progress.dismissed.clear();
     inner.sync_navigation(&app);
@@ -786,6 +818,9 @@ fn layout_state(recorder: State<'_, layout::Recorder>) -> Option<layout::LayoutV
 /// Page errors and notes, printed in the app's terminal (the webview has no visible console).
 #[tauri::command]
 fn client_log(window: tauri::Window, message: String) {
+    if message.contains("Character recognition") || message.starts_with("Start:") {
+        identity::trace("frontend-error",serde_json::json!({"window":window.label(),"message":message}));
+    }
     eprintln!("Page [{}]: {message}", window.label());
 }
 
@@ -917,6 +952,9 @@ fn main() {
             set_toggle_shortcut,
             tracker_state,
             toggle_step,
+            select_character,
+            identity::identity_observed,
+            identity::identity_ready,
             reset_progress,
             set_compass_optional,
             set_compass_enabled,
@@ -959,6 +997,7 @@ fn main() {
             let layouts = app.path().app_data_dir().ok().map(|dir| dir.join("layouts"));
             app.manage(layout::Recorder::new(layouts));
             app.manage(tracker::init(app.handle()));
+            identity::spawn(app.handle().clone());
             relock(&app.state::<tracker::Tracker>().0).sync_navigation(app.handle());
             tracker::spawn(app.handle().clone());
             let reader = minimap::init();

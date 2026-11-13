@@ -75,6 +75,30 @@ and outstanding gameplay verification.
 `npm run build` validates the frontend; `npm run desktop:build` builds the native
 executable. Native/game behavior requires the manual checks above.
 
+The overlay shows `Leveling batonge` outside an active game zone. On Windows,
+v0.1.89 reads the creation name field or highlighted existing character after
+your real menu inputs, then selects that profile when you enter a zone. Covered
+names can be completed from one matching same-league history entry. Unclear
+names remain unassigned; Settings → Character offers manual recovery. Start
+the overlay before choosing/creating a character. The current recognizer is
+calibrated to the supplied 16:9 English screens; live transition timing still
+needs gameplay validation. C-screen recognition is not implemented yet.
+Progress is stored per character and survives revisits and restarts. A logged
+login/reconnect or recognized character menu clears the current binding. An app
+restart requires fresh recognition or manual recovery; a saved active name is
+never assumed current. To retain ticks from before character profiles were added,
+create a new profile with “Use previous saved progress” checked; the old progress
+is preserved until explicitly assigned. Reset progress affects the selected
+character only. Once the zone's selected objectives are all done, the list becomes
+`quests completed`. The application name and message are working text; final
+wording is in the [scope TODO](docs/scope.md#scope-todo-choose-later).
+
+Settings → **Always show character name** keeps a separate name line above the
+checklist, including completed quests and menus. It is enabled by default for
+testing and remembered between starts. `Character` identifies the bound profile;
+`Recognized` is a pending screen read, and unresolved identity shows
+`Character: not recognized`.
+
 ## Project documents
 
 - [Plan](PLAN.md): ordered work and completion criteria.

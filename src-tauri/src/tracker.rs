@@ -449,8 +449,14 @@ impl Route {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackerView {
-    zone: Zone,
+    zone: Option<Zone>,
     current_area: Option<String>,
+    in_zone: bool,
+    character: Option<String>,
+    recognized_character: Option<String>,
+    characters: Vec<String>,
+    legacy_available: bool,
+    identity_note: String,
     steps: Vec<StepView>,
     /// The visit under way: the page lists its steps only (`StepView::visit`).
     visit: usize,
@@ -460,6 +466,8 @@ pub struct TrackerView {
 pub struct Inner {
     pub routes: Vec<Route>,
     pub progress: Progress,
+    pub characters: crate::characters::Characters,
+    pub identity: crate::identity::Recognition,
     pub log: LogStatus,
     pub save_path: Option<PathBuf>,
     /// The compass passes over optional steps (a setting of the page).
@@ -488,14 +496,20 @@ fn save_due(changed: bool, saved_at: Option<std::time::Instant>, now: std::time:
 /// The log line of a game start.
 const GAME_START: &str = "[STARTUP] Game Start";
 
+/// Login/reconnect boundaries observed in Client.txt. They do not identify a character.
+fn session_boundary(line: &str) -> bool {
+    let Some((_, message)) = line.split_once("] ") else { return false };
+    message == GAME_START
+        || (message.starts_with("Async connecting to ") && message.contains(".login.pathofexile2.com"))
+        || message.starts_with("Abnormal disconnect")
+}
+
 /// Whether the log's last game start already led into a zone (true too when the log
 /// shows no game start at all).
 fn zone_since_start(text: &str) -> bool {
-    match (text.rfind(GAME_START), text.rfind("Generating level ")) {
-        (Some(start), Some(zone)) => zone > start,
-        (Some(_), None) => false,
-        (None, _) => true,
-    }
+    let last = text.lines().rev().find(|line| session_boundary(line));
+    let after = last.and_then(|line| text.rfind(line)).map_or(text, |at| &text[at..]);
+    after.contains("Generating level ") || last.is_none()
 }
 
 /// A boss fight under way: the overlay stays out of the way until it is over. It starts
@@ -624,19 +638,9 @@ impl Inner {
         }
     }
 
-    /// The checklist on show: the last zone entered that has one, else the first.
-    fn shown(&self) -> &Route {
-        let zone = self.progress.shown_zone.as_deref();
-        self.routes.iter().find(|r| Some(r.zone.id.as_str()) == zone).unwrap_or(&self.routes[0])
-    }
-
     pub fn view(&self) -> TrackerView {
-        let route = self.shown();
-        let visits = route.visits();
-        let steps = route
-            .steps
-            .iter()
-            .zip(visits)
+        let route = self.routes.iter().find(|r| self.in_zone && Some(r.zone.id.as_str()) == self.progress.current_area.as_deref());
+        let steps = route.into_iter().flat_map(|r| r.steps.iter().zip(r.visits()))
             .map(|(step, visit)| {
                 let done = self.progress.completed.get(&step.id);
                 let state = if step.kind != "objective" {
@@ -661,10 +665,16 @@ impl Inner {
             })
             .collect();
         TrackerView {
-            zone: route.zone.clone(),
-            current_area: self.progress.current_area.clone(),
+            zone: route.map(|r| r.zone.clone()),
+            current_area: self.in_zone.then(|| self.progress.current_area.clone()).flatten(),
+            in_zone: self.in_zone,
+            character: self.characters.active.clone(),
+            recognized_character: self.identity.pending.as_ref().map(|c| c.name.clone()),
+            characters: self.characters.profiles.keys().cloned().collect(),
+            legacy_available: self.characters.legacy.is_some(),
+            identity_note: self.identity.note.clone(),
             steps,
-            visit: route.current_visit(&self.progress),
+            visit: route.map_or(0, |r| r.current_visit(&self.progress)),
             log: self.log.clone(),
         }
     }
@@ -697,7 +707,10 @@ impl Inner {
             if let Some(dir) = path.parent() {
                 std::fs::create_dir_all(dir)?;
             }
-            crate::write_through_temp(path, &serde_json::to_vec_pretty(&self.progress)?)
+            let mut characters = self.characters.clone();
+            characters.remember(&self.progress);
+            let saved = crate::characters::SavedProgress { progress: self.progress.clone(), characters };
+            crate::write_through_temp(path, &serde_json::to_vec_pretty(&saved)?)
         })();
         match result {
             Ok(()) => self.saved_at.set(Some(std::time::Instant::now())),
@@ -715,30 +728,30 @@ pub fn init(app: &AppHandle) -> Tracker {
     let read = |name: &str| {
         let path = dir.as_ref()?.join(name);
         let bytes = std::fs::read(&path).ok()?;
-        serde_json::from_slice::<Progress>(&bytes).map_err(|error| crate::keep_broken(&path, &error.to_string())).ok()
+        crate::characters::load(&bytes).map_err(|error| crate::keep_broken(&path, &error.to_string())).ok()
     };
     let routes = load_routes();
-    let mut progress = read(PROGRESS_FILE).or_else(|| read(OLD_PROGRESS_FILE)).unwrap_or_default();
+    let saved = read(PROGRESS_FILE).or_else(|| read(OLD_PROGRESS_FILE));
+    let (mut progress, mut characters) = saved.map(|s| (s.progress, s.characters)).unwrap_or_default();
+    // A character may have changed while the overlay was closed, without a new
+    // login-server line. Never promote a persisted active name to live identity.
+    characters.clear_binding(&mut progress);
     if progress.shown_zone.is_none() {
         progress.shown_zone =
             progress.current_area.clone().filter(|area| routes.iter().any(|r| &r.zone.id == area));
     }
-    // Being in a zone proves it was entered, even if its entry line was read before
-    // that zone's checklist existed.
-    if let Some(area) = progress.current_area.clone() {
-        // Started inside a zone: no zone line will come, so its exit names are set here.
-        crate::minimap::set_label_candidates(exit_names(&area));
-        apply(&routes, &mut progress, "on start", &LogEvent::ZoneEntered { area, level: 0, seed: None });
-    }
+    // Saved location is history. Live log context plus OS presence must confirm it.
     Tracker(Mutex::new(Inner {
         routes,
         progress,
+        characters,
+        identity: Default::default(),
         log: LogStatus { connected: false, path: None, message: "Looking for Client.txt".into() },
         save_path,
         skip_optional: false,
         recent: Default::default(),
         fight: None,
-        in_zone: true,
+        in_zone: false,
         saved_at: Default::default(),
     }))
 }
@@ -791,18 +804,20 @@ fn first_run_offset(file: &mut File, len: u64) -> std::io::Result<u64> {
 }
 
 /// The zone the player is in now: the last zone generation in the last few MB.
-fn current_zone(file: &mut File, len: u64) -> std::io::Result<(Option<LogEvent>, bool)> {
+fn current_zone(file: &mut File, len: u64) -> std::io::Result<(Option<LogEvent>, bool, Option<String>)> {
     let start = len.saturating_sub(FIRST_RUN_LOOKBACK);
     file.seek(SeekFrom::Start(start))?;
     let mut buf = Vec::new();
     file.take(len - start).read_to_end(&mut buf)?;
     let text = String::from_utf8_lossy(&buf);
-    let zone = text
+    let session = text.lines().rev().find(|line| session_boundary(line)).map(str::to_string);
+    let after = session.as_ref().and_then(|s| text.rfind(s)).map_or(text.as_ref(), |at| &text[at..]);
+    let zone = after
         .lines()
         .rev()
         .filter(|line| line.contains("Generating level "))
         .find_map(|line| parse_line(line).map(|(_, event)| event));
-    Ok((zone, zone_since_start(&text)))
+    Ok((zone, zone_since_start(&text), session))
 }
 
 fn set_log_status(app: &AppHandle, connected: bool, path: Option<&Path>, message: &str) {
@@ -819,11 +834,13 @@ fn set_log_status(app: &AppHandle, connected: bool, path: Option<&Path>, message
 pub fn spawn(app: AppHandle) {
     std::thread::spawn(move || loop {
         let Some(path) = find_log() else {
+            set_in_zone(&app, false);
             set_log_status(&app, false, None, "Client.txt not found. Set POE2_CLIENT_LOG to its path.");
             std::thread::sleep(Duration::from_secs(3));
             continue;
         };
         if let Err(error) = follow(&app, &path) {
+            set_in_zone(&app, false);
             set_log_status(&app, false, Some(&path), &format!("Log read error: {error}"));
             std::thread::sleep(Duration::from_secs(3));
         }
@@ -848,12 +865,8 @@ fn follow(app: &AppHandle, path: &Path) -> std::io::Result<()> {
             _ => first_run_offset(&mut file, len)?,
         }
     };
-    // The layout recorder needs the current zone even when no new zone is entered.
-    let (zone, in_zone) = current_zone(&mut file, pos)?;
-    if let Some(zone) = zone {
-        app.state::<crate::layout::Recorder>().on_log(&zone, false);
-    }
-    set_in_zone(app, in_zone);
+    // Replay the saved cursor before publishing live context. The saved zone may
+    // belong to an earlier login, even though a game process is running now.
     set_log_status(app, true, Some(path), "Reading game log (read-only)");
 
     let mut pending: Vec<u8> = Vec::new();
@@ -865,6 +878,7 @@ fn follow(app: &AppHandle, path: &Path) -> std::io::Result<()> {
             // Truncated or replaced: start over from the beginning.
             pos = 0;
             pending.clear();
+            set_in_zone(app, false);
         }
         if len > pos {
             file.seek(SeekFrom::Start(pos))?;
@@ -883,13 +897,54 @@ fn follow(app: &AppHandle, path: &Path) -> std::io::Result<()> {
             crate::guarded("Tracker: a log batch", || process(app, &path_text, &complete, read_through, live));
             continue; // more may be waiting beyond MAX_READ
         }
-        live = true;
+        if !live {
+            restore_live_context(app, &mut file, pos - pending.len() as u64)?;
+            live = true;
+        }
         crate::guarded("Tracker: between log lines", || {
-            tick_map_kills(app);
+            if crate::game::running() == Some(false) {
+                set_in_zone(app, false);
+            }
+            if crate::relock(&app.state::<Tracker>().0).in_zone {
+                tick_map_kills(app);
+            }
             settle_quiet_fight(app);
         });
         std::thread::sleep(POLL);
     }
+}
+
+fn restore_live_context(app: &AppHandle, file: &mut File, pos: u64) -> std::io::Result<()> {
+    let (zone, in_zone, session) = current_zone(file, pos)?;
+    let running = crate::game::running() == Some(true);
+    let tracker = app.state::<Tracker>();
+    let mut inner = crate::relock(&tracker.0);
+    let Inner { progress, characters, .. } = &mut *inner;
+    let new_session = characters.new_session(progress, session);
+    if new_session { inner.identity.invalidate(); }
+    if let Some(event @ LogEvent::ZoneEntered { ref area, .. }) = zone.as_ref() {
+        let Inner { routes, progress, .. } = &mut *inner;
+        // Restoring an already-read entry is not another visit. In particular,
+        // do not satisfy a later town-return trigger merely by restarting the app.
+        if progress.current_area.as_deref() != Some(area.as_str()) {
+            apply(routes, progress, "on start", event);
+        }
+        crate::minimap::set_label_candidates(exit_names(area));
+        app.state::<crate::layout::Recorder>().on_log(event, false);
+    }
+    inner.in_zone = running && in_zone && zone.is_some();
+    if !running {
+        let Inner { progress, characters, .. } = &mut *inner;
+        characters.new_session(progress, None);
+    }
+    inner.save();
+    crate::identity::set_context(inner.in_zone, inner.characters.active.is_some());
+    inner.sync_navigation(app);
+    let in_zone = inner.in_zone;
+    let _ = app.emit("tracker-state", inner.view());
+    drop(inner);
+    let _ = app.emit("in-zone", in_zone);
+    Ok(())
 }
 
 /// The names of the zones `area`'s exits lead to (its layout file's
@@ -919,25 +974,33 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
     let mut inner = crate::relock(&tracker.0);
     let fighting = inner.fight.is_some();
     let was_in_zone = inner.in_zone;
-    let Inner { routes, progress, recent, fight, in_zone, .. } = &mut *inner;
-    let mut changed = progress.log_path.as_deref() != Some(path);
+    let mut changed = inner.progress.log_path.as_deref() != Some(path);
+    let running = crate::game::running() == Some(true);
     // Every line is handled in order; one event never hides the rest of a batch.
     for line in String::from_utf8_lossy(bytes).lines() {
         if live && is_death(line) {
-            *fight = None;
+            inner.fight = None;
         }
-        if line.contains(GAME_START) {
-            *in_zone = false;
+        if session_boundary(line) {
+            crate::identity::trace("session-boundary",serde_json::json!({"epoch":inner.identity.epoch,"seq":inner.identity.seq,"pending":inner.identity.pending,"live":live}));
+            inner.identity.invalidate();
+            crate::identity::set_context(false, false);
+            let Inner { progress, characters, .. } = &mut *inner;
+            changed |= characters.new_session(progress, Some(line.to_string()));
+            inner.in_zone = false;
+            inner.fight = None;
+            inner.recent.clear();
         }
         if let Some((timestamp, event)) = parse_line(line) {
+            let Inner { routes, progress, recent, fight, in_zone, .. } = &mut *inner;
             changed |= apply(routes, progress, &timestamp, &event);
             match &event {
                 // A new zone: whatever fight there was is behind the player.
                 LogEvent::ZoneEntered { .. } => {
                     *fight = None;
-                    *in_zone = true;
+                    *in_zone = running && live;
                 }
-                LogEvent::Dialogue { speaker, .. } if live => {
+                LogEvent::Dialogue { speaker, .. } if live && *in_zone => {
                     let area = progress.current_area.as_deref().unwrap_or_default();
                     if let Some(step) = boss_step(routes, progress, area, speaker) {
                         *fight = Some(Fight { step: step.id.clone(), last_line: std::time::Instant::now() });
@@ -958,8 +1021,14 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
             }
         }
     }
-    progress.log_path = Some(path.to_string());
-    progress.log_offset = Some(read_through);
+    inner.progress.log_path = Some(path.to_string());
+    inner.progress.log_offset = Some(read_through);
+    if inner.in_zone != was_in_zone {
+        crate::identity::trace("zone-state",serde_json::json!({"inZone":inner.in_zone,"area":inner.progress.current_area,"epoch":inner.identity.epoch,"seq":inner.identity.seq,"latest":crate::identity::latest_input(),"submitted":inner.identity.submitted,"pending":inner.identity.pending}));
+    }
+    crate::identity::set_context(inner.in_zone, inner.characters.active.is_some());
+    changed |= crate::identity::bind_pending(&mut inner);
+    changed |= inner.in_zone != was_in_zone;
     if save_due(changed, inner.saved_at.get(), std::time::Instant::now()) {
         inner.save();
     }
@@ -983,7 +1052,27 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
 /// Sets whether the player is in a zone and tells the compass.
 fn set_in_zone(app: &AppHandle, in_zone: bool) {
     let tracker = app.state::<Tracker>();
-    crate::relock(&tracker.0).in_zone = in_zone;
+    let mut inner = crate::relock(&tracker.0);
+    let changed = inner.in_zone != in_zone;
+    inner.in_zone = in_zone;
+    let mut profile_changed = false;
+    if !in_zone {
+        crate::identity::set_context(false, false);
+        inner.fight = None;
+        let Inner { characters, progress, .. } = &mut *inner;
+        profile_changed = characters.new_session(progress, None);
+        if changed || profile_changed || inner.identity.pending.is_some() {
+            inner.identity.invalidate();
+        }
+    }
+    if profile_changed { inner.save(); }
+    if changed || profile_changed {
+        inner.sync_navigation(app);
+        let _ = app.emit("tracker-state", inner.view());
+    }
+    drop(inner);
+    if !changed && !profile_changed { return; }
+    if !in_zone { crate::set_fight(app, false); }
     let _ = app.emit("in-zone", in_zone);
 }
 
@@ -1446,6 +1535,8 @@ mod tests {
         let mut inner = Inner {
             routes: load_routes(),
             progress: Progress::default(),
+            characters: Default::default(),
+            identity: Default::default(),
             log: LogStatus { connected: false, path: None, message: String::new() },
             save_path: None,
             skip_optional: false,
@@ -1544,6 +1635,8 @@ mod tests {
         let mut inner = Inner {
             routes: load_routes(),
             progress: Progress::default(),
+            characters: Default::default(),
+            identity: Default::default(),
             log: LogStatus { connected: false, path: None, message: String::new() },
             save_path: None,
             skip_optional: false,
@@ -1574,6 +1667,56 @@ mod tests {
         assert!(zone_since_start(&format!("{start}\n{zone}")));
         assert!(!zone_since_start(&start), "at the login screen");
         assert!(!zone_since_start(&format!("{zone}\n{start}")), "started again: the last zone is not where the player is");
+        let login = line("INFO", "Async connecting to mil.login.pathofexile2.com:21270");
+        assert!(!zone_since_start(&format!("{zone}\n{login}")), "returning to login discards the old zone");
+        assert!(zone_since_start(&format!("{login}\n{zone}")));
+        assert!(!session_boundary(&line("INFO", "#Player: [STARTUP] Game Start")), "chat is not a login");
+    }
+
+    #[test]
+    fn idle_and_unknown_zones_never_fall_back_to_the_saved_checklist() {
+        let mut inner = Inner {
+            routes: load_routes(), progress: Progress::default(), characters: Default::default(),
+            identity: Default::default(),
+            log: LogStatus { connected: true, path: None, message: String::new() },
+            save_path: None, skip_optional: false, recent: Default::default(), fight: None,
+            in_zone: false, saved_at: Default::default(),
+        };
+        inner.progress.current_area = Some("G1_1".into());
+        inner.progress.shown_zone = Some("G1_1".into());
+        assert!(inner.view().zone.is_none());
+        assert!(inner.view().steps.is_empty());
+        inner.in_zone = true;
+        assert_eq!(inner.view().zone.unwrap().id, "G1_1");
+        inner.progress.current_area = Some("UnknownArea".into());
+        assert!(inner.view().zone.is_none());
+        assert!(inner.view().steps.is_empty());
+    }
+
+    #[test]
+    fn startup_context_uses_only_the_latest_login() {
+        let path = std::env::temp_dir().join(format!("batonga-session-test-{}-{}.txt", std::process::id(),
+            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_nanos()));
+        let old_zone = line("DEBUG", r#"Generating level 1 area "G1_1" with seed 1"#);
+        let login = line("INFO", "Async connecting to mil.login.pathofexile2.com:21270");
+        let text = format!("{old_zone}\n{login}\n");
+        std::fs::write(&path, &text).unwrap();
+        let mut file = File::open(&path).unwrap();
+        let (zone, active, session) = current_zone(&mut file, text.len() as u64).unwrap();
+        assert!(zone.is_none(), "the prior character's zone is history");
+        assert!(!active);
+        assert_eq!(session.as_deref(), Some(login.as_str()));
+        drop(file);
+        let zone_line = line("DEBUG", r#"Generating level 2 area "G1_2" with seed 2"#);
+        let text = format!("{text}{zone_line}\n");
+        std::fs::write(&path, &text).unwrap();
+        let mut file = File::open(&path).unwrap();
+        let (zone, active, session) = current_zone(&mut file, text.len() as u64).unwrap();
+        assert!(matches!(zone, Some(LogEvent::ZoneEntered { area, .. }) if area == "G1_2"));
+        assert!(active);
+        assert_eq!(session.as_deref(), Some(login.as_str()));
+        drop(file);
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

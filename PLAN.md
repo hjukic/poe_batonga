@@ -3,6 +3,26 @@
 What has to be made, in order. Tick a step when its "Done when" holds.
 The design lives in `docs/architecture.md`, the decisions and their reasons in `docs/decisions.md`.
 
+Names, message wording and Windows VSync compatibility are in the
+[scope TODO](docs/scope.md#scope-todo-choose-later) for the owner to choose later.
+
+Open owner requirement (2026-11-13): automatically identify the character on
+creation/login and bind its quest history. v0.1.88's manual selector is only a
+fallback. Latest recognition order: final creation-name field before the opening
+animation, or the selected existing character on Continue; C only as recovery.
+Clear identity on return to the main menu. v0.1.89 implements Windows input-triggered
+capture, in-process OCR and session/profile binding. Native OCR reads all four
+supplied references, including the selected row among three characters and
+tooltip completion from unique same-league history. Live creation/Play timing,
+menu-return paths and other UI configurations still need gameplay acceptance;
+C-screen recovery remains unimplemented. Overwolf is another documented provider route. See
+[character identity](docs/character-identity.md).
+
+Live follow-up: v0.1.91 fixes missing focus-changing mouse input and creation
+caret noise. One labelled new-character creation through first-zone entry now
+binds and persists the correct profile. Existing-character switching remains
+under live verification.
+
 ## Roadmap (owner, 2026-11-12)
 
 The arrow is parked: "if we are unable to figure out layout first, the arrow is just not right
@@ -38,6 +58,10 @@ their distance and direction pick the layout.
    icons and triggers with `npm run layouts:update`, `icons:update`, `triggers:check`).
 
 - Parked: the arrow (setting "Compass (parked)").
+- Later Windows compatibility: investigate visible-overlay stutter with VSync;
+  the owner confirmed VSync Off as a workaround. Start with a bounded
+  `noRedirectionBitmap` A/B test, not a renderer rewrite. Evidence and checks:
+  [overlay test](docs/overlay-test.md#windows-overlay-and-vsync-deferred-investigation).
 
 ## Earlier plan (2026-11-11), in short
 

@@ -1,5 +1,18 @@
 # Ideas for later
 
+## Windows overlay stutter with VSync
+
+Deferred after the owner's v0.1.87 test (2026-11-12): a visible overlay causes
+stutter; hiding it or setting the game's VSync Off resolves it. A simple,
+confirmed application-side fix has not been established. Keep VSync Off as the
+current workaround; no automatic changes to game or driver settings.
+
+First later experiment: an isolated Windows `noRedirectionBitmap` A/B build,
+with game frame-time measurements and click-through checks. The option already
+exists in our dependencies, but is not a documented VSync fix. Stop if it does
+not help; a renderer rewrite or driver investigation is a separate, larger task.
+Evidence, sources and acceptance checks: [Windows VSync investigation](docs/overlay-test.md#windows-overlay-and-vsync-deferred-investigation).
+
 ## Datamine zone layouts from the game files
 
 **Done for every campaign zone (2026-11-12):** 101 areas, 584 layout graphs (`.tgr` and

@@ -1,0 +1,4 @@
+#!/bin/sh
+if [ "$1" = rebase ]; then
+  printf '%s\n' 'nemoj bez mene fegetu'
+fi
