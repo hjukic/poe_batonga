@@ -153,6 +153,11 @@ const K_SIGMA: f64 = 0.25;
 /// Cemetery) and 1.97 (Ogham Village) times it (the owner's visits, 2026-11-13). The zone's
 /// own scale, once measured, is kept (`scale.json`) and expected next time.
 const K_SIGMA_DUNGEON: f64 = 0.6;
+// A dungeon's layout may also lie turned round (a negative scale): Ogham Farmlands' only
+// orientation (VillageRoad_S_N) put Ogham Village exactly opposite to where the owner read
+// it (2026-11-13). Zones whose files hold all four orientations hid this; there a layout
+// that fits the right way round is preferred to one that fits turned (`TURNED`).
+const TURNED: f64 = 0.3;
 /// How much coarser a dungeon's named-exit fit is: its nodes are the centres of rooms about
 /// 100 world units wide, and an exit sits anywhere in its room. The Grim Tangle's right
 /// layout (the only one with the Cemetery right of the Grelwood) fitted 370 units off and
@@ -203,7 +208,7 @@ const ICON_CONFIRM: f64 = 0.5;
 const ICON_SURE: f64 = 0.95;
 
 /// The memory format; older files are ignored.
-pub(super) const MEMORY_VERSION: u32 = 7;
+pub(super) const MEMORY_VERSION: u32 = 8;
 
 /// Icons this close (world units) on the dead-reckoned track are one exit.
 const SIGHT_MATCH: f64 = 40.0;
@@ -737,7 +742,17 @@ impl Navigator {
                     let gw = got.0 * want.0 + got.1 * want.1;
                     (gw, gg)
                 };
-                let clamp = |gw: f64, gg: f64| if gg > 0.0 { (gw / gg).clamp(K_RANGE.0, K_RANGE.1) } else { 1.0 };
+                let clamp = |gw: f64, gg: f64| {
+                    if gg <= 0.0 {
+                        return 1.0;
+                    }
+                    let k = gw / gg;
+                    if layout.dungeon && k < 0.0 {
+                        -(-k).clamp(K_RANGE.0, K_RANGE.1)
+                    } else {
+                        k.clamp(K_RANGE.0, K_RANGE.1)
+                    }
+                };
                 let miss = |k: f64, got: (f64, f64), want: (f64, f64)| (k * got.0 - want.0).powi(2) + (k * got.1 - want.1).powi(2);
                 let mut best = (0.0f64, 0.0f64, 1.0f64, Vec::new());
                 for &n1 in &cands[ids[0]] {
@@ -770,7 +785,7 @@ impl Navigator {
                     let k = clamp(gw, gg);
                     let fit: f64 = gots.iter().map(|&(got, want, _)| (-miss(k, got, want) / (4.0 * tol * tol)).exp()).product();
                     let sigma = if layout.dungeon { K_SIGMA_DUNGEON } else { K_SIGMA };
-                    let prior = (-(k.ln()).powi(2) / (2.0 * sigma * sigma)).exp();
+                    let prior = (-(k.abs().ln()).powi(2) / (2.0 * sigma * sigma)).exp() * if k < 0.0 { TURNED } else { 1.0 };
                     if fit * prior > best.0 {
                         best = (fit * prior, fit, k, std::iter::once(n1).chain(gots.iter().map(|g| g.2)).collect());
                     }
@@ -1219,8 +1234,10 @@ impl Navigator {
             return Some(Picture { known: false, candidates, no_fit: self.named_loose, ..Picture::default() });
         }
         let layout = &self.area.layouts[top];
+        // A layout the named exits fit turned round is drawn turned round (see `K_SIGMA_DUNGEON`).
+        let turn = if self.banks[top].k < 0.0 { -1.0 } else { 1.0 };
         let screen = |(x, y): (f64, f64)| {
-            let (sx, sy) = to_screen((x * layout.unit, y * layout.unit));
+            let (sx, sy) = to_screen((x * layout.unit * turn, y * layout.unit * turn));
             [sx as f32, sy as f32]
         };
         let paths = layout.edges.iter().map(|e| e.points.iter().map(|&p| screen(p)).collect()).collect();
@@ -1284,7 +1301,7 @@ impl Navigator {
     pub fn zone_scale(&self) -> Option<f64> {
         let picture = self.picture().filter(|p| p.known && !p.from_path)?;
         let top = self.area.layouts.iter().position(|l| l.id == picture.id)?;
-        Some(self.scale * self.banks[top].k).filter(|s| (SCALE_RANGE.0..=SCALE_RANGE.1).contains(s))
+        Some(self.scale * self.banks[top].k.abs()).filter(|s| (SCALE_RANGE.0..=SCALE_RANGE.1).contains(s))
     }
 
     /// The layout ids, most likely first, with their probabilities.
@@ -2361,6 +2378,36 @@ mod tests {
         assert!(!nav.named_loose, "{:?}", &ranking[..4]);
         let top: Vec<&str> = ranking[..2].iter().map(|r| r.0).collect();
         assert!(top.contains(&"Village_S_E") && top.contains(&"Village_W_N"), "{:?}", &ranking[..4]);
+    }
+
+    #[test]
+    fn ogham_farmlands_is_recognised_turned_round() {
+        let area = graph::load("G1_13_1");
+        // The owner's Farmlands (2026-11-13, seed 3333353951, one part): Hunting Grounds' exit
+        // at (20, -425), Ogham Village's at (1245, 588): opposite to every layout's.
+        let frame = [
+            ExitIcon { dx: 20.0, dy: -425.0, to: Some("Hunting Grounds".into()), remembered: true },
+            ExitIcon { dx: 1245.0, dy: 588.0, to: Some("Ogham Village".into()), remembered: true },
+        ];
+        let mut nav = Navigator::new(&area, Arrival::From("G1_11"), None, SCALE, 3333353951);
+        nav.icons(&frame);
+        assert!(!nav.named_loose, "{:?}", &nav.ranking()[..3]);
+        let top = nav.area.layouts.iter().position(|l| l.id == nav.ranking()[0].0).unwrap();
+        assert!(nav.banks[top].k < 0.0, "turned round: {}", nav.banks[top].k);
+        // Drawn turned round: Ogham Village's exit right of and below Hunting Grounds'.
+        if let Some(picture) = nav.picture().filter(|p| p.known) {
+            let at = |name: &str| picture.exits.iter().find(|e| e.0 == name).unwrap().1;
+            let (h, v) = (at("Hunting Grounds"), at("Ogham Village"));
+            assert!(v[0] > h[0] && v[1] > h[1], "{h:?} {v:?}");
+        }
+        // A zone drawn the right way round keeps a positive scale (Clearfell).
+        let clearfell = graph::load("G1_2");
+        let mut nav = Navigator::new(&clearfell, Arrival::From("G1_town"), None, SCALE, 3);
+        nav.icons(&[
+            ExitIcon { dx: 54.0, dy: -88.0, to: Some("Mud Burrow".into()), remembered: false },
+            ExitIcon { dx: 54.0 - 403.0, dy: -88.0 + 614.0, to: Some("Clearfell Encampment".into()), remembered: false },
+        ]);
+        assert!(nav.banks.iter().all(|b| b.k > 0.0));
     }
 
     #[test]
