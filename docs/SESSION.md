@@ -48,7 +48,11 @@
 > reward → "Talk to Renly" must strike within ~3 s. Then a few Act 1 quest bosses (Devourer,
 > Rust King, Draven/Asinia) and talks (Una in the Grelwood). Send the jsonl if a row stays open.
 
-Current version: **0.1.114**. Rebuild before testing:
+> **v0.1.115 (2026-11-13):** merge of Sue's Linux fix (origin's v0.1.113: Hyprland
+> binds through Lua `eval` where a Lua config refuses `keyword`, Hyprland 0.56) with
+> local v0.1.113–0.1.114. No other change; the live tests below still apply.
+
+Current version: **0.1.115**. Rebuild before testing:
 `npm run desktop:build`, then run `src-tauri/target/release/poe-batonga.exe`
 with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation.log`
 and `BATONGA_QUEST_DIAGNOSTICS=artifacts/quest-tracker.jsonl`.
