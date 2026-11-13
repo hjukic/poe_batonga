@@ -92,6 +92,12 @@ impl Recognition {
         self.epoch
     }
 
+    /// A frame is current for the newest input, or for the selection click
+    /// directly before a just-requested activation that has not begun yet.
+    pub fn current(&self, epoch: u64, seq: u64) -> bool {
+        self.accepts(epoch, seq, latest_input()) || self.accepts(epoch, seq, superseding_input())
+    }
+
     pub fn accepts(&self, epoch: u64, seq: u64, latest: u64) -> bool {
         self.epoch == epoch && self.seq == latest &&
             (self.seq == seq || self.activation_parent == Some(seq))
@@ -108,6 +114,15 @@ pub fn set_context(in_zone: bool, bound: bool) {
 pub fn latest_input() -> u64 {
     #[cfg(target_os = "windows")]
     { native::latest_input() }
+    #[cfg(not(target_os = "windows"))]
+    { 0 }
+}
+
+/// Like `latest_input`, except that a just-requested activation does not
+/// supersede the selection frame preceding it (see `native::superseding_input`).
+fn superseding_input() -> u64 {
+    #[cfg(target_os = "windows")]
+    { native::superseding_input() }
     #[cfg(not(target_os = "windows"))]
     { 0 }
 }
@@ -164,7 +179,7 @@ pub fn identity_observed(app: AppHandle, epoch: u64, seq: u64, result: ScreenRes
     if dry_run { return Ok(()); } // Diagnostic references never select/save profiles.
     let tracker = app.state::<crate::tracker::Tracker>();
     let mut inner = crate::relock(&tracker.0);
-    if !inner.identity.accepts(epoch, seq, latest_input()) {
+    if !inner.identity.current(epoch, seq) {
         trace("result-rejected", serde_json::json!({"epoch":epoch,"seq":seq,"currentEpoch":inner.identity.epoch,"currentSeq":inner.identity.seq,"latest":latest_input()}));
         return Ok(());
     }

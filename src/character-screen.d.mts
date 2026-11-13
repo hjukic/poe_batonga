@@ -9,3 +9,4 @@ export function recognizeScreen(image: OcrFrame, focused?: OcrFrame, known?: Kno
 export function learnKnownCharacters(image: OcrFrame, focused?: OcrFrame): KnownCharacter[];
 export function classifyScreen(image: OcrFrame): string;
 export function nameKey(name: string): string;
+export function matchKey(name: string): string;

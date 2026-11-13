@@ -20,10 +20,21 @@ static ARMED: AtomicBool = AtomicBool::new(false);
 static RECOVERY_PROBE: AtomicBool = AtomicBool::new(true);
 static MODIFIERS: AtomicU64 = AtomicU64::new(0);
 static REQUESTS: OnceLock<SyncSender<Trigger>> = OnceLock::new();
+// Double-clicking a character row enters the game like Play does.
+static LAST_CLICK_MS: AtomicU64 = AtomicU64::new(0);
+static LAST_CLICK_AT: AtomicU64 = AtomicU64::new(u64::MAX);
+/// Seq of the latest input that starts the game (Play/Continue, a row double-click).
+static LAST_ACTIVATION: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Copy)]
 struct Trigger { seq: u64, delay: u64, activation: bool, focus_click: bool }
 pub fn latest_input() -> u64 { SEQ.load(Ordering::SeqCst) }
+/// The newest input that may still supersede an OCR frame. An activation does
+/// not: the frame just before it holds the name that is entering the game.
+pub fn superseding_input() -> u64 {
+    let latest = latest_input();
+    if latest > 0 && LAST_ACTIVATION.load(Ordering::SeqCst) == latest { latest - 1 } else { latest }
+}
 pub fn set_context(in_zone: bool, bound: bool) {
     IN_ZONE.store(in_zone, Ordering::SeqCst);
     BOUND.store(bound, Ordering::SeqCst);
@@ -162,16 +173,19 @@ struct Frame { width: usize, height: usize, lines: Vec<Line> }
 struct Batch { epoch: u64, seq: u64, full: Frame, focused: Frame, known: Vec<super::KnownCharacter>, dry_run: bool }
 struct Job { epoch: u64, seq: u64, image: Image }
 
-fn frame_summary(frame: &Frame) -> serde_json::Value {
+fn frame_summary(frame: &Frame) -> serde_json::Value { frame_summary_in(frame, false) }
+
+/// `menu`: the full frame already showed a menu (the focused crop has no anchors).
+fn frame_summary_in(frame: &Frame, menu: bool) -> serde_json::Value {
     let anchors: Vec<_> = frame.lines.iter().filter(|l| matches!(l.text.trim().to_uppercase().as_str(),
         "PLAY"|"CONTINUE"|"CREATE"|"DELETE"|"DRUID"|"WARRIOR"|"WITCH"|"MONK"|"SORCERESS"|"RANGER"|"MERCENARY"|"HUNTRESS"))
         .map(|l| serde_json::json!({"text":l.text,"at":l.words.first().map(|w|[w.x,w.y])})).collect();
     // Keep text only from the character name/league fields on a known menu.
-    let menu = anchors.iter().any(|a| a["text"].as_str().is_some_and(|t| matches!(t.to_uppercase().as_str(), "PLAY"|"CONTINUE")));
+    let menu = menu || anchors.iter().any(|a| a["text"].as_str().is_some_and(|t| matches!(t.to_uppercase().as_str(), "PLAY"|"CONTINUE")));
     let fields: Vec<_> = if menu { frame.lines.iter().filter(|l| l.words.first().is_some_and(|w| {
         let (x,y) = (w.x / frame.width as f64,w.y / frame.height as f64);
         ((0.39..0.68).contains(&x) && (0.72..0.84).contains(&y)) || ((0.79..0.99).contains(&x) && (0.215..0.73).contains(&y))
-    })).map(|l| serde_json::json!({"text":l.text,"at":l.words.first().map(|w|[w.x,w.y])})).collect() } else { vec![] };
+    })).map(|l| serde_json::json!({"text":l.text,"at":l.words.first().map(|w|[w.x,w.y]),"w":l.words.first().map(|w|w.width),"words":l.words.len(),"style":l.style})).collect() } else { vec![] };
     serde_json::json!({"width":frame.width,"height":frame.height,"lines":frame.lines.len(),"anchors":anchors,"fields":fields})
 }
 
@@ -312,7 +326,7 @@ fn frames(engine: &OcrEngine, image: &Image) -> windows::core::Result<(Frame, Fr
     } else { image };
     let mut full = read(engine, image, [0.0, 0.0, 1.0, 1.0])?;
     let crop = if anchor(&full, "PLAY", [0.25, 0.82, 0.60, 0.98]) && anchor(&full, "CREATE", [0.78, 0.70, 0.90, 0.85]) && anchor(&full, "DELETE", [0.88, 0.70, 1.0, 0.85]) {
-        Some([0.788, 0.215, 0.202, 0.510])
+        Some([0.788, 0.205, 0.202, 0.520])
     } else if anchor(&full, "CONTINUE", [0.40, 0.82, 0.65, 0.98]) { Some([0.397, 0.723, 0.210, 0.110]) } else { None };
     let cleaned;
     let image = if crop==Some([0.397,0.723,0.210,0.110]) {
@@ -344,11 +358,23 @@ pub fn spawn(app: AppHandle) {
         let queue = pending.clone();
         let capture_app = app.clone();
         std::thread::spawn(move || {
-            while let Ok(mut trigger) = receiver.recv() {
+            let mut carry: Option<Trigger> = None;
+            // A selection click directly followed by its activation (a row
+            // double-click, or a quick Play) is captured first: the game is
+            // already loading by the time the activation's own frame exists.
+            let take = |current: &mut Trigger, newer: Trigger, carry: &mut Option<Trigger>| -> bool {
+                if newer.activation && !current.activation && newer.seq == current.seq + 1 {
+                    *carry = Some(newer); true
+                } else { *current = newer; false }
+            };
+            loop {
+                let Some(mut trigger) = carry.take().or_else(|| receiver.recv().ok()) else { break };
                 if trigger.delay > 0 {
-                    while let Ok(newer) = receiver.recv_timeout(Duration::from_millis(trigger.delay)) { trigger = newer; if trigger.delay == 0 { break; } }
+                    while let Ok(newer) = receiver.recv_timeout(Duration::from_millis(trigger.delay)) {
+                        if take(&mut trigger, newer, &mut carry) || trigger.delay == 0 { break; }
+                    }
                 }
-                while let Ok(newer) = receiver.try_recv() { trigger = newer; }
+                if carry.is_none() { while let Ok(newer) = receiver.try_recv() { if take(&mut trigger, newer, &mut carry) { break; } } }
                 // A mouse-down can focus the game and activate Continue in one
                 // action. Wait for OS focus metadata, without sending input or
                 // taking extra screenshots, before its single requested capture.
@@ -360,7 +386,7 @@ pub fn spawn(app: AppHandle) {
                 }
                 let foreground = game_foreground();
                 super::trace("input",serde_json::json!({"seq":trigger.seq,"latest":latest_input(),"activation":trigger.activation,"focusClick":trigger.focus_click,"delayMs":trigger.delay,"foreground":foreground,"inZone":IN_ZONE.load(Ordering::SeqCst),"bound":BOUND.load(Ordering::SeqCst)}));
-                if trigger.seq != latest_input() || !foreground { continue; }
+                if trigger.seq != (if trigger.activation { latest_input() } else { superseding_input() }) || !foreground { continue; }
                 let epoch = {
                     let tracker = capture_app.state::<crate::tracker::Tracker>();
                     let mut inner = crate::relock(&tracker.0);
@@ -404,17 +430,19 @@ pub fn spawn(app: AppHandle) {
             };
             {
                 let tracker = app.state::<crate::tracker::Tracker>();
-                if !crate::relock(&tracker.0).identity.accepts(job.epoch, job.seq, latest_input()) {
+                if !crate::relock(&tracker.0).identity.current(job.epoch, job.seq) {
                     super::trace("frame-rejected-before-ocr",serde_json::json!({"epoch":job.epoch,"seq":job.seq,"latest":latest_input()})); continue;
                 }
             }
             let started = std::time::Instant::now();
             match frames(&engine, &job.image) {
                 Ok((full, focused)) => {
-                    super::trace("ocr-result",serde_json::json!({"epoch":job.epoch,"seq":job.seq,"elapsedMs":started.elapsed().as_millis(),"full":frame_summary(&full),"focused":frame_summary(&focused)}));
+                    let full_summary = frame_summary(&full);
+                    let menu = full_summary["fields"].as_array().is_some_and(|f| !f.is_empty());
+                    super::trace("ocr-result",serde_json::json!({"epoch":job.epoch,"seq":job.seq,"elapsedMs":started.elapsed().as_millis(),"full":full_summary,"focused":frame_summary_in(&focused, menu)}));
                     let tracker = app.state::<crate::tracker::Tracker>();
                     let inner = crate::relock(&tracker.0);
-                    if !inner.identity.accepts(job.epoch, job.seq, latest_input()) {
+                    if !inner.identity.current(job.epoch, job.seq) {
                         super::trace("frame-rejected-after-ocr",serde_json::json!({"epoch":job.epoch,"seq":job.seq,"latest":latest_input(),"currentEpoch":inner.identity.epoch,"currentSeq":inner.identity.seq})); continue;
                     }
                     let known = inner.characters.known.clone();

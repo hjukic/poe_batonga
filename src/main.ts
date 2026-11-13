@@ -3,7 +3,7 @@ import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import './style.css';
 import { panelMode } from './checklist';
-import { recognizeScreen, learnKnownCharacters, type OcrFrame, type KnownCharacter } from './character-screen.mjs';
+import { recognizeScreen, learnKnownCharacters, matchKey, type OcrFrame, type KnownCharacter } from './character-screen.mjs';
 
 interface Status {
   visible: boolean;
@@ -817,7 +817,9 @@ async function start() {
       const { epoch, seq, full, focused, known, dryRun } = event.payload;
       try {
         const result = recognizeScreen(full, focused, known);
-        const learned = learnKnownCharacters(full, focused);
+        // An OCR variant of a name already remembered (I/l/1, O/0, Æ/E) is not new.
+        const learned = learnKnownCharacters(full, focused).filter((entry) =>
+          !known.some((prior) => matchKey(prior.name) === matchKey(entry.name)));
         void invoke('identity_observed', { epoch, seq, result, learned, dryRun: dryRun ?? false }).catch((error) => report(`Character recognition: ${String(error)}`));
       } catch (error) { report(`Character recognition frame: ${String(error)}`); }
     }));

@@ -359,3 +359,72 @@ history, short prefixes, mismatched frames and case normalization. Unit-test
 names are synthetic; supplied image files and the name cache stay local. The
 `.log` cache is ignored by Git. This expands the offline recognizer; it does not
 yet add live game capture or write quest progress from inferred names.
+
+v0.1.95 follow-up: the owner's live v0.1.92 trace showed why the **first** row
+failed. The league tooltip opens under the mouse, over the clicked title, and
+OCR turned the half-hidden last glyph into a symbol (`FOULWICTHCOVEN&`). The
+row was dropped as "not a name", leaving the selection ambiguous. A title with
+one or two trailing symbols is now kept as a clipped prefix: it resolves only
+by unique same-league history (`history-prefix`) and is never learned as a
+complete name. Second/third rows already used the same history path. A test
+covers the symbol edge on rows 1–3; live acceptance is pending.
+
+v0.1.96, from the owner's live v0.1.95 test (Forbidden Rites list and a
+five-row Standard list with a slider):
+
+- First row still failed: the tooltip text can glue onto the title word
+  (`NAME&orbidden`). A symbol inside or after a title now yields a clipped
+  prefix (history only); a leading icon symbol (`•NAME`, `i' NAME`) is dropped.
+- OCR reads the small-caps title font inconsistently (`EvoTllZV0Ll`,
+  `EvoTllZVOL1`, `FÉMBOY`/`FEMBOY`). Comparisons now use `matchKey` (diacritics
+  removed, 0→o, 1/l/|→i); the displayed/saved spelling stays the known one.
+- A tooltip only hides a title when its text starts within 1.5% of the frame
+  width of the title's right edge; one opening well to the right of a short
+  title no longer forces the history-only path.
+- A row without measurable gold (half scrolled, misread) no longer makes the
+  whole list ambiguous; the highlight must still lead every measured row.
+- Diagnostics now log each list line's width, word count and gold style for
+  both the full frame and the focused crop.
+
+v0.1.97, from the owner's live v0.1.96 test (Standard list scrolled with the
+slider, then entering Clearfell):
+
+- Entering by **double-clicking** a row lost the name: the second click cleared
+  the pending candidate and its own frame was already the loading screen. A
+  second click within 500 ms/8 px on the list now counts as activation, and the
+  first click's frame is captured before it and stays current
+  (`superseding_input`, `Recognition::current`).
+- A long title under the tooltip was split by OCR into pieces
+  (`SCH U MACH ERG EWINTWStandard`). Pieces closer than 0.8 glyph height join
+  into one clipped title. Clipped reads resolve from their **common** prefix,
+  or when the remainder is exactly the start of `<league> League`.
+- `Æ`/`Œ` read for `E` folds in `matchKey`; without a remembered spelling the
+  plainer read is kept.
+- Not supported: Hangul/CJK names (only the en-US OCR language is installed).
+
+v0.1.98, from the owner's live v0.1.97 test across all leagues:
+
+- Joining OCR pieces at up to 0.8 glyph height also glued the tooltip's
+  `Standard` onto `MOBILEDEPROVISIONINC` (G misread as C), so no prefix
+  matched. Pieces now join only within 0.5 glyph height, and a clipped read
+  falls back to the first OCR piece of each frame.
+- With the tooltip over the first row the focused crop sometimes drops that
+  title line. The crop now starts at y 0.205 instead of 0.215. A clipped title
+  missing from the crop resolves from the full frame alone, history only; a
+  complete name still needs both reads. A lone unhighlighted row in a read is
+  no longer taken as the selection.
+
+v0.1.99, from the owner's live v0.1.98 run (20 of 29 selection clicks
+recognized; the rest were an open league dropdown, a selection scrolled out of
+view or the unsupported Hangul name, plus the two cases below):
+
+- An open league dropdown lights the hovered item; items have under 250 gold
+  pixels against 950+ for titles, so only rows with 300+ are ranked.
+- Disagreeing reads of an unclipped title (`AAAABATONGA`/`ANAABATONGA`) resolve
+  only when exactly one read equals a remembered same-league name of the same
+  length; otherwise ambiguous.
+- Earlier versions remembered OCR variants as separate names. Variants equal
+  under `matchKey` are no longer learned. The owner's local known list was
+  cleaned of `ANAABATONGA`, `ODNÆSENNASINE`, `EVOTllZV0L1` (backup:
+  `progress.json.bak-before-0.1.99`). A misread on which both reads agree can
+  still be learned; there is no immutable ID to arbitrate.
