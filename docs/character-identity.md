@@ -467,3 +467,32 @@ From the owner's live v0.1.108 run (pid 19224 in the diagnostics log):
 Limits: the buttons must read `PLAY`/`CREATE`/`DELETE` (English client, en-US
 OCR) on a 16:9 layout; the creation screen still needs one of the twelve class
 names; a covered title on a turning screen resolves only from history.
+
+## Linux (v0.1.110)
+
+Linux reads the character as Windows does; the code that captures, queues and hands
+frames to the recognizer is now shared (`identity_native.rs`), and each platform
+brings its input, its "game in front" check and its OCR:
+
+- **Input:** Wayland lets no program watch other programs' input. On Hyprland the app
+  adds non-consuming binds (`bindn`) to the `event` dispatcher while the game runs and
+  the player is in the menus: left click, Enter/KP_Enter and the name-editing keys
+  (plain and with Shift). Hyprland passes every input on to the game and writes
+  `custom>>batonga-click|enter|edit` to its event socket; a click's place comes from
+  `cursorpos` and the active window. Play, row double-clicks (500 ms, 6 px) and the
+  rest follow the Windows rules. In a zone (once bound) the binds are removed, so
+  gameplay input is not observed; so still one screenshot per real input, no timer.
+- **Capture:** `grim` of the game window (as the map reader); the game must be on the
+  visible workspace.
+- **OCR:** `tesseract` (English) on two areas: the right panel and the bottom middle,
+  scaled so the menu text is about 40 px, brightest channel inverted. The name list or
+  name field is read a second time thresholded, for the two independent reads the
+  recognizer compares. TSV words are regrouped into lines by baseline and gap
+  (`identity_tesseract.rs`, tested on every platform). Gold is measured as on Windows.
+- Without Hyprland or `tesseract` (or with `BATONGA_SCREEN_RECOGNITION=0`) Linux keeps
+  the last chosen character, as before (`identity::recognises`).
+
+Not yet compiled or run on Linux at the time of writing (written on Windows, where
+the shared and pure parts are tested). Expected first-run checks: Hyprland accepts
+`bindn , mouse:272, event, …` from `keyword`; tesseract's reads of the gold small caps;
+OCR time per click (two to three tesseract runs).

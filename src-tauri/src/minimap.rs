@@ -22,7 +22,8 @@ mod windows_capture;
 #[cfg(target_os = "windows")]
 use windows_capture::{capture, capture_bigmap, capture_window, locate_minimap, Region as CaptureRegion};
 
-#[cfg(target_os = "windows")]
+/// The whole game window, for reading the character screens.
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 pub fn capture_identity_frame() -> Result<Image, String> {
     capture_window(&locate_minimap()?)
 }

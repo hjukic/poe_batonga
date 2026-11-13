@@ -13,7 +13,11 @@
 > Since v0.1.99 the Linux side also parked the radar (v0.1.104) and added Act 1 zone
 > guides (v0.1.105–107; `PLAN.md`, next: Acts 2–6).
 
-Current version: **0.1.109**. Rebuild before testing:
+> **v0.1.110 (2026-11-13):** character recognition on Linux/Hyprland (written on
+> Windows, untested on Linux; see "Linux test" below). The capture and frame queue
+> moved to the shared `identity_native.rs`; Windows behaves as in v0.1.109.
+
+Current version: **0.1.110**. Rebuild before testing:
 `npm run desktop:build`, then run `src-tauri/target/release/poe-batonga.exe`
 with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation.log`.
 
@@ -39,8 +43,21 @@ with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation
 2. **OGLEDALOGOTOVOOOOO** (HC SSF league): select it, enter with Play.
 3. New characters (a few): create, enter, return, select each again.
 4. Clicking a character while the league dropdown is open.
-3. **Progress isolation**: tick a checkbox on A, return to the menu, enter with
+5. **Progress isolation**: tick a checkbox on A, return to the menu, enter with
    B, then A again. A's ticks must come back, B's stay separate.
+
+## Linux test — Sue (v0.1.110, not yet compiled or run on Linux)
+
+v0.1.110 adds character recognition on Linux (Hyprland only): non-consuming
+`bindn` binds while in the menus, `grim` capture, `tesseract` OCR. Needs
+`tesseract` with English data (`docs/overlay-test.md`, Run). First run:
+
+1. `cargo build` on Linux; fix whatever does not compile (`identity_linux.rs`).
+2. Run with `BATONGA_IDENTITY_DIAGNOSTICS=/tmp/identity.log`; in the menus,
+   `hyprctl binds | grep batonga` must list the binds, in a zone none.
+3. Select a character, enter with Play and with a double-click; create a new one.
+   The overlay must say `Character: <name>`. Send the diagnostics log.
+4. Clicks and keys must still reach the game normally.
 
 Known limits: a name that OCR misreads identically in both reads can still be
 remembered as a separate name (no immutable character ID). An overlay restart

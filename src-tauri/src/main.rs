@@ -1048,6 +1048,7 @@ fn main() {
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit) {
                 save_on_exit(app);
+                identity::stop();
             }
         });
 }

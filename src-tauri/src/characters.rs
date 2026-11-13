@@ -26,9 +26,6 @@ pub struct Characters {
 /// Events kept while unbound; a login's own entry is the one that matters.
 pub const UNBOUND_EVENTS: usize = 64;
 
-/// Whether this build reads the character from the creation and selection screens (Windows
-/// OCR only).
-const RECOGNISES: bool = cfg!(target_os = "windows");
 /// The profile progress is kept in where no character can be recognised and none was chosen.
 pub const DEFAULT_PROFILE: &str = "Default";
 
@@ -62,7 +59,7 @@ impl Characters {
     /// again the ticks went into an empty, unsaved progress (the owner's 40 ticks were moved
     /// aside on 2026-11-13). Call after anything that clears the binding.
     pub fn keep_chosen(&mut self, progress: &mut Progress) {
-        if !RECOGNISES {
+        if !crate::identity::recognises() {
             self.keep_chosen_anyway(progress);
         }
     }

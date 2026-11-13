@@ -7,6 +7,9 @@ How to run the overlay and check it over the game. It never sends input to the g
 Install [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/): on Windows,
 Rust's MSVC toolchain, Visual Studio C++ Build Tools/Windows SDK and WebView2;
 on Linux, Rust, the WebKitGTK/GTK development packages and `gtk-layer-shell`.
+On Linux the character recognition also needs Hyprland, `grim` and `tesseract` with its
+English data (Arch: `pacman -S tesseract tesseract-data-eng`; Debian/Ubuntu:
+`apt install tesseract-ocr tesseract-ocr-eng`); without them the last chosen character is kept.
 
 ```sh
 npm ci
@@ -242,3 +245,21 @@ in scenes unlike Clearfell and note any "too much of the view looks like map lin
 or a trail that wanders while standing still: a cold or icy zone, a dungeon with
 blue-grey stone floors, ground lit by water or frost, a fight with frost or lightning
 effects, and a town.
+
+## Character recognition on Linux (v0.1.110)
+
+Hyprland only, like the map reading. Needs `grim` and `tesseract` with English data
+(see Run). While the game runs and the player is in the menus, the app adds Hyprland
+binds that do not take the input from the game (`bindn`): a left click, Enter and the
+keys that edit a name send `custom>>batonga-…` to Hyprland's event socket, and each
+such input takes one screenshot of the game window, as Windows does with its hooks. In
+a zone the binds are removed. They are removed on quit too; after a crash they stay
+until Hyprland reloads (they only send an event nobody reads). Caveat: removing them
+also removes any bind of your own on plain left click, Enter, KP_Enter, a letter,
+digit, minus, BackSpace, Delete, Left, Right, Home or End (with or without Shift).
+
+Keep the overlay panel away from the right-hand character list and the bottom middle of
+the screen while choosing a character: `grim` sees the panel too.
+`BATONGA_SCREEN_RECOGNITION=0` switches recognition off (the last chosen character is
+then kept as before). Diagnostics as on Windows (`BATONGA_IDENTITY_DIAGNOSTICS`).
+Not yet run on Linux: the first live test is the acceptance.

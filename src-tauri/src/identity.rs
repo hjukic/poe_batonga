@@ -24,9 +24,37 @@ pub fn trace(stage: &str, details: serde_json::Value) {
     if let Err(error) = result { eprintln!("Identity diagnostics: {error}"); }
 }
 
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[path = "identity_native.rs"]
+mod shared;
 #[cfg(target_os = "windows")]
 #[path = "identity_windows.rs"]
 mod native;
+#[cfg(target_os = "linux")]
+#[path = "identity_linux.rs"]
+mod native;
+// Pure TSV/line handling for the Linux reader: compiled for its tests everywhere.
+#[cfg(any(target_os = "linux", all(test, target_os = "windows")))]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[path = "identity_tesseract.rs"]
+mod tesseract;
+
+/// On quit: Linux removes its Hyprland input binds (`identity_linux.rs`).
+pub fn stop() {
+    #[cfg(target_os = "linux")]
+    native::stop();
+}
+
+/// Whether the character is read from the creation and selection screens here: always on
+/// Windows; on Linux where Hyprland and `tesseract` are there (`native::available`).
+pub fn recognises() -> bool {
+    #[cfg(target_os = "windows")]
+    { true }
+    #[cfg(target_os = "linux")]
+    { native::available() }
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    { false }
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct KnownCharacter {
@@ -116,37 +144,37 @@ impl Recognition {
 }
 
 pub fn set_context(in_zone: bool, bound: bool) {
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     native::set_context(in_zone, bound);
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     let _ = (in_zone, bound);
 }
 
 pub fn latest_input() -> u64 {
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     { native::latest_input() }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     { 0 }
 }
 
 /// Like `latest_input`, except that a just-requested activation does not
 /// supersede the selection frame preceding it (see `native::superseding_input`).
 fn superseding_input() -> u64 {
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     { native::superseding_input() }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     { 0 }
 }
 
 pub fn spawn(app: AppHandle) {
     let _ = TRACE.set(std::env::var_os("BATONGA_IDENTITY_DIAGNOSTICS").map(|p| (PathBuf::from(p), Mutex::new(()))));
     trace("startup", serde_json::json!({"version":app.package_info().version.to_string()}));
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     native::spawn(app);
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     {
         let tracker = app.state::<crate::tracker::Tracker>();
-        crate::relock(&tracker.0).identity.note = "Automatic screen recognition is currently available on Windows".into();
+        crate::relock(&tracker.0).identity.note = "Automatic screen recognition is available on Windows and on Linux with Hyprland".into();
     }
 }
 
@@ -252,7 +280,7 @@ pub fn identity_observed(app: AppHandle, epoch: u64, seq: u64, result: ScreenRes
         if changed { inner.save(); }
         inner.sync_navigation(&app);
     } else {
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "linux"))]
         native::finish_unknown();
         if inner.characters.active.is_none() {
             inner.identity.note = "Waiting for the character creation or selection screen".into();
@@ -271,9 +299,9 @@ pub fn identity_observed(app: AppHandle, epoch: u64, seq: u64, result: ScreenRes
 #[tauri::command]
 pub fn identity_ready(app: AppHandle) {
     trace("frontend-ready", serde_json::json!({}));
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     native::reference_probe(app);
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     let _ = app;
 }
 
