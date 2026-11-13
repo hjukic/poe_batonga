@@ -437,8 +437,10 @@ pub fn replay_unbound(inner: &mut Inner) -> bool {
 /// taken as done too (source "implied"): only what the later step proves, talks and the like.
 /// Not optional steps, boss kills, detours that return, steps no longer listed, and not what
 /// a player may skip and still need (R-F5 of 2026-11-13): steps the compass leads to ("Take
-/// the waypoint"), steps with a reward (the campsite stash, the small ritual) and zone
-/// entries (the log would have shown them: "Enter Freythorn" when the Farmlands came first).
+/// the waypoint"), steps with a reward out in a zone (the campsite stash, the small ritual;
+/// a town's hand-in of the visit being left is implied: Renly's gem when Clearfell is
+/// entered) and zone entries (the log would have shown them: "Enter Freythorn" when the
+/// Farmlands came first).
 /// Those stay open until they are logged or ticked by hand; the panel keeps rows the app
 /// cannot tick (`tracked`) from holding the arrow.
 fn imply_earlier(routes: &[Route], progress: &mut Progress, timestamp: &str, done_before: &BTreeSet<String>) {
@@ -448,14 +450,18 @@ fn imply_earlier(routes: &[Route], progress: &mut Progress, timestamp: &str, don
                 && progress.completed.get(&step.id).is_some_and(|c| c.source == "log" || c.source == "screen")
         };
         let Some(last) = route.steps.iter().rposition(newly) else { continue };
-        for step in &route.steps[..last] {
+        let visits = route.visits();
+        for (at, step) in route.steps[..last].iter().enumerate() {
+            // A town's hand-in (Renly's gem, the lute's points) is taken with the visit it
+            // belongs to: the player stood by the NPC. A reward out in a zone is not.
+            let hand_in = is_town(&route.zone.id) && visits[at] == visits[last];
             let unseen = step.kind == "objective"
                 && !step.optional
                 && !step.returns
                 && listed(step, progress)
                 && !is_boss(step)
                 && step.navigation_target.is_none()
-                && !step.parts.iter().any(|p| p.style.as_deref() == Some("reward"))
+                && (hand_in || !has_reward(step))
                 && !matches!(step.trigger, Some(Trigger::ZoneEntered { .. }));
             if !unseen || progress.completed.contains_key(&step.id) || progress.dismissed.contains(&step.id) {
                 continue;
@@ -566,6 +572,12 @@ fn is_town(zone: &str) -> bool {
     zone.ends_with("_town")
 }
 
+/// Whether a step shows a reward: the reward is the reason for the row (a pickup, a boss
+/// with a permanent bonus, a hand-in).
+fn has_reward(step: &Step) -> bool {
+    step.parts.iter().any(|p| p.style.as_deref() == Some("reward"))
+}
+
 /// Whether a step is a boss kill (it has a boss part).
 fn is_boss(step: &Step) -> bool {
     step.parts.iter().any(|p| p.style.as_deref() == Some("boss"))
@@ -636,6 +648,12 @@ impl Route {
     ///    for something not yet done (`after`) (R-F2): the Farmlands entered before
     ///    Freythorn, back in the Hunting Grounds Crowbell, the ritual and "Enter Freythorn"
     ///    are still listed; Finn's charm comes with the town visit after Ogham Village.
+    /// 6. A boss with a reward left alive in a visit that was finished (the player went on
+    ///    without it) comes with the visit on show too, until it is killed or ticked by
+    ///    hand: back in the Hunting Grounds from town, Crowbell's points; with the seals,
+    ///    Areagne's gem. The app knows whether a boss is dead; it does not know that of a
+    ///    pickup, so other open steps of a finished visit do not come along (a pickup done
+    ///    but never clicked would show again on every return).
     pub fn shown(&self, progress: &Progress) -> Shown {
         let visits = self.visits();
         let last = visits.last().copied().unwrap_or(0);
@@ -652,9 +670,13 @@ impl Route {
             let step = &self.steps[i];
             step.kind == "objective" && !step.optional && !done(i) && listed(step, progress) && !waits(i)
         };
-        // Rule 5: the steps of unfinished visits before `upto` to list with the visit on show.
+        // Rules 5 and 6: the steps of visits before `upto` to list with the visit on show:
+        // everything open of a visit never finished, and the reward bosses left alive in one that was.
         let carry = |upto: usize| -> Vec<usize> {
-            (0..self.steps.len()).filter(|&i| visits[i] < upto && !finished(visits[i]) && left_open(i)).collect()
+            (0..self.steps.len())
+                .filter(|&i| visits[i] < upto && left_open(i))
+                .filter(|&i| !finished(visits[i]) || (has_reward(&self.steps[i]) && is_boss(&self.steps[i])))
+                .collect()
         };
         if mark > last {
             return Shown { visit: last, carried: carry(last) };
@@ -1005,8 +1027,9 @@ impl Inner {
     pub fn screen_watch(&self) -> Option<String> {
         let character = self.characters.active.clone()?;
         let open = self.routes.iter().flat_map(|r| &r.steps).any(|step| {
+            // A "likely" kill is still open to the tracker's proof (`apply_screen`).
             !step.screen.is_empty()
-                && !self.progress.completed.contains_key(&step.id)
+                && unconfirmed(&self.progress, &step.id)
                 && !self.progress.dismissed.contains(&step.id)
         });
         (self.in_zone && open).then_some(character)
@@ -1831,7 +1854,7 @@ mod tests {
         ] {
             assert!(step(id).is_none(), "{id} is dropped");
         }
-        assert_eq!(text("kill-lachlann"), "Kill Lachlann, leave the ring");
+        assert_eq!(text("kill-lachlann"), "Kill Lachlann, leave his ring");
         // Bosses killed on the way carry no reward (decision 5).
         for id in ["kill-beira", "kill-rust-king", "kill-lachlann", "kill-draven", "kill-asinia", "kill-executioner", "kill-geonor"] {
             assert_eq!(reward(id), None, "{id}");
@@ -2158,7 +2181,7 @@ mod tests {
         assert_eq!(inner.view().steps.iter().find(|s| s.id == "kill-crowbell").unwrap().state, "manual", "open");
         // Then Freythorn and back: both visits finished, the last is listed.
         play(&mut inner, &[enter("G1_12"), enter("G1_11")]);
-        assert_eq!(rows(&inner, false), ["enter-ogham-farmlands"]);
+        assert_eq!(rows(&inner, false), ["kill-crowbell", "enter-ogham-farmlands"], "Crowbell lives: rule 6");
     }
 
     /// R-F2: the caravan's list out of order (Keth before the Mastodon Badlands): no required
@@ -2190,7 +2213,7 @@ mod tests {
     /// the Red Vale proves the Grelwood's way there was taken.
     #[test]
     fn coming_back_from_a_zone_proves_its_exit() {
-        let seals = ["runic-seals", "grelwood-una-seals", "grelwood-portal-town"];
+        let seals = ["kill-areagne", "runic-seals", "grelwood-una-seals", "grelwood-portal-town"]; // Areagne lives: rule 6
         let mut inner = playing();
         play(&mut inner, &[enter("G1_5")]);
         assert_eq!(inner.progress.completed["enter-red-vale"].source, "implied", "where from is not known");
@@ -2407,8 +2430,8 @@ mod tests {
         assert!(!progress.completed.contains_key("talk-renly"));
         enter_zone(&routes, &mut progress, "G1_2");
         assert_eq!(progress.completed["enter-clearfell"].source, "log");
-        // Renly's talk gives a gem: leaving does not prove it (R-F5), it stays open.
-        assert!(!progress.completed.contains_key("talk-renly"));
+        // Renly's gem is a town hand-in of the visit just left: taken with it.
+        assert_eq!(progress.completed["talk-renly"].source, "implied");
         // A talk with nothing to collect is implied: Una's in the Grelwood by the Red Vale.
         enter_zone(&routes, &mut progress, "G1_4");
         enter_zone(&routes, &mut progress, "G1_5");
@@ -2461,12 +2484,10 @@ mod tests {
         let mut progress = Progress::default();
         assert_eq!(town.current_visit(&progress), 0);
         // The visit ends when its leaving step is done, whatever else is open. The next is
-        // due only once the player comes from the Red Vale: until then the first visit while
-        // a row of it is open (Renly's gem), then nothing (one past the last visit).
+        // due only once the player comes from the Red Vale: until then nothing (one past the
+        // last visit); Renly's gem was a hand-in of the visit left.
         enter_zone(&routes, &mut progress, "G1_town");
         enter_zone(&routes, &mut progress, "G1_2");
-        assert_eq!(town.current_visit(&progress), 0);
-        toggle(&routes, &mut progress, "talk-renly").unwrap();
         assert_eq!(town.current_visit(&progress), 6);
         for area in ["G1_4", "G1_5", "G1_town"] {
             enter_zone(&routes, &mut progress, area);
@@ -2727,6 +2748,8 @@ mod tests {
     const GRELWOOD_FIRST: [&str; 5] = ["grelwood-talk-una", "grelwood-waypoint", "kill-areagne", "grelwood-grim-tangle-wp", "enter-red-vale"];
     const GRELWOOD_FIRST_ALL: [&str; 6] =
         ["grelwood-talk-una", "grelwood-waypoint", "kill-areagne", "grelwood-grim-tangle-wp", "kill-gerung", "enter-red-vale"];
+    /// The Grelwood's seals visit in a replay that never kills Areagne: she comes along (rule 6).
+    const SEALS: [&str; 4] = ["kill-areagne", "runic-seals", "grelwood-una-seals", "grelwood-portal-town"];
     const HUNTING_FIRST: [&str; 4] = ["hunting-grounds-waypoint", "kill-crowbell", "small-ritual", "hunting-grounds-to-freythorn"];
     const HUNTING_FIRST_ALL: [&str; 5] =
         ["hunting-grounds-waypoint", "talk-delwyn", "kill-crowbell", "small-ritual", "hunting-grounds-to-freythorn"];
@@ -2767,7 +2790,7 @@ mod tests {
         shows(&mut inner, "G1_5", &["obelisks-of-rust", "kill-rust-king", "red-vale-portal-town"], &[]);
         play(&mut inner, &[npc("Ghostly Voice", "This is our land. We stand united!")]);
         shows(&mut inner, "G1_town", &["renly-runed-spikes", "town-to-grelwood"], &["renly-support-gem", "renly-runed-spikes", "town-to-grelwood"]);
-        shows(&mut inner, "G1_4", &["runic-seals", "grelwood-una-seals", "grelwood-portal-town"], &[]);
+        shows(&mut inner, "G1_4", &SEALS, &[]);
         shows(&mut inner, "G1_town", &["town-una-roots", "town-to-grim-tangle"], &[]);
         shows(&mut inner, "G1_6", &["kill-ervig", "enter-cemetery"], &[]);
         shows(&mut inner, "G1_7", &CEMETERY, &[]);
@@ -2783,7 +2806,7 @@ mod tests {
         shows(&mut inner, "G1_12", &["ritual-altars", "kill-king-in-the-mists", "freythorn-portal-town"], &[]);
         play(&mut inner, &[npc("The King in the Mists", "This is not the end...")]);
         shows(&mut inner, "G1_town", &["finn-charm", "town-to-hunting-grounds"], &[]);
-        shows(&mut inner, "G1_11", &["enter-ogham-farmlands"], &[]);
+        shows(&mut inner, "G1_11", &["kill-crowbell", "enter-ogham-farmlands"], &[]);
         shows(&mut inner, "G1_13_1", &["unas-lute", "crop-circle", "enter-ogham-village"], &[]);
         shows(&mut inner, "G1_13_2", &["smithing-tools", "blacksmiths-chest", "kill-executioner", "lever-leitis", "village-portal-town"], &[]);
         shows(&mut inner, "G1_town", &["deliver-unas-lute", "leitis-gem", "town-to-ogham-village"], &[]);
@@ -2811,16 +2834,16 @@ mod tests {
             to_the_grelwood(&mut inner);
             shows(&mut inner, "G1_5", &["obelisks-of-rust", "kill-rust-king", "red-vale-portal-town"], &[]);
             shows(&mut inner, "G1_town", &["renly-runed-spikes", "town-to-grelwood"], &["renly-support-gem", "renly-runed-spikes", "town-to-grelwood"]);
-            shows(&mut inner, "G1_4", &["runic-seals", "grelwood-una-seals", "grelwood-portal-town"], &[]);
+            shows(&mut inner, "G1_4", &SEALS, &[]);
             if grab_with_the_seals {
                 shows(&mut inner, "G1_6", &["grim-tangle-waypoint"], &[]);
                 assert!(!inner.progress.completed.contains_key("town-to-grim-tangle"), "a waypoint grab is not the town's step");
-                shows(&mut inner, "G1_4", &["runic-seals", "grelwood-una-seals", "grelwood-portal-town"], &[]);
+                shows(&mut inner, "G1_4", &SEALS, &[]);
             }
             shows(&mut inner, "G1_town", &["town-una-roots", "town-to-grim-tangle"], &[]);
             if !grab_with_the_seals {
                 // No waypoint there yet: by the Grelwood, on foot (its visits are all done).
-                shows(&mut inner, "G1_4", &["runic-seals", "grelwood-una-seals", "grelwood-portal-town"], &[]);
+                shows(&mut inner, "G1_4", &SEALS, &[]);
             }
             shows(&mut inner, "G1_6", &["kill-ervig", "enter-cemetery"], &[]);
             assert!(inner.view().steps.iter().all(|s| s.id != "grim-tangle-waypoint"), "not listed at all");
@@ -2833,17 +2856,15 @@ mod tests {
     }
 
     /// S4: a town trip from Clearfell or the Grelwood before the Red Vale lists no rows of a
-    /// later town visit: the first visit while Renly's gem is still open (leaving the town
-    /// does not prove it, R-F5), then nothing (the route plans no visit then); the zones left
-    /// for it list their own visit again on return.
+    /// later town visit: nothing (the route plans no visit then; Renly's gem was a hand-in
+    /// of the visit left); the zones left for it list their own visit again on return.
     #[test]
     fn an_early_town_trip_lists_nothing_stale() {
         let mut inner = playing();
         shows(&mut inner, "G1_town", &["talk-renly", "enter-clearfell"], &[]);
         shows(&mut inner, "G1_2", &["abandoned-stash", "kill-beira", "enter-grelwood"], &["abandoned-stash", "kill-beira", "enter-mud-burrow", "enter-grelwood"]);
-        shows(&mut inner, "G1_town", &["talk-renly", "enter-clearfell"], &[]);
-        toggle(&inner.routes.clone(), &mut inner.progress, "talk-renly").unwrap();
-        assert_eq!(rows(&inner, false), Vec::<String>::new());
+        shows(&mut inner, "G1_town", &[], &[]);
+        assert_eq!(inner.progress.completed["talk-renly"].source, "implied", "a hand-in of the visit left");
         assert!(!inner.view().steps.is_empty(), "the zone's later visits are still sent (errands key on them)");
         shows(&mut inner, "G1_2", &["abandoned-stash", "kill-beira", "enter-grelwood"], &["abandoned-stash", "kill-beira", "enter-mud-burrow", "enter-grelwood"]);
         shows(&mut inner, "G1_4", &GRELWOOD_FIRST, &GRELWOOD_FIRST_ALL);
@@ -2898,7 +2919,7 @@ mod tests {
         let mut inner = playing();
         planned_up_to(&mut inner, "G1_12", 0);
         play(&mut inner, &[enter("G1_12")]);
-        shows(&mut inner, "G1_11", &["enter-ogham-farmlands"], &[]);
+        shows(&mut inner, "G1_11", &["kill-crowbell", "enter-ogham-farmlands"], &[]);
         play(&mut inner, &[enter("G1_13_1"), enter("G1_13_2")]);
         shows(&mut inner, "G1_town", &["finn-charm", "deliver-unas-lute", "leitis-gem", "town-to-ogham-village"], &[]);
         assert_eq!(inner.view().visit, 4);
@@ -2930,7 +2951,7 @@ mod tests {
             assert_eq!(again.view().visit, inner.view().visit, "{area}");
             states.push(rows(&inner, false));
         }
-        assert!(states.contains(&vec!["talk-renly".to_string(), "enter-clearfell".to_string()]), "an early town trip is among them");
+        assert!(states.contains(&Vec::new()), "an early town trip, with nothing listed, is among them");
     }
 
     /// R3: the character's level from its level-up lines, kept in its own profile; the zone's
@@ -3000,6 +3021,44 @@ mod tests {
             assert!(!inner.progress.completed.contains_key(id), "{id}");
         }
         assert_eq!(inner.progress.completed["hunting-grounds-to-freythorn"].source, "log");
+    }
+
+    /// Rule 6 (council round 2): a boss with a reward left alive in a finished visit stays
+    /// listed on a return; a pickup the app cannot see does not, nor a talk.
+    #[test]
+    fn a_reward_boss_left_alive_stays_listed_on_a_return() {
+        let mut inner = playing();
+        planned_up_to(&mut inner, "G1_11", 0);
+        // Into Freythorn without Crowbell or the ritual, to town, back by the waypoint.
+        play(&mut inner, &[enter("G1_11"), enter("G1_12"), enter("G1_town"), enter("G1_11")]);
+        assert_eq!(rows(&inner, false), ["kill-crowbell", "enter-ogham-farmlands"]);
+        // Ticked by hand (or killed): it is gone from the return visit.
+        toggle(&inner.routes.clone(), &mut inner.progress, "kill-crowbell").unwrap();
+        assert_eq!(rows(&inner, false), ["enter-ogham-farmlands"]);
+        // The Grelwood's seals visit brings Areagne along while she lives.
+        let mut inner = playing();
+        to_the_grelwood(&mut inner);
+        play(&mut inner, &[enter("G1_5"), enter("G1_town"), enter("G1_4")]);
+        assert_eq!(rows(&inner, false), ["kill-areagne", "runic-seals", "grelwood-una-seals", "grelwood-portal-town"]);
+        toggle(&inner.routes.clone(), &mut inner.progress, "kill-areagne").unwrap();
+        assert_eq!(rows(&inner, false), ["runic-seals", "grelwood-una-seals", "grelwood-portal-town"]);
+    }
+
+    /// The Windows quest tracker keeps being read while a kill is only "likely": its proof
+    /// can still confirm it (council round 2).
+    #[test]
+    fn the_quest_tracker_is_still_read_for_a_likely_kill() {
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_5")]);
+        let with_screen: Vec<String> = inner.routes.iter().flat_map(|r| &r.steps).filter(|s| !s.screen.is_empty()).map(|s| s.id.clone()).collect();
+        assert!(with_screen.contains(&"kill-rust-king".to_string()));
+        for id in &with_screen {
+            let source = if id == "kill-rust-king" { LIKELY } else { "screen" };
+            inner.progress.completed.insert(id.clone(), Completion { at: "now".into(), source: source.into(), evidence: String::new() });
+        }
+        assert!(inner.screen_watch().is_some(), "a likely kill is still open to the tracker");
+        inner.progress.completed.get_mut("kill-rust-king").unwrap().source = "manual".into();
+        assert!(inner.screen_watch().is_none());
     }
 
     /// R5 (decision 4 of 2026-11-13): a boss quiet for 30 s is "likely" killed; it speaking
@@ -3090,6 +3149,8 @@ mod tests {
             ("G1_15", &[("The Hooded One", "We must make haste. Let us return to Clearfell to make our preparations.")]),
             ("G1_town", &[]),
         ];
+        // The reward bosses the log does not name are killed on the way: ticked as a click would.
+        let kills: &[(usize, &str)] = &[(4, "kill-areagne"), (17, "kill-crowbell")];
         for (n, (area, spoken)) in said.iter().enumerate() {
             let zone = inner.routes.iter().find(|r| r.zone.id == *area).map_or(1, |r| r.zone.level);
             let own = if *area == "G1_town" { inner.progress.level.unwrap_or(1) } else { zone.saturating_sub(1).max(1) };
@@ -3099,6 +3160,10 @@ mod tests {
             for (k, (speaker, text)) in spoken.iter().enumerate() {
                 play(&mut inner, &[npc(speaker, text)]);
                 dump(&inner, format!("{:02}-{area}-said{}", n + 1, k + 1));
+            }
+            for (_, id) in kills.iter().filter(|(at, _)| *at == n + 1) {
+                toggle(&inner.routes.clone(), &mut inner.progress, id).unwrap();
+                dump(&inner, format!("{:02}-{area}-killed", n + 1));
             }
         }
         std::fs::write(&out, lines.join("\n") + "\n").unwrap();

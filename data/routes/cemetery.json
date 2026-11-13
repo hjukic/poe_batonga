@@ -61,7 +61,7 @@
         { "quest": "ReviveHoodedMentor", "past": "Search for the Count's grave past the Memorial Gate" }
       ],
       "navigationTarget": { "area": "G1_7", "label": "Lachlann", "tag": "arena" },
-      "parts": [{ "text": "Kill " }, { "text": "Lachlann", "style": "boss" }, { "text": ", leave the ring" }],
+      "parts": [{ "text": "Kill " }, { "text": "Lachlann", "style": "boss" }, { "text": ", leave his ring" }],
       "trigger": {
         "type": "npcLine",
         "area": "G1_7",

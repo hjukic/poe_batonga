@@ -47,12 +47,19 @@ the order it was done in (2026-11-13):
    not done) are listed with the visit on show, its leaving row too unless that waits for
    an `after` not yet done: the Farmlands before Freythorn leaves Crowbell, the ritual and
    "Enter Freythorn" listed; a skipped town trip's Finn's charm comes with the next one.
-6. A step with `"until": "<step>"` is not listed at all once that step is done (the Grim
+6. A boss with a reward left alive in a visit that was finished comes with the visit on
+   show too, until it is killed or ticked by hand: Crowbell's points back in the Hunting
+   Grounds, Areagne's gem with the seals. The app knows whether a boss is dead; a pickup it
+   cannot see does not come along (done but never clicked, it would show on every return).
+7. A step with `"until": "<step>"` is not listed at all once that step is done (the Grim
    Tangle's waypoint grab, only while the roots still block the way).
 
 What ticks a row (`apply`): a zone entry ticks rows of the list of the zone the player left
 only, and of one list only the last row whose `after` holds (`docs/triggers.md`). Coming
 into Z from X also takes Z's open row into X as done ("Came back from X", implied).
+A later logged row implies the earlier rows it proves (talks), not what a player may skip
+and still need (waypoints, rewards out in a zone, zone entries); a town's hand-in (Renly's
+gem, the lute's points) is taken with the visit it belongs to when that visit is left.
 
 Tests: `tracker.rs`, the Act 1 replays (S1–S8) and `no_log_event_ticks_two_steps_of_one_list`.
 
