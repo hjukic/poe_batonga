@@ -162,7 +162,9 @@ pub(super) fn anchor(frame: &Frame, text: &str, box_: [f64; 4]) -> bool {
 /// The selection screen's name list, or the creation screen's name field, when `full`
 /// shows that screen: the part read a second time (`Reader::frames`' focused frame).
 pub(super) fn focus_of(full: &Frame) -> Option<[f64; 4]> {
-    if anchor(full, "PLAY", [0.25, 0.82, 0.60, 0.98]) && anchor(full, "CREATE", [0.78, 0.70, 0.90, 0.85]) && anchor(full, "DELETE", [0.88, 0.70, 1.0, 0.85]) {
+    // Create and Delete side by side are the selection screen; Play, gold on an ornate button,
+    // is the one tesseract misses (the owner's Linux frames, 2026-11-13).
+    if anchor(full, "CREATE", [0.78, 0.70, 0.90, 0.85]) && anchor(full, "DELETE", [0.88, 0.70, 1.0, 0.85]) {
         Some(SELECTION_FOCUS)
     } else if anchor(full, "CONTINUE", [0.40, 0.82, 0.65, 0.98]) { Some(CREATION_FOCUS) } else { None }
 }

@@ -13,6 +13,29 @@
 > Since v0.1.99 the Linux side also parked the radar (v0.1.104) and added Act 1 zone
 > guides (v0.1.105–107; `PLAN.md`, next: Acts 2–6).
 
+> **Linux test (2026-11-13, Sue's side, v0.1.113-v0.1.114):** Sue's PC: Hyprland 0.56.2
+> with a Lua config, 3840x2160 at scale 2, tesseract 5.
+> - Binds: a Lua-config Hyprland refuses `hyprctl keyword` ("keyword can't work with
+>   non-legacy parsers. Use eval."). v0.1.113 falls back to `eval`: `hl.bind(key,
+>   hl.dsp.event(name), { non_consuming = true })`, each handle kept in `_G.batonga_binds`
+>   and removed with `b:remove()`, never the user's own binds. Live: 89 binds in the menus,
+>   removed on zone entry; a click and a row double-click arrived, one capture each, OCR ~1 s.
+> - Screen: tesseract read CREATE and DELETE but missed PLAY (gold on its ornate button), so
+>   neither side saw the selection screen. v0.1.114: CREATE and DELETE side by side are
+>   enough (`classifyScreen`, `focus_of`).
+> - Names: not reliable yet. Gold small caps on textured rows read unstably. On one
+>   screenshot it helped to read the name column at 2x the menu scale, enlarge smoothly
+>   (bilinear) before cutting, and cut twice: brightest channel >= 100 reads every name,
+>   >= 130-145 only the highlighted row (the selected character alone). Still: names split
+>   ("AJ HBDFJ ...", "M UCKODUBRE"), "M" read as "IVI", rows lost between runs, and
+>   `recognizeScreen` answers "The selected character row is not unambiguous".
+> - Offline check: `BATONGA_IDENTITY_PPM=<shot.ppm> BATONGA_IDENTITY_OUT=<frames.json> cargo
+>   test read_a_screenshot -- --ignored` reads a screenshot as the app does; feed
+>   `frames.json` to `recognizeScreen` in Node. The screenshot stays on Sue's PC.
+> - Next: screenshots with each row selected and of the creation screen, then tune the cuts,
+>   the sizes and `group_lines` for split names. Until then Sue picks the character in
+>   Settings.
+
 > **v0.1.112 (2026-11-13):** character recognition on Linux/Hyprland (written on
 > Windows, untested on Linux; see "Linux test" below). The capture and frame queue
 > moved to the shared `identity_native.rs`; Windows behaves as in v0.1.109.

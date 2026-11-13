@@ -10,9 +10,15 @@ use super::shared::{style, Frame, Line, Word};
 pub enum Prep {
     /// The brightest channel, inverted: the gold and white text dark on light.
     Inverted,
-    /// Black where any channel is bright, else white.
-    Threshold,
+    /// Black where any channel is at least this bright, else white.
+    Threshold(u8),
 }
+
+/// Cut-offs for the selection screen's name list (the owner's 3840x2160 screen, 2026-11-13,
+/// read at twice the menu scale): at 100 every name reads; from 130 only the highlighted row
+/// is bright enough, so that read is the selected character alone. Two reads, independent.
+pub const LIST_CUT: u8 = 100;
+pub const SELECTED_CUT: u8 = 140;
 
 /// Where tesseract reads, as fractions of the game window: the selection screen's right
 /// panel (character list, its tooltip, Create and Delete) and the bottom middle (Play,
@@ -35,15 +41,26 @@ pub fn pgm(image: &Image, rect: [f64; 4], scale: f64, prep: Prep) -> (Vec<u8>, [
     let (sw, sh) = (((w as f64) * scale) as usize, ((h as f64) * scale) as usize);
     let mut out = format!("P5\n{sw} {sh}\n255\n").into_bytes();
     out.reserve(sw * sh);
+    // The brightest channel, sampled smoothly between pixels: enlarged pixel by pixel the
+    // letters came out jagged and tesseract read "M" as "I\/I" (the owner's selection
+    // screen, 2026-11-13); smoothed, then cut, they read clean.
+    let bright = |x: usize, y: usize| {
+        let at = ((y0 + y).min(image.height - 1) * image.width + (x0 + x).min(image.width - 1)) * 3;
+        image.pixels[at].max(image.pixels[at + 1]).max(image.pixels[at + 2]) as f64
+    };
     for y in 0..sh {
-        let py = (y0 + ((y as f64 / scale) as usize).min(h - 1)).min(image.height - 1);
+        let fy = ((y as f64 + 0.5) / scale - 0.5).clamp(0.0, (h - 1) as f64);
+        let (ty, dy) = (fy.floor() as usize, fy - fy.floor());
         for x in 0..sw {
-            let px = (x0 + ((x as f64 / scale) as usize).min(w - 1)).min(image.width - 1);
-            let at = (py * image.width + px) * 3;
-            let bright = image.pixels[at].max(image.pixels[at + 1]).max(image.pixels[at + 2]);
+            let fx = ((x as f64 + 0.5) / scale - 0.5).clamp(0.0, (w - 1) as f64);
+            let (tx, dx) = (fx.floor() as usize, fx - fx.floor());
+            let (x1, y1) = ((tx + 1).min(w - 1), (ty + 1).min(h - 1));
+            let top = bright(tx, ty) * (1.0 - dx) + bright(x1, ty) * dx;
+            let below = bright(tx, y1) * (1.0 - dx) + bright(x1, y1) * dx;
+            let value = (top * (1.0 - dy) + below * dy).round() as u8;
             out.push(match prep {
-                Prep::Inverted => 255 - bright,
-                Prep::Threshold => if bright >= 100 { 0 } else { 255 },
+                Prep::Inverted => 255 - value,
+                Prep::Threshold(cut) => if value >= cut { 0 } else { 255 },
             });
         }
     }
@@ -125,16 +142,19 @@ mod tests {
     #[test]
     fn crops_are_prepared_two_ways() {
         let mut image = Image { width: 100, height: 50, pixels: vec![10; 100 * 50 * 3] };
-        let at = (20 * 100 + 80) * 3;
-        image.pixels[at..at + 3].copy_from_slice(&[220, 180, 90]); // a gold pixel at (80, 20)
+        // A gold 2x2 block at (80, 20): smooth enlargement keeps its middle exact.
+        for (x, y) in [(80, 20), (81, 20), (80, 21), (81, 21)] {
+            let at = (y * 100 + x) * 3;
+            image.pixels[at..at + 3].copy_from_slice(&[220, 180, 90]);
+        }
         let (inverted, origin) = pgm(&image, [0.70, 0.20, 0.30, 0.60], 2.0, Prep::Inverted);
         assert_eq!(origin, [70.0, 10.0]);
         let header = b"P5\n60 60\n255\n";
         assert_eq!(&inverted[..header.len()], header);
         let pixel = |data: &[u8], x: usize, y: usize| data[header.len() + y * 60 + x];
-        assert_eq!(pixel(&inverted, 20, 20), 255 - 220, "dark text");
+        assert_eq!(pixel(&inverted, 21, 21), 255 - 220, "dark text");
         assert_eq!(pixel(&inverted, 0, 0), 245, "light ground");
-        let (threshold, _) = pgm(&image, [0.70, 0.20, 0.30, 0.60], 2.0, Prep::Threshold);
+        let (threshold, _) = pgm(&image, [0.70, 0.20, 0.30, 0.60], 2.0, Prep::Threshold(LIST_CUT));
         assert_eq!((pixel(&threshold, 21, 21), pixel(&threshold, 0, 0)), (0, 255));
         assert!((scale_for(1440) - 1.82).abs() < 0.01 && scale_for(4320) == 1.0);
     }

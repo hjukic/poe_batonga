@@ -231,11 +231,12 @@ fn tesseract_tsv(pgm: Vec<u8>) -> Result<String, String> {
 struct Tesseract;
 
 impl Tesseract {
-    fn read(&self, image: &Image, areas: &[[f64; 4]], prep: Prep) -> Result<Frame, String> {
-        let scale = tesseract::scale_for(image.height);
+    /// Each (area, preparation, size) read, its words in one frame.
+    fn read(&self, image: &Image, reads: &[([f64; 4], Prep, f64)]) -> Result<Frame, String> {
         let mut words = Vec::new();
-        for area in areas {
-            let (pgm, origin) = tesseract::pgm(image, *area, scale, prep);
+        for &(area, prep, size) in reads {
+            let scale = tesseract::scale_for(image.height) * size;
+            let (pgm, origin) = tesseract::pgm(image, area, scale, prep);
             words.extend(tesseract::parse_tsv(&tesseract_tsv(pgm)?, origin, scale));
         }
         Ok(tesseract::frame(image, words))
@@ -243,12 +244,17 @@ impl Tesseract {
 }
 
 impl Reader for Tesseract {
-    /// The menu areas read once, then the name list or field a second time, prepared
-    /// differently: two independent reads, as the recognizer expects.
+    /// Two independent reads, as the recognizer expects. The first: the right panel (names
+    /// twice as large as the menu scale, cut at `LIST_CUT`: at the menu scale tesseract lost
+    /// the names' first letters and read "LLOWSUE") and the bottom (Play, the creation
+    /// fields). The second: the name column or the name field cut at `SELECTED_CUT`, which
+    /// on the selection screen leaves only the highlighted name (the owner's screen,
+    /// 2026-11-13: "MUCKODUBRE" alone).
     fn frames(&self, image: &Image) -> Result<(Frame, Frame), String> {
-        let full = self.read(image, &AREAS, Prep::Inverted)?;
+        let [panel, bottom] = AREAS;
+        let full = self.read(image, &[(panel, Prep::Threshold(tesseract::LIST_CUT), 2.0), (bottom, Prep::Inverted, 1.0)])?;
         let focused = match focus_of(&full) {
-            Some(area) => self.read(image, &[area], Prep::Threshold)?,
+            Some(area) => self.read(image, &[(area, Prep::Threshold(tesseract::SELECTED_CUT), 2.0)])?,
             None => full.clone(),
         };
         Ok((full, focused))
@@ -300,6 +306,19 @@ mod tests {
         assert!(add.contains("keyword bindn SHIFT,a,event,batonga-edit"));
         assert!(binds(false).contains("keyword unbind ,Return"));
         assert_eq!(add.matches(';').count() + 1, 3 + EDIT_KEYS.len() * 2);
+    }
+
+    /// Reads a screenshot as the app does and writes both frames as JSON, for the
+    /// recognizer to be checked offline: `BATONGA_IDENTITY_PPM=shot.ppm
+    /// BATONGA_IDENTITY_OUT=frames.json cargo test read_a_screenshot -- --ignored`.
+    #[test]
+    #[ignore]
+    fn read_a_screenshot() {
+        let path = std::env::var("BATONGA_IDENTITY_PPM").expect("BATONGA_IDENTITY_PPM");
+        let image = crate::minimap::parse_ppm(&std::fs::read(path).unwrap()).unwrap();
+        let (full, focused) = Tesseract.frames(&image).unwrap();
+        let out = std::env::var("BATONGA_IDENTITY_OUT").expect("BATONGA_IDENTITY_OUT");
+        std::fs::write(out, serde_json::to_string(&serde_json::json!({ "full": full, "focused": focused })).unwrap()).unwrap();
     }
 
     #[test]

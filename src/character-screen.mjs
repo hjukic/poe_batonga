@@ -71,8 +71,9 @@ const moveBack = (image, back) => ({ ...image, lines: (image.lines ?? []).map((l
 export function classifyScreen(image) {
   if (!(image.width > 0 && image.height > 0)) return 'unknown';
   const still = steadyView(image).image;
-  if (anchor(still, 'PLAY', [.25, .82, .60, .98]) &&
-      anchor(still, 'CREATE', [.78, .70, .90, .85]) &&
+  // Create and Delete side by side are the selection screen. Play is not required: tesseract
+  // misses it, gold on an ornate button (the owner's Linux frames, 2026-11-13).
+  if (anchor(still, 'CREATE', [.78, .70, .90, .85]) &&
       anchor(still, 'DELETE', [.88, .70, 1, .85])) return 'selection';
   // Creation's layout, not its class title: future classes and unread titles
   // must work without updating a list. Keep recognizing an empty name field
