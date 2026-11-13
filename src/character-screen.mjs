@@ -14,11 +14,66 @@ const within = ([x, y], [left, top, right, bottom]) => x >= left && x <= right &
 const inBox = (image, box) => (image.lines ?? []).filter((line) => within(wordAt(line, image), box));
 const anchor = (image, text, box) => inBox(image, box).some((line) => line.text.trim().toUpperCase() === text);
 
+// Where the selection screen's buttons are when it stands still (2560x1440,
+// the owner's screenshots), and how far from there each may be looked for.
+const BUTTONS = [
+  { text: 'PLAY', at: [942 / 2560, 1281 / 1440], box: [.15, .65, .70, 1] },
+  { text: 'CREATE', at: [2105 / 2560, 1082 / 1440], box: [.60, .50, .97, .97] },
+  { text: 'DELETE', at: [2382 / 2560, 1082 / 1440], box: [.70, .50, 1, .97] },
+];
+
+/**
+ * The selection screen sometimes turns as a whole (live v0.1.108: by -3.9° on a
+ * double-click, +10° with the league dropdown open; the three buttons fit one
+ * rotation and shift within a few pixels). Its three buttons give that motion;
+ * every word is moved back to where it stands on a still screen. `moved`: the
+ * screen was not still. Null transform: no such buttons (another screen).
+ */
+export function steadyView(image) {
+  if (!(image?.width > 0 && image?.height > 0)) return { image, moved: false, back: null };
+  const found = BUTTONS.map(({ text, at, box }) => {
+    const lines = inBox(image, box).filter((line) => line.text.trim().toUpperCase() === text);
+    return lines.length === 1 ? { ref: [at[0] * image.width, at[1] * image.height], got: [lines[0].words[0].x, lines[0].words[0].y] } : null;
+  });
+  if (found.some((point) => !point)) return { image, moved: false, back: null };
+  // Least-squares rotation, scale and shift (complex numbers: got = z * ref + t).
+  const mean = (key) => [0, 1].map((i) => found.reduce((sum, p) => sum + p[key][i], 0) / found.length);
+  const [rx, ry] = mean('ref');
+  const [gx, gy] = mean('got');
+  let re = 0, im = 0, norm = 0;
+  for (const { ref, got } of found) {
+    const [ax, ay] = [ref[0] - rx, ref[1] - ry];
+    const [bx, by] = [got[0] - gx, got[1] - gy];
+    re += bx * ax + by * ay; im += by * ax - bx * ay; norm += ax * ax + ay * ay;
+  }
+  const [zr, zi] = [re / norm, im / norm];
+  const scale = Math.hypot(zr, zi);
+  const angle = Math.atan2(zi, zr) * 180 / Math.PI;
+  const forward = ([x, y]) => [zr * (x - rx) - zi * (y - ry) + gx, zi * (x - rx) + zr * (y - ry) + gy];
+  const fits = found.every(({ ref, got }) => {
+    const [x, y] = forward(ref);
+    return Math.hypot(x - got[0], y - got[1]) <= image.width * .012;
+  });
+  if (!fits || Math.abs(angle) > 15 || Math.abs(scale - 1) > .08) return { image, moved: false, back: null };
+  const back = ([x, y]) => {
+    const [dx, dy] = [x - gx, y - gy];
+    const d = scale * scale;
+    return [(zr * dx + zi * dy) / d + rx, (zr * dy - zi * dx) / d + ry];
+  };
+  const shift = Math.hypot(gx - rx, gy - ry);
+  if (Math.abs(angle) < .4 && Math.abs(scale - 1) < .01 && shift < image.width * .004) return { image, moved: false, back: null };
+  return { image: moveBack(image, back), moved: true, back };
+}
+
+const moveBack = (image, back) => ({ ...image, lines: (image.lines ?? []).map((line) => ({ ...line,
+  words: (line.words ?? []).map((word) => { const [x, y] = back([word.x, word.y]); return { ...word, x, y }; }) })) });
+
 export function classifyScreen(image) {
   if (!(image.width > 0 && image.height > 0)) return 'unknown';
-  if (anchor(image, 'PLAY', [.25, .82, .60, .98]) &&
-      anchor(image, 'CREATE', [.78, .70, .90, .85]) &&
-      anchor(image, 'DELETE', [.88, .70, 1, .85])) return 'selection';
+  const still = steadyView(image).image;
+  if (anchor(still, 'PLAY', [.25, .82, .60, .98]) &&
+      anchor(still, 'CREATE', [.78, .70, .90, .85]) &&
+      anchor(still, 'DELETE', [.88, .70, 1, .85])) return 'selection';
   if (anchor(image, 'CONTINUE', [.40, .82, .65, .98]) &&
       inBox(image, [.39, .78, .68, .84]).length > 0 &&
       inBox(image, [.20, .69, .38, .75]).some((line) =>
@@ -78,14 +133,57 @@ const nameRows = (image) => inBox(image, [.79, .215, .84, .70])
     return [{ ...line, text, first: first.text, clipped, words: [title] }];
   }).sort((a, b) => a.words[0].y - b.words[0].y);
 
-function rowLeague(image, row) {
+// "LEVEL 17 MONK", also as OCR misreads it ("I_EVEL 97 SIORMWEAVER", "[EVEL 95 …").
+// Every character row has it, whatever its league; a league dropdown item has not.
+const LEVEL_LINE = /^\S{2,7}\s+(\d{1,3})\s+\S/u;
+const isLevelLine = (text) => {
+  const level = Number(LEVEL_LINE.exec(text.trim())?.[1]);
+  return level >= 1 && level <= 100;
+};
+const ELLIPSIS = /\s*(?:\.{2,}|…)$/u;
+
+/**
+ * The league in a row's last line: "<league> League", or cut short by the game
+ * ("HC SSF Forbidden Rites Lea...") or read wrong ("Standard i_eague"). Null
+ * when it is not there. League names change every few months: nothing here
+ * knows one, only the word "League" and where the line is.
+ */
+export function leagueText(text, last = false) {
+  const trimmed = text.trim();
+  const cut = ELLIPSIS.test(trimmed);
+  const words = trimmed.replace(ELLIPSIS, '').split(/\s+/);
+  if (words.length < 2 && !(cut && last)) return null;
+  const tail = words.at(-1).toLowerCase().replace(/^(?:i_|i\.|\[|\||1|i)(?=e)/, 'l');
+  const leagueWord = tail === 'league' || /^l.ag.e$/.test(tail) ||
+    ('league'.startsWith(tail) && (tail.length >= 3 || (cut && tail.length >= 1)));
+  if (leagueWord) return words.slice(0, -1).join(' ').trim() || null;
+  // A long league is cut before its "League": the row's last line, by position.
+  return cut && last ? words.join(' ').trim() || null : null;
+}
+
+/** What is listed under a row's title: its level line and its league (or null). */
+function rowDetails(image, row) {
   const at = row.words[0];
   const next = nameRows(image).find((other) => other.words[0].y > at.y + at.height);
   const end = next?.words[0].y ?? Math.min(image.height * .73, at.y + image.height * .12);
-  return (image.lines ?? []).find((line) => line.words?.[0]?.x > image.width * .84 &&
-    line.words[0].y > at.y + at.height * 1.5 && line.words[0].y < end && /\sLeague$/i.test(line.text))
-    ?.text.replace(/\sLeague$/i, '').trim() ?? null;
+  const lines = (image.lines ?? []).filter((line) => line.words?.[0]?.x > image.width * .84 &&
+    line.words[0].y > at.y + at.height * 1.5 && line.words[0].y < end).sort((a, b) => a.words[0].y - b.words[0].y);
+  const level = lines.findIndex((line) => isLevelLine(line.text));
+  const after = level >= 0 ? lines.slice(level + 1) : lines;
+  const league = after.map((line, index) => leagueText(line.text, level >= 0 && index === after.length - 1 && index >= 1))
+    .find((text) => text) ?? null;
+  return { level: level >= 0, league };
 }
+
+// League names compare loosely: the game cuts long ones short ("HC SSF Forbidden
+// Ri..."), the creation screen writes them in capitals, and an unread league is
+// no evidence against a name. Character names are unique across leagues; the
+// league only narrows which remembered names a covered title may complete to.
+const leagueKey = (league) => matchKey(league ?? '').replace(/[^\p{L}\p{N}]/gu, '');
+export const sameLeague = (a, b) => {
+  const [x, y] = [leagueKey(a), leagueKey(b)];
+  return !x || !y || x.startsWith(y) || y.startsWith(x);
+};
 
 function occluded(image, row) {
   const at = row.words[0];
@@ -116,14 +214,44 @@ function selectedRow(image) {
     (!second || first.style.goldMean - second.style.goldMean >= 30) ? first : null;
 }
 
+/**
+ * The character row under a click (`click`: fractions of the frame, on the still
+ * screen). A row double-click enters that row's character, whether or not its
+ * highlight could be measured. Only a real character row (its level line under
+ * it) counts: an open league dropdown's items lie over the list and have none.
+ */
+function clickedRow(image, click) {
+  if (!click) return null;
+  const [x, y] = [click[0] * image.width, click[1] * image.height];
+  if (x < image.width * .79 || x > image.width * .99) return null;
+  const rows = nameRows(image);
+  const index = rows.findLastIndex((row) => row.words[0].y - row.words[0].height * .5 <= y);
+  if (index < 0) return null;
+  const row = rows[index];
+  const next = rows[index + 1];
+  const bottom = next ? next.words[0].y - next.words[0].height * .5 : row.words[0].y + image.height * .095;
+  return y < bottom && rowDetails(image, row).level ? row : null;
+}
+
+/** Both frames on the still screen (one motion, read from the whole frame). */
+function stillFrames(image, focused) {
+  const view = steadyView(image);
+  return { image: view.image, focused: view.back && focused !== image ? moveBack(focused, view.back) : (focused === image ? view.image : focused),
+    moved: view.moved, back: view.back };
+}
+
 export function learnKnownCharacters(image, focused = image) {
   if (classifyScreen(image) !== 'selection') return [];
-  return nameRows(focused).flatMap((row) => {
-    const other = nameRows(image).find((r) => Math.abs(r.words[0].y - row.words[0].y) < row.words[0].height);
-    const league = rowLeague(focused, row);
-    if (!other || !league || row.clipped || other.clipped || occluded(focused, row) || occluded(image, other) ||
-        matchKey(row.text) !== matchKey(other.text)) return [];
-    return [{ name: row.text.trim(), league, source: 'complete-screen-read' }];
+  const still = stillFrames(image, focused);
+  // A turning screen's titles are read worse (live: "I_EVEL", "DEADEYEOPLOOÃ–OÃœ"):
+  // nothing is learned from it.
+  if (still.moved) return [];
+  return nameRows(still.focused).flatMap((row) => {
+    const other = nameRows(still.image).find((r) => Math.abs(r.words[0].y - row.words[0].y) < row.words[0].height);
+    const details = rowDetails(still.focused, row);
+    if (!other || !(details.level || details.league) || row.clipped || other.clipped ||
+        occluded(still.focused, row) || occluded(still.image, other) || matchKey(row.text) !== matchKey(other.text)) return [];
+    return [{ name: row.text.trim(), league: details.league ?? '', source: 'complete-screen-read' }];
   });
 }
 
@@ -132,7 +260,7 @@ export function resolvePartialName(reads, league, knownCharacters) {
   // glyph can be wrong. Never apply arbitrary edit-distance/fuzzy corrections.
   // The reads agree up to where the tooltip begins; past it each frame sees a
   // different mix of title and tooltip. Use their common visible prefix.
-  if (!league) return null;
+  // An unread league narrows nothing (`sameLeague`); the match must still be unique.
   const keys = reads.map((text) => [...matchKey(text)]);
   let common = keys[0] ?? [];
   for (const key of keys.slice(1)) {
@@ -146,14 +274,14 @@ export function resolvePartialName(reads, league, knownCharacters) {
   // of this row's tooltip text, at least three glyphs of it before the last
   // (which may be misread). Less is a longer new name clipped by the tooltip
   // ("ANNAB" is not the known "Anna" glued to anything).
-  const tooltip = matchKey(`${league}League`.replace(/\s+/g, ''));
+  const tooltip = league ? matchKey(`${league}League`.replace(/\s+/g, '')) : null;
   const glued = (read, key) => {
     const rest = read.slice(key.length, -1);
-    return read.startsWith(key) && [...rest].length >= 3 && tooltip.startsWith(rest);
+    return tooltip !== null && read.startsWith(key) && [...rest].length >= 3 && tooltip.startsWith(rest);
   };
   const matches = new Map();
   for (const known of knownCharacters) {
-    if (!known?.name || !known?.league || nameKey(known.league) !== nameKey(league)) continue;
+    if (!known?.name || !sameLeague(known.league, league)) continue;
     const key = matchKey(known.name);
     const byPrefix = [...prefix].length >= 6 && key.startsWith(prefix) && [...prefix].length >= [...key].length / 2;
     const byTooltip = keys.every((read) => glued(read.join(''), key));
@@ -162,20 +290,42 @@ export function resolvePartialName(reads, league, knownCharacters) {
   return matches.size === 1 ? [...matches.values()][0] : null;
 }
 
-export function recognizeScreen(image, focused = image, knownCharacters = []) {
-  const screen = classifyScreen(image);
+/**
+ * `click`: where the input that took this frame clicked, as fractions of the
+ * frame (a row click or double-click), or null. Used only when the highlighted
+ * row cannot be told.
+ */
+export function recognizeScreen(rawImage, rawFocused = rawImage, knownCharacters = [], click = null) {
+  const screen = classifyScreen(rawImage);
   if (screen === 'unknown') return { screen, status: 'unknown', candidate: null };
   if (screen === 'selection') {
-    const full = selectedRow(image);
+    const { image, focused, moved, back } = stillFrames(rawImage, rawFocused);
+    const at = click && back ? (([x, y]) => [x / image.width, y / image.height])(back([click[0] * image.width, click[1] * image.height])) : click;
+    let byClick = false;
+    const pick = (frame) => {
+      const lit = selectedRow(frame);
+      if (lit) return lit;
+      const row = clickedRow(frame, at);
+      if (row) byClick = true;
+      return row;
+    };
+    const full = pick(image);
     // Under the tooltip the focused crop sometimes drops the covered title line
     // altogether. The full frame then reads it alone, for the history-only path.
-    const cropped = selectedRow(focused);
+    const cropped = pick(focused);
     const row = cropped ?? (full && (full.clipped || occluded(image, full)) &&
       !nameRows(focused).some((other) => Math.abs(other.words[0].y - full.words[0].y) < full.words[0].height) ? full : null);
     if (!row || !full || Math.abs(row.words[0].y - full.words[0].y) > row.words[0].height) {
       return { screen, status: 'ambiguous', candidate: null, reason: 'The selected character row is not unambiguous.' };
     }
-    const league = rowLeague(focused, row) ?? rowLeague(image, full);
+    const details = rowDetails(focused, row);
+    const fullDetails = rowDetails(image, full);
+    // A title is a character's only with its level or league line under it.
+    if (!(details.level || details.league || fullDetails.level || fullDetails.league)) {
+      return { screen, status: 'ambiguous', candidate: null, reason: 'The selected line has no character level or league under it.' };
+    }
+    const league = details.league ?? fullDetails.league;
+    const how = (resolution) => byClick ? `${resolution}-clicked-row` : resolution;
     const clipped = row.clipped || full.clipped || occluded(focused, row) || occluded(image, full);
     if (clipped) {
       // A glued-on piece can itself be misread ("…NINC Standard"): fall back to
@@ -183,12 +333,12 @@ export function recognizeScreen(image, focused = image, knownCharacters = []) {
       const known = resolvePartialName([row.text, full.text], league, knownCharacters) ??
         resolvePartialName([row.first ?? row.text, full.first ?? full.text], league, knownCharacters);
       return known ? { screen, status: 'candidate', candidate: { name: known.name, key: nameKey(known.name), league },
-        resolution: 'history-prefix', visibleText: row.text, reason: 'Unique same-league history match for the tooltip-covered selected row; still requires session/entry confirmation.' }
+        resolution: how('history-prefix'), visibleText: row.text, reason: 'Unique same-league history match for the tooltip-covered selected row; still requires session/entry confirmation.' }
         : { screen, status: 'ambiguous', candidate: null, visibleText: row.text,
           reason: 'Tooltip hides the selected name and history has no unique sufficient prefix match.' };
     }
-    const knownAs = (text) => knownCharacters.filter((known) => known.name && known.league &&
-      matchKey(known.name) === matchKey(text) && nameKey(known.league) === nameKey(league ?? '')).slice(0, 1);
+    const knownAs = (text) => knownCharacters.filter((known) => known.name &&
+      matchKey(known.name) === matchKey(text) && sameLeague(known.league, league)).slice(0, 1);
     let read = row.text;
     if (matchKey(row.text) !== matchKey(full.text)) {
       // Two reads of one unclipped title disagree ("AAAABATONGA"/"ANAABATONGA").
@@ -202,12 +352,19 @@ export function recognizeScreen(image, focused = image, knownCharacters = []) {
       read = crop.length ? row.text : full.text;
     }
     const prior = knownAs(read)[0];
+    // A turning screen is read worse, and its crop is no second read: only a
+    // name already seen whole on a still screen is taken from it.
+    if (moved && !prior) {
+      return { screen, status: 'ambiguous', candidate: null, visibleText: read,
+        reason: 'The screen is turning; only a remembered name is taken from it.' };
+    }
     // Without a remembered spelling, prefer the plainer read (E over Æ).
     const plain = (text) => text.replace(/[A-Za-z0-9_]/g, '').length;
     const name = prior?.name ?? (plain(full.text) < plain(read) ? full.text : read).trim();
     return { screen, status: 'candidate', candidate: { name, key: nameKey(name), league },
-      resolution: 'complete', reason: 'A screen candidate only; the same login session and zone entry must confirm it.' };
+      resolution: how(moved ? 'complete-moved' : 'complete'), reason: 'A screen candidate only; the same login session and zone entry must confirm it.' };
   }
+  const [image, focused] = [rawImage, rawFocused];
   const box = [.405, .73, .60, .78];
   const names = inBox(focused, box).map((line) => line.text.trim()).filter(isName);
   if (names.length !== 1) {

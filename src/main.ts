@@ -850,13 +850,14 @@ async function start() {
     await step('restart-status', () => listen<{ step: string; error: string | null }>('restart-status', (event) => renderRestart(event.payload.step, event.payload.error)));
     await step('overlay-status', () => listen<Status>('overlay-status', (event) => render(event.payload)));
     await step('tracker-state', () => listen<TrackerView>('tracker-state', (event) => renderTracker(event.payload)));
-    await step('identity-frame', () => listen<{ epoch: number; seq: number; full: OcrFrame; focused: OcrFrame; known: KnownCharacter[]; dryRun: boolean }>('identity-frame', (event) => {
-      const { epoch, seq, full, focused, known, dryRun } = event.payload;
+    await step('identity-frame', () => listen<{ epoch: number; seq: number; full: OcrFrame; focused: OcrFrame; known: KnownCharacter[]; dryRun: boolean; click: [number, number] | null }>('identity-frame', (event) => {
+      const { epoch, seq, full, focused, known, dryRun, click } = event.payload;
       try {
-        const result = recognizeScreen(full, focused, known);
-        // An OCR variant of a name already remembered (I/l/1, O/0, Æ/E) is not new.
+        const result = recognizeScreen(full, focused, known, click ?? null);
+        // An OCR variant of a name already remembered (I/l/1, O/0, Æ/E) is not new,
+        // unless it brings the league of a name remembered without one.
         const learned = learnKnownCharacters(full, focused).filter((entry) =>
-          !known.some((prior) => matchKey(prior.name) === matchKey(entry.name)));
+          !known.some((prior) => matchKey(prior.name) === matchKey(entry.name) && (prior.league || !entry.league)));
         void invoke('identity_observed', { epoch, seq, result, learned, dryRun: dryRun ?? false }).catch((error) => report(`Character recognition: ${String(error)}`));
       } catch (error) { report(`Character recognition frame: ${String(error)}`); }
     }));

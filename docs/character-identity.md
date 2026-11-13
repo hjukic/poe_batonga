@@ -428,3 +428,42 @@ view or the unsupported Hangul name, plus the two cases below):
   cleaned of `ANAABATONGA`, `ODNÆSENNASINE`, `EVOTllZV0L1` (backup:
   `progress.json.bak-before-0.1.99`). A misread on which both reads agree can
   still be learned; there is no immutable ID to arbitrate.
+
+
+## A turning screen, row double-clicks and any league (v0.1.109)
+
+From the owner's live v0.1.108 run (pid 19224 in the diagnostics log):
+
+- **The selection screen turns as a whole** at times: -3.9° on the double-click
+  (frames 32/33), about -2° just after login, +10.4° with the league dropdown
+  open. PLAY, CREATE and DELETE fit one rotation plus shift within a few pixels,
+  so the fixed DELETE box missed by 1 px and the frame was `unknown`.
+  `steadyView` finds the three buttons anywhere near their places, fits rotation,
+  scale and shift (least squares), checks all three fit, and moves every word back
+  to the still layout. On such a `moved` frame the crop is no second read and
+  OCR is worse, so only a name already remembered is taken (`complete-moved`) and
+  nothing is learned. The native gold measure and the diagnostics fields cover a
+  wider area for the turned titles.
+- **Row double-click:** the hook detected it (v0.1.108), but neither frame was
+  readable. The double-click's point now travels with its frames (`click`); when
+  the highlight cannot be told, the character row under the click is taken
+  (`…-clicked-row`). Only a row with a level line under it: a league dropdown item
+  lying over the list has none. Single clicks send no point.
+- **Leagues are no condition any more.** A character name is unique across all
+  leagues, and leagues change every few months and are cut short by the game
+  (`HC SSF Forbidden Rites Lea...`: the OGLEDALO character was never accepted).
+  - A row is shown to be a character's by its `LEVEL <1-100> <CLASS>` line
+    (also as misread: `I_EVEL`, `[EVEL`), not by its league.
+  - `leagueText` reads `<league> League` with a misread or cut "League"
+    (`i_eague`, `Lea...`), or the row's cut last line by position. It knows no
+    league name.
+  - A candidate or a learned name may come without a league (remembered empty;
+    a later read fills it in). Leagues compare by prefix and case-free
+    (`sameLeague`); an unread league narrows nothing, the history match must still
+    be unique.
+  - A character moved to Standard when its league ends is learned again under
+    Standard from any whole read; the old entry stays.
+
+Limits: the buttons must read `PLAY`/`CREATE`/`DELETE` (English client, en-US
+OCR) on a 16:9 layout; the creation screen still needs one of the twelve class
+names; a covered title on a turning screen resolves only from history.

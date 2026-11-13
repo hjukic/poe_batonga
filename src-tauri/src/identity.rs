@@ -163,10 +163,10 @@ fn bind_at(inner: &mut crate::tracker::Inner, latest: u64) -> bool {
             let from_history = inner.identity.pending_from_history;
             inner.characters.active_source = Some(if from_history { "screen-history-prefix" } else { "screen-complete" }.into());
             if !from_history {
-                if let Some(league) = candidate.league.as_ref() {
-                    let known = KnownCharacter { name: candidate.name.clone(), league: league.clone(), source: "complete-screen-read".into() };
-                    remember_complete(&mut inner.characters, known);
-                }
+                // An unread league is remembered empty: the name is what identifies.
+                let league = candidate.league.clone().unwrap_or_default();
+                let known = KnownCharacter { name: candidate.name.clone(), league, source: "complete-screen-read".into() };
+                remember_complete(&mut inner.characters, known);
             }
             crate::tracker::replay_unbound(inner);
             inner.identity.note = format!("Tracking: {}{}", inner.characters.active.as_deref().unwrap_or(&candidate.name),
@@ -179,11 +179,20 @@ fn bind_at(inner: &mut crate::tracker::Inner, latest: u64) -> bool {
     }
 }
 
-/// False when it was known already.
+/// False when it was known already. A name remembered without its league gets it.
 fn remember_complete(characters: &mut crate::characters::Characters, known: KnownCharacter) -> bool {
-    let new = !characters.known.iter().any(|k| k.name.to_lowercase() == known.name.to_lowercase() && k.league.to_lowercase() == known.league.to_lowercase());
-    if new { characters.known.push(known); }
-    new
+    let same = |k: &KnownCharacter| k.name.to_lowercase() == known.name.to_lowercase();
+    if characters.known.iter().any(|k| same(k) && k.league.to_lowercase() == known.league.to_lowercase()) { return false; }
+    if !known.league.trim().is_empty() {
+        if let Some(blank) = characters.known.iter_mut().find(|k| same(k) && k.league.trim().is_empty()) {
+            blank.league = known.league;
+            return true;
+        }
+    } else if characters.known.iter().any(|k| same(k)) {
+        return false;
+    }
+    characters.known.push(known);
+    true
 }
 
 #[tauri::command]
@@ -219,13 +228,19 @@ pub fn identity_observed(app: AppHandle, epoch: u64, seq: u64, result: ScreenRes
         set_context(inner.in_zone, false);
         // Saved only when something changed, not on every menu read (review item 10).
         let mut changed = returned_to_menu;
-        for known in learned.into_iter().filter(|k| valid_name(&k.name) && !k.league.trim().is_empty() && k.source == "complete-screen-read") {
+        for known in learned.into_iter().filter(|k| valid_name(&k.name) && k.source == "complete-screen-read") {
             changed |= remember_complete(&mut inner.characters, known);
         }
         let read = if result.status == "candidate" {
-            result.candidate.filter(|c| valid_name(&c.name) && c.league.as_ref().is_some_and(|l| !l.trim().is_empty()))
+            // The league is no condition: it changes every few months and the game
+            // cuts long ones short. The screen code checks that this is a character row.
+            result.candidate.filter(|c| valid_name(&c.name)).map(|mut c| {
+                c.league = c.league.filter(|l| !l.trim().is_empty());
+                c
+            })
         } else { None };
-        if !inner.identity.observe(read, result.resolution.as_deref() == Some("history-prefix"), preceding_frame) {
+        let from_history = result.resolution.as_deref().is_some_and(|r| r.starts_with("history-prefix"));
+        if !inner.identity.observe(read, from_history, preceding_frame) {
             trace("activation-kept-preceding", serde_json::json!({"seq":seq,"status":result.status,"reason":result.reason}));
         }
         inner.identity.note = match &inner.identity.pending {
@@ -319,6 +334,31 @@ mod tests {
         state.pending = hero();
         assert!(state.observe(None, false, false), "a selection click without a name clears it");
         assert!(state.pending.is_none());
+    }
+
+    #[test]
+    fn a_name_is_remembered_without_its_league_and_gets_it_later() {
+        let mut chars = crate::characters::Characters::default();
+        let known = |name: &str, league: &str| KnownCharacter { name: name.into(), league: league.into(), source: "complete-screen-read".into() };
+        assert!(remember_complete(&mut chars, known("Hero", "")));
+        assert!(!remember_complete(&mut chars, known("HERO", "")));
+        assert!(remember_complete(&mut chars, known("Hero", "Fate of the Vaal")), "the league fills the blank");
+        assert_eq!(chars.known.len(), 1);
+        assert_eq!(chars.known[0].league, "Fate of the Vaal");
+        assert!(!remember_complete(&mut chars, known("Hero", "")), "known with its league already");
+        assert!(remember_complete(&mut chars, known("Hero", "Standard")), "moved to Standard when its league ended");
+        assert_eq!(chars.known.len(), 2);
+    }
+
+    #[test]
+    fn a_candidate_without_a_league_still_binds() {
+        let mut inner = tracker();
+        inner.identity.begin(1, false, true);
+        inner.identity.pending = Some(Candidate { name: "OGLEDALOGOTOVOOOOO".into(), league: None });
+        inner.in_zone = true;
+        assert!(bind_at(&mut inner, 1));
+        assert_eq!(inner.characters.active.as_deref(), Some("OGLEDALOGOTOVOOOOO"));
+        assert_eq!(inner.characters.known.len(), 1);
     }
 
     fn tracker() -> crate::tracker::Inner {

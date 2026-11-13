@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { classifyScreen, recognizeScreen, nameKey, learnKnownCharacters } from './read-character-screen.mjs';
-import { resolvePartialName } from '../src/character-screen.mjs';
+import { resolvePartialName, leagueText, sameLeague } from '../src/character-screen.mjs';
 
 // Positions from the owner's screenshots; names below are synthetic.
 const line = (text, x, y) => ({ text, words: [{ text, x, y, width: 100, height: 20 }] });
@@ -280,4 +280,97 @@ test('live v0.1.98: an open league dropdown does not hide the highlighted charac
     line('CREATE', 2105, 1082), line('DELETE', 2382, 1082), line('PLAY', 942, 1281),
   ]);
   assert.equal(recognizeScreen(data).candidate?.name, 'STONAMENIVIDISCURICE');
+});
+
+// ---- v0.1.109: a turning screen, row double-clicks, and leagues the code does not know ----
+
+// A still screen as live v0.1.108 read it: title, level, location and league per row.
+const characterRow = (title, y, { selected = false, league = 'Standard League', location = 'Hideout', level = 'LEVEL 95 TACTICIAN' } = {}) => [
+  gold(word(title, 2037, y, 250), selected), line(level, 2185, y + 36), line(location, 2185, y + 69), ...(league ? [line(league, 2185, y + 103)] : []),
+];
+const buttons = () => [line('CREATE', 2105, 1082), line('DELETE', 2382, 1082), line('PLAY', 942, 1281)];
+// The whole screen turned by `degrees` about (1280, 720) and shifted, as on the live frames.
+const turned = (data, degrees, [dx, dy] = [0, 0]) => {
+  const [c, s] = [Math.cos(degrees * Math.PI / 180), Math.sin(degrees * Math.PI / 180)];
+  return { ...data, lines: data.lines.map((l) => ({ ...l, words: l.words.map((w) => ({ ...w,
+    x: c * (w.x - 1280) - s * (w.y - 720) + 1280 + dx, y: s * (w.x - 1280) + c * (w.y - 720) + 720 + dy })) })) };
+};
+const remembered = [{ name: 'AAAABATONGA', league: 'Standard' }, { name: 'DEADEYEOPLOOOOL', league: 'Standard' }];
+
+test('live v0.1.108: a screen turned by -3.9° (a double-click) is read back on its still layout', () => {
+  const still = image([...characterRow('AAAABATONGA', 328, { selected: true }), ...characterRow('DEADEYEOPLOOOOL', 470), ...buttons()]);
+  const moved = turned(still, -3.9, [12, -8]);
+  assert.equal(classifyScreen(moved), 'selection');
+  const result = recognizeScreen(moved, moved, remembered);
+  assert.equal(result.candidate?.name, 'AAAABATONGA');
+  assert.equal(result.resolution, 'complete-moved');
+  assert.equal(recognizeScreen(turned(still, 10.4, [-90, 30]), undefined, remembered).candidate?.name, 'AAAABATONGA', 'the dropdown frame turned +10°');
+});
+
+test('a turning screen never yields a name not seen on a still one', () => {
+  const moved = turned(image([...characterRow('NEWHERO', 328, { selected: true }), ...characterRow('DEADEYEOPLOOOOL', 470), ...buttons()]), -3.9);
+  const result = recognizeScreen(moved, moved, remembered);
+  assert.equal(result.status, 'ambiguous');
+  assert.deepEqual(learnKnownCharacters(moved), [], 'nothing is learned from it either');
+});
+
+test('a row double-click enters the clicked row when its highlight cannot be measured', () => {
+  // Live frame 32: the lit title's gold was not measurable on the turned screen.
+  const dim = (row) => ({ ...row, style: { goldPixels: 15, goldMean: 90, brightFraction: 0 } });
+  const rows = [...characterRow('AAAABATONGA', 328), ...characterRow('DEADEYEOPLOOOOL', 470)];
+  rows[0] = dim(rows[0]); rows[4] = dim(rows[4]);
+  const moved = turned(image([...rows, ...buttons()]), -3.9);
+  assert.equal(recognizeScreen(moved, moved, remembered).status, 'ambiguous', 'without the click');
+  // The click as the hook saw it: on the turned screen, on DEADEYE's row.
+  const [c, s] = [Math.cos(-3.9 * Math.PI / 180), Math.sin(-3.9 * Math.PI / 180)];
+  const [x, y] = [2150, 500];
+  const click = [(c * (x - 1280) - s * (y - 720) + 1280) / 2559, (s * (x - 1280) + c * (y - 720) + 720) / 1439];
+  const result = recognizeScreen(moved, moved, remembered, click);
+  assert.equal(result.candidate?.name, 'DEADEYEOPLOOOOL');
+  assert.equal(result.resolution, 'complete-moved-clicked-row');
+});
+
+test('a double-click on an open league dropdown item is no character', () => {
+  const item = (text, y) => ({ ...line(text, 2040, y), style: { goldPixels: 900, goldMean: 100, brightFraction: 0 } });
+  const rows = [...characterRow('AAAABATONGA', 328), ...characterRow('DEADEYEOPLOOOOL', 470)];
+  rows[0] = { ...rows[0], style: { goldPixels: 15, goldMean: 90, brightFraction: 0 } };
+  const data = image([...rows, item('Standard', 520), item('Forbidden', 552), ...buttons()]);
+  assert.equal(recognizeScreen(data, data, remembered, [2060 / 2559, 556 / 1439]).candidate, null);
+});
+
+test('live v0.1.108: a league cut short ("HC SSF Forbidden Rites Lea...") still gives the name', () => {
+  const data = image([
+    ...characterRow('OGLEDALOGOTOVOOOOO', 326, { selected: true, league: 'HC SSF Forbidden Rites Lea...', location: 'Hideout', level: 'LEVEL 64 DISCIPLE OF VARASHTA' }),
+    ...buttons(),
+  ]);
+  const result = recognizeScreen(data);
+  assert.equal(result.candidate?.name, 'OGLEDALOGOTOVOOOOO');
+  assert.equal(result.candidate?.league, 'HC SSF Forbidden Rites');
+  assert.deepEqual(learnKnownCharacters(data).map((k) => [k.name, k.league]), [['OGLEDALOGOTOVOOOOO', 'HC SSF Forbidden Rites']]);
+});
+
+test('any league name works, also one cut before its "League" or not read at all', () => {
+  assert.equal(leagueText('Standard League'), 'Standard');
+  assert.equal(leagueText('Standard i_eague'), 'Standard');
+  assert.equal(leagueText('Fate of the Vaal 1.0 League'), 'Fate of the Vaal 1.0');
+  assert.equal(leagueText('HC SSF Some Very Long Ne...', true), 'HC SSF Some Very Long Ne', 'cut: the last line by position');
+  assert.equal(leagueText('Act 2: The Ardura Car...', false), null, 'a location is not the last line');
+  assert.equal(leagueText('Hideout'), null);
+  // Not read at all: the level line still shows this is a character row.
+  const data = image([...characterRow('BRANDNEWLEAGUER', 326, { selected: true, league: null }), ...buttons()]);
+  const result = recognizeScreen(data);
+  assert.equal(result.candidate?.name, 'BRANDNEWLEAGUER');
+  assert.equal(result.candidate?.league, null);
+});
+
+test('leagues compare loosely: cut short, capitals, unknown', () => {
+  assert.ok(sameLeague('HC SSF Forbidden Rites', 'HC SSF Forbidden Ri'));
+  assert.ok(sameLeague('FORBIDDEN RITES', 'Forbidden Rites'));
+  assert.ok(sameLeague('', 'Standard'));
+  assert.ok(sameLeague(null, 'Standard'));
+  assert.ok(!sameLeague('Standard', 'Runes of Aldur'));
+  // A covered title completes from a name remembered under the cut league.
+  const history = [{ name: 'OGLEDALOGOTOVOOOOO', league: 'HC SSF Forbidden Rites' }];
+  assert.equal(resolvePartialName(['OGLEDALOGOTO', 'OGLEDALOGOTO'], 'HC SSF Forbidden Ri', history)?.name, 'OGLEDALOGOTOVOOOOO');
+  assert.equal(resolvePartialName(['OGLEDALOGOTO', 'OGLEDALOGOTO'], 'Standard', history), null, 'another league');
 });

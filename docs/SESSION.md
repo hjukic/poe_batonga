@@ -1,17 +1,19 @@
 # Where we stopped — 2026-11-13
 
-> **v0.1.108 (Windows, 2026-11-13):** the review's findings 1–9 are fixed
-> (`docs/review-2026-11-13-character-identity.md`, "Fixed on Windows"): a row double-click
-> really activates now, a briefly missing game window no longer unbinds, events before the
-> binding are judged against the chosen profile, a completed zone can be unfolded to untick.
-> The Windows build and all tests pass (204 Rust, 67 Node; two Node tests had Windows-only
-> path bugs). Since v0.1.99 the Linux side also parked the radar (v0.1.104) and added Act 1
-> zone guides (v0.1.105–107; `PLAN.md`, next: Acts 2–6). The live tests below still apply;
-> step 2's double-click only works from v0.1.108.
+> **v0.1.109 (Windows, 2026-11-13):** from the owner's live v0.1.108 test: Play entry
+> works (DEADEYEOPLOOOOL, AAAABATONGA bound); the row double-click was detected but both
+> its frames were unreadable because the whole selection screen had turned by -3.9°;
+> OGLEDALOGOTOVOOOOO was read but rejected for its cut league ("HC SSF Forbidden Rites
+> Lea..."). v0.1.109 reads a turned screen back on its still layout (only remembered
+> names from it), takes the double-clicked row when the highlight is unclear, and no
+> longer needs the league at all (any league, cut or unread; a level line shows a
+> character row). Details: `docs/character-identity.md`, last section.
+>
+> v0.1.108 fixed the review's findings 1–9 (`docs/review-2026-11-13-character-identity.md`).
+> Since v0.1.99 the Linux side also parked the radar (v0.1.104) and added Act 1 zone
+> guides (v0.1.105–107; `PLAN.md`, next: Acts 2–6).
 
-Current version: **0.1.99**: character-selection recognition fixed for every
-list position, the slider and OCR misreads (details in
-`docs/character-identity.md`, v0.1.95–v0.1.99). Rebuild before testing:
+Current version: **0.1.109**. Rebuild before testing:
 `npm run desktop:build`, then run `src-tauri/target/release/poe-batonga.exe`
 with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation.log`.
 
@@ -27,16 +29,16 @@ with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation
   league dropdown, a selection scrolled out of view, the Hangul name
   (unsupported: only en-US OCR) and two cases fixed in v0.1.99.
 - Settings → **Always show character name**, on by default.
-- Tests: 37 recognizer/checklist tests, 7 identity tests; `tsc` and the
-  Windows release build pass.
+- Entry with **Play** (live v0.1.108, two characters).
+- Tests (v0.1.109): 206 Rust, 74 Node; `tsc` and the Windows release build pass.
 
-## Next live test — do this first (v0.1.108)
+## Next live test — do this first (v0.1.109)
 
-1. Selection, quickly: `AAAABATONGA` (two reads used to disagree) and clicking
-   a character while the league dropdown is open. Not yet seen live.
-2. **Entry**, not yet accepted live: enter once with **Play** and once by
-   **double-clicking** a row (v0.1.97 treats a row double-click as Play). In the
-   zone the overlay must say `Character: <name>`, not `not recognized`.
+1. **Double-click** a row to enter, a few times (also right after moving the mouse).
+   In the zone the overlay must say `Character: <name>`.
+2. **OGLEDALOGOTOVOOOOO** (HC SSF league): select it, enter with Play.
+3. New characters (a few): create, enter, return, select each again.
+4. Clicking a character while the league dropdown is open.
 3. **Progress isolation**: tick a checkbox on A, return to the menu, enter with
    B, then A again. A's ticks must come back, B's stay separate.
 

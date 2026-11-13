@@ -31,7 +31,8 @@ static LAST_CLICK_AT: AtomicU64 = AtomicU64::new(NO_CLICK);
 static LAST_ACTIVATION: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Copy)]
-struct Trigger { seq: u64, delay: u64, activation: bool, focus_click: bool }
+/// `click`: a row double-click's point (fractions of the client area): the row it enters.
+struct Trigger { seq: u64, delay: u64, activation: bool, focus_click: bool, click: Option<[f64; 2]> }
 pub fn latest_input() -> u64 { SEQ.load(Ordering::SeqCst) }
 /// The newest input that may still supersede an OCR frame. An activation does
 /// not: the frame just before it holds the name that is entering the game.
@@ -73,12 +74,12 @@ fn game_title(window: HWND) -> bool {
     }
 }
 
-fn request(delay: u64, activation: bool, focus_click: bool) {
+fn request(delay: u64, activation: bool, focus_click: bool, click: Option<[f64; 2]>) {
     let seq = SEQ.fetch_add(1, Ordering::SeqCst) + 1;
     // Before the worker sees it: the selection frame just before an activation
     // must not count as superseded (see `superseding_input`).
     if activation { LAST_ACTIVATION.store(seq, Ordering::SeqCst); }
-    if let Some(sender) = REQUESTS.get() { let _ = sender.try_send(Trigger { seq, delay, activation, focus_click }); }
+    if let Some(sender) = REQUESTS.get() { let _ = sender.try_send(Trigger { seq, delay, activation, focus_click, click }); }
 }
 
 fn pack_point(x: i32, y: i32) -> u64 { ((x as u32 as u64) << 32) | y as u32 as u64 }
@@ -116,10 +117,10 @@ unsafe extern "system" fn keyboard(code: i32, message: WPARAM, data: LPARAM) -> 
                 if name_input_key(event.vkCode, held) {
                     let menu = menu_input();
                     match event.vkCode {
-                        0x1b => { ARMED.fetch_xor(true, Ordering::SeqCst); request(120, false, false); }
-                        0x43 if !BOUND.load(Ordering::SeqCst) => request(100, false, false),
-                        0x0d if menu => request(0, true, false),
-                        _ if menu => request(65, false, false),
+                        0x1b => { ARMED.fetch_xor(true, Ordering::SeqCst); request(120, false, false, None); }
+                        0x43 if !BOUND.load(Ordering::SeqCst) => request(100, false, false, None),
+                        0x0d if menu => request(0, true, false, None),
+                        _ if menu => request(65, false, false, None),
                         _ => {}
                     }
                 }
@@ -162,7 +163,8 @@ unsafe extern "system" fn mouse(code: i32, message: WPARAM, data: LPARAM) -> LRE
             let activation = play || double;
             // Selection/edit clicks need a rendered frame; activation needs the
             // preceding field before the transition. OCR never blocks the hook.
-            request(if activation { 0 } else if in_zone { 180 } else { 80 }, activation, focus_click);
+            request(if activation { 0 } else if in_zone { 180 } else { 80 }, activation, focus_click,
+                at.filter(|_| double).map(|(fx, fy)| [fx, fy]));
         }
     }
     CallNextHookEx(std::ptr::null_mut(), code, message, data)
@@ -206,8 +208,8 @@ struct Line { text: String, words: Vec<Word>, style: Option<Style> }
 struct Frame { width: usize, height: usize, lines: Vec<Line> }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Batch { epoch: u64, seq: u64, full: Frame, focused: Frame, known: Vec<super::KnownCharacter>, dry_run: bool }
-struct Job { epoch: u64, seq: u64, image: Image }
+struct Batch { epoch: u64, seq: u64, full: Frame, focused: Frame, known: Vec<super::KnownCharacter>, dry_run: bool, click: Option<[f64; 2]> }
+struct Job { epoch: u64, seq: u64, image: Image, click: Option<[f64; 2]> }
 
 fn frame_summary(frame: &Frame) -> serde_json::Value { frame_summary_in(frame, false) }
 
@@ -220,7 +222,7 @@ fn frame_summary_in(frame: &Frame, menu: bool) -> serde_json::Value {
     let menu = menu || anchors.iter().any(|a| a["text"].as_str().is_some_and(|t| matches!(t.to_uppercase().as_str(), "PLAY"|"CONTINUE")));
     let fields: Vec<_> = if menu { frame.lines.iter().filter(|l| l.words.first().is_some_and(|w| {
         let (x,y) = (w.x / frame.width as f64,w.y / frame.height as f64);
-        ((0.39..0.68).contains(&x) && (0.72..0.84).contains(&y)) || ((0.79..0.99).contains(&x) && (0.215..0.73).contains(&y))
+        ((0.39..0.68).contains(&x) && (0.72..0.84).contains(&y)) || ((0.74..0.99).contains(&x) && (0.12..0.82).contains(&y))
     })).map(|l| serde_json::json!({"text":l.text,"at":l.words.first().map(|w|[w.x,w.y]),"w":l.words.first().map(|w|w.width),"words":l.words.len(),"style":l.style})).collect() } else { vec![] };
     serde_json::json!({"width":frame.width,"height":frame.height,"lines":frame.lines.len(),"anchors":anchors,"fields":fields})
 }
@@ -235,7 +237,7 @@ pub fn reference_probe(app: AppHandle) {
             let image = crate::minimap::parse_ppm(&std::fs::read(path).map_err(|e|e.to_string())?)?;
             let (full,focused) = frames(&engine,&image).map_err(|e|e.to_string())?;
             super::trace("reference-emitted", frame_summary(&full));
-            app.emit("identity-frame", Batch {epoch:0,seq:0,full,focused,known:vec![],dry_run:true}).map_err(|e|e.to_string())
+            app.emit("identity-frame", Batch {epoch:0,seq:0,full,focused,known:vec![],dry_run:true,click:None}).map_err(|e|e.to_string())
         })();
         if let Err(error) = result {super::trace("reference-failed",serde_json::json!({"error":error}));}
     });
@@ -244,7 +246,8 @@ pub fn reference_probe(app: AppHandle) {
 fn style(image: &Image, word: &Word) -> Option<Style> {
     let x = word.x / image.width as f64;
     let y = word.y / image.height as f64;
-    if !(0.79..=0.84).contains(&x) || !(0.215..=0.70).contains(&y) { return None; }
+    // Wider than the name column: a turned screen (up to ~10°) moves the titles.
+    if !(0.74..=0.88).contains(&x) || !(0.12..=0.82).contains(&y) { return None; }
     let (mut count, mut total, mut bright) = (0, 0.0, 0);
     for py in word.y as usize..((word.y + word.height) as usize).min(image.height) {
         for px in word.x as usize..((word.x + word.width) as usize).min(image.width) {
@@ -421,7 +424,7 @@ pub fn spawn(app: AppHandle) {
                     }
                 }
                 let foreground = game_foreground();
-                super::trace("input",serde_json::json!({"seq":trigger.seq,"latest":latest_input(),"activation":trigger.activation,"focusClick":trigger.focus_click,"delayMs":trigger.delay,"foreground":foreground,"inZone":IN_ZONE.load(Ordering::SeqCst),"bound":BOUND.load(Ordering::SeqCst)}));
+                super::trace("input",serde_json::json!({"seq":trigger.seq,"latest":latest_input(),"activation":trigger.activation,"focusClick":trigger.focus_click,"click":trigger.click,"delayMs":trigger.delay,"foreground":foreground,"inZone":IN_ZONE.load(Ordering::SeqCst),"bound":BOUND.load(Ordering::SeqCst)}));
                 if trigger.seq != (if trigger.activation { latest_input() } else { superseding_input() }) || !foreground { continue; }
                 let epoch = {
                     let tracker = capture_app.state::<crate::tracker::Tracker>();
@@ -439,7 +442,7 @@ pub fn spawn(app: AppHandle) {
                         let mut jobs = crate::relock(lock);
                         if !trigger.activation { jobs.clear(); }
                         // Keep a final edit's frame while Continue begins to fade.
-                        jobs.push_back(Job { epoch, seq: trigger.seq, image });
+                        jobs.push_back(Job { epoch, seq: trigger.seq, image, click: trigger.click });
                         while jobs.len() > 2 { jobs.pop_front(); }
                         wake.notify_one();
                     }
@@ -483,7 +486,7 @@ pub fn spawn(app: AppHandle) {
                     }
                     let known = inner.characters.known.clone();
                     drop(inner);
-                    let emitted = app.emit("identity-frame", Batch { epoch: job.epoch, seq: job.seq, full, focused, known, dry_run:false });
+                    let emitted = app.emit("identity-frame", Batch { epoch: job.epoch, seq: job.seq, full, focused, known, dry_run:false, click: job.click });
                     super::trace("frame-emitted",serde_json::json!({"seq":job.seq,"error":emitted.err().map(|e|e.to_string())}));
                 }
                 Err(error) => { eprintln!("Character OCR: {error}"); report(&app, "Character could not be read; uncover the name or choose it in settings"); }
@@ -551,6 +554,6 @@ mod tests {
                 assert_eq!(name(&new_focused).unwrap().text,original.text,"crop OCR must agree after masking");
             }
         }
-        println!("{}", serde_json::to_string(&Batch { epoch: 0, seq: 0, full, focused, known: vec![],dry_run:true }).unwrap());
+        println!("{}", serde_json::to_string(&Batch { epoch: 0, seq: 0, full, focused, known: vec![],dry_run:true,click:None }).unwrap());
     }
 }
