@@ -205,12 +205,27 @@ fn on_click() {
 }
 
 /// Runs `tesseract` on one prepared crop and returns its TSV.
+///
+/// It stays out of the game's way: one thread (`OMP_THREAD_LIMIT=1`; by default its
+/// OpenMP build spreads each run over every core) and the lowest CPU priority (nice 19),
+/// so the game always comes first.
 fn tesseract_tsv(pgm: Vec<u8>) -> Result<String, String> {
+    use std::os::unix::process::CommandExt;
     use std::process::{Command, Stdio};
-    let mut child = Command::new("tesseract")
+    let mut command = Command::new("tesseract");
+    command
         .args(["stdin", "stdout", "-l", "eng", "--psm", "11", "--dpi", "300", "tsv"])
-        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null())
-        .spawn().map_err(|e| format!("tesseract unavailable: {e}"))?;
+        .env("OMP_THREAD_LIMIT", "1")
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+    // SAFETY: runs in the child between fork and exec, and calls only setpriority, a
+    // plain system call (async-signal-safe). A refusal is ignored: normal priority then.
+    unsafe {
+        command.pre_exec(|| {
+            libc::setpriority(libc::PRIO_PROCESS, 0, 19);
+            Ok(())
+        });
+    }
+    let mut child = command.spawn().map_err(|e| format!("tesseract unavailable: {e}"))?;
     let mut stdin = child.stdin.take().ok_or("tesseract has no input")?;
     std::thread::spawn(move || { let _ = stdin.write_all(&pgm); });
     let mut stdout = child.stdout.take().ok_or("tesseract has no output")?;

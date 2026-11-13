@@ -69,7 +69,15 @@
 > The false tick was removed from the owner's progress (backup
 > `progress.json.bak-before-0.1.116`).
 
-Current version: **0.1.117**. Rebuild before testing:
+> **v0.1.118 (Linux, 2026-11-13):** tesseract stays out of the game's way (Sue's concern
+> about OCR cost). It runs only on the character screens, on a click or key, never in a
+> zone. Each run now uses one thread (`OMP_THREAD_LIMIT=1`; its OpenMP build took every
+> core) at the lowest CPU priority (nice 19, `libc::setpriority` before exec). Checked on
+> Windows by type-checking the call for x86_64-unknown-linux-gnu; not run on Linux yet.
+> **Test (Sue):** select and create characters as before; names must still be read, and
+> `elapsedMs` in the identity diagnostics log shows whether a read got much slower.
+
+Current version: **0.1.118**. Rebuild before testing:
 `npm run desktop:build`, then run `src-tauri/target/release/poe-batonga.exe`
 with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation.log`
 and `BATONGA_QUEST_DIAGNOSTICS=artifacts/quest-tracker.jsonl`.

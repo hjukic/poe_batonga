@@ -2708,6 +2708,7 @@ dependencies = [
  "fontdue",
  "gtk",
  "gtk-layer-shell",
+ "libc",
  "serde",
  "serde_json",
  "tauri",
