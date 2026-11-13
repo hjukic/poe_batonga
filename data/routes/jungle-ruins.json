@@ -12,8 +12,9 @@
     {
       "id": "kill-silverfist",
       "kind": "objective",
+      "silent": true,
       "navigationTarget": { "area": "G3_3", "label": "Mighty Silverfist", "tag": "clearing_boss" },
-      "parts": [{ "text": "Kill " }, { "text": "Mighty Silverfist", "style": "boss" }, { "text": "2 Skill Points", "style": "reward" }],
+      "parts": [{ "text": "Kill " }, { "text": "Mighty Silverfist", "style": "boss" }, { "text": "2 Passive Points", "style": "reward" }],
       "trigger": null,
       "evidence": "No kill line known. Tick by hand. Target: the one 'clearing_boss' node in all 16 layouts."
     },

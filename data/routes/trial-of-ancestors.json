@@ -8,7 +8,7 @@
       "id": "navali-hinekora",
       "kind": "objective",
       "screen": [{ "quest": "Act4KaruiElder", "past": "Take the Reward from Navali" }],
-      "parts": [{ "text": "Talk to " }, { "text": "Navali", "style": "npc" }, { "text": " & Hinekora" }, { "text": "2 Skill Points", "style": "reward" }],
+      "parts": [{ "text": "Talk to " }, { "text": "Navali", "style": "npc" }, { "text": " & Hinekora" }, { "text": "2 Passive Points", "style": "reward" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."
     },

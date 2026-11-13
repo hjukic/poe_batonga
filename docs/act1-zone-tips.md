@@ -57,8 +57,8 @@ steps (zone entries the log ticks), so a visit never shows more than two, at any
 | 1, first arrival | boots with movement speed; damage gloves | until the Grim Tangle waypoint |
 | 2, from the Red Vale | the same, and a better weapon if sold | after Clearfell, until the Grim Tangle waypoint |
 | 3, from the seals | the same two | as above |
-| 4, from Freythorn | "Level 10:" the next weapon base; greater flasks from Una if needed | shown under level 10 too (the line names the level), until the Hunting Grounds waypoint |
-| 5, from Ogham Village | a cold-resistance ring for Geonor | until the Ogham Village waypoint |
+| 4, from Freythorn | "Level 10:" the next weapon base; greater flasks from Una if needed | while under level 12 (the line names the level, so it shows under 10 too), until the Hunting Grounds waypoint |
+| 4–5 | a cold-resistance ring for Geonor | from level 12, after the Grim Tangle waypoint, until the Ogham Village waypoint (it shows on the trip from Ogham Village also when the one after Freythorn was skipped) |
 | 6, after Geonor | none (grand flasks and the next boots come at 16, after Act 1's vendors) | |
 
 Level targets (gtd): 5 leaving the Grim Tangle, 7 before the Mausoleum (Draven), 8 before

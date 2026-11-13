@@ -22,7 +22,7 @@
     {
       "id": "kill-kabala",
       "kind": "objective",
-      "parts": [{ "text": "Kill " }, { "text": "Kabala", "style": "boss" }, { "text": " (Venom Pit)" }, { "text": "2 Skill Points", "style": "reward" }],
+      "parts": [{ "text": "Kill " }, { "text": "Kabala", "style": "boss" }, { "text": " (Venom Pit)" }, { "text": "2 Passive Points", "style": "reward" }],
       "trigger": null,
       "evidence": "No kill line known. Tick by hand."
     },

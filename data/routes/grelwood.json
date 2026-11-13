@@ -23,6 +23,7 @@
     {
       "id": "kill-areagne",
       "kind": "objective",
+      "silent": true,
       "navigationTarget": { "area": "G1_4", "label": "Areagne's hut", "tag": "witch_hut" },
       "parts": [{ "text": "Kill " }, { "text": "Areagne", "style": "boss" }, { "text": " at the hut" }, { "text": "Support Gem", "style": "reward" }],
       "trigger": null,
@@ -40,6 +41,7 @@
     {
       "id": "kill-gerung",
       "kind": "objective",
+      "silent": true,
       "navigationTarget": { "area": "G1_4", "label": "Gerung", "tag": "bossman" },
       "optional": true,
       "parts": [{ "text": "Kill " }, { "text": "Gerung", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],

@@ -35,6 +35,7 @@
     {
       "id": "freythorn-portal-town",
       "kind": "objective",
+      "alsoFrom": ["G1_11"],
       "parts": [{ "text": "Portal to town" }],
       "trigger": { "type": "zoneEntered", "area": "G1_town", "after": "hunting-grounds-to-freythorn" },
       "evidence": "Zone-generation line for G1_town, counted only once hunting-grounds-to-freythorn is done (Freythorn was entered): the log cannot see the King's kill when his death line is missed. The fast route takes Finn's charm in town here (GTD-video)."

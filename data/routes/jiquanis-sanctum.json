@@ -32,6 +32,7 @@
     {
       "id": "kill-zicoatl",
       "kind": "objective",
+      "silent": true,
       "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Defeat Zicoatl, Warden of the Core" }],
       "parts": [{ "text": "Kill " }, { "text": "Zicoatl", "style": "boss" }, { "text": "Soul Core", "style": "reward" }],
       "trigger": null,

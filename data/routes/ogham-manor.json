@@ -7,6 +7,7 @@
     {
       "id": "kill-candlemass",
       "kind": "objective",
+      "silent": true,
       "parts": [{ "text": "Kill " }, { "text": "Candlemass", "style": "boss" }, { "text": "+20 Max Life", "style": "reward" }],
       "trigger": null,
       "evidence": "No kill line known. Tick by hand."

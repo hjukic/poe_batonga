@@ -19,7 +19,7 @@
     {
       "id": "place-the-heart",
       "kind": "objective",
-      "parts": [{ "text": "Place the Heart, stab it" }, { "text": "2 Skill Points", "style": "reward" }],
+      "parts": [{ "text": "Place the Heart, stab it" }, { "text": "2 Passive Points", "style": "reward" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."
     },

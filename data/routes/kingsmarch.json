@@ -102,7 +102,7 @@
       "id": "kingsmarch-tujen-reward",
       "kind": "objective",
       "screen": [{ "quest": "Act4DeliriumUnlock", "past": "Speak to Tujen in Kingsmarch" }],
-      "parts": [{ "text": "Talk to " }, { "text": "Tujen", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }]
+      "parts": [{ "text": "Talk to " }, { "text": "Tujen", "style": "npc" }, { "text": "2 Passive Points", "style": "reward" }]
     },
     {
       "id": "maps-to-makoru",

@@ -198,6 +198,10 @@ test('at most two errand lines in any town visit, at any level', () => {
   const most = mostErrands(errands);
   assert.ok(most.count <= 2, `visit ${most.visit} at level ${most.level}: ${JSON.stringify(most.lines)}`);
   // Each visit up to the one after Ogham Village has at least one errand at its usual level.
+  // The ring for Geonor shows from level 12 on any trip after the Grim Tangle's, also when
+  // the trip after Freythorn was skipped (council round 2).
+  const skipped = new Set(TOWN_VISITS.slice(0, 3).flat());
+  assert.ok(errands.some((h) => /ring for Geonor/.test(h.text) && visible(h, 13, skipped)), 'the ring shows though the Freythorn trip was skipped');
   for (const [v, level] of [[1, 2], [2, 6], [3, 8], [4, 11], [5, 13]]) {
     const done = new Set(TOWN_VISITS.slice(0, v - 1).flat());
     assert.ok(errands.some((h) => visible(h, level, done)), `visit ${v} at level ${level} has an errand`);
@@ -249,7 +253,7 @@ test("hints follow contract 3's rows", () => {
   assert.ok(lines('G1_7', 'kill-lachlann').some((t) => /cutscene/.test(t)), "Lachlann's row says why the ring stays");
   assert.equal(guide.zones.G1_4.general[0].until, 'enter-red-vale', 'the "exit first" trick ends with the first visit');
   // Lines that must not show at the wrong moment (review of 2026-11-13).
-  assert.ok(lines('G1_7', 'kill-lachlann').some((t) => /this act/.test(t)), 'the ring line says the Hooded One stays away this act');
+  assert.ok(lines('G1_7', 'kill-lachlann').some((t) => /comes later/.test(t)), 'the ring line says the Hooded One comes later');
   assert.ok(!lines('G1_4', 'kill-areagne').some((t) => /cauldron/.test(t)), 'the cauldron line outlives the kill row');
   assert.ok(guide.zones.G1_4.general.some((h) => /cauldron/.test(h.text) && h.until === 'enter-red-vale'));
   assert.ok(!(guide.zones.G1_6.general ?? []).some((h) => /Una/.test(h.text)), "no Una line on the Grim Tangle's waypoint grab");

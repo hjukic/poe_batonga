@@ -14,6 +14,7 @@
     {
       "id": "kill-vultures",
       "kind": "objective",
+      "silent": true,
       "parts": [{ "text": "Kill " }, { "text": "2 Vultures", "style": "boss" }, { "text": " (side area)" }, { "text": "Djinn Barya", "style": "reward" }],
       "trigger": null,
       "evidence": "No kill line known. Tick by hand."

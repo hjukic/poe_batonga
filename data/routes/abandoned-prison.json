@@ -23,6 +23,7 @@
     {
       "id": "kill-forael",
       "kind": "objective",
+      "silent": true,
       "navigationTarget": { "area": "G4_5_1", "label": "Chapel", "tag": "prison_chapel" },
       "parts": [{ "text": "Kill " }, { "text": "Forael", "style": "boss" }, { "text": " (Chapel)" }, { "text": "Flask choice", "style": "reward" }],
       "trigger": null,

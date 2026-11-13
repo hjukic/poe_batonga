@@ -15,6 +15,7 @@
     {
       "id": "kill-noxious-behemoth",
       "kind": "objective",
+      "silent": true,
       "optional": true,
       "parts": [{ "text": "Kill " }, { "text": "Noxious Behemoth", "style": "boss" }, { "text": "Magic Amulet", "style": "reward" }],
       "trigger": null,
@@ -31,6 +32,7 @@
     {
       "id": "kill-xyclucian",
       "kind": "objective",
+      "silent": true,
       "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Defeat Xyclucian, the Chimera" }],
       "parts": [{ "text": "Kill " }, { "text": "Xyclucian", "style": "boss" }, { "text": "Ultimatum", "style": "reward" }],
       "trigger": null,

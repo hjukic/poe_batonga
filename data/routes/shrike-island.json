@@ -14,6 +14,7 @@
     {
       "id": "kill-scourge-of-the-skies",
       "kind": "objective",
+      "silent": true,
       "screen": [{ "quest": "Act4ScourgeSkies", "past": "Kill the Scourge of the Skies" }],
       "navigationTarget": { "area": "G4_7", "label": "Scourge of the Skies", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Scourge of the Skies", "style": "boss" }],

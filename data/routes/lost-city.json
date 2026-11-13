@@ -7,6 +7,7 @@
     {
       "id": "kill-ninth-treasure",
       "kind": "objective",
+      "silent": true,
       "optional": true,
       "parts": [{ "text": "Kill " }, { "text": "Ninth Treasure", "style": "boss" }, { "text": "Jewel", "style": "reward" }],
       "trigger": null,

@@ -13,6 +13,7 @@
     {
       "id": "kill-rathbreaker",
       "kind": "objective",
+      "silent": true,
       "screen": [{ "quest": "CaravanRescue", "past": "Defeat Rathbreaker" }],
       "navigationTarget": { "area": "G2_1", "label": "Rathbreaker", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Rathbreaker", "style": "boss" }],

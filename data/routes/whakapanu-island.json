@@ -14,6 +14,7 @@
     {
       "id": "kill-great-white-one",
       "kind": "objective",
+      "silent": true,
       "screen": [{ "quest": "Act4RescueMedicineWoman", "past": "Defeat the Great White One" }],
       "navigationTarget": { "area": "G4_3_1", "label": "Shark Pit", "tag": "boss" },
       "optional": true,
@@ -24,6 +25,7 @@
     {
       "id": "kill-clawcrunch",
       "kind": "objective",
+      "silent": true,
       "navigationTarget": { "area": "G4_3_1", "label": "Crabshell Cavern", "tag": "CrabCave" },
       "optional": true,
       "parts": [{ "text": "Kill " }, { "text": "Clawcrunch", "style": "boss" }, { "text": "Support Gem", "style": "reward" }],

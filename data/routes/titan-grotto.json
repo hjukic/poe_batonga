@@ -7,6 +7,7 @@
     {
       "id": "kill-zalmarath",
       "kind": "objective",
+      "silent": true,
       "screen": [{ "quest": "PryTheFlameRuby", "past": "Defeat Zalmarath, the Colossus and retrieve the Flame Ruby" }],
       "navigationTarget": { "area": "G2_7", "label": "Zalmarath", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Zalmarath", "style": "boss" }, { "text": "Flame Ruby", "style": "reward" }],

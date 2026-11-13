@@ -13,6 +13,7 @@
     {
       "id": "kill-rootdredge",
       "kind": "objective",
+      "silent": true,
       "optional": true,
       "parts": [{ "text": "Kill " }, { "text": "Rootdredge", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
       "trigger": null,

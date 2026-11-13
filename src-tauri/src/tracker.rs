@@ -160,6 +160,14 @@ pub struct Step {
     /// waypoint grab before the Red Vale). Once it is done the row is not listed at all.
     #[serde(default)]
     pub until: Option<String>,
+    /// A boss that never speaks (the game's tables have no line for it: Areagne, Ervig,
+    /// the Crowbell, Candlemass): the app cannot see its fight, so its row is not `tracked`.
+    #[serde(default)]
+    pub silent: bool,
+    /// Other zones a zone-entry trigger also counts from, besides the list's own: the Red
+    /// Vale's "Portal to town" when the player walks back and takes the Grelwood's waypoint.
+    #[serde(default, rename = "alsoFrom")]
+    pub also_from: Vec<String>,
     #[serde(default)]
     pub trigger: Option<Trigger>,
     #[serde(default, rename = "navigationTarget")]
@@ -359,7 +367,9 @@ pub fn apply(routes: &[Route], progress: &mut Progress, timestamp: &str, event: 
                 if area == got && after.as_ref().is_none_or(|step| done_before.contains(step)) =>
             {
                 match &origin {
-                    Some(from) if *from == route.zone.id => (format!("Entered {got} (level {level})"), "log"),
+                    Some(from) if *from == route.zone.id || step.also_from.contains(from) => {
+                        (format!("Entered {got} (level {level})"), "log")
+                    }
                     // A town's "Waypoint to X" says where to go next: X entered another way
                     // (on foot through the Grelwood) does that. Other lists' rows say how to
                     // leave their zone: from there only.
@@ -384,8 +394,11 @@ pub fn apply(routes: &[Route], progress: &mut Progress, timestamp: &str, event: 
     // Coming into Z from X proves Z's way to X was taken (R-F6): a start in the middle of an
     // act, or X reached another way (a waypoint from town). Z's open row into X, the last whose
     // `after` holds, is taken as done.
+    // Not for a town on either side (council round 2): a town is reached from anywhere, so
+    // arriving from X proves nothing about its row to X (Kingsmarch from Journey's End took
+    // the later "Waypoint to Journey's End" as done), nor does arriving from town.
     if let (Some(from), LogEvent::ZoneEntered { area: got, .. }) = (&origin, event) {
-        if let Some(route) = routes.iter().find(|r| &r.zone.id == got) {
+        if let Some(route) = routes.iter().find(|r| &r.zone.id == got).filter(|_| !is_town(got) && !is_town(from)) {
             let back = route.steps.iter().rev().find(|step| {
                 matches!(&step.trigger, Some(Trigger::ZoneEntered { area, after }) if area == from
                     && after.as_ref().is_none_or(|id| done_before.contains(id)))
@@ -449,7 +462,11 @@ fn imply_earlier(routes: &[Route], progress: &mut Progress, timestamp: &str, don
             !done_before.contains(&step.id)
                 && progress.completed.get(&step.id).is_some_and(|c| c.source == "log" || c.source == "screen")
         };
-        let Some(last) = route.steps.iter().rposition(newly) else { continue };
+        // A trip to town and back proves nothing about the visit's work (council round 2): a
+        // portal from the Grelwood before the seals does not strike them. Such rows wait for
+        // another step (`after`); the walk on into a town (the Riverbank's exit) does not.
+        let to_town = |step: &Step| matches!(&step.trigger, Some(Trigger::ZoneEntered { area, after: Some(_) }) if is_town(area));
+        let Some(last) = route.steps.iter().rposition(|step| newly(step) && !to_town(step)) else { continue };
         let visits = route.visits();
         for (at, step) in route.steps[..last].iter().enumerate() {
             // A town's hand-in (Renly's gem, the lute's points) is taken with the visit it
@@ -585,10 +602,11 @@ fn is_boss(step: &Step) -> bool {
 
 /// Whether the app can tick a step by itself on this platform: a log trigger, a boss kill
 /// (its fight starts when the boss speaks and ends with the kill line or as "likely" after
-/// `FIGHT_QUIET`; a boss that never speaks stays open), and on Windows a quest-tracker
-/// rule. Otherwise a click or an implied tick only.
+/// `FIGHT_QUIET`; not a boss marked `silent`: it never speaks, so no fight is seen), and on
+/// Windows a quest-tracker rule. Otherwise a click or an implied tick only.
 pub fn tracked(step: &Step) -> bool {
-    step.kind == "objective" && (step.trigger.is_some() || is_boss(step) || (crate::quest_screen::READS && !step.screen.is_empty()))
+    step.kind == "objective"
+        && (step.trigger.is_some() || (is_boss(step) && !step.silent) || (crate::quest_screen::READS && !step.screen.is_empty()))
 }
 
 /// Whether a step's trigger is a zone entry into another area: it leaves the zone.
@@ -672,9 +690,12 @@ impl Route {
         };
         // Rules 5 and 6: the steps of visits before `upto` to list with the visit on show:
         // everything open of a visit never finished, and the reward bosses left alive in one that was.
+        // Nothing comes along on a list nothing was done in yet (a character first seen in
+        // the middle of an act, or after a reset): its earlier visits were never seen.
+        let touched = (0..self.steps.len()).any(done);
         let carry = |upto: usize| -> Vec<usize> {
             (0..self.steps.len())
-                .filter(|&i| visits[i] < upto && left_open(i))
+                .filter(|&i| touched && visits[i] < upto && left_open(i))
                 .filter(|&i| !finished(visits[i]) || (has_reward(&self.steps[i]) && is_boss(&self.steps[i])))
                 .collect()
         };
@@ -1833,9 +1854,9 @@ mod tests {
         let reward = |id: &str| step(id).unwrap().parts.iter().find(|p| p.style.as_deref() == Some("reward")).map(|p| p.text.clone());
         let pickups = [
             ("abandoned-stash", "Skill Gem"), ("kill-areagne", "Support Gem"), ("kill-ervig", "Support Gem"),
-            ("ancient-ruins", "Ring"), ("haunted-treasure", "Support Gem"), ("kill-crowbell", "2 Skill Points"),
+            ("ancient-ruins", "Ring"), ("haunted-treasure", "Support Gem"), ("kill-crowbell", "2 Passive Points"),
             ("small-ritual", "Support Gem"), ("kill-king-in-the-mists", "+30 Spirit"), ("finn-charm", "Charm"),
-            ("crop-circle", "Skill Gem"), ("deliver-unas-lute", "2 Skill Points"), ("smithing-tools", "Salvage Bench"),
+            ("crop-circle", "Skill Gem"), ("deliver-unas-lute", "2 Passive Points"), ("smithing-tools", "Salvage Bench"),
             ("blacksmiths-chest", "Rune + Orb"), ("leitis-gem", "Skill Gem"), ("gallows-secret", "Support Gem"),
             ("kill-candlemass", "+20 Max Life"),
         ];
@@ -1860,7 +1881,7 @@ mod tests {
             assert_eq!(reward(id), None, "{id}");
         }
         // Outside Act 1: the letter pays the points, and the heart for Aggorat is a route row.
-        assert_eq!(reward("deliver-lihl-lima-letter").as_deref(), Some("2 Skill Points"));
+        assert_eq!(reward("deliver-lihl-lima-letter").as_deref(), Some("2 Passive Points"));
         assert!(!step("deliver-lihl-lima-letter").unwrap().optional);
         assert_eq!(reward("fallen-dekhara"), None);
         assert!(!step("sacrificial-heart").unwrap().optional);
@@ -2996,7 +3017,9 @@ mod tests {
         let view = inner.view();
         let tracked = |id: &str| view.steps.iter().find(|s| s.id == id).unwrap().tracked;
         assert!(tracked("enter-red-vale"), "a log trigger");
-        assert!(tracked("kill-areagne"), "a boss: her fight starts when she speaks");
+        assert!(!tracked("kill-areagne"), "a boss that never speaks: no fight is seen");
+        let clearfell = inner.routes.iter().find(|r| r.zone.id == "G1_2").unwrap();
+        assert!(super::tracked(clearfell.steps.iter().find(|s| s.id == "kill-beira").unwrap()), "a boss: her fight starts when she speaks");
         assert!(!tracked("grelwood-waypoint"), "a hand row");
         assert_eq!(tracked("grelwood-talk-una"), crate::quest_screen::READS, "a quest-tracker rule, read on Windows only");
         play(&mut inner, &[enter("G1_6")]);
@@ -3042,6 +3065,70 @@ mod tests {
         assert_eq!(rows(&inner, false), ["kill-areagne", "runic-seals", "grelwood-una-seals", "grelwood-portal-town"]);
         toggle(&inner.routes.clone(), &mut inner.progress, "kill-areagne").unwrap();
         assert_eq!(rows(&inner, false), ["runic-seals", "grelwood-una-seals", "grelwood-portal-town"]);
+    }
+
+    /// Council round 2 (Opus's replays). Act 4: Kingsmarch reached from Journey's End is the
+    /// planned trip for the spikes: the town's later "Waypoint to Journey's End" is not taken
+    /// as done by coming from there, nor Journey's End's "Portal to town" by coming from town.
+    #[test]
+    fn a_town_entry_proves_no_row_of_the_town() {
+        let mut inner = playing();
+        play(&mut inner, &[enter("G4_town"), enter("G4_2_1"), enter("G4_2_2"), enter("G4_town")]);
+        assert!(!inner.progress.completed.contains_key("kingsmarch-to-journeys-end"));
+        assert!(rows(&inner, false).contains(&"verisium-spikes".to_string()), "{:?}", rows(&inner, false));
+        play(&mut inner, &[enter("G4_2_2")]);
+        assert_eq!(inner.progress.completed["kingsmarch-to-journeys-end"].source, "log");
+        assert!(!inner.progress.completed.contains_key("journeys-end-portal-town"));
+    }
+
+    /// The Red Vale done, the walk back into the Grelwood (for Areagne) and its waypoint to
+    /// town: the town still lists the spikes, the Grelwood then the seals, the Grim Tangle
+    /// Ervig (`alsoFrom` on the Red Vale's portal row).
+    #[test]
+    fn the_red_vale_left_on_foot_still_leads_to_the_spikes() {
+        let mut inner = playing();
+        to_the_grelwood(&mut inner);
+        play(&mut inner, &[enter("G1_5"), npc("Ghostly Voice", "This is our land. We stand united!"), enter("G1_4"), enter("G1_town")]);
+        assert_eq!(inner.progress.completed["red-vale-portal-town"].source, "log");
+        assert_eq!(rows(&inner, false), ["renly-runed-spikes", "town-to-grelwood"]);
+        shows(&mut inner, "G1_4", &SEALS, &[]);
+        shows(&mut inner, "G1_town", &["town-una-roots", "town-to-grim-tangle"], &[]);
+        shows(&mut inner, "G1_6", &["kill-ervig", "enter-cemetery"], &[]);
+        // Freythorn left on foot, town by the Hunting Grounds' waypoint: Finn's visit.
+        let mut inner = playing();
+        planned_up_to(&mut inner, "G1_11", 0);
+        play(&mut inner, &[enter("G1_11"), enter("G1_12"), npc("The King in the Mists", "This is not the end..."), enter("G1_11"), enter("G1_town")]);
+        assert_eq!(rows(&inner, false), ["finn-charm", "town-to-hunting-grounds"]);
+    }
+
+    /// A trip to town in the middle of a visit strikes none of its work: the seals, the
+    /// altars and the lever stay open.
+    #[test]
+    fn a_town_trip_mid_visit_strikes_nothing() {
+        let mut inner = playing();
+        to_the_grelwood(&mut inner);
+        play(&mut inner, &[enter("G1_5"), enter("G1_town"), enter("G1_4"), enter("G1_town")]);
+        for id in ["runic-seals", "grelwood-una-seals"] {
+            assert!(!inner.progress.completed.contains_key(id), "{id}");
+        }
+        let mut inner = playing();
+        planned_up_to(&mut inner, "G1_12", 0);
+        play(&mut inner, &[enter("G1_12"), enter("G1_town"), enter("G1_12")]);
+        assert!(!inner.progress.completed.contains_key("ritual-altars"));
+        assert!(rows(&inner, false).contains(&"ritual-altars".to_string()));
+        let mut inner = playing();
+        planned_up_to(&mut inner, "G1_13_2", 0);
+        play(&mut inner, &[enter("G1_13_2"), enter("G1_town")]);
+        assert!(!inner.progress.completed.contains_key("lever-leitis"));
+    }
+
+    /// A character first seen in the middle of an act (or after a reset): a list nothing was
+    /// done in brings no rows of its earlier visits along.
+    #[test]
+    fn a_list_never_seen_brings_nothing_along() {
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_13_2"), enter("G1_town")]);
+        assert_eq!(rows(&inner, false), ["deliver-unas-lute", "leitis-gem", "town-to-ogham-village"]);
     }
 
     /// The Windows quest tracker keeps being read while a kill is only "likely": its proof

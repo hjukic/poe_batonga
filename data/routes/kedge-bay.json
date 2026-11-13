@@ -24,6 +24,7 @@
     {
       "id": "kill-tombgrowl",
       "kind": "objective",
+      "silent": true,
       "optional": true,
       "parts": [{ "text": "Kill " }, { "text": "Tombgrowl", "style": "boss" }, { "text": " (Tidal Cay)" }],
       "trigger": null,

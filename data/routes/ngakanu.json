@@ -15,6 +15,7 @@
     {
       "id": "kill-mad-butcher",
       "kind": "objective",
+      "silent": true,
       "optional": true,
       "parts": [{ "text": "Kill " }, { "text": "Mad Butcher", "style": "boss" }, { "text": " (big hut)" }],
       "trigger": null,

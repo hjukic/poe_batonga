@@ -52,6 +52,7 @@
     {
       "id": "kill-omniphobia",
       "kind": "objective",
+      "silent": true,
       "screen": [{ "quest": "Act4DeliriumUnlock", "past": "Survive the Madness" }],
       "parts": [{ "text": "Kill " }, { "text": "Omniphobia", "style": "boss" }, { "text": " (totem)" }],
       "trigger": null,

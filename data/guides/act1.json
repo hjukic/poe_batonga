@@ -243,7 +243,7 @@
      "kind": "tip"
     },
     "kill-lachlann": {
-     "text": "Skips a long cutscene; no Hooded One this act.",
+     "text": "Skips a long cutscene; Hooded One comes later.",
      "src": [
       "gtd"
      ],
@@ -523,7 +523,8 @@
      ],
      "kind": "tip",
      "after": "town-to-grim-tangle",
-     "until": "town-to-hunting-grounds"
+     "until": "town-to-hunting-grounds",
+     "below": 12
     },
     {
      "text": "Level 10: greater flasks from Una, if needed.",
@@ -532,7 +533,8 @@
      ],
      "kind": "tip",
      "after": "town-to-grim-tangle",
-     "until": "town-to-hunting-grounds"
+     "until": "town-to-hunting-grounds",
+     "below": 12
     },
     {
      "text": "A cold-resistance ring for Geonor.",
@@ -540,8 +542,9 @@
       "maxroll-ls"
      ],
      "kind": "tip",
-     "after": "town-to-hunting-grounds",
-     "until": "town-to-ogham-village"
+     "after": "town-to-grim-tangle",
+     "until": "town-to-ogham-village",
+     "from": 12
     }
    ]
   }

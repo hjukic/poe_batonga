@@ -16,6 +16,7 @@
     {
       "id": "kill-ervig",
       "kind": "objective",
+      "silent": true,
       "navigationTarget": { "area": "G1_6", "label": "Ervig", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Ervig", "style": "boss" }, { "text": "Support Gem", "style": "reward" }],
       "trigger": null,

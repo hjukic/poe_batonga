@@ -170,7 +170,7 @@
       "id": "deliver-lihl-lima-letter",
       "kind": "objective",
       "screen": [{ "quest": "FindTheSuicideNote", "past": "Return the Final Letter to Shambrin" }],
-      "parts": [{ "text": "Letter to " }, { "text": "Shambrin", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }],
+      "parts": [{ "text": "Letter to " }, { "text": "Shambrin", "style": "npc" }, { "text": "2 Passive Points", "style": "reward" }],
       "trigger": null,
       "evidence": "The guide's Deshar tip: Lihl Lima's letter goes to Shambrin. A route row with the 2 points: Tradition's Toll (FindTheSuicideNote) pays them when the letter is returned ('Return the Final Letter to Shambrin', then 'Use the Book of Specialisation'); maxroll names this step for the points. No log line known. Tick by hand."
     },

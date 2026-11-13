@@ -32,6 +32,7 @@
     {
       "id": "kill-mimok",
       "kind": "objective",
+      "silent": true,
       "parts": [{ "text": "Kill " }, { "text": "Mimok", "style": "boss" }, { "text": " (Beast Pen)" }, { "text": "Support Gem", "style": "reward" }],
       "trigger": null,
       "evidence": "No kill line known. Tick by hand."
@@ -39,6 +40,7 @@
     {
       "id": "kill-blind-beast",
       "kind": "objective",
+      "silent": true,
       "navigationTarget": { "area": "G4_1_1", "label": "Primal Arena", "tag": "arena" },
       "optional": true,
       "parts": [{ "text": "Kill " }, { "text": "Blind Beast", "style": "boss" }, { "text": "Blank Rune", "style": "reward" }],

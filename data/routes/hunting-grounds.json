@@ -24,7 +24,8 @@
     {
       "id": "kill-crowbell",
       "kind": "objective",
-      "parts": [{ "text": "Kill " }, { "text": "The Crowbell", "style": "boss" }, { "text": "2 Skill Points", "style": "reward" }],
+      "silent": true,
+      "parts": [{ "text": "Kill " }, { "text": "The Crowbell", "style": "boss" }, { "text": "2 Passive Points", "style": "reward" }],
       "trigger": null,
       "evidence": "No kill line known. Tick by hand."
     },

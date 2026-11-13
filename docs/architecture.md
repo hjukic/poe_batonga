@@ -57,9 +57,19 @@ the order it was done in (2026-11-13):
 What ticks a row (`apply`): a zone entry ticks rows of the list of the zone the player left
 only, and of one list only the last row whose `after` holds (`docs/triggers.md`). Coming
 into Z from X also takes Z's open row into X as done ("Came back from X", implied).
+The exception to "the zone the player left": a row with `"alsoFrom": ["<zone>"]` also
+counts from those zones (the Red Vale's "Portal to town" from the Grelwood, for the player
+who walks back and takes its waypoint). "Came back from X" is not applied when Z or X is a
+town: a town is reached from anywhere. A boss marked `"silent": true` never speaks, so the
+app sees no fight: its row is not `tracked` (a hollow marker, it does not hold the arrow).
+Nothing of earlier visits comes along on a list nothing was done in yet (a character first
+seen in the middle of an act).
+
 A later logged row implies the earlier rows it proves (talks), not what a player may skip
 and still need (waypoints, rewards out in a zone, zone entries); a town's hand-in (Renly's
-gem, the lute's points) is taken with the visit it belongs to when that visit is left.
+gem, the lute's points) is taken with the visit it belongs to when that visit is left. A
+trip to town and back (a "Portal to town" row) implies nothing: it proves none of the
+visit's work.
 
 Tests: `tracker.rs`, the Act 1 replays (S1–S8) and `no_log_event_ticks_two_steps_of_one_list`.
 

@@ -29,6 +29,7 @@
     {
       "id": "red-vale-portal-town",
       "kind": "objective",
+      "alsoFrom": ["G1_4"],
       "parts": [{ "text": "Portal to town" }],
       "trigger": { "type": "zoneEntered", "area": "G1_town", "after": "enter-red-vale" },
       "evidence": "Zone-generation line, counted only once enter-red-vale is done (The Red Vale was entered): the log cannot see kill-rust-king, the step meant."
