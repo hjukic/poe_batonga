@@ -53,13 +53,14 @@ impl Characters {
         true
     }
 
-    /// Where no character can be recognised (Linux), the last character chosen stays chosen;
-    /// before any was chosen, a "Default" one holds the progress kept before profiles. Each
-    /// restart, login or game exit cleared the binding, and with no recognition to bind it
-    /// again the ticks went into an empty, unsaved progress (the owner's 40 ticks were moved
-    /// aside on 2026-11-13). Call after anything that clears the binding.
+    /// Everywhere but on Windows (`identity::keeps_last`), the last character chosen stays
+    /// chosen until the screen or the log names another; before any was chosen, a "Default"
+    /// one holds the progress kept before profiles. Each restart, login or game exit cleared
+    /// the binding, and with nothing to bind it again the ticks went into an empty, unsaved
+    /// progress (the owner's 40 ticks were moved aside on 2026-11-13). Call after anything
+    /// that clears the binding.
     pub fn keep_chosen(&mut self, progress: &mut Progress) {
-        if !crate::identity::recognises() {
+        if crate::identity::keeps_last() {
             self.keep_chosen_anyway(progress);
         }
     }
@@ -87,8 +88,9 @@ impl Characters {
     /// The character the game's log names (a level-up or a death: `tracker::character_in_line`),
     /// the main source of who is playing on every platform (owner, 2026-11-13). It becomes the
     /// active profile. The "Default" profile (progress kept before any name was known) is taken
-    /// over by the first character the log names that has no profile of its own; where no
-    /// screen is read, the progress from before profiles too. True when the profile changed.
+    /// over by the first character the log names that has no profile of its own; where the
+    /// last character is kept (`identity::keeps_last`), the progress from before profiles too.
+    /// True when the profile changed.
     pub fn bind_from_log(&mut self, progress: &mut Progress, name: &str) -> bool {
         let same = |other: &str| other.to_lowercase() == name.to_lowercase();
         if self.active.as_deref().is_some_and(same) {
@@ -109,7 +111,7 @@ impl Characters {
                 }
             }
         }
-        let import = !crate::identity::recognises() && self.legacy.is_some() && !self.profiles.keys().any(|key| same(key));
+        let import = crate::identity::keeps_last() && self.legacy.is_some() && !self.profiles.keys().any(|key| same(key));
         if self.select(progress, name, import).is_err() {
             return false;
         }

@@ -3,7 +3,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{AppHandle, Emitter};
 use crate::minimap::Image;
-use super::shared::{self, focus_of, report, request, style, Batch, Frame, Line, Reader, Word, ARMED, BOUND, IN_ZONE, NO_CLICK, CREATION_FOCUS};
+use super::shared::{self, focus_of, report, request, style, without_creation_caret, Batch, Frame, Line, Reader, Word, ARMED, BOUND, IN_ZONE, NO_CLICK, CREATION_FOCUS};
 pub use super::shared::{finish_unknown, latest_input, set_context, superseding_input};
 use windows::{core::HSTRING, Globalization::Language, Graphics::Imaging::{BitmapPixelFormat, SoftwareBitmap},
     Media::Ocr::OcrEngine, Storage::Streams::DataWriter, Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED}};
@@ -173,57 +173,6 @@ fn read(engine: &OcrEngine, image: &Image, rect: [f64; 4]) -> windows::core::Res
         lines.push(Line { text: line.Text()?.to_string(), words, style: color });
     }
     Ok(Frame { width: image.width, height: image.height, lines })
-}
-
-/// The input caret rises above the font and is taller than a real I. Mask only
-/// such narrow pixel bars, never remove a trailing letter from the OCR string.
-fn without_creation_caret(image: &Image) -> Option<Image> {
-    let x0 = (image.width as f64 * 0.410) as usize;
-    let x1 = (image.width as f64 * 0.594) as usize;
-    let y0 = (image.height as f64 * 0.738) as usize;
-    let y1 = (image.height as f64 * 0.768) as usize;
-    let min_height = (image.height as f64 * 0.022).ceil() as usize;
-    let before_font = (image.height as f64 * 0.742) as usize;
-    let max_width = (image.width as f64 * 0.0025).ceil() as usize;
-    let bright = |x: usize,y: usize| {
-        let at=(y*image.width+x)*3;
-        image.pixels[at]>=140 && image.pixels[at+1]>=100
-    };
-    let mut columns = Vec::new();
-    for x in x0..x1 {
-        let mut start=y0;
-        for y in y0..=y1 {
-            if y<y1 && bright(x,y) {continue;}
-            if y-start>=min_height && start<before_font {columns.push((x,start,y));break;}
-            start=y+1;
-        }
-    }
-    if columns.is_empty() {return None;}
-    let mut cleaned=image.clone();
-    let mut removed=0;
-    let mut at=0;
-    while at<columns.len() {
-        let first=at;
-        while at+1<columns.len() && columns[at+1].0==columns[at].0+1 {at+=1;}
-        let (left,right)=(columns[first].0,columns[at].0);
-        if right-left<max_width && left>x0 && right+2<x1 {
-            let top=columns[first..=at].iter().map(|c|c.1).min().unwrap();
-            let bottom=columns[first..=at].iter().map(|c|c.2).max().unwrap();
-            for y in top..bottom {for x in left..=right {
-                let l=(y*image.width+left-2)*3;
-                let r=(y*image.width+right+2)*3;
-                let source=if (image.pixels[l] as u32+image.pixels[l+1] as u32) < (image.pixels[r] as u32+image.pixels[r+1] as u32) {l} else {r};
-                let dest=(y*image.width+x)*3;
-                cleaned.pixels[dest..dest+3].copy_from_slice(&image.pixels[source..source+3]);
-            }}
-            removed+=1;
-        }
-        at+=1;
-    }
-    if removed>0 {
-        super::trace("caret-masked",serde_json::json!({"bars":removed}));
-        Some(cleaned)
-    } else {None}
 }
 
 struct WindowsOcr(OcrEngine);

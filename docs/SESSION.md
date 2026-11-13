@@ -106,7 +106,27 @@
 > The tesseract change went with the file origin removed; `libc` was dropped again. The
 > Windows hover fix (v0.1.116 above) and the v0.1.117 fight fix still need live tests.
 
-Current version: **0.1.119**. Rebuild before testing:
+> **v0.1.120 (Sue's side, 2026-11-13): Linux reads the character screens again**, with
+> PaddleOCR's PP-OCRv6 models on ONNX Runtime, in process, in place of tesseract (owner:
+> "build it for linux then"). The Hyprland binds and `grim` capture of v0.1.112-0.1.116 are
+> back (`identity_linux.rs`); `identity_ocr.rs` reads. The models are in
+> `src-tauri/models/ocr` (27.5 MB) and built into the Linux binary; the first Linux build
+> downloads ONNX Runtime's static library. Windows: `without_creation_caret` moved to
+> `identity_native.rs` unchanged; nothing else differs there (type-checked from Linux for
+> `x86_64-pc-windows-gnu`, not built or run). On Linux the last chosen character still stays
+> chosen until the screen or the log names another (`identity::keeps_last`).
+> Checked offline on Sue's selection screenshot at 2160, 1440 and 1080 px high: the selected
+> name is returned and all five names are learned; a read takes about 1 s on one thread.
+> Details and what is not yet seen on Linux: `docs/character-identity.md`, "Linux screen
+> recognition (v0.1.120)".
+>
+> **Next Linux live test (Sue):** with the overlay running, in the character selection:
+> select a character and enter with **Play**; enter with a **double-click** on a row; create a
+> **new character** and enter. In the zone the overlay must say `Character: <name>`. Then
+> return to the selection and enter with another character: its own ticks must show. If a
+> name is missed, send the diagnostics log (`BATONGA_IDENTITY_DIAGNOSTICS`).
+
+Current version: **0.1.120**. Rebuild before testing:
 `npm run desktop:build`, then run `src-tauri/target/release/poe-batonga.exe`
 with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation.log`
 and `BATONGA_QUEST_DIAGNOSTICS=artifacts/quest-tracker.jsonl`.
@@ -137,6 +157,8 @@ and `BATONGA_QUEST_DIAGNOSTICS=artifacts/quest-tracker.jsonl`.
    B, then A again. A's ticks must come back, B's stay separate.
 
 ## Linux test — Sue (v0.1.112, not yet compiled or run on Linux)
+
+History: superseded by v0.1.120 (see the note above "Current version").
 
 v0.1.112 adds character recognition on Linux (Hyprland only): non-consuming
 `bindn` binds while in the menus, `grim` capture, `tesseract` OCR. Needs

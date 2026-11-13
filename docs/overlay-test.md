@@ -7,9 +7,9 @@ How to run the overlay and check it over the game. It never sends input to the g
 Install [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/): on Windows,
 Rust's MSVC toolchain, Visual Studio C++ Build Tools/Windows SDK and WebView2;
 on Linux, Rust, the WebKitGTK/GTK development packages and `gtk-layer-shell`.
-On Linux the character recognition also needs Hyprland, `grim` and `tesseract` with its
-English data (Arch: `pacman -S tesseract tesseract-data-eng`; Debian/Ubuntu:
-`apt install tesseract-ocr tesseract-ocr-eng`); without them the last chosen character is kept.
+On Linux reading the character screens also needs Hyprland and `grim`; without them the
+character comes from the game log and the last chosen one is kept. The first Linux build
+downloads ONNX Runtime's static library (the text models themselves are in the repository).
 
 ```sh
 npm ci
@@ -246,10 +246,11 @@ or a trail that wanders while standing still: a cold or icy zone, a dungeon with
 blue-grey stone floors, ground lit by water or frost, a fight with frost or lightning
 effects, and a town.
 
-## Character recognition on Linux (v0.1.112)
+## Character recognition on Linux (v0.1.120)
 
-Hyprland only, like the map reading. Needs `grim` and `tesseract` with English data
-(see Run). While the game runs and the player is in the menus, the app adds Hyprland
+Hyprland only, like the map reading. Needs `grim`; the text is read in process by
+bundled models (`docs/character-identity.md`, "Linux screen recognition"), on one thread at
+the lowest CPU priority, about 1 s a read. While the game runs and the player is in the menus, the app adds Hyprland
 binds that do not take the input from the game (`bindn`): a left click, Enter and the
 keys that edit a name send `custom>>batonga-…` to Hyprland's event socket, and each
 such input takes one screenshot of the game window, as Windows does with its hooks. In
@@ -260,6 +261,6 @@ digit, minus, BackSpace, Delete, Left, Right, Home or End (with or without Shift
 
 Keep the overlay panel away from the right-hand character list and the bottom middle of
 the screen while choosing a character: `grim` sees the panel too.
-`BATONGA_SCREEN_RECOGNITION=0` switches recognition off (the last chosen character is
-then kept as before). Diagnostics as on Windows (`BATONGA_IDENTITY_DIAGNOSTICS`).
-Not yet run on Linux: the first live test is the acceptance.
+`BATONGA_SCREEN_RECOGNITION=0` switches recognition off (the log and the last chosen
+character then tell who plays). Diagnostics as on Windows (`BATONGA_IDENTITY_DIAGNOSTICS`).
+Checked offline on a selection screenshot; the live test with the game is the acceptance.

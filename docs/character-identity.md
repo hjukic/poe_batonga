@@ -510,16 +510,69 @@ the active profile, live and when the app starts (the last name since the sessio
 line). It is the main source (owner, 2026-11-13: "log as main source"): the first level-up of
 a new character (about a minute into the Riverbank) names it exactly, with no screen read.
 A "Default" profile (progress kept before any name was known) is taken over by the first
-character the log names that has none of its own. On Windows the screen recognition below
-still binds at Play; a log line naming another character switches to it. Not known yet:
-whether the log writes these lines for party members.
+character the log names that has none of its own. The screen recognition (Windows, and Linux
+since v0.1.120) still binds at Play; a log line naming another character switches to it. Not
+known yet: whether the log writes these lines for party members.
 
-## Linux screen recognition: removed (v0.1.112-v0.1.116)
+The log alone does not name a character that neither levels nor dies: the owner's Linux log
+(2026-11-13) named only the levelling Ranger, in 17 lines, and never the level 93-97
+characters. That is what the screen is read for.
 
-v0.1.112 read the character screens on Linux too: non-consuming Hyprland binds reported
-clicks and keys in the menus, `grim` captured the game, `tesseract` read it. On the owner's
-PC (Hyprland 0.56.2, Lua config): `keyword` binds were refused (v0.1.113 used `eval` with
-`hl.bind`), Play was missed (v0.1.116: Create and Delete were enough), and the gold
-small-caps names read unstably whatever the preparation. Removed in v0.1.117 (owner: "remove
-that linux tesseract"): Linux knows the character from the log and keeps the last one chosen
-in between (`identity::recognises` is Windows only).
+## Linux screen recognition (v0.1.120): PaddleOCR's models, in process
+
+Linux reads the creation and selection screens again, under Hyprland, as Windows does: one
+screenshot per real input, the same recognizer (`src/character-screen.mjs`), the same binding
+at zone entry. `src-tauri/src/identity_linux.rs` watches the input and `identity_ocr.rs` reads.
+
+- **Input:** non-consuming Hyprland binds while the player is in the menus (left click,
+  Enter, the keys that edit a name), sent as `custom>>batonga-…` events on Hyprland's event
+  socket; through `hl.bind` in `eval` where the config is Lua (Hyprland 0.56). Removed in a
+  zone. The game gets every click and key.
+- **Capture:** `grim`, the game window.
+- **Reading:** PaddleOCR's PP-OCRv6 models on ONNX Runtime (`paddle-ocr-rs`; `ort` pinned to
+  `=2.0.0-rc.10`, later release candidates do not compile with it). The models are in
+  `src-tauri/models/ocr` (27.5 MB) and built into the Linux binary with ONNX Runtime (about
+  30 MB; its static library is downloaded on the first build). Nothing to install, no
+  network at run time.
+  - `PP-OCRv6_det_tiny` finds the lines of text in the right panel and the bottom middle
+    (`AREAS`), looking at a crop no larger than 960 px.
+  - `PP-OCRv6_rec_small` reads each line of the whole frame; `PP-OCRv6_rec_tiny` reads the
+    focused crop (the name list or the name field). Two models, so the two reads the
+    recognizer compares are independent.
+  - A frame under 2160 px high is enlarged first (`scale_for`): at 1080 px one name lost a
+    letter until enlarged.
+  - Each line found is cut to its letters (`letters`: the detector's boxes have a margin, and
+    the recognizer measures in title heights and compares the buttons' places with Windows
+    OCR's) and split into words by letter count (`words`).
+  - The creation screen's input caret is masked as on Windows (`without_creation_caret`, now
+    in `identity_native.rs`).
+- **Out of the game's way:** one thread at the lowest CPU priority; a read of the selection
+  screen takes about 1 s. The models hold about 300 MB and are let go in a zone
+  (`keep_binds`); loading them again takes about 60 ms.
+- **The last character stays chosen** on Linux while nothing names another
+  (`identity::keeps_last`, as since v0.1.117): a screen read or a log line replaces it. On
+  Windows a login still leaves the character unknown until one of them names it.
+- `BATONGA_SCREEN_RECOGNITION=0` turns the reading off.
+
+Measured on the owner's selection screenshot (3840x2160, five characters, the fourth
+selected; also made 2560x1440 and 1920x1080): all five names, the level and league lines,
+Create, Delete and Play read; the recognizer returns the selected name (`complete`) and
+learns all five. The highlighted title measures gold 168 with 0.78 bright, the others 108-110
+with 0.00. tesseract 5.5 on the same screenshot lost two of the five names even one title
+row at a time, the selected one among them.
+
+Offline check, as the app reads: `BATONGA_IDENTITY_PPM=<shot.ppm>
+BATONGA_IDENTITY_OUT=<frames.json> cargo test read_a_screenshot -- --ignored --nocapture`
+(prints the time and the memory), then `recognizeScreen` on `frames.json` in Node.
+`the_models_read_a_drawn_selection_screen` runs the models in every `cargo test` on Linux, on
+a screen drawn in the game's font.
+
+Not yet seen on Linux: the creation screen, a title under the league tooltip, a turning
+screen, a live Play and double-click entry with these models (the input and capture were
+live in v0.1.113). Names in Hangul or other scripts are not checked.
+
+History: v0.1.112-v0.1.116 read with `tesseract`; on the owner's PC `keyword` binds were
+refused (v0.1.113: `eval`), Play was missed (v0.1.116: Create and Delete are enough), and the
+gold small-caps names read unstably whatever the preparation. Removed in v0.1.117 (owner:
+"remove that linux tesseract"); read again with these models in v0.1.120 (owner: "build it
+for linux then").

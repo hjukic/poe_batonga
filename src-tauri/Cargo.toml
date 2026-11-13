@@ -25,6 +25,14 @@ windows = { version = "0.62.2", features = ["Foundation", "Globalization", "Grap
 gtk = "0.18"
 # v0_6: keyboard modes, margin getters, is_supported (needs system gtk-layer-shell >= 0.6).
 gtk-layer-shell = { version = "0.8", features = ["v0_6"] }
+# Reads the character screens (identity_ocr.rs): PaddleOCR's models on ONNX Runtime, in
+# process. The first build downloads ONNX Runtime's static library (about 30 MB linked in).
+paddle-ocr-rs = "0.6.1"
+# Pinned: paddle-ocr-rs 0.6.1 does not compile against later release candidates.
+ort = { version = "=2.0.0-rc.10", default-features = false }
+image = { version = "0.25", default-features = false }
+# setpriority: the reading thread runs at the lowest CPU priority (identity_linux.rs).
+libc = "0.2"
 
 # The navigator's simulated walks run in every `cargo test`: unoptimised they take 90 s.
 [profile.test]
@@ -35,3 +43,14 @@ opt-level = 1
 # rebuilds stay short.
 [profile.dev.package.poe-batonga]
 opt-level = 2
+
+# Reading the character screens on Linux (identity_ocr.rs): the image work around the text
+# models is several times faster optimised, and these are built once.
+[profile.dev.package.paddle-ocr-rs]
+opt-level = 3
+[profile.dev.package.image]
+opt-level = 3
+[profile.dev.package.imageproc]
+opt-level = 3
+[profile.dev.package.ndarray]
+opt-level = 3
