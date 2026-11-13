@@ -30,7 +30,7 @@ pub fn capture_quest_tracker() -> Result<Image, String> {
 }
 
 /// The whole game window, for reading the character screens.
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+#[cfg(target_os = "windows")]
 pub fn capture_identity_frame() -> Result<Image, String> {
     capture_window(&locate_minimap()?)
 }

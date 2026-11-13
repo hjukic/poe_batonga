@@ -403,6 +403,8 @@ fn imply_earlier(routes: &[Route], progress: &mut Progress, timestamp: &str, don
 /// Ticks the steps a confirmed quest-tracker state proves done (`quest_screen`), and the
 /// unseen steps before them as the log does. True when a step was ticked. A step unticked
 /// by hand stays unticked.
+// The quest tracker is read on Windows only (`quest_screen.rs`).
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub fn apply_screen(routes: &[Route], progress: &mut Progress, quest: &str, orders: &BTreeSet<u32>, evidence: &str) -> bool {
     let done_before: BTreeSet<String> = progress.completed.keys().cloned().collect();
     let at = now_label();
@@ -626,6 +628,26 @@ pub fn boss_after_line<'a>(routes: &'a [Route], progress: &Progress, area: &str,
         .filter(|step| !progress.completed.contains_key(&step.id))
 }
 
+/// The character a log line names: a level-up (`: <name> (<Class>) is now level <n>`) or a
+/// death (`: <name> has been slain.`). The game writes the character's name nowhere at login;
+/// these lines are where it appears (the owner's Client.txt, 2026-11-13). Chat lines carry
+/// their sender after `] ` with a channel mark (`#`, `@`, `$`, `%`, `&`), never `] : `.
+pub fn character_in_line(line: &str) -> Option<String> {
+    let (_, message) = line.split_once("] : ")?;
+    let message = message.trim_end();
+    let name = match message.strip_suffix(" has been slain.") {
+        Some(name) => name,
+        None => {
+            let (name, rest) = message.split_once(" (")?;
+            let (_, level) = rest.split_once(") is now level ")?;
+            level.trim().parse::<u32>().ok()?;
+            name
+        }
+    };
+    let valid = (2..=80).contains(&name.chars().count()) && name.chars().all(|c| c.is_alphanumeric() || c == '_');
+    valid.then(|| name.to_string())
+}
+
 /// The log line of the player's death: `: <character> has been slain.`
 fn is_death(line: &str) -> bool {
     line.trim_end().ends_with(" has been slain.") && line.contains("] : ")
@@ -685,6 +707,7 @@ impl Inner {
 
     /// The character whose quest tracker is worth reading now: in a zone, bound, with a
     /// step open that the tracker can tick.
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub fn screen_watch(&self) -> Option<String> {
         let character = self.characters.active.clone()?;
         let open = self.routes.iter().flat_map(|r| &r.steps).any(|step| {
@@ -696,6 +719,7 @@ impl Inner {
     }
 
     /// See `apply_screen`.
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub fn apply_screen(&mut self, quest: &str, orders: &BTreeSet<u32>, evidence: &str) -> bool {
         apply_screen(&self.routes, &mut self.progress, quest, orders, evidence)
     }
@@ -918,7 +942,7 @@ fn first_run_offset(file: &mut File, len: u64) -> std::io::Result<u64> {
 }
 
 /// The zone the player is in now: the last zone generation in the last few MB.
-fn current_zone(file: &mut File, len: u64) -> std::io::Result<(Option<LogEvent>, bool, Option<String>)> {
+fn current_zone(file: &mut File, len: u64) -> std::io::Result<(Option<LogEvent>, bool, Option<String>, Option<String>)> {
     let start = len.saturating_sub(FIRST_RUN_LOOKBACK);
     file.seek(SeekFrom::Start(start))?;
     let mut buf = Vec::new();
@@ -931,7 +955,9 @@ fn current_zone(file: &mut File, len: u64) -> std::io::Result<(Option<LogEvent>,
         .rev()
         .filter(|line| line.contains("Generating level "))
         .find_map(|line| parse_line(line).map(|(_, event)| event));
-    Ok((zone, zone_since_start(&text), session))
+    // Who is playing: the last character this session's log named.
+    let named = session.as_ref().and_then(|_| after.lines().rev().find_map(character_in_line));
+    Ok((zone, zone_since_start(&text), session, named))
 }
 
 fn set_log_status(app: &AppHandle, connected: bool, path: Option<&Path>, message: &str) {
@@ -1031,13 +1057,16 @@ fn follow(app: &AppHandle, path: &Path) -> std::io::Result<()> {
 }
 
 fn restore_live_context(app: &AppHandle, file: &mut File, pos: u64) -> std::io::Result<()> {
-    let (zone, in_zone, session) = current_zone(file, pos)?;
+    let (zone, in_zone, session, named) = current_zone(file, pos)?;
     let running = crate::game::running() == Some(true);
     let tracker = app.state::<Tracker>();
     let mut inner = crate::relock(&tracker.0);
     let Inner { progress, characters, .. } = &mut *inner;
     let new_session = characters.new_session(progress, session);
     characters.keep_chosen(progress);
+    if let Some(name) = &named {
+        characters.bind_from_log(progress, name);
+    }
     if new_session { inner.identity.invalidate(); }
     if let Some(event @ LogEvent::ZoneEntered { ref area, .. }) = zone.as_ref() {
         let Inner { routes, progress, .. } = &mut *inner;
@@ -1100,6 +1129,11 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
     for line in String::from_utf8_lossy(bytes).lines() {
         if live && is_death(line) {
             inner.fight = None;
+        }
+        // Who is playing, from the log (the main source on every platform).
+        if let Some(name) = character_in_line(line) {
+            let Inner { progress, characters, .. } = &mut *inner;
+            changed |= characters.bind_from_log(progress, &name);
         }
         if session_boundary(line) {
             crate::identity::trace("session-boundary",serde_json::json!({"epoch":inner.identity.epoch,"seq":inner.identity.seq,"pending":inner.identity.pending,"live":live}));
@@ -1888,6 +1922,18 @@ mod tests {
     }
 
     #[test]
+    fn the_log_names_the_character_on_a_level_up_or_a_death() {
+        let at = |message: &str| format!("2026/11/13 17:20:01 1 2 [INFO Client 308] {message}");
+        assert_eq!(character_in_line(&at(": ajhbdfjkahuecibnauebfkl (Ranger) is now level 6")).as_deref(), Some("ajhbdfjkahuecibnauebfkl"));
+        assert_eq!(character_in_line(&at(": Hollow_Sue has been slain.")).as_deref(), Some("Hollow_Sue"));
+        for not in [": AFK mode is now ON. Autoreply \"This player is AFK.\"", "#Someone: I am now level 3",
+            "@From Someone: Hollow has been slain.", ": You have entered Clearfell.", "Ghostly Voice: This is our land. We stand united!",
+            ": Two Words (Ranger) is now level 2"] {
+            assert_eq!(character_in_line(&at(not)), None, "{not}");
+        }
+    }
+
+    #[test]
     fn the_rust_kings_emerge_line_ticks_the_obelisks_and_starts_his_fight() {
         let routes = load_routes();
         let mut progress = Progress::default();
@@ -1959,7 +2005,7 @@ mod tests {
         let text = format!("{old_zone}\n{login}\n");
         std::fs::write(&path, &text).unwrap();
         let mut file = File::open(&path).unwrap();
-        let (zone, active, session) = current_zone(&mut file, text.len() as u64).unwrap();
+        let (zone, active, session, _) = current_zone(&mut file, text.len() as u64).unwrap();
         assert!(zone.is_none(), "the prior character's zone is history");
         assert!(!active);
         assert_eq!(session.as_deref(), Some(login.as_str()));
@@ -1968,7 +2014,7 @@ mod tests {
         let text = format!("{text}{zone_line}\n");
         std::fs::write(&path, &text).unwrap();
         let mut file = File::open(&path).unwrap();
-        let (zone, active, session) = current_zone(&mut file, text.len() as u64).unwrap();
+        let (zone, active, session, _) = current_zone(&mut file, text.len() as u64).unwrap();
         assert!(matches!(zone, Some(LogEvent::ZoneEntered { area, .. }) if area == "G1_2"));
         assert!(active);
         assert_eq!(session.as_deref(), Some(login.as_str()));

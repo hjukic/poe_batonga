@@ -13,6 +13,36 @@
 > Since v0.1.99 the Linux side also parked the radar (v0.1.104) and added Act 1 zone
 > guides (v0.1.105–107; `PLAN.md`, next: Acts 2–6).
 
+> **v0.1.117 (Sue's side): the game log is the main source of the character, on every
+> platform** (`: <name> (<Class>) is now level <n>`, `: <name> has been slain.`;
+> `Characters::bind_from_log`), and **the Linux screen recognition (tesseract) is removed**
+> at the owner's word ("log as main source, remove that linux tesseract"). Windows' screen
+> recognition stays; a log line naming another character switches to it.
+> `docs/character-identity.md`, first and last sections. The test below is history.
+>
+> **Linux test (2026-11-13, Sue's side, v0.1.113-v0.1.114):** Sue's PC: Hyprland 0.56.2
+> with a Lua config, 3840x2160 at scale 2, tesseract 5.
+> - Binds: a Lua-config Hyprland refuses `hyprctl keyword` ("keyword can't work with
+>   non-legacy parsers. Use eval."). v0.1.113 falls back to `eval`: `hl.bind(key,
+>   hl.dsp.event(name), { non_consuming = true })`, each handle kept in `_G.batonga_binds`
+>   and removed with `b:remove()`, never the user's own binds. Live: 89 binds in the menus,
+>   removed on zone entry; a click and a row double-click arrived, one capture each, OCR ~1 s.
+> - Screen: tesseract read CREATE and DELETE but missed PLAY (gold on its ornate button), so
+>   neither side saw the selection screen. v0.1.114: CREATE and DELETE side by side are
+>   enough (`classifyScreen`, `focus_of`).
+> - Names: not reliable yet. Gold small caps on textured rows read unstably. On one
+>   screenshot it helped to read the name column at 2x the menu scale, enlarge smoothly
+>   (bilinear) before cutting, and cut twice: brightest channel >= 100 reads every name,
+>   >= 130-145 only the highlighted row (the selected character alone). Still: names split
+>   ("AJ HBDFJ ...", "M UCKODUBRE"), "M" read as "IVI", rows lost between runs, and
+>   `recognizeScreen` answers "The selected character row is not unambiguous".
+> - Offline check: `BATONGA_IDENTITY_PPM=<shot.ppm> BATONGA_IDENTITY_OUT=<frames.json> cargo
+>   test read_a_screenshot -- --ignored` reads a screenshot as the app does; feed
+>   `frames.json` to `recognizeScreen` in Node. The screenshot stays on Sue's PC.
+> - Next: screenshots with each row selected and of the creation screen, then tune the cuts,
+>   the sizes and `group_lines` for split names. Until then Sue picks the character in
+>   Settings.
+
 > **v0.1.112 (2026-11-13):** character recognition on Linux/Hyprland (written on
 > Windows, untested on Linux; see "Linux test" below). The capture and frame queue
 > moved to the shared `identity_native.rs`; Windows behaves as in v0.1.109.
@@ -69,15 +99,14 @@
 > The false tick was removed from the owner's progress (backup
 > `progress.json.bak-before-0.1.116`).
 
-> **v0.1.118 (Linux, 2026-11-13):** tesseract stays out of the game's way (Sue's concern
-> about OCR cost). It runs only on the character screens, on a click or key, never in a
-> zone. Each run now uses one thread (`OMP_THREAD_LIMIT=1`; its OpenMP build took every
-> core) at the lowest CPU priority (nice 19, `libc::setpriority` before exec). Checked on
-> Windows by type-checking the call for x86_64-unknown-linux-gnu; not run on Linux yet.
-> **Test (Sue):** select and create characters as before; names must still be read, and
-> `elapsedMs` in the identity diagnostics log shows whether a read got much slower.
+> **v0.1.119 (2026-11-13):** merge of origin's v0.1.116–0.1.118 (Linux selection-screen
+> tuning, the game log as the main character source with Linux tesseract removed, zone
+> diagrams in the glass look) with local v0.1.116–0.1.118 (Windows overlay hover fix, the
+> Wounded Man/Miller fight fix, and a Linux tesseract change: one thread and nice 19).
+> The tesseract change went with the file origin removed; `libc` was dropped again. The
+> Windows hover fix (v0.1.116 above) and the v0.1.117 fight fix still need live tests.
 
-Current version: **0.1.118**. Rebuild before testing:
+Current version: **0.1.119**. Rebuild before testing:
 `npm run desktop:build`, then run `src-tauri/target/release/poe-batonga.exe`
 with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation.log`
 and `BATONGA_QUEST_DIAGNOSTICS=artifacts/quest-tracker.jsonl`.
