@@ -629,6 +629,9 @@ impl Inner {
                 }))
             })
             .collect();
+        if !crate::RADAR {
+            return;
+        }
         let recorder = app.state::<crate::layout::Recorder>();
         recorder.set_bosses(bosses);
         recorder.set_targets(targets);
@@ -907,7 +910,9 @@ fn follow(app: &AppHandle, path: &Path) -> std::io::Result<()> {
                 set_in_zone(app, false);
             }
             if crate::relock(&app.state::<Tracker>().0).in_zone {
-                tick_map_kills(app);
+                if crate::RADAR {
+                    tick_map_kills(app);
+                }
             }
             settle_quiet_fight(app);
         });
@@ -931,8 +936,10 @@ fn restore_live_context(app: &AppHandle, file: &mut File, pos: u64) -> std::io::
         if progress.current_area.as_deref() != Some(area.as_str()) {
             apply(routes, progress, "on start", event);
         }
-        crate::minimap::set_label_candidates(exit_names(area));
-        app.state::<crate::layout::Recorder>().on_log(event, false);
+        if crate::RADAR {
+            crate::minimap::set_label_candidates(exit_names(area));
+            app.state::<crate::layout::Recorder>().on_log(event, false);
+        }
     }
     inner.in_zone = running && in_zone && zone.is_some();
     if !running {
@@ -1012,11 +1019,13 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
                 }
                 LogEvent::Dialogue { .. } => {}
             }
-            if let LogEvent::ZoneEntered { area, .. } = &event {
-                // The big map's exit labels are read against this zone's exit names.
-                crate::minimap::set_label_candidates(exit_names(area));
+            if crate::RADAR {
+                if let LogEvent::ZoneEntered { area, .. } = &event {
+                    // The big map's exit labels are read against this zone's exit names.
+                    crate::minimap::set_label_candidates(exit_names(area));
+                }
+                recorder.on_log(&event, live);
             }
-            recorder.on_log(&event, live);
             if let (true, LogEvent::Dialogue { speaker, text }) = (live, &event) {
                 recent.push_back((timestamp, speaker.clone(), text.clone()));
                 if recent.len() > RECENT_LINES {

@@ -119,3 +119,5 @@ button.step:enabled:hover { background: rgb(239 235 255 / .06); }
 
 /* Version, bottom right of the panel: shows that an update has been applied. */
 .version { padding: 0 12px 6px; text-align: right; font-size: 10.5px; line-height: 1; color: var(--muted); opacity: .7; }
+/* The radar and layout recognition are parked (the app's RADAR switch): their settings are hidden. */
+body[data-radar="false"] .radar-only { display: none; }

@@ -143,10 +143,10 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <label class="row"><span>Opacity</span><input id="opacity" type="range" min="10" max="90" value="25" /><output id="opacity-value" for="opacity">25%</output></label>
     <div class="row"><span>Show / hide</span><button id="shortcut" class="keycap" type="button" title="Click, then press a new shortcut"></button></div>
     <label class="row" title="Off (speedrun): only the steps needed to progress are listed. On: side steps marked optional are listed too."><span>Optional content</span><input id="optional-content" type="checkbox" /></label>
-    <label class="row" title="Parked until the layout is recognised reliably (roadmap phase 3). On: the experimental arrow around the character."><span>Compass (parked)</span><input id="compass-enabled" type="checkbox" /></label>
+    <label class="row radar-only" title="Parked until the layout is recognised reliably (roadmap phase 3). On: the experimental arrow around the character."><span>Compass (parked)</span><input id="compass-enabled" type="checkbox" /></label>
     <label class="row" title="The overlay hides while the game is closed or on a workspace that is not shown"><span>Hide when game is off screen</span><input id="auto-hide" type="checkbox" checked /></label>
     <label class="row" title="The overlay hides when a zone boss starts talking and comes back when the kill is logged, you die or leave, or the boss has been quiet for 30 seconds"><span>Hide during boss fights</span><input id="fight-hide" type="checkbox" checked /></label>
-    <label class="row" title="The map recorded so far, for checking the tracking"><span>Map preview</span><input id="map-preview" type="checkbox" /></label>
+    <label class="row radar-only" title="The map recorded so far, for checking the tracking"><span>Map preview</span><input id="map-preview" type="checkbox" /></label>
     <p id="shortcut-error" class="warning" hidden></p>
     <hr />
     <button id="reset-progress" class="item" type="button">Reset progress</button>
@@ -347,6 +347,8 @@ const minimapBox = $('#minimap');
 const minimapCanvas = $<HTMLCanvasElement>('#minimap-canvas');
 let minimapTracking = false;
 function renderMinimap(view: MinimapView) {
+  // The radar parked (the app's `RADAR`): its settings are hidden.
+  document.body.dataset.radar = String(view.enabled);
   minimapTracking = view.enabled && view.visible && view.player !== null;
   minimapBox.hidden = !view.enabled || !lastTracker?.inZone;
   // The preview is the map recorded so far: a frame without the player (a fight, the map

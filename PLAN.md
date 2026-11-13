@@ -23,7 +23,16 @@ caret noise. One labelled new-character creation through first-zone entry now
 binds and persists the correct profile. Existing-character switching remains
 under live verification.
 
-## Roadmap (owner, 2026-11-12)
+## Parked: radar and layout recognition (owner, 2026-11-13)
+
+"pls park those radar and layout recognition feature, turn them off in the app and codebase..
+we will go into another direction with the app". Switched off by `RADAR = false` in
+`src-tauri/src/main.rs`: no minimap or big-map screenshots, no map recorder, no layout
+drawing, no boss kills from the map, no map preview or compass; their settings are hidden.
+The code and its tests stay (`cargo test` still runs them); `true` brings it all back, at
+v0.1.103's state. The roadmap below is on hold with it.
+
+## Roadmap (owner, 2026-11-12), on hold
 
 The arrow is parked: "if we are unable to figure out layout first, the arrow is just not right
 feature for now". Keep it simple: "figure out the layout without too much effort, features,

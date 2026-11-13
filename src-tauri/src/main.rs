@@ -11,6 +11,13 @@ mod characters;
 mod game;
 mod identity;
 
+/// The radar and layout recognition: the screenshots of the minimap and the big map, the
+/// map recorder, the layout drawn under the checklist, boss kills read from the map, the
+/// map preview and the parked compass. Parked by the owner on 2026-11-13 ("we will go into
+/// another direction with the app"): none of it runs, no screenshot is taken, and their
+/// settings are hidden. The code and its tests stay; `true` turns it all back on.
+pub const RADAR: bool = false;
+
 use std::str::FromStr;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
@@ -1000,8 +1007,10 @@ fn main() {
             identity::spawn(app.handle().clone());
             relock(&app.state::<tracker::Tracker>().0).sync_navigation(app.handle());
             tracker::spawn(app.handle().clone());
-            let reader = minimap::init();
-            minimap::spawn(app.handle().clone(), &reader);
+            let reader = minimap::init(RADAR);
+            if RADAR {
+                minimap::spawn(app.handle().clone(), &reader);
+            }
             app.manage(reader);
             #[cfg(not(target_os = "linux"))]
             watch_input_hover(app.handle().clone());
@@ -1054,7 +1063,9 @@ mod tests {
         let saved = serde_json::to_value(old).unwrap();
         assert!(saved.get("readMinimap").is_none());
         assert!(saved.get("windowsCaptureOptIn").is_none());
-        assert!(minimap::init().last.lock().unwrap().enabled);
+        // Old settings do not switch reading off; the radar's own switch does.
+        assert!(minimap::init(true).last.lock().unwrap().enabled);
+        assert!(!minimap::init(false).last.lock().unwrap().enabled, "parked: the pages hide its settings");
     }
 
     #[test]

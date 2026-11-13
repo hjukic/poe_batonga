@@ -603,10 +603,11 @@ pub struct Minimap {
     pub last: Arc<std::sync::Mutex<MinimapView>>,
 }
 
-pub fn init() -> Minimap {
-    Minimap {
-        last: Arc::new(std::sync::Mutex::new(MinimapView::status(true, "Starting"))),
-    }
+/// `enabled` false (`crate::RADAR` parked): the pages get a view that says so, and no
+/// reader runs.
+pub fn init(enabled: bool) -> Minimap {
+    let view = if enabled { MinimapView::status(true, "Starting") } else { MinimapView::status(false, "Map reading is parked") };
+    Minimap { last: Arc::new(std::sync::Mutex::new(view)) }
 }
 
 /// The current zone's layout is recognised from named exits (`layout::layout_done`): the
