@@ -44,8 +44,41 @@ test('loading screens and in-game chat containing names are not identity screens
   assert.equal(classifyScreen(image([line('Existing_Hero', 2036, 326)])), 'unknown');
   assert.equal(recognizeScreen(image([])).candidate, null);
 });
-test('a generic Continue dialog without the creation class title is not a creation screen', () => {
-  assert.equal(classifyScreen({ ...creation, lines: creation.lines.filter((entry) => entry.text !== 'DRUID') }), 'unknown');
+test('a generic Continue dialog without the creation layout cannot identify a character', () => {
+  for (const lines of [
+    [line('CONTINUE', 1192, 1281)],
+    [line('New_Hero', 1061, 1071), line('CONTINUE', 1192, 1281)],
+    [line('New_Hero', 1061, 1071), line('FORBIDDEN RITES', 1077, 1149), line('CONTINUE', 400, 600)],
+  ]) {
+    assert.equal(classifyScreen(image(lines)), 'unknown');
+    assert.equal(recognizeScreen(image(lines)).candidate, null);
+  }
+});
+
+test('creation reads names with any class title, or with no readable class title', () => {
+  for (const title of ['ASSASSIN', 'DUELIST', 'UNKNOWN FUTURE CLASS', 'A55A??1N', null]) {
+    const data = image([
+      ...creation.lines.filter((entry) => entry.text !== 'DRUID'),
+      ...(title === null ? [] : [line(title, 675, 1028)]),
+    ]);
+    // Native focused OCR contains only the name and league, never the class.
+    const focused = image(data.lines.filter((entry) => ['New_Hero', 'FORBIDDEN RITES'].includes(entry.text)));
+    assert.equal(classifyScreen(data), 'creation', String(title));
+    assert.deepEqual(recognizeScreen(data, focused).candidate,
+      { name: 'New_Hero', key: 'new_hero', league: 'FORBIDDEN RITES' }, String(title));
+    assert.deepEqual(learnKnownCharacters(data, focused), [], 'creation names are remembered only after entry');
+
+    const empty = image(data.lines.filter((entry) => entry.text !== 'New_Hero'));
+    assert.equal(recognizeScreen(empty).screen, 'creation', 'clearing the name must invalidate the pending candidate');
+    assert.equal(recognizeScreen(empty).status, 'no-name');
+    assert.equal(recognizeScreen(empty).candidate, null);
+
+    const different = image([line('Other_Hero', 1061, 1071), line('FORBIDDEN RITES', 1077, 1149)]);
+    assert.equal(recognizeScreen(data, different).status, 'ambiguous');
+    assert.equal(recognizeScreen(empty, focused).candidate, null, 'a stale crop cannot restore the erased name');
+    const several = image([...focused.lines, line('Other_Hero', 1061, 1100)]);
+    assert.equal(recognizeScreen(data, several).status, 'ambiguous');
+  }
 });
 test('case differences do not create a new character identity', () => {
   assert.equal(nameKey('  Existing_Hero '), nameKey('EXISTING_HERO'));
@@ -296,6 +329,28 @@ const turned = (data, degrees, [dx, dy] = [0, 0]) => {
     x: c * (w.x - 1280) - s * (w.y - 720) + 1280 + dx, y: s * (w.x - 1280) + c * (w.y - 720) + 720 + dy })) })) };
 };
 const remembered = [{ name: 'AAAABATONGA', league: 'Standard' }, { name: 'DEADEYEOPLOOOOL', league: 'Standard' }];
+
+test('existing characters are read and learned independently of class, also on row entry', () => {
+  for (const title of ['ASSASSIN', 'DUELIST', 'UNKNOWN FUTURE CLASS', 'A55A??1N', '']) {
+    const data = image([
+      ...characterRow('Future_Hero', 328, { selected: true, league: null, level: `LEVEL 17 ${title}`.trim() }),
+      ...characterRow('Other_Hero', 470, { league: null }), ...buttons(),
+    ]);
+    const focused = image(data.lines.filter((entry) => !['CREATE', 'DELETE', 'PLAY'].includes(entry.text)));
+    assert.deepEqual(recognizeScreen(data, focused).candidate,
+      { name: 'Future_Hero', key: 'future_hero', league: null }, String(title));
+    assert.ok(learnKnownCharacters(data, focused).some((known) => known.name === 'Future_Hero'), String(title));
+
+    // With no measurable highlight, double-click entry needs the clicked row's
+    // level evidence. Even a level without its class or league must suffice.
+    const dim = (frame) => ({ ...frame, lines: frame.lines.map((row) => ({ ...row,
+      style: { goldPixels: 15, goldMean: 90, brightFraction: 0 } })) });
+    const result = recognizeScreen(dim(data), dim(focused), [], [2150 / 2559, 350 / 1439]);
+    assert.equal(result.candidate?.name, 'Future_Hero', String(title));
+    assert.equal(result.resolution, 'complete-clicked-row');
+    assert.equal(recognizeScreen(dim(data), dim(focused)).status, 'ambiguous', 'no selection or click: no guess');
+  }
+});
 
 test('live v0.1.108: a screen turned by -3.9° (a double-click) is read back on its still layout', () => {
   const still = image([...characterRow('AAAABATONGA', 328, { selected: true }), ...characterRow('DEADEYEOPLOOOOL', 470), ...buttons()]);

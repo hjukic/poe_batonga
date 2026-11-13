@@ -1,5 +1,37 @@
 # Automatic character identity
 
+## Class-independent names: v0.1.113
+
+Creation no longer requires an OCR class title from a fixed list. The Continue
+button and text in the league field identify the creation layout, including when
+the name is empty. Neither the spelling nor presence of a class title matters.
+A candidate still requires exactly one valid name in the name field, matching
+between the full-frame and focused OCR reads. An empty/ambiguous field clears
+the pending name under the existing session rules; actual activation and zone
+entry are still required to bind a profile.
+
+Existing-character selection already ignored class names. Its level-line evidence
+now also accepts `LEVEL 17` without any class text, so row double-clicks and learning
+complete names work even if OCR drops both the class and league. Level boundaries
+remain 1–100. Diagnostics list menu buttons as anchors without a class whitelist.
+Both Windows and Linux use this shared recognizer; their capture/OCR paths are
+unchanged.
+
+Regression cases cover Assassin, Duelist, an unknown future title, a corrupt title
+and no title, using separate full/focused frames. They also cover empty fields,
+conflicting/stale name reads, highlighted selection, row double-click entry and
+learning. This removes class-dependent logic; live acceptance on new game classes
+and any changed 1.0 screen layout still needs gameplay testing.
+
+Validation on Windows: 216 Rust tests passed (27 ignored), 76 Node tests passed
+(1 skipped), and TypeScript passed. Five saved native OCR references (creation,
+creation with caret, Witch with caret, single selection and multiple selection)
+returned identical name candidates after removing creation class titles and the
+class text after selection levels. No live game input or profile changes were
+performed by these offline checks.
+The Windows release build passed and v0.1.113 was restarted with identity
+diagnostics enabled; live recognition acceptance is still pending.
+
 Owner clarification, 2026-11-13: both a newly created character and a login with
 an existing one must select the correct quest history automatically. Repeated
 manual profile selection is not the requested product. v0.1.88 implements

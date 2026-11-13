@@ -119,7 +119,7 @@ pub(super) fn frame_summary(frame: &Frame) -> serde_json::Value { frame_summary_
 /// `menu`: the full frame already showed a menu (the focused crop has no anchors).
 pub(super) fn frame_summary_in(frame: &Frame, menu: bool) -> serde_json::Value {
     let anchors: Vec<_> = frame.lines.iter().filter(|l| matches!(l.text.trim().to_uppercase().as_str(),
-        "PLAY"|"CONTINUE"|"CREATE"|"DELETE"|"DRUID"|"WARRIOR"|"WITCH"|"MONK"|"SORCERESS"|"RANGER"|"MERCENARY"|"HUNTRESS"))
+        "PLAY"|"CONTINUE"|"CREATE"|"DELETE"))
         .map(|l| serde_json::json!({"text":l.text,"at":l.words.first().map(|w|[w.x,w.y])})).collect();
     // Keep text only from the character name/league fields on a known menu.
     let menu = menu || anchors.iter().any(|a| a["text"].as_str().is_some_and(|t| matches!(t.to_uppercase().as_str(), "PLAY"|"CONTINUE")));

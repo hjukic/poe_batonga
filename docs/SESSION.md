@@ -20,7 +20,18 @@
 > (pushed from the other machine) and Windows character recognition (local), merged
 > as v0.1.112.
 
-Current version: **0.1.112**. Rebuild before testing:
+> **v0.1.113 (2026-11-13):** names no longer depend on class titles. Creation
+> recognizes the Continue/league-field layout without a class whitelist or even
+> readable class text. Selection also accepts a level line without its class,
+> including row double-click entry. Tests cover Assassin, Duelist, unknown/corrupt
+> and absent class titles. Still needs live create → enter → return → Play and
+> double-click testing; any new 1.0 screen layout must be checked in the game.
+> Verified: 216 Rust tests passed (27 ignored), 76 Node tests passed (1 skipped),
+> TypeScript passed. Five saved native OCR references still returned the same
+> names after removing creation class titles and selection class suffixes.
+> Windows release build passed; v0.1.113 was restarted with identity diagnostics.
+
+Current version: **0.1.113**. Rebuild before testing:
 `npm run desktop:build`, then run `src-tauri/target/release/poe-batonga.exe`
 with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation.log`.
 

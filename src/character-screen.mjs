@@ -74,10 +74,12 @@ export function classifyScreen(image) {
   if (anchor(still, 'PLAY', [.25, .82, .60, .98]) &&
       anchor(still, 'CREATE', [.78, .70, .90, .85]) &&
       anchor(still, 'DELETE', [.88, .70, 1, .85])) return 'selection';
+  // Creation's layout, not its class title: future classes and unread titles
+  // must work without updating a list. Keep recognizing an empty name field
+  // too, so deleting a name clears the pending candidate. A candidate still
+  // needs one valid name in the field, agreeing in full and focused reads.
   if (anchor(image, 'CONTINUE', [.40, .82, .65, .98]) &&
-      inBox(image, [.39, .78, .68, .84]).length > 0 &&
-      inBox(image, [.20, .69, .38, .75]).some((line) =>
-        /^(WARRIOR|MERCENARY|HUNTRESS|MONK|SORCERESS|WITCH|DRUID|MARAUDER|DUELIST|RANGER|SHADOW|TEMPLAR)$/i.test(line.text.trim()))) return 'creation';
+      inBox(image, [.39, .78, .68, .84]).some((line) => line.text.trim())) return 'creation';
   return 'unknown';
 }
 
@@ -134,8 +136,9 @@ const nameRows = (image) => inBox(image, [.79, .215, .84, .70])
   }).sort((a, b) => a.words[0].y - b.words[0].y);
 
 // "LEVEL 17 MONK", also as OCR misreads it ("I_EVEL 97 SIORMWEAVER", "[EVEL 95 …").
-// Every character row has it, whatever its league; a league dropdown item has not.
-const LEVEL_LINE = /^\S{2,7}\s+(\d{1,3})\s+\S/u;
+// The class after the level is optional: OCR may drop it, and its spelling
+// must not determine whether this is a character row. A dropdown item has no level.
+const LEVEL_LINE = /^\S{2,7}\s+(\d{1,3})(?:\s|$)/u;
 const isLevelLine = (text) => {
   const level = Number(LEVEL_LINE.exec(text.trim())?.[1]);
   return level >= 1 && level <= 100;
