@@ -14,6 +14,7 @@
     {
       "id": "kill-tor-gul",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Defeat Tor Gul, the Defiler" }],
       "navigationTarget": { "area": "G2_9_2", "label": "Tor Gul", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Tor Gul", "style": "boss" }],
       "trigger": null,

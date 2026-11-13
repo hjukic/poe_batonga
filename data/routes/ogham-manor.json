@@ -14,6 +14,7 @@
     {
       "id": "kill-geonor",
       "kind": "objective",
+      "screen": [{ "quest": "TheIronCount", "past": "Slay the Count of Ogham" }],
       "parts": [{ "text": "Kill " }, { "text": "Count Geonor", "style": "boss" }],
       "trigger": {
         "type": "npcLine",

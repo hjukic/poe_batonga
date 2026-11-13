@@ -14,6 +14,7 @@
     {
       "id": "kill-great-white-one",
       "kind": "objective",
+      "screen": [{ "quest": "Act4RescueMedicineWoman", "past": "Defeat the Great White One" }],
       "navigationTarget": { "area": "G4_3_1", "label": "Shark Pit", "tag": "boss" },
       "optional": true,
       "parts": [{ "text": "Kill " }, { "text": "Great White One", "style": "boss" }, { "text": "Shark Fin", "style": "reward" }],

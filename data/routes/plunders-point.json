@@ -7,6 +7,7 @@
     {
       "id": "plunders-point-dannig",
       "kind": "objective",
+      "screen": [{ "quest": "Act4TreasureMapExpedition", "past": "Speak to Dannig" }],
       "parts": [{ "text": "Talk to " }, { "text": "Dannig", "style": "npc" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."

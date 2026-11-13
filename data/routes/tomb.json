@@ -7,6 +7,9 @@
     {
       "id": "kill-asinia",
       "kind": "objective",
+      "screen": [
+        { "quest": "GraveyardFight", "lines": ["Pick up Asinia's Memorial Key Piece", "Return to the Cemetery of the Eternals and search for Draven", "Investigate the Mausoleum in search of Praetor Draven", "Search the Mausoleum for Praetor Draven", "Return to the Cemetery of the Eternals and open the Memorial Gate", "Follow Lachlann", "Put Lachlann to rest", "Quest Complete"] }
+      ],
       "parts": [{ "text": "Kill " }, { "text": "Asinia", "style": "boss" }, { "text": "Key Piece", "style": "reward" }],
       "trigger": null,
       "evidence": "No kill line known. Tick by hand."

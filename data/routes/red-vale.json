@@ -21,6 +21,7 @@
     {
       "id": "kill-rust-king",
       "kind": "objective",
+      "screen": [{ "quest": "TreeOfSouls", "past": "Defeat the Rust King to obtain the final Rune of Power" }],
       "parts": [{ "text": "Kill " }, { "text": "The Rust King", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
       "trigger": null,
       "evidence": "No kill line known. Tick by hand."

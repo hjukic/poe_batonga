@@ -7,6 +7,9 @@
     {
       "id": "grelwood-talk-una",
       "kind": "objective",
+      "screen": [
+        { "quest": "TreeOfSouls", "lines": ["Find the entrance to the Red Vale in the Grelwood", "Find the entrance to the Red Vale", "Search the Red Vale for the 3 Runes of Power", "Activate the Obelisks of Rust", "Collect all 3 Runes of Power", "Collect the 2 remaining Runes of Power", "Collect the last Rune of Power", "Defeat the monsters guarding the Rune of Power", "Defeat the Rust King to obtain the final Rune of Power", "Bring the Runes to Renly for forging", "Take the forged Rune Spikes from Renly", "Take the forged Rune Spikes to the Hooded One in the Grelwood", "Stab the Rune Spikes into the Tree of Souls", "Stab the 2 remaining Rune Spikes into the Tree of Souls", "Stab the last Rune Spike into the Tree of Souls", "Speak to Una about what you have just witnessed", "Return to Clearfell Encampment and speak to Una", "Quest Complete"] }
+      ],
       "parts": [{ "text": "Find and talk to " }, { "text": "Una", "style": "npc" }]
     },
     {
@@ -62,6 +65,7 @@
     {
       "id": "runic-seals",
       "kind": "objective",
+      "screen": [{ "quest": "TreeOfSouls", "past": "Stab the last Rune Spike into the Tree of Souls" }],
       "parts": [{ "text": "Activate 3 Runic Seals" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."
@@ -69,6 +73,7 @@
     {
       "id": "grelwood-una-seals",
       "kind": "objective",
+      "screen": [{ "quest": "TreeOfSouls", "past": "Speak to Una about what you have just witnessed" }],
       "parts": [{ "text": "Talk to " }, { "text": "Una", "style": "npc" }]
     },
     {

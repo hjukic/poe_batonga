@@ -15,6 +15,7 @@
     {
       "id": "kill-krutog",
       "kind": "objective",
+      "screen": [{ "quest": "Act4KillGoblinGiant", "past": "Slay Krutog" }],
       "navigationTarget": { "area": "G4_1_2", "label": "Krutog", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Krutog", "style": "boss" }],
       "trigger": null,

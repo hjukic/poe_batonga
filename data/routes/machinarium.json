@@ -12,11 +12,13 @@
     {
       "id": "machinarium-alva",
       "kind": "objective",
+      "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Ask Alva for advice" }],
       "parts": [{ "text": "Summon and talk to " }, { "text": "Alva", "style": "npc" }]
     },
     {
       "id": "small-soul-core-altar",
       "kind": "objective",
+      "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Place the small Soul Core into the Stone Altar" }],
       "parts": [{ "text": "Soul Core on Alva's altar" }],
       "trigger": {
         "type": "npcLine",

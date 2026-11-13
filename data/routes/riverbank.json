@@ -6,6 +6,7 @@
     {
       "id": "talk-wounded-man",
       "kind": "objective",
+      "screen": [{ "quest": "TheMiller" }],
       "parts": [{ "text": "Talk to the Wounded Man" }],
       "trigger": {
         "type": "npcLine",
@@ -18,6 +19,7 @@
       "id": "kill-bloated-miller",
       "navigationTarget": { "area": "G1_1", "label": "The Bloated Miller", "exit": "G1_town" },
       "kind": "objective",
+      "screen": [{ "quest": "TheMiller", "past": "Kill the Bloated Miller and end his rage" }],
       "parts": [{ "text": "Kill " }, { "text": "The Bloated Miller", "style": "boss" }],
       "trigger": {
         "type": "npcLine",

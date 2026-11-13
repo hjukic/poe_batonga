@@ -7,11 +7,17 @@
     {
       "id": "sanctum-alva",
       "kind": "objective",
+      "screen": [
+        { "quest": "SearchForTheVaalRepository", "from": "Search Jiquani's Sanctum for two medium Soul Cores and use them to activate two Generators" }
+      ],
       "parts": [{ "text": "Summon and talk to " }, { "text": "Alva", "style": "npc" }]
     },
     {
       "id": "medium-soul-cores",
       "kind": "objective",
+      "screen": [
+        { "quest": "SearchForTheVaalRepository", "past": "Search Jiquani's Sanctum for two medium Soul Cores and use them to activate two Generators" }
+      ],
       "parts": [{ "text": "2 Medium Cores: generators" }],
       "trigger": {
         "type": "npcLine",
@@ -26,6 +32,7 @@
     {
       "id": "kill-zicoatl",
       "kind": "objective",
+      "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Defeat Zicoatl, Warden of the Core" }],
       "parts": [{ "text": "Kill " }, { "text": "Zicoatl", "style": "boss" }, { "text": "Soul Core", "style": "reward" }],
       "trigger": null,
       "evidence": "Back at the start, click the Large Soul Core; loot it after the kill. No kill line known. Tick by hand."

@@ -14,6 +14,7 @@
     {
       "id": "kill-scourge-of-the-skies",
       "kind": "objective",
+      "screen": [{ "quest": "Act4ScourgeSkies", "past": "Kill the Scourge of the Skies" }],
       "navigationTarget": { "area": "G4_7", "label": "Scourge of the Skies", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Scourge of the Skies", "style": "boss" }],
       "trigger": null,
@@ -22,6 +23,7 @@
     {
       "id": "shrike-hooded-one",
       "kind": "objective",
+      "screen": [{ "quest": "FindTheSpearPieces", "from": "Speak to The Hooded One in Kingsmarch" }],
       "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {

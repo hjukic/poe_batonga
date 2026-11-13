@@ -7,21 +7,25 @@
     {
       "id": "kingsmarch-doryani",
       "kind": "objective",
+      "screen": [{ "quest": "FindTheSpearPieces", "past": "Talk to Doryani" }],
       "parts": [{ "text": "Talk to " }, { "text": "Doryani", "style": "npc" }]
     },
     {
       "id": "kingsmarch-alva",
       "kind": "objective",
+      "screen": [{ "quest": "FindTheSpearPieces", "past": "Talk to Alva" }],
       "parts": [{ "text": "Talk to " }, { "text": "Alva", "style": "npc" }]
     },
     {
       "id": "kingsmarch-tujen",
       "kind": "objective",
+      "screen": [{ "quest": "Act4DeliriumUnlock" }],
       "parts": [{ "text": "Take " }, { "text": "Tujen", "style": "npc" }, { "text": "'s quest" }]
     },
     {
       "id": "kingsmarch-farrow",
       "kind": "objective",
+      "screen": [{ "quest": "Act4TreasureMapExpedition", "from": "Investigate the region for Runic Knowledge" }],
       "parts": [{ "text": "Talk to " }, { "text": "Farrow", "style": "npc" }, { "text": ": Runeseeker" }],
       "trigger": null,
       "evidence": "Starts The Runeseeker; it ends at the Deserted Post and unlocks the Verisium Anvil. No log line known. Tick by hand."
@@ -83,6 +87,7 @@
     {
       "id": "verisium-spikes",
       "kind": "objective",
+      "screen": [{ "quest": "Act4DeliriumUnlock", "past": "Take the Verisium Spikes from Dannig" }],
       "parts": [{ "text": "Spikes from " }, { "text": "Dannig", "style": "npc" }]
     },
     {
@@ -96,11 +101,13 @@
     {
       "id": "kingsmarch-tujen-reward",
       "kind": "objective",
+      "screen": [{ "quest": "Act4DeliriumUnlock", "past": "Speak to Tujen in Kingsmarch" }],
       "parts": [{ "text": "Talk to " }, { "text": "Tujen", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }]
     },
     {
       "id": "maps-to-makoru",
       "kind": "objective",
+      "screen": [{ "quest": "Act4TreasureMapExpedition", "past": "Speak to Makoru about the Map Pieces" }],
       "parts": [{ "text": "Give 4 maps to Makoru" }]
     },
     {
@@ -127,11 +134,15 @@
     {
       "id": "kingsmarch-hooded-one-act-end",
       "kind": "objective",
+      "screen": [{ "quest": "FindTheSpearPieces", "past": "Speak to the Hooded One" }],
       "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {
       "id": "shark-fin-kaimana",
       "kind": "objective",
+      "screen": [
+        { "quest": "Act4RescueMedicineWoman", "lines": ["Await Kaimana's return to Kingsmarch", "Take a Reward from Kaimana", "Take a Reward from Kaimana in Kingsmarch", "Use Rakiata's Lesson to receive her Blessing", "Use Kaom's Lesson to receive his Blessing", "Quest Complete"] }
+      ],
       "optional": true,
       "parts": [{ "text": "Shark Fin to " }, { "text": "Kaimana", "style": "npc" }, { "text": "Gem + blessing", "style": "reward" }],
       "trigger": null,

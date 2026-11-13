@@ -7,6 +7,7 @@
     {
       "id": "kill-devourer",
       "kind": "objective",
+      "screen": [{ "quest": "MudBurrower", "past": "Kill the Devourer" }],
       "navigationTarget": { "area": "G1_3", "label": "The Devourer", "tag": "boss" },
       "optional": true,
       "parts": [{ "text": "Kill " }, { "text": "The Devourer", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],

@@ -10,6 +10,7 @@ mod tracker;
 mod characters;
 mod game;
 mod identity;
+mod quest_screen;
 
 /// The radar and layout recognition: the screenshots of the minimap and the big map, the
 /// map recorder, the layout drawn under the checklist, boss kills read from the map, the
@@ -1008,6 +1009,7 @@ fn main() {
             identity::spawn(app.handle().clone());
             relock(&app.state::<tracker::Tracker>().0).sync_navigation(app.handle());
             tracker::spawn(app.handle().clone());
+            quest_screen::spawn(app.handle().clone());
             let reader = minimap::init(RADAR);
             if RADAR {
                 minimap::spawn(app.handle().clone(), &reader);

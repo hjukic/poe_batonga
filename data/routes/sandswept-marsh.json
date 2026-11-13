@@ -7,6 +7,7 @@
     {
       "id": "marsh-hooded-one",
       "kind": "objective",
+      "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Speak to the Hooded One about what to do next" }],
       "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {

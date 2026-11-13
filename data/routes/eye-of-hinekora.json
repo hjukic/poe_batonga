@@ -7,6 +7,7 @@
     {
       "id": "matiki-well",
       "kind": "objective",
+      "screen": [{ "quest": "Act4KaruiElder", "past": "Speak to Matiki" }],
       "parts": [{ "text": "Well: talk to " }, { "text": "Matiki", "style": "npc" }]
     },
     {
@@ -20,6 +21,7 @@
     {
       "id": "three-tests",
       "kind": "objective",
+      "screen": [{ "quest": "Act4KaruiElder", "past": "Complete Rakiata's Test of Mettle" }],
       "parts": [{ "text": "Tests: Fire, Nature, Cold" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."

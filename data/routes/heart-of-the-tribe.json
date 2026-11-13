@@ -15,6 +15,7 @@
     {
       "id": "kill-tavakai",
       "kind": "objective",
+      "screen": [{ "quest": "FindTheSpearPieces", "past": "Defeat Tavakai" }],
       "navigationTarget": { "area": "G4_11_2", "label": "Tavakai", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Tavakai", "style": "boss" }, { "text": ", talk to him" }]
     },

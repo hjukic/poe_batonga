@@ -12,6 +12,7 @@
     {
       "id": "kill-ketzuli",
       "kind": "objective",
+      "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Defeat Ketzuli, High Priest of the Sun" }],
       "parts": [{ "text": "Kill " }, { "text": "Ketzuli", "style": "boss" }, { "text": " (upstairs)" }],
       "trigger": {
         "type": "npcLine",

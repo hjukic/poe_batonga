@@ -20,6 +20,7 @@
     {
       "id": "kill-ignagduk",
       "kind": "objective",
+      "screen": [{ "quest": "KillTheBogWitch", "past": "Kill Ignagduk" }],
       "navigationTarget": { "area": "G3_7", "label": "Ignagduk", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Ignagduk", "style": "boss" }, { "text": ", use Skull" }, { "text": "+30 Spirit", "style": "reward" }],
       "trigger": null,

@@ -7,6 +7,7 @@
     {
       "id": "talk-lachlann",
       "kind": "objective",
+      "screen": [{ "quest": "GraveyardFight" }],
       "parts": [{ "text": "Talk to " }, { "text": "Lachlann", "style": "npc" }]
     },
     {
@@ -36,6 +37,9 @@
     {
       "id": "memorial-gate",
       "kind": "objective",
+      "screen": [
+        { "quest": "GraveyardFight", "past": "Return to the Cemetery of the Eternals and open the Memorial Gate" }
+      ],
       "navigationTarget": { "area": "G1_7", "label": "Memorial Gate", "tag": "arena_gate" },
       "parts": [{ "text": "Open the Memorial Gate" }],
       "trigger": {
@@ -51,6 +55,10 @@
     {
       "id": "kill-lachlann",
       "kind": "objective",
+      "screen": [
+        { "quest": "GraveyardFight", "past": "Put Lachlann to rest" },
+        { "quest": "ReviveHoodedMentor", "past": "Search for the Count's grave past the Memorial Gate" }
+      ],
       "navigationTarget": { "area": "G1_7", "label": "Lachlann", "tag": "arena" },
       "parts": [{ "text": "Kill " }, { "text": "Lachlann", "style": "boss" }, { "text": ", loot Ring" }, { "text": "Skill Gem", "style": "reward" }],
       "trigger": {

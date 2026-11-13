@@ -7,6 +7,7 @@
     {
       "id": "smithing-tools",
       "kind": "objective",
+      "screen": [{ "quest": "RenlysTools", "past": "Find Renly's tools" }],
       "navigationTarget": { "area": "G1_13_2", "label": "Smithing house", "tag": "blacksmith" },
       "parts": [{ "text": "Smithing Tools (house)" }, { "text": "Salvage Bench", "style": "reward" }],
       "trigger": null,
@@ -24,6 +25,7 @@
     {
       "id": "kill-executioner",
       "kind": "objective",
+      "screen": [{ "quest": "TheExecutioner", "past": "Kill the Executioner" }],
       "parts": [{ "text": "Kill " }, { "text": "The Executioner", "style": "boss" }, { "text": "Support Gem", "style": "reward" }],
       "trigger": null,
       "evidence": "No kill line known. Tick by hand."
@@ -31,6 +33,10 @@
     {
       "id": "lever-leitis",
       "kind": "objective",
+      "screen": [
+        { "quest": "TheExecutioner", "past": "Talk to Leitis" },
+        { "quest": "TheIronCount" }
+      ],
       "parts": [{ "text": "Pull lever, talk to " }, { "text": "Leitis", "style": "npc" }]
     },
     {

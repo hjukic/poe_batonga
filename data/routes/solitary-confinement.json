@@ -7,6 +7,7 @@
     {
       "id": "kill-the-prisoner",
       "kind": "objective",
+      "screen": [{ "quest": "Act4KillPrisoner", "past": "Slay the Prisoner" }],
       "navigationTarget": { "area": "G4_5_2", "label": "The Prisoner", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "The Prisoner", "style": "boss" }],
       "trigger": null,
@@ -15,6 +16,7 @@
     {
       "id": "prison-hooded-one",
       "kind": "objective",
+      "screen": [{ "quest": "FindTheSpearPieces", "from": "Speak to Makoru in Kingsmarch" }],
       "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {

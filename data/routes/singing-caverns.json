@@ -15,6 +15,7 @@
     {
       "id": "kill-diamora",
       "kind": "objective",
+      "screen": [{ "quest": "Act4KillSiren", "past": "Kill Diamora, Song of Death" }],
       "navigationTarget": { "area": "G4_3_2", "label": "Diamora", "tag": "bossman_new" },
       "parts": [{ "text": "Kill " }, { "text": "Diamora", "style": "boss" }],
       "trigger": {
@@ -30,6 +31,7 @@
     {
       "id": "caverns-hooded-one",
       "kind": "objective",
+      "screen": [{ "quest": "FindTheSpearPieces", "from": "Explore the Islands in search of other Weapon Pieces" }],
       "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {

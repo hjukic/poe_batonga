@@ -1,0 +1,1290 @@
+{
+  "formatVersion": 1,
+  "quests": {
+    "TheMiller": {
+      "name": "Reaching Clearfell", "act": 1,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Take Renly's reward"]},
+        {"order":2,"lines":["Talk to the Blacksmith"]},
+        {"order":3,"lines":["Open the Passive Skill Screen","Spend your Passive Skill Point"]},
+        {"order":4,"lines":["Enter the logging encampment"]},
+        {"order":5,"lines":["Kill the Bloated Miller and end his rage"]},
+        {"order":6,"lines":["Search for the Miller and find safety in Clearfell"]}
+      ]
+    },
+    "MudBurrower": {
+      "name": "Treacherous Ground", "act": 1,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Talk to Renly for your reward"]},
+        {"order":2,"lines":["Kill the Devourer"]},
+        {"order":3,"lines":["Find the Devourer and slay it"]},
+        {"order":4,"lines":["Search Clearfell to find the Mud Burrow entrance","Slay the Devourer in its lair"]},
+        {"order":5,"lines":["Search Clearfell for the entrance to the Mud Burrow","Slay the Devourer in its lair"]}
+      ]
+    },
+    "TreeOfSouls": {
+      "name": "Secrets in the Dark", "act": 1,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Return to Clearfell Encampment and speak to Una"]},
+        {"order":2,"lines":["Speak to Una about what you have just witnessed"]},
+        {"order":3,"lines":["Stab the last Rune Spike into the Tree of Souls"]},
+        {"order":4,"lines":["Stab the last Rune Spike into the Tree of Souls"]},
+        {"order":5,"lines":["Stab the last Rune Spike into the Tree of Souls"]},
+        {"order":6,"lines":["Stab the 2 remaining Rune Spikes into the Tree of Souls"]},
+        {"order":7,"lines":["Stab the 2 remaining Rune Spikes into the Tree of Souls"]},
+        {"order":8,"lines":["Stab the 2 remaining Rune Spikes into the Tree of Souls"]},
+        {"order":9,"lines":["Stab the Rune Spikes into the Tree of Souls"]},
+        {"order":10,"lines":["Take the forged Rune Spikes to the Hooded One in the Grelwood"]},
+        {"order":11,"lines":["Take the forged Rune Spikes from Renly"]},
+        {"order":12,"lines":["Bring the Runes to Renly for forging"]},
+        {"order":13,"lines":["Defeat the Rust King to obtain the final Rune of Power"]},
+        {"order":14,"lines":["Defeat the monsters guarding the Rune of Power"]},
+        {"order":15,"lines":["Collect the last Rune of Power"]},
+        {"order":16,"lines":["Collect the last Rune of Power"]},
+        {"order":17,"lines":["Collect the last Rune of Power"]},
+        {"order":18,"lines":["Collect the 2 remaining Runes of Power"]},
+        {"order":19,"lines":["Collect the 2 remaining Runes of Power"]},
+        {"order":20,"lines":["Collect the 2 remaining Runes of Power"]},
+        {"order":21,"lines":["Collect all 3 Runes of Power"]},
+        {"order":22,"lines":["Activate the Obelisks of Rust","Collect the Runes of Power"]},
+        {"order":23,"lines":["Search for the 3 Runes of Power"]},
+        {"order":24,"lines":["Investigate the Obelisks of Rust","Collect the Rune of Power"]},
+        {"order":25,"lines":["Search the Red Vale for Obelisks of Rust containing Runes of Power"]},
+        {"order":26,"lines":["Search the Red Vale for the 3 Runes of Power"]},
+        {"order":27,"lines":["Find the entrance to the Red Vale","Search the Red Vale for 3 Runes of Power"]},
+        {"order":28,"lines":["Find the entrance to the Red Vale in the Grelwood","Search the Red Vale for Obelisks of Rust which contain Runes of Power"]},
+        {"order":29,"lines":["Summon Una and ask her about the entity in the Tree"]},
+        {"order":30,"lines":["Search the Grelwood for evidence of the Count's activities"]},
+        {"order":31,"lines":["Travel through Clearfell to the Grelwood"]}
+      ]
+    },
+    "ReviveHoodedMentor": {
+      "name": "The Mysterious Shade", "act": 1,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Witness the revival of the Hooded One"]},
+        {"order":2,"lines":["Bring Count Lachlann's Ring to Una"]},
+        {"order":3,"lines":["Search for the Count's grave past the Memorial Gate"]},
+        {"order":4,"lines":["Continue through the Grim Tangle"]},
+        {"order":5,"lines":["Speak to Una about the roots"]},
+        {"order":6,"lines":["Summon Una to ask for help clearing the roots"]},
+        {"order":7,"lines":["Travel through the Grim Tangle"]},
+        {"order":8,"lines":["Return to the entrance to the Grim Tangle in the Grelwood"]},
+        {"order":9,"lines":["Find the entrance to the Grim Tangle in the Grelwood"]},
+        {"order":10,"lines":["The roots are impassable for now"]}
+      ]
+    },
+    "RenlysTools": {
+      "name": "Finding the Forge", "act": 1,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Bring the tools back to Renly"]},
+        {"order":2,"lines":["Find Renly's tools"]},
+        {"order":3,"lines":["Travel to Ogham Village"]},
+        {"order":4,"lines":["Speak to Renly"]}
+      ]
+    },
+    "UnaLute": {
+      "name": "The Lost Lute", "act": 1,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Use the Book of Specialisation"]},
+        {"order":2,"lines":["Speak to Una for a reward"]},
+        {"order":3,"lines":["Return Una's Lute to her"]},
+        {"order":4,"lines":["Retrieve Una's Lute"]},
+        {"order":5,"lines":["Search Ogham Farmlands for Una's Lute"]},
+        {"order":6,"lines":["Go to Ogham Farmlands","Find Una's Lute"]}
+      ]
+    },
+    "GraveyardFight": {
+      "name": "Sorrow Among Stones", "act": 1,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Put Lachlann to rest"]},
+        {"order":2,"lines":["Follow Lachlann"]},
+        {"order":3,"lines":["Return to the Cemetery of the Eternals and open the Memorial Gate"]},
+        {"order":4,"lines":["Pick up Asinia's Memorial Key Piece"]},
+        {"order":5,"lines":["Destroy Asinia, the Praetor's Consort"]},
+        {"order":6,"lines":["Search for Asinia in the Tomb of the Consort"]},
+        {"order":7,"lines":["Enter the Tomb of the Consort in search of Asinia"]},
+        {"order":8,"lines":["Return to the Cemetery of the Eternals and search for the Tomb of the Consort"]},
+        {"order":9,"lines":["Pick up Draven's Memorial Key Piece"]},
+        {"order":10,"lines":["Destroy Praetor Draven"]},
+        {"order":11,"lines":["Search the Mausoleum for Draven and his Consort"]},
+        {"order":12,"lines":["Enter the Mausoleum"]},
+        {"order":13,"lines":["Return to the Cemetery of the Eternals and search for the Tomb of the Consort"]},
+        {"order":14,"lines":["Pick up Draven's Memorial Key Piece"]},
+        {"order":15,"lines":["Destroy Praetor Draven"]},
+        {"order":16,"lines":["Search the Mausoleum for Praetor Draven"]},
+        {"order":17,"lines":["Investigate the Mausoleum in search of Praetor Draven"]},
+        {"order":18,"lines":["Return to the Cemetery of the Eternals and search for Draven"]},
+        {"order":19,"lines":["Pick up Asinia's Memorial Key Piece"]},
+        {"order":20,"lines":["Destroy Asinia"]},
+        {"order":21,"lines":["Explore the Tomb of the Consort in search of Draven and his Consort"]},
+        {"order":22,"lines":["Explore the Tomb of the Consort in search of Draven and his Consort"]},
+        {"order":23,"lines":["Search the Cemetery of the Eternals for the Tomb of the Consort and the Mausoleum"]}
+      ]
+    },
+    "TheOutcast": {
+      "name": "Ominous Altars", "act": 1,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Talk to Finn for your reward"]},
+        {"order":2,"lines":["Defeat the King in the Mists"]},
+        {"order":3,"lines":["Search for Ritual Altars and cleanse them"]},
+        {"order":4,"lines":["Search for Freythorn above the Hunting Grounds"]}
+      ]
+    },
+    "TheExecutioner": {
+      "name": "The Trail of Corruption", "act": 1,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Talk to Leitis in Clearfell"]},
+        {"order":2,"lines":["Talk to Leitis"]},
+        {"order":3,"lines":["Free the Prisoner"]},
+        {"order":4,"lines":["Kill the Executioner"]},
+        {"order":5,"lines":["Search for the Seed of Corruption"]},
+        {"order":6,"lines":["Find the entrance to the Village"]},
+        {"order":7,"lines":["Find the entrance to the Village"]},
+        {"order":8,"lines":["Enter the Hunting Grounds"]}
+      ]
+    },
+    "TheIronCount": {
+      "name": "The Mad Wolf of Ogham", "act": 1,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Travel East"]},
+        {"order":2,"lines":["Return to Clearfell Encampment and speak to the Hooded One"]},
+        {"order":3,"lines":["Slay the Count of Ogham"]},
+        {"order":4,"lines":["Approach the throne"]},
+        {"order":5,"lines":["Find your way down beneath the Manor"]},
+        {"order":6,"lines":["Search the manor for Count Geonor"]},
+        {"order":7,"lines":["Infiltrate the Manor beyond the Village","Find Count Geonor"]}
+      ]
+    },
+    "CaravanRescue": {
+      "name": "Earning Passage", "act": 2,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Enter the Ardura Caravan"]},
+        {"order":2,"lines":["Speak to Zarka"]},
+        {"order":3,"lines":["Defeat Rathbreaker"]},
+        {"order":4,"lines":["Find the Hyenic Raiders and destroy them"]},
+        {"order":5,"lines":["Speak to someone in charge at the caravan"]},
+        {"order":6,"lines":["Speak to the Hooded One"]}
+      ]
+    },
+    "OpenTheDesertGates": {
+      "name": "The Trail of Corruption", "act": 2,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Talk to Asala to travel south to the Sandswept Marsh"]},
+        {"order":2,"lines":["Use a ramp to the northwest of the Caravan's midpoint to find the Hooded One"]},
+        {"order":3,"lines":["Speak to the Hooded One in the Shrine to the Northwest of the Caravan"]},
+        {"order":4,"lines":["Defeat Jamanra, the Abomination"]},
+        {"order":5,"lines":["Fight your way to Jamanra, the Abomination's throne"]},
+        {"order":6,"lines":["Use the Desert Map to travel to the Dreadnought"]},
+        {"order":7,"lines":["Speak to Asala"]},
+        {"order":8,"lines":["Defeat Tor Gul, the Defiler"]},
+        {"order":9,"lines":["Defeat Jamanra, the Abomination"]},
+        {"order":10,"lines":["Defeat Jamanra, the Abomination"]},
+        {"order":11,"lines":["Travel through the Path of Mourning"]},
+        {"order":12,"lines":["Ascend Deshar"]},
+        {"order":13,"lines":["Use the Desert Map to travel to Deshar"]},
+        {"order":14,"lines":["Speak to Asala"]},
+        {"order":15,"lines":["Use the Horn of the Vastiri to clear the Sandstorm"]},
+        {"order":16,"lines":["Use the Desert Map to return to the Sandstorm at the Halani Gates"]},
+        {"order":17,"lines":["Return to Zarka to obtain the Horn of the Vastiri"]},
+        {"order":18,"lines":["Retrace the legendary Orbala's path to recreate the Horn of the Vastiri"]},
+        {"order":19,"lines":["Speak to Asala to learn about Orbala's footsteps"]},
+        {"order":20,"lines":["Return to the Caravan and speak to Zarka"]},
+        {"order":21,"lines":["Help Asala slay the Corrupted leader of the Faridun"]},
+        {"order":22,"lines":["Fight your way forward"]},
+        {"order":23,"lines":["Fight your way to the third Gate and open it"]},
+        {"order":24,"lines":["Fight your way to the second Gate and open it"]},
+        {"order":25,"lines":["Find a way to open the Gates with Asala"]},
+        {"order":26,"lines":["Ascend Traitor's Passage to reach the top of the Gates"]},
+        {"order":27,"lines":["Use the Desert Map to travel to Traitor's Passage"]},
+        {"order":28,"lines":["Talk to Asala about Risu's information"]},
+        {"order":29,"lines":["Return to the caravan and talk to Risu about the closed Gates"]},
+        {"order":30,"lines":["Use the Desert Map to travel to the Halani Gates"]},
+        {"order":31,"lines":["Return to the Caravan's lead cart to question the Defector there"]},
+        {"order":32,"lines":["Question the Faridun Defector"]},
+        {"order":33,"lines":["Defeat Rudja, Dread Engineer"]},
+        {"order":34,"lines":["Investigate Mawdun Mine"]},
+        {"order":35,"lines":["Enter Mawdun Mine"]},
+        {"order":36,"lines":["Explore Mawdun Quarry"]},
+        {"order":37,"lines":["Use the Desert Map to travel to Mawdun Quarry"]},
+        {"order":38,"lines":["Talk to Asala about the closed Gates"]},
+        {"order":39,"lines":["Travel with the Ardura Caravan to areas of reported Corruption"]},
+        {"order":40,"lines":["Consult with Asala about the Beast"]},
+        {"order":41,"lines":["Talk to the Sekhema of the Ardura"]},
+        {"order":42,"lines":["Speak to the Hooded One"]}
+      ]
+    },
+    "BurnTheWaterGoddess": {
+      "name": "The City of Seven Waters", "act": 2,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Take the reward for returning the Essence of Water"]},
+        {"order":2,"lines":["Return to the Ardura Caravan and talk to Zarka"]},
+        {"order":3,"lines":["Pick up the Essence of Water"]},
+        {"order":4,"lines":["Witness the Water Goddess being put to rest"]},
+        {"order":5,"lines":["Use the Everburning Cinders to let the Water Goddess rest"]},
+        {"order":6,"lines":["Speak with the Water Goddess to see if you can render aid"]},
+        {"order":7,"lines":["Destroy Azarian, the Forsaken Son to gain access to the Essence of Water"]},
+        {"order":8,"lines":["Find the Essence of Water somewhere in Keth Sanctum"]},
+        {"order":9,"lines":["Find the Sanctum at the heart of Keth"]},
+        {"order":10,"lines":["Find the entrance to Keth buried somewhere in the sands"]},
+        {"order":11,"lines":["Use the Desert Map to travel to Keth"]}
+      ]
+    },
+    "StealTheMastodonTusks": {
+      "name": "A Theft of Ivory", "act": 2,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Take the reward for the Mastodon Tusks from Zarka"]},
+        {"order":2,"lines":["Return to the Ardura Caravan and talk to Zarka"]},
+        {"order":3,"lines":["Retrieve the Tusks"]},
+        {"order":4,"lines":["Defeat Ekbab, Ancient Steed and Iktab, the Deathlord, then retrieve the Tusks"]},
+        {"order":5,"lines":["Search the Bone Pits for the Mastodon Tusks"]},
+        {"order":6,"lines":["Search the Mastodon Badlands for the entrance to the Bone Pits"]},
+        {"order":7,"lines":["Use the Desert Map to travel to the Mastodon Badlands"]}
+      ]
+    },
+    "PryTheFlameRuby": {
+      "name": "A Crown of Stone", "act": 2,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Zarka has offered you a reward for defeating Zalmarath, the Colossus"]},
+        {"order":2,"lines":["Give the Flame Ruby to Zarka"]},
+        {"order":3,"lines":["Pick up the Flame Ruby"]},
+        {"order":4,"lines":["Defeat Zalmarath, the Colossus and retrieve the Flame Ruby"]},
+        {"order":5,"lines":["Search for the Rite of Flame altar somewhere in the Titan Grotto"]},
+        {"order":6,"lines":["Enter the Titan Grotto at the Clasped Entry"]},
+        {"order":7,"lines":["Find and activate additional Ancient Seals"]},
+        {"order":8,"lines":["Find a way to access the Titan Grotto beneath Valley of the Titans"]},
+        {"order":9,"lines":["Use the Desert Map to travel to Valley of the Titans"]}
+      ]
+    },
+    "FindTheSuicideNote": {
+      "name": "Tradition's Toll", "act": 2,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Use the Book of Specialisation"]},
+        {"order":2,"lines":["Speak to Shambrin"]},
+        {"order":3,"lines":["Return the Final Letter to Shambrin"]},
+        {"order":4,"lines":["Find Lailuma's body somewhere in Deshar"]},
+        {"order":5,"lines":["Travel to Deshar"]},
+        {"order":6,"lines":["Return the letter to someone in the Ardura Caravan"]},
+        {"order":7,"lines":["Look for the owner of the abandoned rhoa in Deshar"]}
+      ]
+    },
+    "MysteriousRelics": {
+      "name": "Ancient Vows", "act": 2,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Insert the Sun Clan Relic"]},
+        {"order":2,"lines":["Insert the Kabala Clan Relic"]},
+        {"order":3,"lines":["Insert the Relics"]},
+        {"order":4,"lines":["Find a use for the Relics"]},
+        {"order":5,"lines":["Find a use for the Relic"]},
+        {"order":6,"lines":["Find another Relic that can be placed in the altar"]},
+        {"order":7,"lines":["Place the Relic in the altar that you found"]},
+        {"order":8,"lines":["Find something that can be placed in the altar"]}
+      ]
+    },
+    "AscentToPower": {
+      "name": "Ascent to Power", "act": 2,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Quest Complete"],"complete":true},
+        {"order":2,"lines":["Use the Altar of Ascendancy to obtain Ascendancy Passive Skill Points"]},
+        {"order":3,"lines":["Use the Altar of Ascendancy to choose your Ascendancy"]},
+        {"order":4,"lines":["Defeat Rattlecage, the Earthbreaker"]},
+        {"order":5,"lines":["Complete the Trial of the Sekhemas"]},
+        {"order":6,"lines":["Begin your Test of Strength"]},
+        {"order":7,"lines":["Use the Relic Altar to start the Trial"]},
+        {"order":8,"lines":["Speak to Balbala, the Released"]},
+        {"order":9,"lines":["Place your Barya into the Relic Altar"]},
+        {"order":10,"lines":["Find a Relic Altar to place your Barya into"]},
+        {"order":11,"lines":["Use the Desert Map to travel to the Trial of the Sekhemas"]},
+        {"order":12,"lines":["Return to the Ardura Caravan and speak to Zarka"]},
+        {"order":13,"lines":["Return to the Ardura Caravan and speak to Zarka"]},
+        {"order":14,"lines":["Obtain another Balbala's Barya"]},
+        {"order":15,"lines":["Find a way to open the Gates with Asala"]},
+        {"order":16,"lines":["Find a way to open the Gates with Asala"]},
+        {"order":17,"lines":["Find a way to open the Gates with Asala"]}
+      ]
+    },
+    "SearchForTheVaalRepository": {
+      "name": "Legacy of the Vaal", "act": 3,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Speak to Alva to travel to Kingsmarch"]},
+        {"order":2,"lines":["Speak to Alva"]},
+        {"order":3,"lines":["Speak to Doryani"]},
+        {"order":4,"lines":["Use the Gateway to travel to the Present"]},
+        {"order":5,"lines":["Survive the Cataclysm"]},
+        {"order":6,"lines":["Use the Gateway to travel to the Past"]},
+        {"order":7,"lines":["Speak to Doryani in Ziggurat Encampment"]},
+        {"order":8,"lines":["Capture Doryani for his knowledge of the Beast"]},
+        {"order":9,"lines":["Find Doryani in the Black Chambers"]},
+        {"order":10,"lines":["Fight through Aggorat and find the Black Chambers"]},
+        {"order":11,"lines":["Enter Aggorat and search for the Black Chambers"]},
+        {"order":12,"lines":["Rescue Alva from Doryani"]},
+        {"order":13,"lines":["Defeat Viper Napuatzi"]},
+        {"order":14,"lines":["Search Utzaal for knowledge about the Beast"]},
+        {"order":15,"lines":["Enter Utzaal in the past"]},
+        {"order":16,"lines":["Enter the Gateway"]},
+        {"order":17,"lines":["Ride the Elevator"]},
+        {"order":18,"lines":["Speak to Alva"]},
+        {"order":19,"lines":["Complete the Ritual"]},
+        {"order":20,"lines":["Summon Alva and tell her what happened"]},
+        {"order":21,"lines":["Defeat Ketzuli, High Priest of the Sun"]},
+        {"order":22,"lines":["Explore the Temple of Kopec in search of the Vaal repository of knowledge"]},
+        {"order":23,"lines":["Enter the Temple of Kopec underneath the treasure hunter encampment"]},
+        {"order":24,"lines":["Open the door to the Temple of Kopec"]},
+        {"order":25,"lines":["Return to Alva with the Temple Door Idol"]},
+        {"order":26,"lines":["Pick up the Temple Door Idol"]},
+        {"order":27,"lines":["Defeat the Queen of Filth"]},
+        {"order":28,"lines":["Explore the Apex of Filth and search for a key"]},
+        {"order":29,"lines":["Enter the Apex of Filth and search for a key"]},
+        {"order":30,"lines":["Explore The Drowned City and search for Aggorat"]},
+        {"order":31,"lines":["Enter The Drowned City and search for Aggorat"]},
+        {"order":32,"lines":["Return to the Encampment and find Alva at the base of the Ziggurat"]},
+        {"order":33,"lines":["Find the control mechanisms and activate The Matlan Waterways to drain the area"]},
+        {"order":34,"lines":["Enter The Matlan Waterways and find the control mechanisms"]},
+        {"order":35,"lines":["Return to Jungle Ruins and activate the Stone Altar"]},
+        {"order":36,"lines":["Pick up the Large Soul Core"]},
+        {"order":37,"lines":["Defeat Zicoatl, Warden of the Core"]},
+        {"order":38,"lines":["Retrieve the Large Soul Core near Alva"]},
+        {"order":39,"lines":["Search Jiquani's Sanctum for two medium Soul Cores and use them to activate two Generators"]},
+        {"order":40,"lines":["Speak to Alva"]},
+        {"order":41,"lines":["Summon Alva and speak to her"]},
+        {"order":42,"lines":["Explore Jiquani's Sanctum"]},
+        {"order":43,"lines":["Proceed deeper into the Machinarium"]},
+        {"order":44,"lines":["Place the small Soul Core into the Stone Altar"]},
+        {"order":45,"lines":["Search Jiquani's Machinarium for a small Soul Core to open the Door"]},
+        {"order":46,"lines":["Ask Alva for advice"]},
+        {"order":47,"lines":["Summon Alva to ask her for advice"]},
+        {"order":48,"lines":["Search the Machinarium for a large Soul Core"]},
+        {"order":49,"lines":["Enter Jiquani's Machinarium"]},
+        {"order":50,"lines":["Defeat Xyclucian, the Chimera"]},
+        {"order":51,"lines":["Traverse the Chimeral Wetlands in search of the ancient Machinarium"]},
+        {"order":52,"lines":["Explore Infested Barrens in search of the Chimeral Wetlands"]},
+        {"order":53,"lines":["Ask Servi for more information about Soul Cores"]},
+        {"order":54,"lines":["Ask Alva for advice"]},
+        {"order":55,"lines":["Summon Alva to ask her for advice"]},
+        {"order":56,"lines":["Explore beyond the Jungle Ruins in search of The Matlan Waterways"]},
+        {"order":57,"lines":["Enter the Jungle Ruins to search for The Matlan Waterways"]},
+        {"order":58,"lines":["Ask the Hooded One about lowering the water level"]},
+        {"order":59,"lines":["Ask the Hooded One about lowering the water level"]},
+        {"order":60,"lines":["Meet the treasure hunters"]},
+        {"order":61,"lines":["Cross the Sandswept Marsh in search of a Ziggurat"]},
+        {"order":62,"lines":["Speak to the Hooded One about what to do next"]}
+      ]
+    },
+    "CleanseTheSnakePit": {
+      "name": "The Slithering Dead", "act": 3,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Consume the Venom Draught"]},
+        {"order":2,"lines":["Consume the Venom Draught"]},
+        {"order":3,"lines":["Consume the Venom Draught"]},
+        {"order":4,"lines":["Take a Venom Draught"]},
+        {"order":5,"lines":["Talk to Servi"]},
+        {"order":6,"lines":["Take the Corpse-snake Venom"]},
+        {"order":7,"lines":["Search the Corpse"]},
+        {"order":8,"lines":["Explore The Venom Crypts"]},
+        {"order":9,"lines":["Find the source of the Orok poison"]}
+      ]
+    },
+    "RaidTheTreasureVault": {
+      "name": "Treasures of Utzaal", "act": 3,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Bring The Hammer of Kamasa to Oswald in Ziggurat Encampment"]},
+        {"order":2,"lines":["Speak to Oswald in Ziggurat Encampment"]},
+        {"order":3,"lines":["Pick up The Hammer of Kamasa"]},
+        {"order":4,"lines":["Defeat Mektul, the Forgemaster"]},
+        {"order":5,"lines":["Clear out The Molten Vault"]},
+        {"order":6,"lines":["Enter The Molten Vault"]},
+        {"order":7,"lines":["Speak to Oswald"]},
+        {"order":8,"lines":["Summon Oswald and speak to him about the monkey statues you have spotted"]},
+        {"order":9,"lines":["Summon Oswald and speak to him about the monkey statues you have spotted"]},
+        {"order":10,"lines":["Search for The Molten Vault"]}
+      ]
+    },
+    "KillTheBogWitch": {
+      "name": "Tribal Vengeance", "act": 3,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Take the Reward from Servi"]},
+        {"order":2,"lines":["Return to town and talk to Servi"]},
+        {"order":3,"lines":["Pick up Ignagduk's Ghastly Spear"]},
+        {"order":4,"lines":["Kill Ignagduk"]},
+        {"order":5,"lines":["Find Ignagduk in the Azak village and slay her"]},
+        {"order":6,"lines":["Find the village of the Azak tribe beyond the Waterways"]}
+      ]
+    },
+    "FindTheSpearPieces": {
+      "name": "The Search", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Speak to the Hooded One"]},
+        {"order":2,"lines":["Return to Kingsmarch"]},
+        {"order":3,"lines":["Witness the Hooded One cure Tavakai and Makoru"]},
+        {"order":4,"lines":["Defeat Tavakai"]},
+        {"order":5,"lines":["Find Tavakai"]},
+        {"order":6,"lines":["Enter the Heart of the Tribe"]},
+        {"order":7,"lines":["Find the Heart of the Tribe"]},
+        {"order":8,"lines":["Speak to Rhodri to sail to Ngakanu"]},
+        {"order":9,"lines":["Speak to Rhodri"]},
+        {"order":10,"lines":["Return to Kingsmarch"]},
+        {"order":11,"lines":["Speak to The Hooded One"]},
+        {"order":12,"lines":["Witness the Hooded One reforge the Weapon"]},
+        {"order":13,"lines":["Speak to Rhodri"]},
+        {"order":14,"lines":["Return to Kingsmarch"]},
+        {"order":15,"lines":["Enter the Excavated Site"]},
+        {"order":16,"lines":["Defeat Benedictus, First Herald of Utopia"]},
+        {"order":17,"lines":["Confront Kanu and the First Herald"]},
+        {"order":18,"lines":["Search for a way to reforge the Weapon"]},
+        {"order":19,"lines":["Enter the Excavation"]},
+        {"order":20,"lines":["Defeat Torvian, Hand of the Saviour"]},
+        {"order":21,"lines":["Search for a way to reforge the Weapon"]},
+        {"order":22,"lines":["Survive the ambush"]},
+        {"order":23,"lines":["Attack and destroy the forcefield"]},
+        {"order":24,"lines":["Investigate the commotion outside the church"]},
+        {"order":25,"lines":["Follow the Preacher"]},
+        {"order":26,"lines":["Ask someone about the Weapon"]},
+        {"order":27,"lines":["Travel to Arastas"]},
+        {"order":28,"lines":["Speak to Makoru"]},
+        {"order":29,"lines":["Speak to Makoru in Kingsmarch"]},
+        {"order":30,"lines":["Speak to the Hooded One"]},
+        {"order":31,"lines":["Speak to The Hooded One in Kingsmarch"]},
+        {"order":32,"lines":["Witness The Hooded One"]},
+        {"order":33,"lines":["Witness The Hooded One"]},
+        {"order":34,"lines":["Witness The Hooded One"]},
+        {"order":35,"lines":["Witness The Hooded One"]},
+        {"order":36,"lines":["Explore the Islands in search of other Weapon Pieces"]},
+        {"order":37,"lines":["Speak to the Hooded One"]},
+        {"order":38,"lines":["Explore the Islands in search of the final Weapon Piece"]},
+        {"order":39,"lines":["Witness The Hooded One"]},
+        {"order":40,"lines":["Witness The Hooded One"]},
+        {"order":41,"lines":["Witness The Hooded One"]},
+        {"order":42,"lines":["Witness The Hooded One"]},
+        {"order":43,"lines":["Explore the Islands in search of other Weapon Pieces"]},
+        {"order":44,"lines":["Speak to the Hooded One"]},
+        {"order":45,"lines":["Explore the Islands in search of other Weapon Pieces"]},
+        {"order":46,"lines":["Witness The Hooded One"]},
+        {"order":47,"lines":["Witness The Hooded One"]},
+        {"order":48,"lines":["Witness The Hooded One"]},
+        {"order":49,"lines":["Witness The Hooded One"]},
+        {"order":50,"lines":["Explore the Islands in search of Weapon Pieces"]},
+        {"order":51,"lines":["Talk to Makoru to set sail"]},
+        {"order":52,"lines":["Talk to Makoru about hiring a ship"]},
+        {"order":53,"lines":["Take the Boat Charter from Rog"]},
+        {"order":54,"lines":["Talk to Alva"]},
+        {"order":55,"lines":["Meet up with Alva"]},
+        {"order":56,"lines":["Talk to Doryani"]}
+      ]
+    },
+    "Act4ScourgeSkies": {
+      "name": "Shrike Island", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Kill the Scourge of the Skies"]},
+        {"order":2,"lines":["Explore Shrike Island"]}
+      ]
+    },
+    "Act4KillGoblinGiant": {
+      "name": "Land of the Kin", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Slay Krutog"]},
+        {"order":2,"lines":["Explore the Volcanic Warrens"]},
+        {"order":3,"lines":["Enter the Volcanic Warrens"]},
+        {"order":4,"lines":["Explore the Isle of Kin"]}
+      ]
+    },
+    "Act4VisitArastas": {
+      "name": "Utopia", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Explore Arastas"]},
+        {"order":2,"lines":["Travel to Arastas"]}
+      ]
+    },
+    "Act4KillSiren": {
+      "name": "Whakapanu Island", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Kill Diamora, Song of Death"]},
+        {"order":2,"lines":["Explore the Singing Caverns"]},
+        {"order":3,"lines":["Enter the Singing Caverns"]},
+        {"order":4,"lines":["Explore Whakapanu Island"]}
+      ]
+    },
+    "Act4KillPrisoner": {
+      "name": "Abandoned Prison", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Slay the Prisoner"]},
+        {"order":2,"lines":["Open the Fortified Door"]},
+        {"order":3,"lines":["Explore Solitary Confinement"]},
+        {"order":4,"lines":["Enter Solitary Confinement"]},
+        {"order":5,"lines":["Explore the Prison"]}
+      ]
+    },
+    "Act4KillPrisonerLocalQuest": {
+      "name": "The Prisoner", "act": 4,
+      "states": [
+        {"order":0,"lines":["Use a Ballista"]}
+      ]
+    },
+    "Act4RescueMedicineWoman": {
+      "name": "Tribal Medicine", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Use Kaom's Lesson to receive his Blessing"]},
+        {"order":2,"lines":["Use Rakiata's Lesson to receive her Blessing"]},
+        {"order":3,"lines":["Take a Reward from Kaimana in Kingsmarch"]},
+        {"order":4,"lines":["Take a Reward from Kaimana"]},
+        {"order":5,"lines":["Await Kaimana's return to Kingsmarch"]},
+        {"order":6,"lines":["Return to Kaimana in Kingsmarch"]},
+        {"order":7,"lines":["Return to Kaimana in Ngakanu"]},
+        {"order":8,"lines":["Find a use for the Shark Fin"]},
+        {"order":9,"lines":["Pick up the Shark Fin"]},
+        {"order":10,"lines":["Defeat the Great White One"]},
+        {"order":11,"lines":["Explore Whakapanu Island"]},
+        {"order":12,"lines":["Travel to Whakapanu Island"]},
+        {"order":13,"lines":["Speak to Kaimana"]},
+        {"order":14,"lines":["Explore Ngakanu"]}
+      ]
+    },
+    "Act4DeliriumUnlock": {
+      "name": "Dark Mists", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Use the Mist-shrouded Tome"]},
+        {"order":2,"lines":["Take the Rewards from Tujen"]},
+        {"order":3,"lines":["Take the Reward from Tujen"]},
+        {"order":4,"lines":["Speak to Tujen in Kingsmarch"]},
+        {"order":5,"lines":["Survive the Madness"]},
+        {"order":6,"lines":["Free Freya Hartlin"]},
+        {"order":7,"lines":["Return to Freya Hartlin"]},
+        {"order":8,"lines":["Take the Verisium Spikes from Dannig"]},
+        {"order":9,"lines":["Bring the Verisium Ingots to Dannig"]},
+        {"order":10,"lines":["Pick up the Verisium Ingots"]},
+        {"order":11,"lines":["Kill Captain Hartlin"]},
+        {"order":12,"lines":["Find Captain Hartlin"]},
+        {"order":13,"lines":["Speak to Tujen"]},
+        {"order":14,"lines":["Summon Tujen"]},
+        {"order":15,"lines":["Explore Journey's End"]},
+        {"order":16,"lines":["Enter Journey's End"]},
+        {"order":17,"lines":["Explore Kedge Bay"]},
+        {"order":18,"lines":["Speak to Makoru to travel to Kedge Bay"]}
+      ]
+    },
+    "Act4TreasureMapExpedition": {
+      "name": "The Runeseeker", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Speak to Farrow"]},
+        {"order":2,"lines":["Use the Verisium Anvil to Reforge an Armour"]},
+        {"order":3,"lines":["Listen to Farrow"]},
+        {"order":4,"lines":["Take the Verisium from Farrow"]},
+        {"order":5,"lines":["Speak to Farrow"]},
+        {"order":6,"lines":["Quest Complete"],"complete":true},
+        {"order":7,"lines":["Obtain the Runesmithing Knowledge"]},
+        {"order":8,"lines":["Speak to Farrow about the Tome"]},
+        {"order":9,"lines":["Witness Farrow"]},
+        {"order":10,"lines":["Summon Farrow"]},
+        {"order":11,"lines":["Explore the Deserted Post"]},
+        {"order":12,"lines":["Enter the Deserted Post"]},
+        {"order":13,"lines":["Survive the Expedition Encounter"]},
+        {"order":14,"lines":["Return to Dannig to Detonate the Explosives"]},
+        {"order":15,"lines":["Place the Explosives throughout Plunder's Point"]},
+        {"order":16,"lines":["Speak to Dannig"]},
+        {"order":17,"lines":["Summon Dannig"]},
+        {"order":18,"lines":["Search Plunder's Point for clues"]},
+        {"order":19,"lines":["Speak to Makoru to sail to Plunder's Point"]},
+        {"order":20,"lines":["Speak to Rhodri to sail to Plunder's Point"]},
+        {"order":21,"lines":["Speak to Makoru to sail to Plunder's Point"]},
+        {"order":22,"lines":["Speak to Makoru about the Map Pieces"]},
+        {"order":23,"lines":["Speak to Makoru about the Map Pieces"]},
+        {"order":24,"lines":["Speak to Makoru about the Map Pieces"]},
+        {"order":25,"lines":["Speak to Makoru about the Map Pieces"]},
+        {"order":26,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":27,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":28,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":29,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":30,"lines":["Find additional Treasure Maps"]},
+        {"order":31,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":32,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":33,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":34,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":35,"lines":["Find additional Treasure Maps"]},
+        {"order":36,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":37,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":38,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":39,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":40,"lines":["Find additional Treasure Maps"]},
+        {"order":41,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":42,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":43,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":44,"lines":["Take the Treasure Map to Dannig in Kingsmarch"]},
+        {"order":45,"lines":["Investigate the region for clues about the location of Verisium"]},
+        {"order":46,"lines":["Investigate the region for Runic Knowledge"]},
+        {"order":47,"lines":["Speak to Farrow"]}
+      ]
+    },
+    "Act4KaruiElder": {
+      "name": "Trial of the Ancestors", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Quest Complete"],"complete":true},
+        {"order":2,"lines":["Use the Tattoo of Hinekora"]},
+        {"order":3,"lines":["Take the Reward from Navali"]},
+        {"order":4,"lines":["Speak to Navali for a Reward"]},
+        {"order":5,"lines":["Obtain a Silver Coin from Yama the White"]},
+        {"order":6,"lines":["Speak to Navali"]},
+        {"order":7,"lines":["Enter the portal to meet the Mother"]},
+        {"order":8,"lines":["Explore further into the Halls of the Dead"]},
+        {"order":9,"lines":["Pick up the Silver Coin"]},
+        {"order":10,"lines":["Defeat Yama the White"]},
+        {"order":11,"lines":["Explore the Halls of the Dead"]},
+        {"order":12,"lines":["Enter the Halls of the Dead"]},
+        {"order":13,"lines":["Locate the Halls of the Dead"]},
+        {"order":14,"lines":["Complete Rakiata's Test of Mettle"]},
+        {"order":15,"lines":["Complete Maata's Test of Mettle","Complete Rakiata's Test of Mettle"]},
+        {"order":16,"lines":["Complete Kaom's Test of Mettle","Complete Maata's Test of Mettle","Complete Rakiata's Test of Mettle"]},
+        {"order":17,"lines":["Peer into the Well of Passing"]},
+        {"order":18,"lines":["Speak to Matiki"]},
+        {"order":19,"lines":["Meet up with Matiki"]},
+        {"order":20,"lines":["Travel to the Eye of Hinekora"]},
+        {"order":21,"lines":["Speak to Matiki"]}
+      ]
+    },
+    "Act5SiegeOfOriath": {
+      "name": "The Siege of Oriath", "act": 5,
+      "states": [
+        {"order":0,"lines":["Explore the Plaza of Patrons"]},
+        {"order":1,"lines":["Enter the Plaza of Patrons"]},
+        {"order":2,"lines":["Find the exit out of the Cisterns"]},
+        {"order":3,"lines":["Defeat the Rat King"]},
+        {"order":4,"lines":["Explore the Cisterns"]},
+        {"order":5,"lines":["Enter the Cisterns"]},
+        {"order":6,"lines":["Explore the Slums"]},
+        {"order":7,"lines":["Enter the Slums"]},
+        {"order":8,"lines":["Speak to Cedrus"]},
+        {"order":9,"lines":["Enter the Rampart Encampment"]},
+        {"order":10,"lines":["Proceed to the Rampart Encampment"]},
+        {"order":11,"lines":["Defeat Sergeant Odyg"]},
+        {"order":12,"lines":["Locate the Rampart Encampment"]},
+        {"order":13,"lines":["Speak to Cedrus"]},
+        {"order":14,"lines":["Free the crucified man"]},
+        {"order":15,"lines":["Explore the Harbour in search of a safe place to set up a base of operations"]}
+      ]
+    },
+    "Act5WaterWheel": {
+      "name": "Plumbing the Depths", "act": 5,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Take the Reward from Elwynian"]},
+        {"order":2,"lines":["Speak to Elwynian"]},
+        {"order":3,"lines":["Destroy the Nests on the Water Wheel"]},
+        {"order":4,"lines":["Locate the Water Wheel"]},
+        {"order":5,"lines":["Enter the Cisterns"]},
+        {"order":6,"lines":["Search the Cisterns past the Slums"]}
+      ]
+    },
+    "Act5TrarthanGladiator": {
+      "name": "Trarthan Gladiator", "act": 5,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Take a Reward from Cedrus"]},
+        {"order":2,"lines":["Speak to Cedrus in Rampart Encampment"]},
+        {"order":3,"lines":["Defeat Thag-Tror, the Mammoth"]},
+        {"order":4,"lines":["Locate the one-eyed Gladiator"]},
+        {"order":5,"lines":["Enter the Gladiator's Arena"]},
+        {"order":6,"lines":["Locate the Gladiator's Arena"]},
+        {"order":7,"lines":["Travel to the Plaza of Patrons"]}
+      ]
+    },
+    "Ultimatum": {
+      "name": "The Trials of Chaos", "act": 3,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Complete the Trialmaster's Challenges"]},
+        {"order":2,"lines":["Place the Inscribed Ultimatum in the Temple Offering"]},
+        {"order":3,"lines":["Take a new Inscribed Ultimatum from The Trialmaster"]},
+        {"order":4,"lines":["Find a use for the Inscribed Ultimatum"]},
+        {"order":5,"lines":["Travel to the Temple of Chaos"]}
+      ]
+    },
+    "TormentedSpirits": {
+      "name": "The Hunt Begins", "act": 1,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Speak to Delwyn"]},
+        {"order":2,"lines":["Defeat the Hunted Monster"]},
+        {"order":3,"lines":["Track the Spirit"]},
+        {"order":4,"lines":["Speak to Delwyn"]}
+      ]
+    },
+    "EndgameTimeBossStandInHourglass": {
+      "name": "The Trial of Time", "act": 2,
+      "states": [
+        {"order":0,"lines":["Collect the Sands of TIme"]},
+        {"order":1,"lines":["Enter the Confluence to begin the Trial of Time"]}
+      ]
+    },
+    "HallsOfTheDeadBlankTattoo1": {
+      "name": "Tawhoa's Test", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Use the Tattoo of Tawhoa"]},
+        {"order":2,"lines":["Use the Tattoo of Tawhoa"]},
+        {"order":3,"lines":["Take a Reward from Navali"]},
+        {"order":4,"lines":["Turn in the Blank Tattoo of Tawhoa to Navali"]},
+        {"order":5,"lines":["Take a Reward from the Hinekora Totem"]},
+        {"order":6,"lines":["Turn in the Blank Tattoo of Tawhoa to the Hinekora Totem"]},
+        {"order":7,"lines":["Pick up the Blank Tattoo of Tawhoa"]},
+        {"order":8,"lines":["Complete Tawhoa's Test"]}
+      ]
+    },
+    "HallsOfTheDeadBlankTattoo2": {
+      "name": "Tasalio's Test", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Use the Tattoo of Tasalio"]},
+        {"order":2,"lines":["Use the Tattoo of Tasalio"]},
+        {"order":3,"lines":["Take a Reward from Navali"]},
+        {"order":4,"lines":["Turn in the Blank Tattoo of Tasalio to Navali"]},
+        {"order":5,"lines":["Take a Reward from the Hinekora Totem"]},
+        {"order":6,"lines":["Turn in the Blank Tattoo of Tasalio"]},
+        {"order":7,"lines":["Pick up the Blank Tattoo of Tasalio"]},
+        {"order":8,"lines":["Complete Tasalio's Test"]}
+      ]
+    },
+    "HallsOfTheDeadBlankTattoo3": {
+      "name": "Ngamahu's Test", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Use the Tattoo of Ngamahu"]},
+        {"order":2,"lines":["Use the Tattoo of Ngamahu"]},
+        {"order":3,"lines":["Take a Reward from Navali"]},
+        {"order":4,"lines":["Turn in the Blank Tattoo of Ngamahu to Navali"]},
+        {"order":5,"lines":["Take a Reward from the Hinekora Totem"]},
+        {"order":6,"lines":["Turn in the Blank Tattoo of Ngamahu"]},
+        {"order":7,"lines":["Pick up the Blank Tattoo of Ngamahu"]},
+        {"order":8,"lines":["Complete Ngamahu's Test"]}
+      ]
+    },
+    "InterludePart1": {
+      "name": "Recruit the Ezomytes", "act": 6,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Return to Renly in Ogham"]},
+        {"order":2,"lines":["Defeat the Thane and Lady"]},
+        {"order":3,"lines":["Find the Thane and Lady"]},
+        {"order":4,"lines":["Enter Holten Estate"]},
+        {"order":5,"lines":["Explore Holten"]},
+        {"order":6,"lines":["Enter Holten"]},
+        {"order":7,"lines":["Find your way through the Blackwood"]},
+        {"order":8,"lines":["Enter the Blackwood"]},
+        {"order":9,"lines":["Return to the Darkness in Scorched Farmlands"]},
+        {"order":10,"lines":["Speak to Una"]},
+        {"order":11,"lines":["Await Una's arrival"]},
+        {"order":12,"lines":["Defeat Siora, Blade of the Mists"]},
+        {"order":13,"lines":["Approach the Altar"]},
+        {"order":14,"lines":["Find what the Megaliths are powering"]},
+        {"order":15,"lines":["Activate the remaining Megaliths"]},
+        {"order":16,"lines":["Activate the Runed Megalith"]},
+        {"order":17,"lines":["Find a way to activate the Altar"]},
+        {"order":18,"lines":["Seek the help of the Fey Spirits"]},
+        {"order":19,"lines":["Enter the Stones of Serle"]},
+        {"order":20,"lines":["Find a way through the Darkness"]},
+        {"order":21,"lines":["Approach the Darkness"]},
+        {"order":22,"lines":["Defeat Isolde and Heldra"]},
+        {"order":23,"lines":["Explore the Scorched Farmlands"]},
+        {"order":24,"lines":["Travel to the Scorched Farmlands"]},
+        {"order":25,"lines":["Speak to Renly"]},
+        {"order":26,"lines":["Speak to the Hooded One to travel to Ogham"]}
+      ]
+    },
+    "InterludePart2": {
+      "name": "Recruit the Maraketh", "act": 6,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Speak to Jado"]},
+        {"order":2,"lines":["Interact with the Grand Barya"]},
+        {"order":3,"lines":["Defeat Azmadi, the Faridun Prince"]},
+        {"order":4,"lines":["Explore Qimah Reservoir"]},
+        {"order":5,"lines":["Enter Qimah Reservoir"]},
+        {"order":6,"lines":["Speak to Jado"]},
+        {"order":7,"lines":["Summon Jado"]},
+        {"order":8,"lines":["Search for the Water Guard Envoy and Grand Barya"]},
+        {"order":9,"lines":["Explore the Pools of Khatal"]},
+        {"order":10,"lines":["Locate the Sel Khari Sanctuary"]},
+        {"order":11,"lines":["Explore Qimah in search of the Ceremony Site"]},
+        {"order":12,"lines":["Enter Qimah"]},
+        {"order":13,"lines":["Defeat Vornas, the Fell Flame"]},
+        {"order":14,"lines":["Traverse the Galai Gates"]},
+        {"order":15,"lines":["Enter the Galai Gates"]},
+        {"order":16,"lines":["Explore the Khari Crossing in search of the Galai Gates"]},
+        {"order":17,"lines":["Speak to Asala"]},
+        {"order":18,"lines":["Defeat Elzarah, the Cobra Lord"]},
+        {"order":19,"lines":["Search for the Water Guard Envoy and Grand Barya"]},
+        {"order":20,"lines":["Enter the Sel Khari Sanctuary"]},
+        {"order":21,"lines":["Explore the Pools of Khatal"]},
+        {"order":22,"lines":["Enter the Pools of Khatal"]},
+        {"order":23,"lines":["Follow the guide to the Temple of the Water Guard"]},
+        {"order":24,"lines":["Follow the guide to locate the final Wayfinder"]},
+        {"order":25,"lines":["Follow the guide to locate other Wayfinders"]},
+        {"order":26,"lines":["Use the Wayfinder"]},
+        {"order":27,"lines":["Ascend the tower of Ab Binayi"]},
+        {"order":28,"lines":["Locate the Sel Khari Sanctuary"]},
+        {"order":29,"lines":["Travel to the Khari Crossing and locate the tower of Ab Binayi"]},
+        {"order":30,"lines":["Speak to Zarka"]},
+        {"order":31,"lines":["Speak to Asala"]},
+        {"order":32,"lines":["Speak to the Hooded One to travel to the Bazaar"]}
+      ]
+    },
+    "InterludePart3": {
+      "name": "Recruit the Vaal", "act": 6,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Speak to Doryani"]},
+        {"order":2,"lines":["Summon Doryani"]},
+        {"order":3,"lines":["Defeat Zolin and Zelina"]},
+        {"order":4,"lines":["Explore the Cuachic Vault"]},
+        {"order":5,"lines":["Enter the Cuachic Vault"]},
+        {"order":6,"lines":["Defeat Stormgore"]},
+        {"order":7,"lines":["Explore the Etched Ravine"]},
+        {"order":8,"lines":["Enter the Etched Ravine"]},
+        {"order":9,"lines":["Explore the Kriar Peaks"]},
+        {"order":10,"lines":["Enter the Kriar Peaks"]},
+        {"order":11,"lines":["Defeat Rakkar, the Frozen Talon"]},
+        {"order":12,"lines":["Explore the Glacial Tarn"]},
+        {"order":13,"lines":["Enter the Glacial Tarn"]},
+        {"order":14,"lines":["Defeat the Crazed Azmeri"]},
+        {"order":15,"lines":["Explore Kriar Village"]},
+        {"order":16,"lines":["Enter Kriar Village"]},
+        {"order":17,"lines":["Explore the Ashen Forest"]},
+        {"order":18,"lines":["Enter the Ashen Forest"]},
+        {"order":19,"lines":["Speak to Doryani"]},
+        {"order":20,"lines":["Speak to the Hooded One to travel to Mount Kriar"]}
+      ]
+    },
+    "InterludeToEndgameConnector": {
+      "name": "Siege of Oriath", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Quest Complete"],"complete":true},
+        {"order":2,"lines":["Speak to the Hooded One to travel to Oriath"]},
+        {"order":3,"lines":["Use the Book of Specialisation"]},
+        {"order":4,"lines":["Take the Reward from Hooded One"]},
+        {"order":5,"lines":["Speak to Hooded One in Kingsmarch"]}
+      ]
+    },
+    "HideoutUnlock": {
+      "name": "Hostile Takeover", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Quest Complete"],"complete":true},
+        {"order":2,"lines":["Speak to Ange"]},
+        {"order":3,"lines":["Travel to your Hideout and speak to Ange"]},
+        {"order":4,"lines":["Speak to Ange"]},
+        {"order":5,"lines":["Clear the Shoreline"]},
+        {"order":6,"lines":["Speak to Ange to travel to Shoreline Hideout"]},
+        {"order":7,"lines":["Return to Ange"]},
+        {"order":8,"lines":["Speak to someone in Kingsmarch"]},
+        {"order":9,"lines":["Find a suitable location to establish a Hideout"]}
+      ]
+    },
+    "InterludePart2ScorpionAndWorm": {
+      "name": "Clearing the Way", "act": 6,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Quest Complete"],"complete":true},
+        {"order":2,"lines":["Use the Book of Specialisation"]},
+        {"order":3,"lines":["Take the Book of Specialisation from Risu"]},
+        {"order":4,"lines":["Return to Risu in the Khari Bazaar"]},
+        {"order":5,"lines":["Defeat Akthi and Anundr"]},
+        {"order":6,"lines":["Find the Scorpion and Sandworm"]},
+        {"order":7,"lines":["Travel to the Khari Crossing"]}
+      ]
+    },
+    "InterludePart3YetiQuadrilla": {
+      "name": "Howling Winds", "act": 6,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Quest Complete"],"complete":true},
+        {"order":2,"lines":["Use the Book of Specialisation"]},
+        {"order":3,"lines":["Take the Reward from Hilda"]},
+        {"order":4,"lines":["Return the Ice Tusks to Hilda"]},
+        {"order":5,"lines":["Pick up the Ice Tusks"]},
+        {"order":6,"lines":["Defeat the Yeti"]},
+        {"order":7,"lines":["Find the Yeti"]},
+        {"order":8,"lines":["Enter the Howling Caves"]},
+        {"order":9,"lines":["Find the Howling Caves"]}
+      ]
+    },
+    "AbyssTutorial": {
+      "name": "The Well of Souls", "act": 2,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Use the Well of Souls"]},
+        {"order":2,"lines":["Enter the Well of Souls"]},
+        {"order":3,"lines":["Explore the Lightless Passage"]},
+        {"order":4,"lines":["Enter Lightless Passage"]},
+        {"order":5,"lines":["Find the source of the Abyssal fissures"]}
+      ]
+    },
+    "A4BossFightPhase1To2ChaseLocalQuest": {
+      "name": "Follow Tavakai", "act": 4,
+      "states": [
+        {"order":0,"lines":["Follow Tavakai"]}
+      ]
+    },
+    "IncursionQuest1_Act1": {
+      "name": "Ancient Beacons", "act": 1,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Place Rooms using the Temple Console to build a Temple"]},
+        {"order":2,"lines":["Explore the Vaal Ruins"]},
+        {"order":3,"lines":["Return to the Vaal Ruins"]},
+        {"order":4,"lines":["Enter the Vaal Ruins"]},
+        {"order":5,"lines":["Find and activate an Ancient Beacon"]},
+        {"order":6,"lines":["Activate one additional Ancient Beacon"]},
+        {"order":7,"lines":["Activate two additional Ancient Beacons"]},
+        {"order":8,"lines":["Activate three additional Ancient Beacons"]},
+        {"order":9,"lines":["Activate four additional Ancient Beacons"]},
+        {"order":10,"lines":["Activate five additional Ancient Beacons"]},
+        {"order":11,"lines":["Activate the Ancient Beacon"]},
+        {"order":12,"lines":["Defeat the monsters to sacrifice them to the beacon"]}
+      ]
+    },
+    "IncursionQuest1_Act2": {
+      "name": "Ancient Beacons", "act": 2,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Place Rooms using the Temple Console to build a Temple"]},
+        {"order":2,"lines":["Explore the Vaal Ruins"]},
+        {"order":3,"lines":["Return to the Vaal Ruins"]},
+        {"order":4,"lines":["Enter the Vaal Ruins"]},
+        {"order":5,"lines":["Find and activate an Ancient Beacon"]},
+        {"order":6,"lines":["Activate one additional Ancient Beacon"]},
+        {"order":7,"lines":["Activate two additional Ancient Beacons"]},
+        {"order":8,"lines":["Activate three additional Ancient Beacons"]},
+        {"order":9,"lines":["Activate four additional Ancient Beacons"]},
+        {"order":10,"lines":["Activate five additional Ancient Beacons"]},
+        {"order":11,"lines":["Activate the Ancient Beacon"]},
+        {"order":12,"lines":["Defeat the monsters to sacrifice them to the beacon"]}
+      ]
+    },
+    "IncursionQuest1_Act3": {
+      "name": "Ancient Beacons", "act": 3,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Place Rooms using the Temple Console to build a Temple"]},
+        {"order":2,"lines":["Explore the Vaal Ruins"]},
+        {"order":3,"lines":["Return to the Vaal Ruins"]},
+        {"order":4,"lines":["Enter the Vaal Ruins"]},
+        {"order":5,"lines":["Find and activate an Ancient Beacon"]},
+        {"order":6,"lines":["Activate one additional Ancient Beacon"]},
+        {"order":7,"lines":["Activate two additional Ancient Beacons"]},
+        {"order":8,"lines":["Activate three additional Ancient Beacons"]},
+        {"order":9,"lines":["Activate four additional Ancient Beacons"]},
+        {"order":10,"lines":["Activate five additional Ancient Beacons"]},
+        {"order":11,"lines":["Activate the Ancient Beacon"]},
+        {"order":12,"lines":["Defeat the monsters to sacrifice them to the beacon"]}
+      ]
+    },
+    "IncursionQuest2": {
+      "name": "Fate of the Vaal", "act": 4,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Return to Atziri's Vault and open the Vault"]},
+        {"order":2,"lines":["Pick up Atziri's Medallion"]},
+        {"order":3,"lines":["Defeat Atziri, the Fell Serpent"]},
+        {"order":4,"lines":["Follow Atziri"]},
+        {"order":5,"lines":["Enter The Cradle"]},
+        {"order":6,"lines":["Defeat Atziri, the Red Queen"]},
+        {"order":7,"lines":["Locate Atziri, the Red Queen"]},
+        {"order":8,"lines":["Speak to Doryani"]},
+        {"order":9,"lines":["Use the Royal Access Chamber to reach Atziri's Chamber"]},
+        {"order":10,"lines":["Use Xipocado's Console to place the Royal Access Chamber into the Temple"]},
+        {"order":11,"lines":["Defeat the Royal Architect in Atziri's Temple at level 75 or higher"]},
+        {"order":12,"lines":["Use Xipocado's Console to place Restricted Rooms into the Temple"]},
+        {"order":13,"lines":["Defeat the Royal Architect in Atziri's Temple at level 75 or higher"]},
+        {"order":14,"lines":["Defeat Xipocado, Royal Architect"]},
+        {"order":15,"lines":["Locate the Royal Architect"]},
+        {"order":16,"lines":["Enter Atziri's Temple and locate the Royal Architect"]},
+        {"order":17,"lines":["Configure the Temple Layout"]},
+        {"order":18,"lines":["Speak to Doryani"]},
+        {"order":19,"lines":["Summon Doryani and Alva"]}
+      ]
+    },
+    "Expedition2Act1": {
+      "name": "The Runeseeker", "act": 1,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Speak to Farrow"]},
+        {"order":2,"lines":["Use the Verisium Anvil to Reforge an Armour"]},
+        {"order":3,"lines":["Listen to Farrow"]},
+        {"order":4,"lines":["Take the Verisium from Farrow"]},
+        {"order":5,"lines":["Speak to Farrow in Clearfell"]},
+        {"order":6,"lines":["Speak to Farrow about the Tome"]},
+        {"order":7,"lines":["Speak to Farrow"]},
+        {"order":8,"lines":["Summon Farrow"]},
+        {"order":9,"lines":["Explore the Lost Catacombs"]},
+        {"order":10,"lines":["Enter the Lost Catacombs"]},
+        {"order":11,"lines":["Speak to Farrow"]},
+        {"order":12,"lines":["Summon Farrow"]},
+        {"order":13,"lines":["Return to the Tree of Souls"]},
+        {"order":14,"lines":["Return to the Tree of Souls"]},
+        {"order":15,"lines":["Speak to Farrow"]},
+        {"order":16,"lines":["Summon Farrow"]},
+        {"order":17,"lines":["Touch the Runestones"]},
+        {"order":18,"lines":["Search Ogham Farmlands for Runestones"]},
+        {"order":19,"lines":["Speak to Farrow"]},
+        {"order":20,"lines":["Summon Farrow"]},
+        {"order":21,"lines":["Touch the Runestones"]},
+        {"order":22,"lines":["Search the Hunting Grounds for Runestones"]},
+        {"order":23,"lines":["Speak to Farrow"]},
+        {"order":24,"lines":["Summon Farrow"]},
+        {"order":25,"lines":["Touch the Runestones"]},
+        {"order":26,"lines":["Search the Grim Tangle for Runestones"]},
+        {"order":27,"lines":["Search the region for more Runestones"]},
+        {"order":28,"lines":["Search the region for more Runestones"]},
+        {"order":29,"lines":["Search the region for more Runestones"]},
+        {"order":30,"lines":["Search the region for more Runestones"]},
+        {"order":31,"lines":["Search the region for more Runestones"]},
+        {"order":32,"lines":["Search the region for more Runestones"]},
+        {"order":33,"lines":["Search the region for more Runestones"]},
+        {"order":34,"lines":["Search the region for more Runestones"]},
+        {"order":35,"lines":["Search the region for more Runestones"]},
+        {"order":36,"lines":["Speak to Farrow"]},
+        {"order":37,"lines":["Summon Farrow"]},
+        {"order":38,"lines":["Touch the Runestones"]},
+        {"order":39,"lines":["Search Ogham Farmlands for Runestones"]},
+        {"order":40,"lines":["Speak to Farrow"]},
+        {"order":41,"lines":["Summon Farrow"]},
+        {"order":42,"lines":["Touch the Runestones"]},
+        {"order":43,"lines":["Search Ogham Farmlands for Runestones"]},
+        {"order":44,"lines":["Speak to Farrow"]},
+        {"order":45,"lines":["Summon Farrow"]},
+        {"order":46,"lines":["Touch the Runestones"]},
+        {"order":47,"lines":["Search the Hunting Grounds for Runestones"]},
+        {"order":48,"lines":["Speak to Farrow"]},
+        {"order":49,"lines":["Summon Farrow"]},
+        {"order":50,"lines":["Touch the Runestones"]},
+        {"order":51,"lines":["Search the Hunting Grounds for Runestones"]},
+        {"order":52,"lines":["Speak to Farrow"]},
+        {"order":53,"lines":["Summon Farrow"]},
+        {"order":54,"lines":["Touch the Runestones"]},
+        {"order":55,"lines":["Search the Grim Tangle for Runestones"]},
+        {"order":56,"lines":["Speak to Farrow"]},
+        {"order":57,"lines":["Summon Farrow"]},
+        {"order":58,"lines":["Touch the Runestones"]},
+        {"order":59,"lines":["Search the Grim Tangle for Runestones"]},
+        {"order":60,"lines":["Search the region for more Runestones"]},
+        {"order":61,"lines":["Search the region for more Runestones"]},
+        {"order":62,"lines":["Search the region for more Runestones"]},
+        {"order":63,"lines":["Search the region for more Runestones"]},
+        {"order":64,"lines":["Search the region for more Runestones"]},
+        {"order":65,"lines":["Search the region for more Runestones"]},
+        {"order":66,"lines":["Speak to Farrow"]},
+        {"order":67,"lines":["Summon Farrow"]},
+        {"order":68,"lines":["Touch the Runestones"]},
+        {"order":69,"lines":["Search Ogham Farmlands for Runestones"]},
+        {"order":70,"lines":["Speak to Farrow"]},
+        {"order":71,"lines":["Summon Farrow"]},
+        {"order":72,"lines":["Touch the Runestones"]},
+        {"order":73,"lines":["Search the Hunting Grounds for Runestones"]},
+        {"order":74,"lines":["Speak to Farrow"]},
+        {"order":75,"lines":["Summon Farrow"]},
+        {"order":76,"lines":["Touch the Runestones"]},
+        {"order":77,"lines":["Search the Grim Tangle for Runestones"]},
+        {"order":78,"lines":["Search for the meaning of the Runes etched into the Tree of Souls"]},
+        {"order":79,"lines":["Search the region for more Runestones"]},
+        {"order":80,"lines":["Speak to Farrow"]},
+        {"order":81,"lines":["Collect your Reward"]},
+        {"order":82,"lines":["Defeat the ambush"]},
+        {"order":83,"lines":["Inscribe runes from the Runeshape Tome on the Remnant"]},
+        {"order":84,"lines":["Use the Runeshape Tome"]},
+        {"order":85,"lines":["Speak to Farrow"]},
+        {"order":86,"lines":["Help the man"]}
+      ]
+    },
+    "Expedition2Act2": {
+      "name": "The Runeseeker", "act": 2,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Study the Runic Knowledge"]},
+        {"order":2,"lines":["Speak to Farrow about the Tome"]},
+        {"order":3,"lines":["Summon Farrow"]},
+        {"order":4,"lines":["Explore the Skull of the Titan"]},
+        {"order":5,"lines":["Use the Desert Map to travel to Skull of the Titan"]},
+        {"order":6,"lines":["Summon Farrow"]},
+        {"order":7,"lines":["Search Deshar for Runestones"]},
+        {"order":8,"lines":["Summon Farrow"]},
+        {"order":9,"lines":["Search the Bone Pits for Runestones"]},
+        {"order":10,"lines":["Summon Farrow"]},
+        {"order":11,"lines":["Search Keth for Runestones"]},
+        {"order":12,"lines":["Search the region for more Runestones"]},
+        {"order":13,"lines":["Search the region for more Runestones"]},
+        {"order":14,"lines":["Search the region for more Runestones"]},
+        {"order":15,"lines":["Summon Farrow"]},
+        {"order":16,"lines":["Search Deshar for Runestones"]},
+        {"order":17,"lines":["Summon Farrow"]},
+        {"order":18,"lines":["Search Deshar for Runestones"]},
+        {"order":19,"lines":["Summon Farrow"]},
+        {"order":20,"lines":["Search the Bone Pits for Runestones"]},
+        {"order":21,"lines":["Summon Farrow"]},
+        {"order":22,"lines":["Search the Bone Pits for Runestones"]},
+        {"order":23,"lines":["Summon Farrow"]},
+        {"order":24,"lines":["Search Keth for Runestones"]},
+        {"order":25,"lines":["Summon Farrow"]},
+        {"order":26,"lines":["Search Keth for Runestones"]},
+        {"order":27,"lines":["Search the region for more Runestones"]},
+        {"order":28,"lines":["Search the region for more Runestones"]},
+        {"order":29,"lines":["Search the region for more Runestones"]},
+        {"order":30,"lines":["Summon Farrow"]},
+        {"order":31,"lines":["Search Deshar for Runestones"]},
+        {"order":32,"lines":["Summon Farrow"]},
+        {"order":33,"lines":["Search the Bone Pits for Runestones"]},
+        {"order":34,"lines":["Summon Farrow"]},
+        {"order":35,"lines":["Search Keth for Runestones"]},
+        {"order":36,"lines":["Search the region for more Runestones"]}
+      ]
+    },
+    "Expedition2Act3": {
+      "name": "The Runeseeker", "act": 3,
+      "states": [
+        {"order":0,"lines":["Quest Complete"],"complete":true},
+        {"order":1,"lines":["Study the Runic Knowledge"]},
+        {"order":2,"lines":["Speak to Farrow about the Tome"]},
+        {"order":3,"lines":["Summon Farrow"]},
+        {"order":4,"lines":["Explore the Mystic Refuge"]},
+        {"order":5,"lines":["Search the region for more Runestones"]},
+        {"order":6,"lines":["Search for the Mystic Refuge in the Infested Barrens"]},
+        {"order":7,"lines":["Summon Farrow"]},
+        {"order":8,"lines":["Search Azak Bog for Runestones"]},
+        {"order":9,"lines":["Summon Farrow"]},
+        {"order":10,"lines":["Search the Venom Crypts for Runestones"]},
+        {"order":11,"lines":["Summon Farrow"]},
+        {"order":12,"lines":["Search the Jungle Ruins for Runestones"]},
+        {"order":13,"lines":["Search the region for more Runestones"]},
+        {"order":14,"lines":["Search the region for more Runestones"]},
+        {"order":15,"lines":["Search the region for more Runestones"]},
+        {"order":16,"lines":["Summon Farrow"]},
+        {"order":17,"lines":["Search Azak Bog for Runestones"]},
+        {"order":18,"lines":["Summon Farrow"]},
+        {"order":19,"lines":["Search Azak Bog for Runestones"]},
+        {"order":20,"lines":["Summon Farrow"]},
+        {"order":21,"lines":["Search the Venom Crypts for Runestones"]},
+        {"order":22,"lines":["Summon Farrow"]},
+        {"order":23,"lines":["Search the Venom Crypts for Runestones"]},
+        {"order":24,"lines":["Summon Farrow"]},
+        {"order":25,"lines":["Search the Jungle Ruins for Runestones"]},
+        {"order":26,"lines":["Summon Farrow"]},
+        {"order":27,"lines":["Search the Jungle Ruins for Runestones"]},
+        {"order":28,"lines":["Search the region for more Runestones"]},
+        {"order":29,"lines":["Search the region for more Runestones"]},
+        {"order":30,"lines":["Search the region for more Runestones"]},
+        {"order":31,"lines":["Summon Farrow"]},
+        {"order":32,"lines":["Search Azak Bog for Runestones"]},
+        {"order":33,"lines":["Summon Farrow"]},
+        {"order":34,"lines":["Search the Venom Crypts for Runestones"]},
+        {"order":35,"lines":["Summon Farrow"]},
+        {"order":36,"lines":["Search the Jungle Ruins for Runestones"]},
+        {"order":37,"lines":["Search the region for more Runestones"]}
+      ]
+    },
+    "RitualGroupLeague0": {
+      "name": "Grim Portents", "act": 1,
+      "states": [
+        {"order":0,"lines":["Rituals Completed"],"complete":true},
+        {"order":1,"lines":["Complete Rituals in these areas:{0}"]}
+      ]
+    },
+    "RitualGroupLeague1": {
+      "name": "Grave Tidings", "act": 1,
+      "states": [
+        {"order":0,"lines":["Rituals Completed"],"complete":true},
+        {"order":1,"lines":["Complete Rituals in these areas:{0}"]}
+      ]
+    },
+    "RitualGroupLeague2": {
+      "name": "Desert Omens", "act": 2,
+      "states": [
+        {"order":0,"lines":["Rituals Completed"],"complete":true},
+        {"order":1,"lines":["Complete Rituals in these areas:{0}"]}
+      ]
+    },
+    "RitualGroupLeague3": {
+      "name": "Ash and Bone", "act": 2,
+      "states": [
+        {"order":0,"lines":["Rituals Completed"],"complete":true},
+        {"order":1,"lines":["Complete Rituals in these areas:{0}"]}
+      ]
+    },
+    "RitualGroupLeague4": {
+      "name": "Savage Wilds", "act": 3,
+      "states": [
+        {"order":0,"lines":["Rituals Completed"],"complete":true},
+        {"order":1,"lines":["Complete Rituals in these areas:{0}"]}
+      ]
+    },
+    "RitualGroupLeague5": {
+      "name": "Blood Offerings", "act": 3,
+      "states": [
+        {"order":0,"lines":["Rituals Completed"],"complete":true},
+        {"order":1,"lines":["Complete Rituals in these areas:{0}"]}
+      ]
+    },
+    "RitualGroupLeague6": {
+      "name": "Blood in the Water", "act": 4,
+      "states": [
+        {"order":0,"lines":["Rituals Completed"],"complete":true},
+        {"order":1,"lines":["Complete Rituals in these areas:{0}"]}
+      ]
+    },
+    "RitualGroupLeague7": {
+      "name": "Tidal Omens", "act": 4,
+      "states": [
+        {"order":0,"lines":["Rituals Completed"],"complete":true},
+        {"order":1,"lines":["Complete Rituals in these areas:{0}"]}
+      ]
+    },
+    "RitualGroupLeague8": {
+      "name": "Shadow Over Ogham", "act": 6,
+      "states": [
+        {"order":0,"lines":["Rituals Completed"],"complete":true},
+        {"order":1,"lines":["Complete Rituals in these areas:{0}"]}
+      ]
+    },
+    "RitualGroupLeague9": {
+      "name": "Sands of Ruin", "act": 6,
+      "states": [
+        {"order":0,"lines":["Rituals Completed"],"complete":true},
+        {"order":1,"lines":["Complete Rituals in these areas:{0}"]}
+      ]
+    },
+    "RitualGroupLeague10": {
+      "name": "Death in the Ranges", "act": 6,
+      "states": [
+        {"order":0,"lines":["Rituals Completed"],"complete":true},
+        {"order":1,"lines":["Complete Rituals in these areas:{0}"]}
+      ]
+    }
+  }
+}

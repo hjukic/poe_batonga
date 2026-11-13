@@ -7,6 +7,7 @@
     {
       "id": "halani-first-asala",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Talk to Asala about the closed Gates" }],
       "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }]
     },
     {

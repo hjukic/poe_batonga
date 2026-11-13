@@ -15,6 +15,7 @@
     {
       "id": "kill-queen-of-filth",
       "kind": "objective",
+      "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Defeat the Queen of Filth" }],
       "navigationTarget": { "area": "G3_11", "label": "Queen of Filth", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Queen of Filth", "style": "boss" }, { "text": "Door Idol", "style": "reward" }],
       "trigger": null,

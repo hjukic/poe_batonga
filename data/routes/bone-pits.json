@@ -14,6 +14,9 @@
     {
       "id": "kill-iktab-ekbab",
       "kind": "objective",
+      "screen": [
+        { "quest": "StealTheMastodonTusks", "past": "Defeat Ekbab, Ancient Steed and Iktab, the Deathlord, then retrieve the Tusks" }
+      ],
       "navigationTarget": { "area": "G2_5_2", "label": "Iktab & Ekbab", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Iktab & Ekbab", "style": "boss" }, { "text": "Mastodon Tusks", "style": "reward" }],
       "trigger": null,

@@ -7,6 +7,7 @@
     {
       "id": "kill-benedictus",
       "kind": "objective",
+      "screen": [{ "quest": "FindTheSpearPieces", "past": "Defeat Benedictus, First Herald of Utopia" }],
       "navigationTarget": { "area": "G4_10", "label": "Benedictus", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Benedictus", "style": "boss" }],
       "trigger": {
@@ -22,6 +23,7 @@
     {
       "id": "excavation-hooded-one",
       "kind": "objective",
+      "screen": [{ "quest": "FindTheSpearPieces", "from": "Speak to Rhodri to sail to Ngakanu" }],
       "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {

@@ -31,6 +31,7 @@
     {
       "id": "kill-xyclucian",
       "kind": "objective",
+      "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Defeat Xyclucian, the Chimera" }],
       "parts": [{ "text": "Kill " }, { "text": "Xyclucian", "style": "boss" }, { "text": "Ultimatum", "style": "reward" }],
       "trigger": null,
       "evidence": "Drops the Inscribed Ultimatum for the Trial of Chaos. No kill line known. Tick by hand."

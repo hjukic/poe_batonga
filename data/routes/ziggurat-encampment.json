@@ -17,6 +17,7 @@
     {
       "id": "ziggurat-hooded-one",
       "kind": "objective",
+      "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Ask the Hooded One about lowering the water level" }],
       "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {
@@ -30,6 +31,7 @@
     {
       "id": "orok-poison-servi",
       "kind": "objective",
+      "screen": [{ "quest": "CleanseTheSnakePit", "past": "Talk to Servi" }],
       "parts": [{ "text": "Orok Poison to " }, { "text": "Servi", "style": "npc" }, { "text": "Permanent buff", "style": "reward" }]
     },
     {
@@ -43,11 +45,15 @@
     {
       "id": "spear-to-servi",
       "kind": "objective",
+      "screen": [{ "quest": "KillTheBogWitch", "past": "Return to town and talk to Servi" }],
       "parts": [{ "text": "Ignagduk's Spear to " }, { "text": "Servi", "style": "npc" }, { "text": "Charm", "style": "reward" }]
     },
     {
       "id": "ziggurat-alva-downstairs",
       "kind": "objective",
+      "screen": [
+        { "quest": "SearchForTheVaalRepository", "past": "Return to the Encampment and find Alva at the base of the Ziggurat" }
+      ],
       "parts": [{ "text": "Downstairs: talk to " }, { "text": "Alva", "style": "npc" }]
     },
     {
@@ -60,6 +66,9 @@
     {
       "id": "hammer-to-oswald",
       "kind": "objective",
+      "screen": [
+        { "quest": "RaidTheTreasureVault", "past": "Bring The Hammer of Kamasa to Oswald in Ziggurat Encampment" }
+      ],
       "parts": [{ "text": "Hammer to " }, { "text": "Oswald", "style": "npc" }, { "text": "Reforging Bench", "style": "reward" }]
     },
     {
@@ -73,6 +82,7 @@
     {
       "id": "ziggurat-alva-idol",
       "kind": "objective",
+      "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Return to Alva with the Temple Door Idol" }],
       "parts": [{ "text": "Downstairs: talk to " }, { "text": "Alva", "style": "npc" }]
     },
     {
@@ -85,6 +95,7 @@
     {
       "id": "take-the-gateway",
       "kind": "objective",
+      "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Enter the Gateway" }],
       "parts": [{ "text": "Take the Gateway" }],
       "trigger": null,
       "evidence": "After Temple of Kopec. No log line known. Tick by hand."
@@ -99,11 +110,17 @@
     {
       "id": "ziggurat-doryani",
       "kind": "objective",
+      "screen": [
+        { "quest": "SearchForTheVaalRepository", "lines": ["Survive the Cataclysm", "Use the Gateway to travel to the Present", "Speak to Doryani", "Speak to Alva to travel to Kingsmarch", "Quest Complete"] }
+      ],
       "parts": [{ "text": "Talk to " }, { "text": "Doryani", "style": "npc" }]
     },
     {
       "id": "ziggurat-doryani-again",
       "kind": "objective",
+      "screen": [
+        { "quest": "SearchForTheVaalRepository", "lines": ["Speak to Alva to travel to Kingsmarch", "Quest Complete"] }
+      ],
       "parts": [{ "text": "Talk to " }, { "text": "Doryani", "style": "npc" }, { "text": " again" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."
@@ -111,6 +128,9 @@
     {
       "id": "ziggurat-end-talks",
       "kind": "objective",
+      "screen": [
+        { "quest": "SearchForTheVaalRepository", "lines": ["Speak to Alva to travel to Kingsmarch", "Quest Complete"] }
+      ],
       "parts": [{ "text": "Then " }, { "text": "Alva", "style": "npc" }, { "text": ", Hooded One, Alva" }]
     }
   ]

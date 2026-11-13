@@ -7,6 +7,7 @@
     {
       "id": "summon-asala-gates",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Find a way to open the Gates with Asala" }],
       "parts": [{ "text": "Summon " }, { "text": "Asala", "style": "npc" }, { "text": ", open gates" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."
@@ -14,6 +15,7 @@
     {
       "id": "kill-jamanra-halani",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Help Asala slay the Corrupted leader of the Faridun" }],
       "navigationTarget": { "area": "G2_3", "label": "Jamanra", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Jamanra", "style": "boss" }],
       "trigger": {

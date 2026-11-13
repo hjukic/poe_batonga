@@ -28,6 +28,7 @@
     {
       "id": "kill-viper-napuatzi",
       "kind": "objective",
+      "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Defeat Viper Napuatzi" }],
       "navigationTarget": { "area": "G3_14", "label": "Viper Napuatzi", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Viper Napuatzi", "style": "boss" }],
       "trigger": {

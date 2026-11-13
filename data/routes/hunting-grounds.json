@@ -23,6 +23,9 @@
     {
       "id": "talk-delwyn",
       "kind": "objective",
+      "screen": [
+        { "quest": "TormentedSpirits", "lines": ["Track the Spirit", "Defeat the Hunted Monster", "Quest Complete"] }
+      ],
       "optional": true,
       "parts": [{ "text": "Talk to " }, { "text": "Delwyn", "style": "npc" }]
     },

@@ -7,11 +7,13 @@
     {
       "id": "caravan-hooded-one",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Speak to the Hooded One" }],
       "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {
       "id": "caravan-asala-twice",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Consult with Asala about the Beast" }],
       "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }, { "text": " twice" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."
@@ -26,6 +28,7 @@
     {
       "id": "caravan-asala-halani",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Talk to Asala about the closed Gates" }],
       "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }]
     },
     {
@@ -38,11 +41,13 @@
     {
       "id": "caravan-risu",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Use the Desert Map to travel to the Halani Gates" }],
       "parts": [{ "text": "Talk to " }, { "text": "Risu", "style": "npc" }]
     },
     {
       "id": "caravan-asala-risu",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Talk to Asala about Risu's information" }],
       "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }]
     },
     {
@@ -62,11 +67,16 @@
     {
       "id": "caravan-zarka-trial",
       "kind": "objective",
+      "screen": [
+        { "quest": "AscentToPower", "past": "Return to the Ardura Caravan and speak to Zarka" },
+        { "quest": "OpenTheDesertGates", "past": "Return to the Caravan and speak to Zarka" }
+      ],
       "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }]
     },
     {
       "id": "caravan-asala-trial",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Speak to Asala to learn about Orbala's footsteps" }],
       "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }]
     },
     {
@@ -86,6 +96,7 @@
     {
       "id": "caravan-zarka-relic",
       "kind": "objective",
+      "screen": [{ "quest": "StealTheMastodonTusks", "past": "Return to the Ardura Caravan and talk to Zarka" }],
       "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }]
     },
     {
@@ -98,6 +109,7 @@
     {
       "id": "caravan-zarka-keth",
       "kind": "objective",
+      "screen": [{ "quest": "BurnTheWaterGoddess", "past": "Return to the Ardura Caravan and talk to Zarka" }],
       "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }]
     },
     {
@@ -110,11 +122,15 @@
     {
       "id": "caravan-zarka-grotto",
       "kind": "objective",
+      "screen": [{ "quest": "PryTheFlameRuby", "past": "Give the Flame Ruby to Zarka" }],
       "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }]
     },
     {
       "id": "caravan-asala-grotto",
       "kind": "objective",
+      "screen": [
+        { "quest": "OpenTheDesertGates", "past": "Use the Desert Map to return to the Sandstorm at the Halani Gates" }
+      ],
       "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }]
     },
     {
@@ -127,6 +143,7 @@
     {
       "id": "sound-the-horn",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Use the Horn of the Vastiri to clear the Sandstorm" }],
       "parts": [{ "text": "Sound the Horn (top)" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."
@@ -134,6 +151,9 @@
     {
       "id": "caravan-asala-horn",
       "kind": "objective",
+      "screen": [
+        { "quest": "OpenTheDesertGates", "lines": ["Use the Desert Map to travel to Deshar", "Ascend Deshar", "Travel through the Path of Mourning", "Defeat Jamanra, the Abomination", "Defeat Tor Gul, the Defiler", "Use the Desert Map to travel to the Dreadnought", "Fight your way to Jamanra, the Abomination's throne", "Speak to the Hooded One in the Shrine to the Northwest of the Caravan", "Use a ramp to the northwest of the Caravan's midpoint to find the Hooded One", "Talk to Asala to travel south to the Sandswept Marsh", "Quest Complete"] }
+      ],
       "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."
@@ -148,6 +168,7 @@
     {
       "id": "deliver-lihl-lima-letter",
       "kind": "objective",
+      "screen": [{ "quest": "FindTheSuicideNote", "past": "Return the Final Letter to Shambrin" }],
       "optional": true,
       "parts": [{ "text": "Letter to " }, { "text": "Shambrin", "style": "npc" }],
       "trigger": null,
@@ -156,6 +177,7 @@
     {
       "id": "caravan-asala-spires",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Speak to Asala" }],
       "parts": [{ "text": "Talk to " }, { "text": "Asala", "style": "npc" }, { "text": " twice" }],
       "trigger": null,
       "evidence": "After The Spires of Deshar. No log line known. Tick by hand."
@@ -178,6 +200,9 @@
     {
       "id": "caravan-hooded-one-outside",
       "kind": "objective",
+      "screen": [
+        { "quest": "OpenTheDesertGates", "lines": ["Talk to Asala to travel south to the Sandswept Marsh", "Quest Complete"] }
+      ],
       "parts": [{ "text": "Talk to " }, { "text": "Hooded One", "style": "npc" }, { "text": " outside" }]
     },
     {

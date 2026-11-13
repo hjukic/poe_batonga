@@ -13,6 +13,12 @@ dialogue-panel lines (quest talks) were removed in v0.1.74: those steps tick by 
 below) or a click. The log shows zone entries, level-ups, world speech (boss barks, shouts
 such as Mortimer's) and cutscene conversations.
 
+**Since v0.1.114 (Windows) a step may also carry `screen`: states of the game's quest
+tracker that prove it done** (`docs/quest-tracker.md`). That ticks quest bosses and quest
+talks the moment the tracker changes: the Bloated Miller at the kill, not at Mortimer's line
+at the gate; Renly's reward when his quest leaves the list. Bosses outside quests stay as
+below.
+
 ## Implied ticks
 
 The lists are in walking order. When the log ticks a step, the steps before it in the same list

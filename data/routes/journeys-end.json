@@ -7,11 +7,13 @@
     {
       "id": "journeys-end-tujen",
       "kind": "objective",
+      "screen": [{ "quest": "Act4DeliriumUnlock", "past": "Speak to Tujen" }],
       "parts": [{ "text": "Talk to " }, { "text": "Tujen", "style": "npc" }]
     },
     {
       "id": "kill-captain-hartlin",
       "kind": "objective",
+      "screen": [{ "quest": "Act4DeliriumUnlock", "past": "Kill Captain Hartlin" }],
       "navigationTarget": { "area": "G4_2_2", "label": "Captain Hartlin", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Captain Hartlin", "style": "boss" }, { "text": "Verisium", "style": "reward" }],
       "trigger": {
@@ -42,6 +44,7 @@
     {
       "id": "journeys-end-freya-spikes",
       "kind": "objective",
+      "screen": [{ "quest": "Act4DeliriumUnlock", "past": "Return to Freya Hartlin" }],
       "parts": [{ "text": "Spikes to " }, { "text": "Freya", "style": "npc" }],
       "trigger": null,
       "evidence": "After Dannig's Verisium Spikes. No log line known. Tick by hand."
@@ -49,6 +52,7 @@
     {
       "id": "kill-omniphobia",
       "kind": "objective",
+      "screen": [{ "quest": "Act4DeliriumUnlock", "past": "Survive the Madness" }],
       "parts": [{ "text": "Kill " }, { "text": "Omniphobia", "style": "boss" }, { "text": " (totem)" }],
       "trigger": null,
       "evidence": "No kill line known. Tick by hand."

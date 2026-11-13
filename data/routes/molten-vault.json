@@ -7,6 +7,7 @@
     {
       "id": "kill-mektul",
       "kind": "objective",
+      "screen": [{ "quest": "RaidTheTreasureVault", "past": "Defeat Mektul, the Forgemaster" }],
       "navigationTarget": { "area": "G3_9", "label": "Mektul", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Mektul", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
       "trigger": null,

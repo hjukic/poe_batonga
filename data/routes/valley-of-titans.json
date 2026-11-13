@@ -12,6 +12,7 @@
     {
       "id": "valley-ancient-seals",
       "kind": "objective",
+      "screen": [{ "quest": "PryTheFlameRuby", "past": "Find and activate additional Ancient Seals" }],
       "parts": [{ "text": "Find 3 Ancient Seals" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."
@@ -19,6 +20,7 @@
     {
       "id": "relic-altar",
       "kind": "objective",
+      "screen": [{ "quest": "MysteriousRelics", "lines": ["Quest Complete"] }],
       "parts": [{ "text": "Relic Altar: place relics" }, { "text": "+1 Charm Slot", "style": "reward" }],
       "trigger": null,
       "evidence": "The Medallion is at the altar; place both clan relics. No log line known. Tick by hand."

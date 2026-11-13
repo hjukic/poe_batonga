@@ -7,6 +7,7 @@
     {
       "id": "unas-lute",
       "kind": "objective",
+      "screen": [{ "quest": "UnaLute", "past": "Retrieve Una's Lute" }],
       "navigationTarget": { "area": "G1_13_1", "label": "Una's Lute", "tag": "quest" },
       "parts": [{ "text": "Una's Lute Box (house)" }],
       "trigger": null,

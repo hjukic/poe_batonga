@@ -15,6 +15,9 @@
     {
       "id": "pressure-pads",
       "kind": "objective",
+      "screen": [
+        { "quest": "SearchForTheVaalRepository", "past": "Find the control mechanisms and activate The Matlan Waterways to drain the area" }
+      ],
       "parts": [{ "text": "Step on the pressure pads" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."

@@ -31,9 +31,27 @@
 > names after removing creation class titles and selection class suffixes.
 > Windows release build passed; v0.1.113 was restarted with identity diagnostics.
 
-Current version: **0.1.113**. Rebuild before testing:
+> **v0.1.114 (Windows, 2026-11-13):** quest kills and talks tick from the game's quest
+> tracker (`docs/quest-tracker.md`). From the owner's StoNaMeniVidisCurice run: the
+> Bloated Miller stayed open after the kill (the log's only sign is Mortimer's line at the
+> gate, 2 minutes later) and "Talk to Renly" stayed open after the reward (talks are never
+> logged). The overlay now reads the tracker under the minimap about once a second while a
+> step it can tick is open (GDI + Windows OCR), and 119 steps in acts 1–4 name the tracker
+> states that prove them (`screen` in `data/routes`, from the game's QuestStates table in
+> `data/quests/states.json`). Non-quest bosses (Beira, Gerung, Crowbell, Candlemass, …)
+> are not covered. Verified: Rust tests (quest_screen and tracker), the real Windows OCR
+> on the owner's screenshot. Not yet live.
+>
+> **Next live test (v0.1.114):** run with
+> `BATONGA_QUEST_DIAGNOSTICS=artifacts/quest-tracker.jsonl` as well. New character: kill
+> the Miller → his row must strike within ~2 s, before the gate; in town take Renly's
+> reward → "Talk to Renly" must strike within ~3 s. Then a few Act 1 quest bosses (Devourer,
+> Rust King, Draven/Asinia) and talks (Una in the Grelwood). Send the jsonl if a row stays open.
+
+Current version: **0.1.114**. Rebuild before testing:
 `npm run desktop:build`, then run `src-tauri/target/release/poe-batonga.exe`
-with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation.log`.
+with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation.log`
+and `BATONGA_QUEST_DIAGNOSTICS=artifacts/quest-tracker.jsonl`.
 
 ## Done and checked live (2026-11-13)
 

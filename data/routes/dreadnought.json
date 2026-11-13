@@ -7,6 +7,7 @@
     {
       "id": "kill-jamanra-abomination",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Defeat Jamanra, the Abomination" }],
       "navigationTarget": { "area": "G2_12", "label": "Jamanra", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Jamanra", "style": "boss" }],
       "trigger": {

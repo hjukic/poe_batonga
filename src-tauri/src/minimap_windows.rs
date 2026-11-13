@@ -242,6 +242,25 @@ pub fn capture_window(region: &Region) -> Result<Image, String> {
     capture_crop(region, region.whole, Some(unsafe { GetCurrentProcessId() }))
 }
 
+/// A column at the client area's right edge: `top`, `height` and `width` in client
+/// heights (the game's interface scales with the height). For the quest tracker.
+pub fn capture_right_column(region: &Region, top: f64, height: f64, width: f64) -> Result<Image, String> {
+    let whole = region.whole;
+    let h = whole.height as f64;
+    let width = ((h * width).round() as i32).min(whole.width);
+    let y = (h * top).round() as i32;
+    let bounds = Bounds {
+        x: whole.x + whole.width - width,
+        y: whole.y + y,
+        width,
+        height: ((h * height).round() as i32).min(whole.height - y),
+    };
+    if bounds.width <= 0 || bounds.height <= 0 {
+        return Err("Client area too small for the quest tracker".into());
+    }
+    capture_crop(region, bounds, Some(unsafe { GetCurrentProcessId() }))
+}
+
 fn capture_crop(region: &Region, bounds: Bounds, skip_process: Option<u32>) -> Result<Image, String> {
     let _dpi = DpiGuard::enter()?;
     if game_window()? != region.window {

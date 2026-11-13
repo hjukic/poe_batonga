@@ -12,6 +12,7 @@
     {
       "id": "kill-rudja",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Defeat Rudja, Dread Engineer" }],
       "navigationTarget": { "area": "G2_10_2", "label": "Rudja", "tag": "bossman" },
       "parts": [{ "text": "Kill " }, { "text": "Rudja", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
       "trigger": {
@@ -29,6 +30,7 @@
     {
       "id": "mine-risu",
       "kind": "objective",
+      "screen": [{ "quest": "OpenTheDesertGates", "past": "Question the Faridun Defector" }],
       "parts": [{ "text": "Talk to " }, { "text": "Risu", "style": "npc" }, { "text": " (cage)" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."

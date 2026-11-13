@@ -7,6 +7,7 @@
     {
       "id": "talk-renly",
       "kind": "objective",
+      "screen": [{ "quest": "TheMiller", "past": "Take Renly's reward" }],
       "parts": [{ "text": "Talk to " }, { "text": "Renly", "style": "npc" }, { "text": "Skill Gem", "style": "reward" }]
     },
     {
@@ -20,12 +21,14 @@
     {
       "id": "renly-support-gem",
       "kind": "objective",
+      "screen": [{ "quest": "MudBurrower", "past": "Talk to Renly for your reward" }],
       "optional": true,
       "parts": [{ "text": "After The Devourer: " }, { "text": "Renly", "style": "npc" }, { "text": "Support Gem", "style": "reward" }]
     },
     {
       "id": "renly-runed-spikes",
       "kind": "objective",
+      "screen": [{ "quest": "TreeOfSouls", "past": "Take the forged Rune Spikes from Renly" }],
       "parts": [{ "text": "Runed Spikes from " }, { "text": "Renly", "style": "npc" }]
     },
     {
@@ -39,6 +42,10 @@
     {
       "id": "town-una-roots",
       "kind": "objective",
+      "screen": [
+        { "quest": "TreeOfSouls", "past": "Return to Clearfell Encampment and speak to Una" },
+        { "quest": "ReviveHoodedMentor", "past": "The roots are impassable for now" }
+      ],
       "parts": [{ "text": "Talk to " }, { "text": "Una", "style": "npc" }]
     },
     {
@@ -59,6 +66,7 @@
     {
       "id": "town-una-cemetery",
       "kind": "objective",
+      "screen": [{ "quest": "ReviveHoodedMentor", "past": "Bring Count Lachlann's Ring to Una" }],
       "parts": [{ "text": "Talk to " }, { "text": "Una", "style": "npc" }],
       "trigger": {
         "type": "npcLine",
@@ -75,6 +83,7 @@
     {
       "id": "town-hooded-one",
       "kind": "objective",
+      "screen": [{ "quest": "ReviveHoodedMentor", "past": "Witness the revival of the Hooded One" }],
       "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {
@@ -88,12 +97,14 @@
     {
       "id": "finn-charm",
       "kind": "objective",
+      "screen": [{ "quest": "TheOutcast", "past": "Talk to Finn for your reward" }],
       "optional": true,
       "parts": [{ "text": "After Ominous Altars: " }, { "text": "Finn", "style": "npc" }, { "text": "Charm", "style": "reward" }]
     },
     {
       "id": "deliver-unas-lute",
       "kind": "objective",
+      "screen": [{ "quest": "UnaLute", "past": "Speak to Una for a reward" }],
       "parts": [{ "text": "Give the Lute to " }, { "text": "Una", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }]
     },
     {
@@ -106,6 +117,7 @@
     {
       "id": "town-beasts-trail",
       "kind": "objective",
+      "screen": [{ "quest": "TheIronCount", "past": "Travel East" }],
       "parts": [{ "text": "Hooded One", "style": "npc" }, { "text": ": Beast's Trail" }]
     },
     {

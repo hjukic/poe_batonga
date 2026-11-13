@@ -7,11 +7,13 @@
     {
       "id": "vastiri-hooded-one",
       "kind": "objective",
+      "screen": [{ "quest": "CaravanRescue", "past": "Speak to the Hooded One" }],
       "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
     },
     {
       "id": "kill-rathbreaker",
       "kind": "objective",
+      "screen": [{ "quest": "CaravanRescue", "past": "Defeat Rathbreaker" }],
       "navigationTarget": { "area": "G2_1", "label": "Rathbreaker", "tag": "boss" },
       "parts": [{ "text": "Kill " }, { "text": "Rathbreaker", "style": "boss" }],
       "trigger": null,
@@ -27,6 +29,7 @@
     {
       "id": "vastiri-zarka",
       "kind": "objective",
+      "screen": [{ "quest": "CaravanRescue", "past": "Speak to Zarka" }],
       "parts": [{ "text": "Talk to " }, { "text": "Zarka", "style": "npc" }, { "text": "Skill Gem", "style": "reward" }]
     },
     {

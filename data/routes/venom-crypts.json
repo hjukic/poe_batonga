@@ -15,6 +15,7 @@
     {
       "id": "orok-poison",
       "kind": "objective",
+      "screen": [{ "quest": "CleanseTheSnakePit", "past": "Take the Corpse-snake Venom" }],
       "parts": [{ "text": "Loot Orok Poison (corpse)" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."

@@ -151,6 +151,10 @@ pub struct Step {
     pub trigger: Option<Trigger>,
     #[serde(default, rename = "navigationTarget")]
     pub navigation_target: Option<NavigationTarget>,
+    /// Quest-tracker states that prove the step done (`quest_screen::Condition`): kills
+    /// and talks the log does not show.
+    #[serde(default)]
+    pub screen: Vec<crate::quest_screen::Condition>,
 }
 
 /// Where the compass heads for this step: a zone exit (`exit`: the area it leads
@@ -182,7 +186,17 @@ pub struct Route {
 pub fn load_routes() -> Vec<Route> {
     let mut routes: Vec<Route> = crate::bundle::ROUTES
         .iter()
-        .map(|(name, json)| serde_json::from_str(json).unwrap_or_else(|e| panic!("data/routes/{name}.json: {e}")))
+        .map(|(name, json)| {
+            let mut route: Route = serde_json::from_str(json).unwrap_or_else(|e| panic!("data/routes/{name}.json: {e}"));
+            for step in &mut route.steps {
+                for condition in &mut step.screen {
+                    condition
+                        .resolve(crate::quest_screen::quests())
+                        .unwrap_or_else(|e| panic!("data/routes/{name}.json, {}: {e}", step.id));
+                }
+            }
+            route
+        })
         .collect();
     routes.sort_by_key(|route: &Route| route.order);
     routes
@@ -255,7 +269,8 @@ fn is_system_line(speaker: &str, text: &str) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Completion {
     pub at: String,
-    /// "log", "implied" (a later step was logged), "map" (a boss's grey icon) or "manual".
+    /// "log", "screen" (the quest tracker), "implied" (a later step was logged or read),
+    /// "map" (a boss's grey icon) or "manual".
     pub source: String,
     pub evidence: String,
 }
@@ -360,7 +375,8 @@ pub fn replay_unbound(inner: &mut Inner) -> bool {
 fn imply_earlier(routes: &[Route], progress: &mut Progress, timestamp: &str, done_before: &BTreeSet<String>) {
     for route in routes {
         let newly = |step: &Step| {
-            !done_before.contains(&step.id) && progress.completed.get(&step.id).is_some_and(|c| c.source == "log")
+            !done_before.contains(&step.id)
+                && progress.completed.get(&step.id).is_some_and(|c| c.source == "log" || c.source == "screen")
         };
         let Some(last) = route.steps.iter().rposition(newly) else { continue };
         for step in &route.steps[..last] {
@@ -377,6 +393,32 @@ fn imply_earlier(routes: &[Route], progress: &mut Progress, timestamp: &str, don
             );
         }
     }
+}
+
+/// Ticks the steps a confirmed quest-tracker state proves done (`quest_screen`), and the
+/// unseen steps before them as the log does. True when a step was ticked. A step unticked
+/// by hand stays unticked.
+pub fn apply_screen(routes: &[Route], progress: &mut Progress, quest: &str, orders: &BTreeSet<u32>, evidence: &str) -> bool {
+    let done_before: BTreeSet<String> = progress.completed.keys().cloned().collect();
+    let at = now_label();
+    let mut ticked = false;
+    for step in routes.iter().flat_map(|r| &r.steps) {
+        if progress.completed.contains_key(&step.id)
+            || progress.dismissed.contains(&step.id)
+            || !step.screen.iter().any(|c| c.proves(quest, orders))
+        {
+            continue;
+        }
+        progress.completed.insert(
+            step.id.clone(),
+            Completion { at: at.clone(), source: "screen".into(), evidence: evidence.to_string() },
+        );
+        ticked = true;
+    }
+    if ticked {
+        imply_earlier(routes, progress, &at, &done_before);
+    }
+    ticked
 }
 
 /// Ticks or unticks a step by hand.
@@ -636,6 +678,23 @@ impl Inner {
         ticked
     }
 
+    /// The character whose quest tracker is worth reading now: in a zone, bound, with a
+    /// step open that the tracker can tick.
+    pub fn screen_watch(&self) -> Option<String> {
+        let character = self.characters.active.clone()?;
+        let open = self.routes.iter().flat_map(|r| &r.steps).any(|step| {
+            !step.screen.is_empty()
+                && !self.progress.completed.contains_key(&step.id)
+                && !self.progress.dismissed.contains(&step.id)
+        });
+        (self.in_zone && open).then_some(character)
+    }
+
+    /// See `apply_screen`.
+    pub fn apply_screen(&mut self, quest: &str, orders: &BTreeSet<u32>, evidence: &str) -> bool {
+        apply_screen(&self.routes, &mut self.progress, quest, orders, evidence)
+    }
+
     pub fn sync_navigation(&self, app: &AppHandle) {
         let completed = self.routes.iter().flat_map(|r| &r.steps)
             .filter(|s| self.progress.completed.contains_key(&s.id))
@@ -696,7 +755,7 @@ impl Inner {
                     "note"
                 } else if done.is_some() {
                     "done"
-                } else if step.trigger.is_some() {
+                } else if step.trigger.is_some() || (crate::quest_screen::READS && !step.screen.is_empty()) {
                     "open"
                 } else {
                     "manual"
@@ -1196,6 +1255,51 @@ mod tests {
             parse_line(&line("DEBUG", r#"Generating level 1 area "G1_1" with seed 1256743153"#)).unwrap();
         assert_eq!(ts, "2026/11/11 22:41:55");
         assert_eq!(event, LogEvent::ZoneEntered { area: "G1_1".into(), level: 1, seed: Some(1256743153) });
+    }
+
+    /// The tracker reads of the owner's 2026-11-13 run, as `quest_screen` confirms them.
+    #[test]
+    fn the_quest_tracker_ticks_the_miller_and_renlys_reward() {
+        use crate::quest_screen::{read, Watcher};
+        let routes = load_routes();
+        let mut progress = Progress::default();
+        let mut watcher = Watcher::default();
+        let mut feed = |progress: &mut Progress, lines: &[&str], times: usize| {
+            let lines: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+            for _ in 0..times {
+                for c in watcher.frame(&read(&lines)) {
+                    apply_screen(&routes, progress, &c.quest, &c.orders, &c.evidence);
+                }
+            }
+        };
+        feed(&mut progress, &["Reaching Clearfell", "Kill the Bloated Miller and end his rage"], 2);
+        assert!(progress.completed.contains_key("talk-wounded-man"));
+        assert!(!progress.completed.contains_key("kill-bloated-miller"));
+        // The kill: the tracker moves on at once, two minutes before Mortimer's line.
+        feed(&mut progress, &["Reaching Clearfell", "Enter the logging encampment"], 2);
+        let kill = &progress.completed["kill-bloated-miller"];
+        assert_eq!(kill.source, "screen");
+        assert!(kill.evidence.contains("Enter the logging encampment"));
+        assert!(!progress.completed.contains_key("talk-renly"));
+        // In town, then Renly's reward: the quest leaves the list, his next one shows.
+        feed(&mut progress, &["Reaching Clearfell", "Talk to the Blacksmith"], 2);
+        assert!(!progress.completed.contains_key("talk-renly"));
+        feed(&mut progress, &["Treacherous Ground", "Search Clearfell to find the Mud Burrow entrance", "Slay the Devourer in its lair"], 3);
+        assert_eq!(progress.completed["talk-renly"].source, "screen");
+        // A step unticked by hand is not ticked again.
+        let mut progress = Progress::default();
+        progress.dismissed.insert("kill-bloated-miller".into());
+        apply_screen(&routes, &mut progress, "TheMiller", &BTreeSet::from([4]), "test");
+        assert!(!progress.completed.contains_key("kill-bloated-miller"));
+    }
+
+    #[test]
+    fn every_screen_condition_names_real_tracker_lines() {
+        // `load_routes` resolves each condition against data/quests/states.json and
+        // panics on an unknown quest or line.
+        let routes = load_routes();
+        let count = routes.iter().flat_map(|r| &r.steps).filter(|s| !s.screen.is_empty()).count();
+        assert!(count >= 100, "{count} steps read from the quest tracker");
     }
 
     #[test]

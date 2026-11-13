@@ -22,6 +22,13 @@ mod windows_capture;
 #[cfg(target_os = "windows")]
 use windows_capture::{capture, capture_bigmap, capture_window, locate_minimap, Region as CaptureRegion};
 
+/// The quest tracker's column under the minimap (`quest_screen::TRACKER_*`).
+#[cfg(target_os = "windows")]
+pub fn capture_quest_tracker() -> Result<Image, String> {
+    use crate::quest_screen::{TRACKER_HEIGHT, TRACKER_TOP, TRACKER_WIDTH};
+    windows_capture::capture_right_column(&locate_minimap()?, TRACKER_TOP, TRACKER_HEIGHT, TRACKER_WIDTH)
+}
+
 /// The whole game window, for reading the character screens.
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 pub fn capture_identity_frame() -> Result<Image, String> {

@@ -59,6 +59,7 @@
     {
       "id": "large-soul-core-altar",
       "kind": "objective",
+      "screen": [{ "quest": "SearchForTheVaalRepository", "past": "Return to Jungle Ruins and activate the Stone Altar" }],
       "parts": [{ "text": "Soul Core on Stone Altar" }],
       "trigger": null,
       "evidence": "After Jiquani's Sanctum: the Large Soul Core resurfaces the Waterways entrance. No log line known. Tick by hand."
