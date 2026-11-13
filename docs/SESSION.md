@@ -13,6 +13,13 @@
 > Since v0.1.99 the Linux side also parked the radar (v0.1.104) and added Act 1 zone
 > guides (v0.1.105–107; `PLAN.md`, next: Acts 2–6).
 
+> **v0.1.117 (Sue's side): the game log is the main source of the character, on every
+> platform** (`: <name> (<Class>) is now level <n>`, `: <name> has been slain.`;
+> `Characters::bind_from_log`), and **the Linux screen recognition (tesseract) is removed**
+> at the owner's word ("log as main source, remove that linux tesseract"). Windows' screen
+> recognition stays; a log line naming another character switches to it.
+> `docs/character-identity.md`, first and last sections. The test below is history.
+>
 > **Linux test (2026-11-13, Sue's side, v0.1.113-v0.1.114):** Sue's PC: Hyprland 0.56.2
 > with a Lua config, 3840x2160 at scale 2, tesseract 5.
 > - Binds: a Lua-config Hyprland refuses `hyprctl keyword` ("keyword can't work with

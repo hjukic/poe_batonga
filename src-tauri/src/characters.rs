@@ -84,6 +84,39 @@ impl Characters {
         }
     }
 
+    /// The character the game's log names (a level-up or a death: `tracker::character_in_line`),
+    /// the main source of who is playing on every platform (owner, 2026-11-13). It becomes the
+    /// active profile. The "Default" profile (progress kept before any name was known) is taken
+    /// over by the first character the log names that has no profile of its own; where no
+    /// screen is read, the progress from before profiles too. True when the profile changed.
+    pub fn bind_from_log(&mut self, progress: &mut Progress, name: &str) -> bool {
+        let same = |other: &str| other.to_lowercase() == name.to_lowercase();
+        if self.active.as_deref().is_some_and(same) {
+            self.active_source = Some("log".into());
+            return false;
+        }
+        if !self.profiles.keys().any(|key| same(key)) {
+            if let Some(kept) = self.profiles.remove(DEFAULT_PROFILE) {
+                self.profiles.insert(name.to_string(), kept);
+                if self.last.as_deref() == Some(DEFAULT_PROFILE) {
+                    self.last = Some(name.to_string());
+                }
+                if self.active.as_deref() == Some(DEFAULT_PROFILE) {
+                    self.active = Some(name.to_string());
+                    self.active_source = Some("log".into());
+                    self.last = Some(name.to_string());
+                    return true;
+                }
+            }
+        }
+        let import = !crate::identity::recognises() && self.legacy.is_some() && !self.profiles.keys().any(|key| same(key));
+        if self.select(progress, name, import).is_err() {
+            return false;
+        }
+        self.active_source = Some("log".into());
+        true
+    }
+
     /// Stored progress survives a restart; a stored active name is not fresh identity.
     /// Where the player was belongs to the log, like its path: kept, so that restoring an
     /// already-read entry on start is not taken for another visit (review of 2026-11-13,
@@ -219,6 +252,27 @@ mod tests {
         chars.keep_chosen_anyway(&mut progress);
         assert_eq!(chars.active.as_deref(), Some("Hero"));
         assert!(progress.completed.contains_key("hero-step"));
+    }
+
+    #[test]
+    fn the_log_names_who_plays_and_takes_over_the_default_profile() {
+        let mut chars = Characters::default();
+        let mut progress = Progress::default();
+        chars.select(&mut progress, DEFAULT_PROFILE, false).unwrap();
+        tick(&mut progress, "beira");
+        // The first level-up names the character: Default's ticks are now its own.
+        assert!(chars.bind_from_log(&mut progress, "Ranger_One"));
+        assert_eq!(chars.active.as_deref(), Some("Ranger_One"));
+        assert_eq!(chars.active_source.as_deref(), Some("log"));
+        assert!(progress.completed.contains_key("beira"));
+        assert!(!chars.profiles.contains_key(DEFAULT_PROFILE));
+        // Again (another level-up): nothing changes.
+        assert!(!chars.bind_from_log(&mut progress, "RANGER_ONE"));
+        // Another character logs in and levels: its own, empty profile; the first keeps its ticks.
+        assert!(chars.bind_from_log(&mut progress, "Witch_Two"));
+        assert!(progress.completed.is_empty());
+        assert!(chars.bind_from_log(&mut progress, "Ranger_One"));
+        assert!(progress.completed.contains_key("beira"));
     }
 
     #[test]

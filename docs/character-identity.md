@@ -500,31 +500,26 @@ Limits: the buttons must read `PLAY`/`CREATE`/`DELETE` (English client, en-US
 OCR) on a 16:9 layout; the creation screen still needs one of the twelve class
 names; a covered title on a turning screen resolves only from history.
 
-## Linux (v0.1.112)
+## The game log names the character (v0.1.117, every platform)
 
-Linux reads the character as Windows does; the code that captures, queues and hands
-frames to the recognizer is now shared (`identity_native.rs`), and each platform
-brings its input, its "game in front" check and its OCR:
+The game writes the character's name nowhere at login, but on every level-up and death:
+`: <name> (<Class>) is now level <n>` and `: <name> has been slain.` (the owner's
+Client.txt, 2026-11-13; chat lines carry a channel mark instead of `] : `).
+`tracker::character_in_line` reads them; `Characters::bind_from_log` makes that character
+the active profile, live and when the app starts (the last name since the session's login
+line). It is the main source (owner, 2026-11-13: "log as main source"): the first level-up of
+a new character (about a minute into the Riverbank) names it exactly, with no screen read.
+A "Default" profile (progress kept before any name was known) is taken over by the first
+character the log names that has none of its own. On Windows the screen recognition below
+still binds at Play; a log line naming another character switches to it. Not known yet:
+whether the log writes these lines for party members.
 
-- **Input:** Wayland lets no program watch other programs' input. On Hyprland the app
-  adds non-consuming binds (`bindn`) to the `event` dispatcher while the game runs and
-  the player is in the menus: left click, Enter/KP_Enter and the name-editing keys
-  (plain and with Shift). Hyprland passes every input on to the game and writes
-  `custom>>batonga-click|enter|edit` to its event socket; a click's place comes from
-  `cursorpos` and the active window. Play, row double-clicks (500 ms, 6 px) and the
-  rest follow the Windows rules. In a zone (once bound) the binds are removed, so
-  gameplay input is not observed; so still one screenshot per real input, no timer.
-- **Capture:** `grim` of the game window (as the map reader); the game must be on the
-  visible workspace.
-- **OCR:** `tesseract` (English) on two areas: the right panel and the bottom middle,
-  scaled so the menu text is about 40 px, brightest channel inverted. The name list or
-  name field is read a second time thresholded, for the two independent reads the
-  recognizer compares. TSV words are regrouped into lines by baseline and gap
-  (`identity_tesseract.rs`, tested on every platform). Gold is measured as on Windows.
-- Without Hyprland or `tesseract` (or with `BATONGA_SCREEN_RECOGNITION=0`) Linux keeps
-  the last chosen character, as before (`identity::recognises`).
+## Linux screen recognition: removed (v0.1.112-v0.1.116)
 
-Not yet compiled or run on Linux at the time of writing (written on Windows, where
-the shared and pure parts are tested). Expected first-run checks: Hyprland accepts
-`bindn , mouse:272, event, …` from `keyword`; tesseract's reads of the gold small caps;
-OCR time per click (two to three tesseract runs).
+v0.1.112 read the character screens on Linux too: non-consuming Hyprland binds reported
+clicks and keys in the menus, `grim` captured the game, `tesseract` read it. On the owner's
+PC (Hyprland 0.56.2, Lua config): `keyword` binds were refused (v0.1.113 used `eval` with
+`hl.bind`), Play was missed (v0.1.116: Create and Delete were enough), and the gold
+small-caps names read unstably whatever the preparation. Removed in v0.1.117 (owner: "remove
+that linux tesseract"): Linux knows the character from the log and keeps the last one chosen
+in between (`identity::recognises` is Windows only).

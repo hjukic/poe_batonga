@@ -24,36 +24,24 @@ pub fn trace(stage: &str, details: serde_json::Value) {
     if let Err(error) = result { eprintln!("Identity diagnostics: {error}"); }
 }
 
-#[cfg(any(target_os = "windows", target_os = "linux"))]
+// The character screens are read on Windows only. Linux read them with tesseract from
+// v0.1.112 to v0.1.116; it was removed (owner, 2026-11-13: "log as main source, remove that
+// linux tesseract"): the game's log names the character on every level-up and death
+// (`tracker::character_in_line`, `Characters::bind_from_log`), on every platform.
+#[cfg(target_os = "windows")]
 #[path = "identity_native.rs"]
 mod shared;
 #[cfg(target_os = "windows")]
 #[path = "identity_windows.rs"]
 mod native;
-#[cfg(target_os = "linux")]
-#[path = "identity_linux.rs"]
-mod native;
-// Pure TSV/line handling for the Linux reader: compiled for its tests everywhere.
-#[cfg(any(target_os = "linux", all(test, target_os = "windows")))]
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-#[path = "identity_tesseract.rs"]
-mod tesseract;
 
-/// On quit: Linux removes its Hyprland input binds (`identity_linux.rs`).
-pub fn stop() {
-    #[cfg(target_os = "linux")]
-    native::stop();
-}
+/// On quit (Linux removed its input binds here while it read the screens).
+pub fn stop() {}
 
-/// Whether the character is read from the creation and selection screens here: always on
-/// Windows; on Linux where Hyprland and `tesseract` are there (`native::available`).
+/// Whether the character is read from the creation and selection screens here (Windows).
+/// Elsewhere the log alone names it, and the last character stays chosen in between.
 pub fn recognises() -> bool {
-    #[cfg(target_os = "windows")]
-    { true }
-    #[cfg(target_os = "linux")]
-    { native::available() }
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-    { false }
+    cfg!(target_os = "windows")
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -103,6 +91,7 @@ impl Recognition {
         self.note = "Waiting for the character creation or selection screen".into();
     }
 
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     pub fn begin(&mut self, seq: u64, in_zone: bool, activation: bool) -> u64 {
         // Continue/Play may already have faded by the time the capture worker runs.
         // Only retain the read of the immediately preceding input, never a name
@@ -144,37 +133,37 @@ impl Recognition {
 }
 
 pub fn set_context(in_zone: bool, bound: bool) {
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[cfg(target_os = "windows")]
     native::set_context(in_zone, bound);
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    #[cfg(not(target_os = "windows"))]
     let _ = (in_zone, bound);
 }
 
 pub fn latest_input() -> u64 {
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[cfg(target_os = "windows")]
     { native::latest_input() }
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    #[cfg(not(target_os = "windows"))]
     { 0 }
 }
 
 /// Like `latest_input`, except that a just-requested activation does not
 /// supersede the selection frame preceding it (see `native::superseding_input`).
 fn superseding_input() -> u64 {
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[cfg(target_os = "windows")]
     { native::superseding_input() }
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    #[cfg(not(target_os = "windows"))]
     { 0 }
 }
 
 pub fn spawn(app: AppHandle) {
     let _ = TRACE.set(std::env::var_os("BATONGA_IDENTITY_DIAGNOSTICS").map(|p| (PathBuf::from(p), Mutex::new(()))));
     trace("startup", serde_json::json!({"version":app.package_info().version.to_string()}));
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[cfg(target_os = "windows")]
     native::spawn(app);
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    #[cfg(not(target_os = "windows"))]
     {
         let tracker = app.state::<crate::tracker::Tracker>();
-        crate::relock(&tracker.0).identity.note = "Automatic screen recognition is available on Windows and on Linux with Hyprland".into();
+        crate::relock(&tracker.0).identity.note = "Your character is read from the game log: it is known from your first level-up or death after you log in".into();
     }
 }
 
@@ -280,7 +269,7 @@ pub fn identity_observed(app: AppHandle, epoch: u64, seq: u64, result: ScreenRes
         if changed { inner.save(); }
         inner.sync_navigation(&app);
     } else {
-        #[cfg(any(target_os = "windows", target_os = "linux"))]
+        #[cfg(target_os = "windows")]
         native::finish_unknown();
         if inner.characters.active.is_none() {
             inner.identity.note = "Waiting for the character creation or selection screen".into();
@@ -299,9 +288,9 @@ pub fn identity_observed(app: AppHandle, epoch: u64, seq: u64, result: ScreenRes
 #[tauri::command]
 pub fn identity_ready(app: AppHandle) {
     trace("frontend-ready", serde_json::json!({}));
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    #[cfg(target_os = "windows")]
     native::reference_probe(app);
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    #[cfg(not(target_os = "windows"))]
     let _ = app;
 }
 
