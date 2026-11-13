@@ -736,6 +736,7 @@ pub fn init(app: &AppHandle) -> Tracker {
     // A character may have changed while the overlay was closed, without a new
     // login-server line. Never promote a persisted active name to live identity.
     characters.clear_binding(&mut progress);
+    characters.keep_chosen(&mut progress);
     if progress.shown_zone.is_none() {
         progress.shown_zone =
             progress.current_area.clone().filter(|area| routes.iter().any(|r| &r.zone.id == area));
@@ -921,6 +922,7 @@ fn restore_live_context(app: &AppHandle, file: &mut File, pos: u64) -> std::io::
     let mut inner = crate::relock(&tracker.0);
     let Inner { progress, characters, .. } = &mut *inner;
     let new_session = characters.new_session(progress, session);
+    characters.keep_chosen(progress);
     if new_session { inner.identity.invalidate(); }
     if let Some(event @ LogEvent::ZoneEntered { ref area, .. }) = zone.as_ref() {
         let Inner { routes, progress, .. } = &mut *inner;
@@ -936,6 +938,7 @@ fn restore_live_context(app: &AppHandle, file: &mut File, pos: u64) -> std::io::
     if !running {
         let Inner { progress, characters, .. } = &mut *inner;
         characters.new_session(progress, None);
+        characters.keep_chosen(progress);
     }
     inner.save();
     crate::identity::set_context(inner.in_zone, inner.characters.active.is_some());
@@ -987,6 +990,7 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
             crate::identity::set_context(false, false);
             let Inner { progress, characters, .. } = &mut *inner;
             changed |= characters.new_session(progress, Some(line.to_string()));
+            characters.keep_chosen(progress);
             inner.in_zone = false;
             inner.fight = None;
             inner.recent.clear();
@@ -1061,6 +1065,7 @@ fn set_in_zone(app: &AppHandle, in_zone: bool) {
         inner.fight = None;
         let Inner { characters, progress, .. } = &mut *inner;
         profile_changed = characters.new_session(progress, None);
+        characters.keep_chosen(progress);
         if changed || profile_changed || inner.identity.pending.is_some() {
             inner.identity.invalidate();
         }

@@ -1,5 +1,12 @@
 # Where we stopped — 2026-11-13
 
+> **Review, 2026-11-13 (from the Linux side):** read `docs/review-2026-11-13-character-identity.md`
+> first: 9 open findings on the identity code (double-click activation is never wired up,
+> a clipped new name can bind to a shorter known one, one missed game-window poll unbinds
+> the character, ...). v0.1.101 changed two things: Linux keeps its progress without
+> recognition (`Characters::keep_chosen`), and `game::running()` keeps its answer for 3 s.
+
+
 Current version: **0.1.99**: character-selection recognition fixed for every
 list position, the slider and OCR misreads (details in
 `docs/character-identity.md`, v0.1.95–v0.1.99). Rebuild before testing:

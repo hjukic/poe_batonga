@@ -4,8 +4,29 @@ fn is_game(name: &str) -> bool {
         "pathofexile.exe" | "pathofexilesteam.exe" | "pathofexile_x64.exe" | "pathofexile_x64steam.exe")
 }
 
-#[cfg(target_os = "windows")]
+/// How long an answer of `running` is kept. It was asked twice a second and on every log
+/// batch, and each time read every process's command line (Linux) or took a process
+/// snapshot and walked all windows (Windows): review of 2026-11-13.
+const KEEP: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Whether the game is running (None: cannot tell), at most `KEEP` old.
 pub fn running() -> Option<bool> {
+    use std::sync::Mutex;
+    use std::time::Instant;
+    static LAST: Mutex<Option<(Instant, Option<bool>)>> = Mutex::new(None);
+    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((at, answer)) = *last {
+        if at.elapsed() < KEEP {
+            return answer;
+        }
+    }
+    let answer = look();
+    *last = Some((Instant::now(), answer));
+    answer
+}
+
+#[cfg(target_os = "windows")]
+fn look() -> Option<bool> {
     use windows_sys::Win32::{Foundation::{CloseHandle, INVALID_HANDLE_VALUE}, UI::WindowsAndMessaging::EnumWindows, System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
     }};
@@ -53,7 +74,7 @@ unsafe extern "system" fn find_game_window(window: windows_sys::Win32::Foundatio
 }
 
 #[cfg(target_os = "linux")]
-pub fn running() -> Option<bool> {
+fn look() -> Option<bool> {
     for entry in std::fs::read_dir("/proc").ok()?.flatten() {
         if !entry.file_name().to_string_lossy().chars().all(|c| c.is_ascii_digit()) { continue; }
         let Ok(cmdline) = std::fs::read(entry.path().join("cmdline")) else { continue };
@@ -67,4 +88,4 @@ pub fn running() -> Option<bool> {
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-pub fn running() -> Option<bool> { None }
+fn look() -> Option<bool> { None }

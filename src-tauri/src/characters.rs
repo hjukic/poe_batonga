@@ -13,7 +13,15 @@ pub struct Characters {
     /// Pre-profile progress has no trustworthy owner. Import only by explicit choice.
     pub legacy: Option<Progress>,
     pub known: Vec<crate::identity::KnownCharacter>,
+    /// The character chosen last, by hand or kept (`keep_chosen`).
+    pub last: Option<String>,
 }
+
+/// Whether this build reads the character from the creation and selection screens (Windows
+/// OCR only).
+const RECOGNISES: bool = cfg!(target_os = "windows");
+/// The profile progress is kept in where no character can be recognised and none was chosen.
+pub const DEFAULT_PROFILE: &str = "Default";
 
 #[derive(Serialize, Deserialize)]
 pub struct SavedProgress {
@@ -37,6 +45,37 @@ impl Characters {
         self.session = session;
         self.clear_binding(progress);
         true
+    }
+
+    /// Where no character can be recognised (Linux), the last character chosen stays chosen;
+    /// before any was chosen, a "Default" one holds the progress kept before profiles. Each
+    /// restart, login or game exit cleared the binding, and with no recognition to bind it
+    /// again the ticks went into an empty, unsaved progress (the owner's 40 ticks were moved
+    /// aside on 2026-11-13). Call after anything that clears the binding.
+    pub fn keep_chosen(&mut self, progress: &mut Progress) {
+        if !RECOGNISES {
+            self.keep_chosen_anyway(progress);
+        }
+    }
+
+    fn keep_chosen_anyway(&mut self, progress: &mut Progress) {
+        if self.active.is_some() {
+            return;
+        }
+        let only = (self.profiles.len() == 1).then(|| self.profiles.keys().next().cloned()).flatten();
+        let name = self.last.clone().or(only).unwrap_or_else(|| DEFAULT_PROFILE.to_string());
+        let import = self.legacy.is_some() && !self.profiles.keys().any(|key| key.to_lowercase() == name.to_lowercase());
+        let kept = if import { self.legacy.clone() } else { self.profiles.get(&name).cloned() };
+        if self.select(progress, &name, import).is_err() {
+            return;
+        }
+        self.active_source = Some("kept".into());
+        // Where the player was is the profile's too: a restart in a zone is no new visit.
+        if let Some(kept) = kept.filter(|_| progress.current_area.is_none()) {
+            progress.current_area = kept.current_area;
+            progress.shown_zone = kept.shown_zone;
+            self.remember(progress);
+        }
     }
 
     /// Stored progress survives a restart; a stored active name is not fresh identity.
@@ -82,6 +121,7 @@ impl Characters {
         next.log_offset = progress.log_offset;
         *progress = next;
         self.active = Some(name.to_string());
+        self.last = Some(name.to_string());
         self.active_source = Some("manual".into());
         self.remember(progress);
         Ok(())
@@ -106,6 +146,34 @@ mod tests {
 
     fn tick(progress: &mut Progress, id: &str) {
         progress.completed.insert(id.into(), Completion { at: "now".into(), source: "manual".into(), evidence: String::new() });
+    }
+
+    #[test]
+    fn without_recognition_the_progress_is_kept_across_restarts() {
+        // The owner's file after the profiles came: all ticks moved aside as legacy.
+        let mut legacy = Progress { current_area: Some("G1_13_2".into()), shown_zone: Some("G1_13_2".into()), ..Default::default() };
+        tick(&mut legacy, "beira");
+        let mut chars = Characters { legacy: Some(legacy), ..Default::default() };
+        let mut progress = Progress::default();
+        chars.keep_chosen_anyway(&mut progress);
+        assert_eq!(chars.active.as_deref(), Some(DEFAULT_PROFILE));
+        assert!(progress.completed.contains_key("beira"), "the earlier ticks are back");
+        assert_eq!(progress.current_area.as_deref(), Some("G1_13_2"));
+        assert!(chars.legacy.is_none());
+        // A restart, a login or the game closing clears the binding: kept again, with its ticks.
+        tick(&mut progress, "miller");
+        chars.clear_binding(&mut progress);
+        assert!(progress.completed.is_empty());
+        chars.keep_chosen_anyway(&mut progress);
+        assert!(progress.completed.contains_key("beira") && progress.completed.contains_key("miller"));
+        assert_eq!(progress.current_area.as_deref(), Some("G1_13_2"));
+        // A character chosen by hand stays the one kept.
+        chars.select(&mut progress, "Hero", false).unwrap();
+        tick(&mut progress, "hero-step");
+        chars.clear_binding(&mut progress);
+        chars.keep_chosen_anyway(&mut progress);
+        assert_eq!(chars.active.as_deref(), Some("Hero"));
+        assert!(progress.completed.contains_key("hero-step"));
     }
 
     #[test]
