@@ -272,42 +272,60 @@ fn apply_input(app: &AppHandle, window: &WebviewWindow, interactive: bool) -> Re
     .map_err(|e| e.to_string())
 }
 
-/// Elsewhere the whole window ignores the mouse; `watch_input_hover` lifts that while the
-/// cursor is over an input rect.
+/// Elsewhere the window ignores the mouse except while the cursor is over an input rect,
+/// and only `watch_input_hover` changes that. The rects or the lock changed here, so the
+/// state it last applied is forgotten and its next tick applies the right one.
+///
+/// (Up to v0.1.115 this made the window click-through itself while the watcher still
+/// believed the cursor was over a rect: after unlocking, opening the menu or any new rects
+/// from the page, the buttons under the cursor took no hover or click until the cursor
+/// left every rect and came back. Linux uses an input shape and never had this.)
 #[cfg(not(target_os = "linux"))]
-fn apply_input(_app: &AppHandle, window: &WebviewWindow, _interactive: bool) -> Result<(), String> {
-    window.set_ignore_cursor_events(true).map_err(|e| e.to_string())
+fn apply_input(app: &AppHandle, _window: &WebviewWindow, _interactive: bool) -> Result<(), String> {
+    app.state::<HoverInput>().0.store(HOVER_UNKNOWN, std::sync::atomic::Ordering::SeqCst);
+    Ok(())
 }
 
+/// Not Linux: what `watch_input_hover` last applied to the overlay window.
+#[cfg_attr(target_os = "linux", allow(dead_code))]
+struct HoverInput(std::sync::atomic::AtomicU8);
+#[cfg_attr(target_os = "linux", allow(dead_code))]
+const HOVER_UNKNOWN: u8 = 0;
+#[cfg_attr(target_os = "linux", allow(dead_code))]
+const HOVER_IGNORES: u8 = 1;
+#[cfg_attr(target_os = "linux", allow(dead_code))]
+const HOVER_TAKES: u8 = 2;
+
 /// Not Linux: poll the cursor and make the window clickable only over the input rects.
-/// Untested on Windows so far.
+/// The only caller of `set_ignore_cursor_events` on the overlay, so what it applied and
+/// what it remembers cannot drift apart.
 #[cfg_attr(target_os = "linux", allow(dead_code))]
 fn watch_input_hover(app: AppHandle) {
-    std::thread::spawn(move || {
-        let mut over = false;
-        loop {
-            std::thread::sleep(std::time::Duration::from_millis(30));
-            let Ok(status) = snapshot(&app) else { continue };
-            let Ok(window) = overlay(&app) else { continue };
-            if !status.visible {
-                over = false;
-                continue;
-            }
-            let rects = relock(&app.state::<InputRects>().0).clone();
-            let (Ok(cursor), Ok(origin), Ok(scale)) =
-                (app.cursor_position(), window.inner_position(), window.scale_factor())
-            else {
-                continue;
-            };
-            let x = (cursor.x - origin.x as f64) / scale;
-            let y = (cursor.y - origin.y as f64) / scale;
-            let inside = rects.iter().any(|rect| rect.contains(x, y));
-            if inside != over {
-                over = inside;
-                let _ = window.set_ignore_cursor_events(!inside);
-            }
+    use std::sync::atomic::Ordering;
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        let Ok(status) = snapshot(&app) else { continue };
+        let Ok(window) = overlay(&app) else { continue };
+        let inside = status.visible && cursor_over_input(&app, &window).unwrap_or(false);
+        let want = if inside { HOVER_TAKES } else { HOVER_IGNORES };
+        let applied = &app.state::<HoverInput>().0;
+        if applied.swap(want, Ordering::SeqCst) != want && window.set_ignore_cursor_events(!inside).is_err() {
+            applied.store(HOVER_UNKNOWN, Ordering::SeqCst); // try again on the next tick
         }
     });
+}
+
+/// Whether the cursor is over one of the input rects; None when the cursor or the window
+/// position cannot be read.
+#[cfg_attr(target_os = "linux", allow(dead_code))]
+fn cursor_over_input(app: &AppHandle, window: &WebviewWindow) -> Option<bool> {
+    let rects = relock(&app.state::<InputRects>().0).clone();
+    let cursor = app.cursor_position().ok()?;
+    let origin = window.inner_position().ok()?;
+    let scale = window.scale_factor().ok()?;
+    let x = (cursor.x - origin.x as f64) / scale;
+    let y = (cursor.y - origin.y as f64) / scale;
+    Some(rects.iter().any(|rect| rect.contains(x, y)))
 }
 
 /// Hyprland's global cursor position, in the same logical pixels as layer margins.
@@ -947,6 +965,7 @@ fn main() {
         }))
         .manage(Presence::new())
         .manage(InputRects(Mutex::new(Vec::new())))
+        .manage(HoverInput(std::sync::atomic::AtomicU8::new(HOVER_UNKNOWN)))
         .manage(Dragging(Default::default()))
         .invoke_handler(tauri::generate_handler![
             overlay_status,

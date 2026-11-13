@@ -52,7 +52,16 @@
 > binds through Lua `eval` where a Lua config refuses `keyword`, Hyprland 0.56) with
 > local v0.1.113–0.1.114. No other change; the live tests below still apply.
 
-Current version: **0.1.115**. Rebuild before testing:
+> **v0.1.116 (Windows, 2026-11-13):** overlay buttons unresponsive after unlocking (owner:
+> hovering Settings showed no highlight and took no click). Windows only: every new set of
+> input rects from the page (unlock, menu open, checklist change) made the window
+> click-through while the hover watcher still believed the cursor was over a rect, so it
+> stayed click-through until the cursor left every rect and came back. Now only the watcher
+> sets click-through, and a rect/lock change makes it re-check within 30 ms. Linux (input
+> shape) is unchanged. **Test:** unlock, go straight to Settings, open the menu, click
+> inside it, lock again; the lock button and checklist rows while locked.
+
+Current version: **0.1.116**. Rebuild before testing:
 `npm run desktop:build`, then run `src-tauri/target/release/poe-batonga.exe`
 with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation.log`
 and `BATONGA_QUEST_DIAGNOSTICS=artifacts/quest-tracker.jsonl`.
