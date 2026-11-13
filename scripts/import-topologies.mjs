@@ -76,10 +76,14 @@ export function parseGraph(text, name = 'graph') {
     // tag or key. A node can be both: the start is often also the way back.
     const start = rest.includes('entrance');
     const exitWords = rest.filter((w) => /^entrance\d+$/.test(w));
+    // "entranceNdisabled": a way out the game opens later (Ogham Village's to the Manor
+    // Ramparts, through the Executioner's arena; the Halani Gates'). Linked below where no
+    // node of the layout leads there otherwise.
+    const laterWords = rest.filter((w) => /^entrance\d+disabled$/.test(w));
     const keys = t.slice(4 + degree).filter((w) => w.quoted && w.text !== '').map((w) => w.text);
     // The word after the tag is the node's turn: I, FI, R90, FR270, (any), (best), ….
     const turn = t[4 + degree]?.text ?? 'I';
-    nodes.push({ x: Number(t[0].text), y: Number(t[1].text), tag: tag.text, start, exitWords, keys, turn });
+    nodes.push({ x: Number(t[0].text), y: Number(t[1].text), tag: tag.text, start, exitWords, laterWords, keys, turn });
   }
   i += nodeCount;
   const edges = [];
@@ -296,6 +300,14 @@ export function importArea(area, topologies, worldAreas, src) {
           start: node.start,
           keys: node.keys,
         };
+      });
+      // A way out opened later ("entranceNdisabled"), where no node leads to that connection:
+      // without it Ogham Village knew no way to the Manor Ramparts, and two exits read by name
+      // fitted none of its layouts (the owner, 2026-11-13).
+      ex.nodes.forEach((node, i) => {
+        if (outNodes[i].exit || !node.laterWords?.length) return;
+        const later = node.laterWords.map((w) => connections[parseInt(w.slice(8), 10) - 1]).find(Boolean);
+        if (later && !outNodes.some((n) => n.exit === later)) outNodes[i].exit = later;
       });
       // Act 4's islands (Shrike Island, Plunder's Point, Brinerot Cove) have no entranceN: the way
       // out is the boat at the landing, keyed "teleport1" (Ngakanu's landing has both "entrance1"

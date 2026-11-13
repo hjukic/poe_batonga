@@ -148,6 +148,11 @@ const K_RANGE: (f64, f64) = (0.4, 2.5);
 /// a pair of exits alone fits a wrong layout at a far scale too (one of Clearfell's at
 /// 1.74 as well as the right one at 1.0), and the near scale wins.
 const K_SIGMA: f64 = 0.25;
+/// The same for a dungeon's room grid, whose size per room the files do not give reliably:
+/// three dungeons of the same `roomUnitSize` measured 0.72 (the Grim Tangle), 1.24 (the
+/// Cemetery) and 1.97 (Ogham Village) times it (the owner's visits, 2026-11-13). The zone's
+/// own scale, once measured, is kept (`scale.json`) and expected next time.
+const K_SIGMA_DUNGEON: f64 = 0.6;
 /// How much coarser a dungeon's named-exit fit is: its nodes are the centres of rooms about
 /// 100 world units wide, and an exit sits anywhere in its room. The Grim Tangle's right
 /// layout (the only one with the Cemetery right of the Grelwood) fitted 370 units off and
@@ -198,7 +203,7 @@ const ICON_CONFIRM: f64 = 0.5;
 const ICON_SURE: f64 = 0.95;
 
 /// The memory format; older files are ignored.
-pub(super) const MEMORY_VERSION: u32 = 6;
+pub(super) const MEMORY_VERSION: u32 = 7;
 
 /// Icons this close (world units) on the dead-reckoned track are one exit.
 const SIGHT_MATCH: f64 = 40.0;
@@ -764,7 +769,8 @@ impl Navigator {
                     });
                     let k = clamp(gw, gg);
                     let fit: f64 = gots.iter().map(|&(got, want, _)| (-miss(k, got, want) / (4.0 * tol * tol)).exp()).product();
-                    let prior = (-(k.ln()).powi(2) / (2.0 * K_SIGMA * K_SIGMA)).exp();
+                    let sigma = if layout.dungeon { K_SIGMA_DUNGEON } else { K_SIGMA };
+                    let prior = (-(k.ln()).powi(2) / (2.0 * sigma * sigma)).exp();
                     if fit * prior > best.0 {
                         best = (fit * prior, fit, k, std::iter::once(n1).chain(gots.iter().map(|g| g.2)).collect());
                     }
@@ -2338,6 +2344,23 @@ mod tests {
         let picture = nav.picture().unwrap();
         assert!(picture.known && picture.from_path && picture.id == "both", "{picture:?}");
         assert_eq!(nav.zone_scale(), None, "no scale learnt from the path");
+    }
+
+    #[test]
+    fn ogham_village_knows_its_way_to_the_ramparts() {
+        let area = graph::load("G1_13_2");
+        // The owner's Ogham Village (2026-11-13, seed 3703502618): Ogham Farmlands' exit at
+        // (19, 18), the Manor Ramparts' (through the Executioner's arena) at (735, -1007).
+        let frame = [
+            ExitIcon { dx: 19.0, dy: 18.0, to: Some("Ogham Farmlands".into()), remembered: true },
+            ExitIcon { dx: 735.0, dy: -1007.0, to: Some("The Manor Ramparts".into()), remembered: true },
+        ];
+        let mut nav = Navigator::new(&area, Arrival::From("G1_13_1"), None, SCALE, 3703502618);
+        nav.icons(&frame);
+        let ranking = nav.ranking();
+        assert!(!nav.named_loose, "{:?}", &ranking[..4]);
+        let top: Vec<&str> = ranking[..2].iter().map(|r| r.0).collect();
+        assert!(top.contains(&"Village_S_E") && top.contains(&"Village_W_N"), "{:?}", &ranking[..4]);
     }
 
     #[test]

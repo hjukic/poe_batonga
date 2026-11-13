@@ -139,7 +139,7 @@ test('a .dgr graph: header lines skipped, keys kept, entrance words read', () =>
   const g = parseGraph(DGR);
   assert.deepEqual(g.size, [5, 6]);
   assert.equal(g.nodes.length, 3);
-  assert.deepEqual(g.nodes[0], { x: 104, y: 104, tag: 'entrance_flip', start: false, exitWords: ['entrance1'], keys: ['entrance1', 'default'], turn: 'FI' });
+  assert.deepEqual(g.nodes[0], { x: 104, y: 104, tag: 'entrance_flip', start: false, exitWords: ['entrance1'], laterWords: [], keys: ['entrance1', 'default'], turn: 'FI' });
   assert.equal(g.nodes[2].tag, 'boss');
   assert.deepEqual(g.nodes[2].keys, ['teleport1disabled-MudBurrowArena', 'teleport2disabled-MudBurrowArena', 'telepad1', 'telepad2', 'zone=2']);
   assert.deepEqual(g.edges[0], { a: 0, b: 1, via: [], kind: 'cavern_rooms' });
