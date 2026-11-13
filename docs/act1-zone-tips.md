@@ -9,6 +9,16 @@ pattern per zone, not one picture per layout; the game turns zones, the pattern 
 file keeps what they rest on. Started 2026-11-13, after the radar
 and layout recognition were parked; Act 1 only for now.
 
+## How steps are written (owner, 2026-11-13)
+
+For a league start, levelling fast: "very concise and straight to the point".
+
+- One short line each, what to do: "Away from town: Beira, then the Grelwood (88%)."
+- How often a pattern holds as a percentage of the zone's layouts (88%), not "29 of 33".
+- No rewards for what you do anyway ("Kill Beira", not "+10% cold res").
+- Side content starts with "Optional:" and says in brackets why you might do it:
+  "Optional: Mud Burrow (Lv 2 gem)."
+
 ## Sources
 
 | Key | Source | Date / version |

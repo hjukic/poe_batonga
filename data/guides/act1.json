@@ -12,22 +12,16 @@
   "G1_1": {
    "steps": [
     {
-     "text": "Follow the river straight on: no waypoint here.",
-     "src": [
-      "maxroll"
-     ]
-    },
-    {
-     "text": "Large chest midway: your first skill gem.",
-     "src": [
-      "maxroll"
-     ]
-    },
-    {
-     "text": "The Bloated Miller guards the way to the encampment.",
+     "text": "Follow the river to the Miller.",
      "src": [
       "maxroll",
       "data"
+     ]
+    },
+    {
+     "text": "Chest midway: first skill gem.",
+     "src": [
+      "maxroll"
      ]
     }
    ],
@@ -129,7 +123,7 @@
        38
       ],
       "kind": "reward",
-      "label": "Chest: skill gem",
+      "label": "Chest (gem)",
       "anchor": "end"
      },
      {
@@ -156,23 +150,22 @@
   "G1_2": {
    "steps": [
     {
-     "text": "Head straight away from town: Beira (+10% cold res) and the Grelwood are on the far side (the Grelwood in 29 of 33 layouts).",
+     "text": "Away from town: Beira, then the Grelwood (88%).",
      "src": [
       "data",
       "codex"
      ]
     },
     {
-     "text": "Waypoint and Mud Burrow on one side of the start, the Mysterious Campsite (skill gem) on the other; the sides swap.",
+     "text": "Grelwood is past the bridge.",
      "src": [
       "codex"
      ]
     },
     {
-     "text": "The Grelwood is past the bridge. The Mud Burrow is rarely worth it.",
+     "text": "Optional: Mud Burrow (Lv 2 gem), campsite (gem).",
      "src": [
-      "codex",
-      "maxroll"
+      "codex"
      ]
     }
    ],
@@ -334,7 +327,7 @@
        42
       ],
       "kind": "reward",
-      "label": "Campsite: gem",
+      "label": "Campsite (gem)",
       "below": true,
       "anchor": "end"
      },
@@ -362,17 +355,15 @@
   "G1_3": {
    "steps": [
     {
-     "text": "One winding tunnel: keep going, the Devourer is always at the far end (4 of 4).",
+     "text": "Optional zone (Lv 2 gem).",
      "src": [
-      "data",
-      "maxroll"
+      "codex"
      ]
     },
     {
-     "text": "Optional (Lv 2 uncut gem); dodge-roll through his projectile barrage.",
+     "text": "Boss at the far end (100%).",
      "src": [
-      "codex",
-      "maxroll"
+      "data"
      ]
     }
    ],
@@ -460,7 +451,7 @@
   "G1_4": {
    "steps": [
     {
-     "text": "Follow the river upstream: the Red Vale is always at the far end (12 of 12), the Brambleghast next to it.",
+     "text": "River → Red Vale, far end (100%).",
      "src": [
       "poe2way",
       "codex",
@@ -468,7 +459,14 @@
      ]
     },
     {
-     "text": "Glowing roots lead to the Tree of Souls (waypoint); orange mushrooms to the Grim Tangle, about halfway in (11 of 12).",
+     "text": "Roots → Tree of Souls (WP).",
+     "src": [
+      "poe2way",
+      "codex"
+     ]
+    },
+    {
+     "text": "Mushrooms → Grim Tangle, halfway (92%).",
      "src": [
       "poe2way",
       "codex",
@@ -476,14 +474,7 @@
      ]
     },
     {
-     "text": "The Tree, the Grim Tangle and Areagne's hut sit round a diamond and swap; the Lost Catacombs are by the entrance.",
-     "src": [
-      "codex",
-      "data"
-     ]
-    },
-    {
-     "text": "Found the Grim Tangle or the Red Vale first? Take its waypoint and come back.",
+     "text": "Exit found first? Take its WP, come back.",
      "src": [
       "poe2way",
       "maxroll"
@@ -701,17 +692,16 @@
   "G1_5": {
    "steps": [
     {
-     "text": "Make a loop: three Rust obelisks spread round the zone, one sometimes by the blood river in the middle.",
+     "text": "Loop round: 3 obelisks.",
      "src": [
       "codex",
       "maxroll"
      ]
     },
     {
-     "text": "Each spawns a wave; the third summons the Rust King. Good experience.",
+     "text": "3rd spawns the Rust King.",
      "src": [
-      "maxroll",
-      "poe2way"
+      "maxroll"
      ]
     }
    ],
@@ -857,24 +847,17 @@
   "G1_6": {
    "steps": [
     {
-     "text": "Head away from the entrance, the way the zone opens up: the Cemetery is always at the far end (8 of 8).",
+     "text": "Away from the entrance: Cemetery at the far end (100%).",
      "src": [
       "data",
       "codex"
      ]
     },
     {
-     "text": "When Una starts singing, respawn at the checkpoint to skip it.",
+     "text": "Una sings: respawn at checkpoint to skip.",
      "src": [
       "codex",
       "poe2way"
-     ]
-    },
-    {
-     "text": "The Rotten Druid (support gem) is off to one side near the end.",
-     "src": [
-      "data",
-      "codex"
      ]
     }
    ],
@@ -969,7 +952,7 @@
        47
       ],
       "kind": "place",
-      "label": "Una: respawn to skip",
+      "label": "Una",
       "anchor": "end"
      },
      {
@@ -997,31 +980,30 @@
   "G1_7": {
    "steps": [
     {
-     "text": "Lachlann's arena and the Memorial Gate are close to where you come in (10 of 12).",
+     "text": "Lachlann + gate: near the entrance (83%).",
      "src": [
       "data"
      ]
     },
     {
-     "text": "The two tombs lie halfway in, along the side walls: hug one wall, then the other; take a tomb's waypoint when you find it.",
+     "text": "Tombs halfway, on the side walls: hug one, then the other.",
      "src": [
       "data",
-      "codex",
-      "poe2way"
+      "codex"
      ]
     },
     {
-     "text": "Sarcophagus with a guaranteed ring on the far wall.",
-     "src": [
-      "codex",
-      "maxroll"
-     ]
-    },
-    {
-     "text": "After opening the gate, respawn at the checkpoint to skip the talk.",
+     "text": "Gate open: respawn at checkpoint to skip the talk.",
      "src": [
       "poe2way",
       "codex"
+     ]
+    },
+    {
+     "text": "Optional: ring chest, far wall.",
+     "src": [
+      "codex",
+      "maxroll"
      ]
     }
    ],
@@ -1114,7 +1096,7 @@
        52
       ],
       "kind": "boss",
-      "label": "Lachlann · gate",
+      "label": "Lachlann + gate",
       "anchor": "end"
      },
      {
@@ -1143,7 +1125,7 @@
        11
       ],
       "kind": "reward",
-      "label": "Sarcophagus: ring",
+      "label": "Ring chest",
       "below": true
      }
     ]
@@ -1152,19 +1134,13 @@
   "G1_8": {
    "steps": [
     {
-     "text": "A grid of rooms; you come in near a corner.",
+     "text": "Line from entrance through the wheel tile: Draven at the far end (75%).",
      "src": [
       "codex"
      ]
     },
     {
-     "text": "Draw a line from the entrance through the wheel tile in the middle: Draven is at the far end 3 times in 4.",
-     "src": [
-      "codex"
-     ]
-    },
-    {
-     "text": "Not there? He is along the long wall in line with the entrance. His arena has a ribbed edge.",
+     "text": "Not there: long wall in line with the entrance.",
      "src": [
       "codex"
      ]
@@ -1253,7 +1229,7 @@
        12
       ],
       "kind": "boss",
-      "label": "Draven (3 in 4)",
+      "label": "Draven 75%",
       "anchor": "end",
       "below": true
      },
@@ -1273,13 +1249,7 @@
   "G1_9": {
    "steps": [
     {
-     "text": "Go through the middle: Asinia's arena is usually along the far side (not sure yet).",
-     "src": [
-      "codex"
-     ]
-    },
-    {
-     "text": "Haunted Treasure (optional): a rare knight with a support gem.",
+     "text": "Through the middle: Asinia usually at the far side.",
      "src": [
       "codex"
      ]
@@ -1353,7 +1323,7 @@
        12
       ],
       "kind": "boss",
-      "label": "Asinia (usually)",
+      "label": "Asinia",
       "anchor": "start"
      }
     ]
@@ -1362,21 +1332,27 @@
   "G1_11": {
    "steps": [
     {
-     "text": "Places sit in the corners: follow the edges, skip the middle. Both exits are usually on the far side.",
+     "text": "Follow the edges, skip the middle.",
      "src": [
-      "codex",
-      "data"
+      "codex"
      ]
     },
     {
-     "text": "Signposts lead to Ogham Farmlands; bloody tracks to the Crowbell (+2 passive points).",
+     "text": "Signposts → Farmlands.",
      "src": [
       "codex",
       "poe2way"
      ]
     },
     {
-     "text": "Finish the ritual in the middle and its locusts fly to Freythorn. Found the Farmlands first? Take its waypoint and come back.",
+     "text": "Ritual locusts → Freythorn.",
+     "src": [
+      "codex",
+      "poe2way"
+     ]
+    },
+    {
+     "text": "Optional: Crowbell (+2 passives), follow bloody tracks.",
      "src": [
       "codex",
       "poe2way"
@@ -1555,24 +1531,17 @@
   "G1_12": {
    "steps": [
     {
-     "text": "Three rituals, then the King in the Mists (+30 spirit).",
+     "text": "3 rituals, then the King.",
      "src": [
       "maxroll",
       "poe2way"
      ]
     },
     {
-     "text": "After each ritual the locusts fly to the nearest one left.",
+     "text": "Locusts point to the next ritual.",
      "src": [
       "codex",
       "poe2way"
-     ]
-    },
-    {
-     "text": "The arena is often opposite the entrance; its black swirls point to rituals still undone.",
-     "src": [
-      "codex",
-      "data"
      ]
     }
    ],
@@ -1763,21 +1732,21 @@
   "G1_13_1": {
    "steps": [
     {
-     "text": "Head straight away from the entrance.",
+     "text": "Straight away from the entrance.",
      "src": [
       "codex",
       "data"
      ]
     },
     {
-     "text": "Una's lute is close, on the way: her hut is behind a long hut with carts; go round.",
+     "text": "Village on the far wall (88%); else follow that wall.",
      "src": [
       "codex",
       "data"
      ]
     },
     {
-     "text": "Ogham Village is on the far wall (28 of 32): not there? Follow that wall.",
+     "text": "Optional: Una's lute (+2 passives), on the way.",
      "src": [
       "codex",
       "data"
@@ -1889,19 +1858,19 @@
   "G1_13_2": {
    "steps": [
     {
-     "text": "Hug the right-hand wall up to the Executioner's arena.",
+     "text": "Hug the right wall to the Executioner.",
      "src": [
       "codex"
      ]
     },
     {
-     "text": "The Manor Ramparts open behind his arena, usually on the far side.",
+     "text": "Exit is behind his arena.",
      "src": [
       "data"
      ]
     },
     {
-     "text": "Renly's tools: a room with a checkpoint along the wall; missed it? From the waypoint follow the left wall.",
+     "text": "Optional: Renly's tools (salvage bench), room with checkpoint.",
      "src": [
       "codex"
      ]
@@ -1994,7 +1963,7 @@
        17
       ],
       "kind": "boss",
-      "label": "Executioner (exit behind)",
+      "label": "Executioner",
       "anchor": "end",
       "below": true
      },
@@ -2014,23 +1983,10 @@
   "G1_14": {
    "steps": [
     {
-     "text": "U-shaped: follow it round; the manor is up the other side (usually the far side).",
+     "text": "U-shape: follow it round to the manor.",
      "src": [
       "codex",
       "data"
-     ]
-    },
-    {
-     "text": "If it opens down-left the manor is up-right, and the other way round.",
-     "src": [
-      "codex"
-     ]
-    },
-    {
-     "text": "Gallows rope on a wall: a support gem.",
-     "src": [
-      "codex",
-      "poe2way"
      ]
     }
    ],
@@ -2111,24 +2067,23 @@
   "G1_15": {
    "steps": [
     {
-     "text": "Each floor: go the opposite way from where you came in; Count Geonor is always at the far end (16 of 16).",
-     "src": [
-      "codex",
-      "poe2way",
-      "data"
-     ]
-    },
-    {
-     "text": "Candlemass (+20 life) is on the first floor, on a far wall: found the stairs first? Take the checkpoint, go back for him.",
+     "text": "Each floor: go opposite to where you came in.",
      "src": [
       "codex",
       "poe2way"
      ]
     },
     {
-     "text": "Floors 2 and 3: cross the bridge; on 3 the Count shouts, take the lift down to him.",
+     "text": "The Count is at the far end (100%).",
      "src": [
-      "codex"
+      "data"
+     ]
+    },
+    {
+     "text": "Optional: Candlemass, floor 1 (+20 life).",
+     "src": [
+      "codex",
+      "poe2way"
      ]
     }
    ],
