@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "order": 110,
   "zone": { "id": "G1_11", "name": "Hunting Grounds", "level": 10 },
-  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas. Pickups and order from the fast route (GTD-video, Act 1), 2026-11-13",
   "steps": [
     {
       "id": "hunting-grounds-waypoint",
@@ -11,14 +11,6 @@
       "parts": [{ "text": "Take the waypoint" }],
       "trigger": null,
       "evidence": "No log line known. Tick by hand."
-    },
-    {
-      "id": "hunting-grounds-town",
-      "kind": "objective",
-      "navigationTarget": { "area": "G1_11", "label": "Waypoint", "icon": "waypoint" },
-      "parts": [{ "text": "Waypoint to town" }],
-      "trigger": { "type": "zoneEntered", "area": "G1_town", "after": "enter-hunting-grounds" },
-      "evidence": "Zone-generation line for G1_town, counted only once enter-hunting-grounds is done: the zone was entered before."
     },
     {
       "id": "talk-delwyn",
@@ -37,22 +29,6 @@
       "evidence": "No kill line known. Tick by hand."
     },
     {
-      "id": "freythorn-wp",
-      "kind": "objective",
-      "navigationTarget": { "area": "G1_11", "label": "Freythorn", "exit": "G1_12" },
-      "parts": [{ "text": "Freythorn WP, return" }],
-      "trigger": { "type": "zoneEntered", "area": "G1_12" },
-      "evidence": "Zone-generation line for G1_12."
-    },
-    {
-      "id": "farmlands-wp",
-      "kind": "objective",
-      "navigationTarget": { "area": "G1_11", "label": "Ogham Farmlands", "exit": "G1_13_1" },
-      "parts": [{ "text": "Farmlands WP, return" }],
-      "trigger": { "type": "zoneEntered", "area": "G1_13_1" },
-      "evidence": "Zone-generation line for G1_13_1."
-    },
-    {
       "id": "small-ritual",
       "kind": "objective",
       "parts": [{ "text": "Do the small ritual" }, { "text": "Support Gem", "style": "reward" }],
@@ -62,10 +38,18 @@
     {
       "id": "hunting-grounds-to-freythorn",
       "kind": "objective",
-      "navigationTarget": { "area": "G1_11", "label": "Waypoint", "icon": "waypoint" },
-      "parts": [{ "text": "Waypoint to Freythorn" }],
-      "trigger": { "type": "zoneEntered", "area": "G1_12", "after": "freythorn-wp" },
-      "evidence": "Zone-generation line for G1_12, counted only once freythorn-wp is done: the zone was entered before."
+      "navigationTarget": { "area": "G1_11", "label": "Freythorn", "exit": "G1_12" },
+      "parts": [{ "text": "Enter Freythorn" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_12" },
+      "evidence": "Zone-generation line for G1_12. It ends the first visit: the fast route goes from Freythorn to town (Finn's charm), then back by waypoint."
+    },
+    {
+      "id": "enter-ogham-farmlands",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_11", "label": "Ogham Farmlands", "exit": "G1_13_1" },
+      "parts": [{ "text": "Enter Ogham Farmlands" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_13_1" },
+      "evidence": "Zone-generation line for G1_13_1."
     }
   ]
 }

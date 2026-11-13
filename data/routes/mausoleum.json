@@ -11,7 +11,7 @@
         { "quest": "GraveyardFight", "lines": ["Pick up Draven's Memorial Key Piece", "Return to the Cemetery of the Eternals and search for the Tomb of the Consort", "Enter the Tomb of the Consort in search of Asinia", "Search for Asinia in the Tomb of the Consort", "Destroy Asinia, the Praetor's Consort", "Return to the Cemetery of the Eternals and open the Memorial Gate", "Follow Lachlann", "Put Lachlann to rest", "Quest Complete"] }
       ],
       "navigationTarget": { "area": "G1_8", "label": "Draven", "tag": "boss" },
-      "parts": [{ "text": "Kill " }, { "text": "Draven", "style": "boss" }, { "text": "Key Piece", "style": "reward" }],
+      "parts": [{ "text": "Kill " }, { "text": "Draven", "style": "boss" }],
       "trigger": null,
       "evidence": "No kill line known. Tick by hand. Target: the one 'boss' node in all 12 layouts."
     },

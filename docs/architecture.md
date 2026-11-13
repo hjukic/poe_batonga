@@ -26,6 +26,36 @@ data files compiled in from `data/`. It never reads game memory and never sends 
 | `layout/obs.rs` | The flight recorder (`.obs.jsonl`) and its replay (tests only) |
 | `layout/nav_sim.rs` | Simulated walks that check the navigator (tests only) |
 
+## Visits (`tracker.rs`, `Route::shown`)
+
+A zone's list covers every pass through it; a visit ends with a step that enters another
+zone, unless the step is optional or a detour that returns (`"returns": true`: a waypoint
+grab, the Cemetery's Mausoleum and Tomb). The visit on show depends on what is done, not on
+the order it was done in (2026-11-13):
+
+1. The high-water mark is the visit after the last finished one (its leaving step done, or
+   no longer listed). Skipped detours and older open visits do not hold the list back.
+2. A later visit is due once the player has arrived for it: its leaving step's `after` is
+   done (the town's visits wait for the zone the route comes from), or, without one, it is
+   the visit at the mark. The last due visit from the mark on is shown.
+3. Nothing due (a trip the route does not plan): the visit before the mark while it has
+   open required rows, else nothing (`visit` is then one past the last visit). When the
+   player was not seen leaving that visit (its leaving row only inferred: a start in the
+   middle of an act, or "came back from X"), the visit at the mark instead.
+4. Every visit finished: the last one.
+5. The open required rows of an earlier visit the player never finished (its leaving row
+   not done) are listed with the visit on show, its leaving row too unless that waits for
+   an `after` not yet done: the Farmlands before Freythorn leaves Crowbell, the ritual and
+   "Enter Freythorn" listed; a skipped town trip's Finn's charm comes with the next one.
+6. A step with `"until": "<step>"` is not listed at all once that step is done (the Grim
+   Tangle's waypoint grab, only while the roots still block the way).
+
+What ticks a row (`apply`): a zone entry ticks rows of the list of the zone the player left
+only, and of one list only the last row whose `after` holds (`docs/triggers.md`). Coming
+into Z from X also takes Z's open row into X as done ("Came back from X", implied).
+
+Tests: `tracker.rs`, the Act 1 replays (S1–S8) and `no_log_event_ticks_two_steps_of_one_list`.
+
 ## Pages (`src/`)
 
 - `main.ts`: the panel: the zone, the checklist, the recognised layout under it, settings,

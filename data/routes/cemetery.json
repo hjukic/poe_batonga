@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "order": 80,
   "zone": { "id": "G1_7", "name": "Cemetery of the Eternals", "level": 7 },
-  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas. Pickups and order from the fast route (GTD-video, Act 1), 2026-11-13",
   "steps": [
     {
       "id": "talk-lachlann",
@@ -13,26 +13,27 @@
     {
       "id": "ancient-ruins",
       "kind": "objective",
-      "optional": true,
       "parts": [{ "text": "Sarcophagus by checkpoint" }, { "text": "Ring", "style": "reward" }],
       "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "evidence": "A route row: the sarcophagus ring is part of the fast route (GTD-video). No log line known. Tick by hand."
     },
     {
       "id": "enter-mausoleum",
       "kind": "objective",
+      "returns": true,
       "navigationTarget": { "area": "G1_7", "label": "Mausoleum of the Praetor", "exit": "G1_8" },
       "parts": [{ "text": "Enter the Mausoleum" }],
       "trigger": { "type": "zoneEntered", "area": "G1_8" },
-      "evidence": "Zone-generation line for G1_8."
+      "evidence": "Zone-generation line for G1_8. A detour that returns (Draven's key piece): the Cemetery is one visit, the Mausoleum and the Tomb in either order."
     },
     {
       "id": "enter-tomb",
       "kind": "objective",
+      "returns": true,
       "navigationTarget": { "area": "G1_7", "label": "Tomb of the Consort", "exit": "G1_9" },
       "parts": [{ "text": "Enter the Tomb" }],
       "trigger": { "type": "zoneEntered", "area": "G1_9" },
-      "evidence": "Zone-generation line for G1_9."
+      "evidence": "Zone-generation line for G1_9. A detour that returns (Asinia's key piece): the Cemetery is one visit, the Mausoleum and the Tomb in either order."
     },
     {
       "id": "memorial-gate",
@@ -60,7 +61,7 @@
         { "quest": "ReviveHoodedMentor", "past": "Search for the Count's grave past the Memorial Gate" }
       ],
       "navigationTarget": { "area": "G1_7", "label": "Lachlann", "tag": "arena" },
-      "parts": [{ "text": "Kill " }, { "text": "Lachlann", "style": "boss" }, { "text": ", loot Ring" }, { "text": "Skill Gem", "style": "reward" }],
+      "parts": [{ "text": "Kill " }, { "text": "Lachlann", "style": "boss" }, { "text": ", leave the ring" }],
       "trigger": {
         "type": "npcLine",
         "area": "G1_7",
@@ -68,7 +69,7 @@
           { "id": "BitterGuyDeath", "speaker": "Lachlann of Endless Lament", "text": "Together... at last..." }
         ]
       },
-      "evidence": "Bark: BitterGuyDeath. Lachlann of Endless Lament's death line. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log. Target: the one 'arena' node in all 12 layouts.",
+      "evidence": "The ring is left on the ground: picking it up starts a long cutscene and its unlock comes anyway (GTD-video; owner, 2026-11-13). Bark: BitterGuyDeath. Lachlann of Endless Lament's death line. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log. Target: the one 'arena' node in all 12 layouts.",
       "evidenceKind": "bark"
     },
     {

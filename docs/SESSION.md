@@ -1,5 +1,21 @@
 # Where we stopped — 2026-11-13
 
+> **v0.1.121 (Sue's side, 2026-11-13): the panel for a fast league start.** A council
+> reviewed the overlay against the fastest players' levelling guides
+> (`docs/review-2026-11-13-levelling-council.md`, `docs/levelling-benchmark.md`); this is
+> what it led to. Act 1 is now the fast route (pickups listed by default, Lachlann's ring
+> left, town after Freythorn and after Ogham Village); the visit on show follows the player
+> whatever order they take (`docs/architecture.md`, "Visits"; a zone entry ticks only rows
+> of the zone just left, one row per list); the header shows "area N · you N" (the level
+> from the log); rows the app cannot tick have a hollow marker; a boss quiet for 30 s is
+> "probably done" (source `likely`); guide lines have kinds and conditions
+> (`docs/act1-zone-tips.md`); the schematic follows the row; "Reset progress" asks twice.
+> **For Windows:** the shared code changed, the Windows-only files did not:
+> `apply_screen` now also upgrades a `likely` kill to `screen`; `Fight` has a new field
+> `earlier`; `Step`, `Progress`, `StepView`, `TrackerView` have new serde-defaulted fields
+> (`returns`, `until`, `area_level`, `level`, `tracked`). It could not be compiled for
+> Windows here: please build once. `PLAN.md`: guide text for Acts 2–4 waits for 1.0.
+
 > **v0.1.109 (Windows, 2026-11-13):** from the owner's live v0.1.108 test: Play entry
 > works (DEADEYEOPLOOOOL, AAAABATONGA bound); the row double-click was detected but both
 > its frames were unreadable because the whole selection screen had turned by -3.9°;

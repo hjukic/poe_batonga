@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "order": 130,
   "zone": { "id": "G1_13_1", "name": "Ogham Farmlands", "level": 12 },
-  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas. Pickups and order from the fast route (GTD-video, Act 1), 2026-11-13",
   "steps": [
     {
       "id": "unas-lute",
@@ -16,10 +16,9 @@
     {
       "id": "crop-circle",
       "kind": "objective",
-      "optional": true,
       "parts": [{ "text": "Rare dogs in crop circle" }, { "text": "Skill Gem", "style": "reward" }],
       "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "evidence": "A route row by the build plan of 2026-11-13 (contract 3). No log line known. Tick by hand."
     },
     {
       "id": "enter-ogham-village",

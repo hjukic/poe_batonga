@@ -152,6 +152,14 @@ pub struct Step {
     /// Not needed to progress; shown dimmer.
     #[serde(default)]
     pub optional: bool,
+    /// A detour that returns (a waypoint grab, a side zone the route comes back from): its
+    /// zone entry ends no visit (`Route::visits`) and is never implied.
+    #[serde(default)]
+    pub returns: bool,
+    /// Listed only until this step is done: a row for one order of play (the Grim Tangle's
+    /// waypoint grab before the Red Vale). Once it is done the row is not listed at all.
+    #[serde(default)]
+    pub until: Option<String>,
     #[serde(default)]
     pub trigger: Option<Trigger>,
     #[serde(default, rename = "navigationTarget")]
@@ -285,6 +293,13 @@ pub struct Completion {
 pub struct Progress {
     #[serde(default)]
     pub current_area: Option<String>,
+    /// The level of `current_area`, from its zone-generation line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub area_level: Option<u32>,
+    /// The character's level, from its last level-up line (`level_up_in_line`). Progress is
+    /// kept per character, so this is that character's own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<u32>,
     /// Zone of the checklist on show: the last zone entered that has one.
     #[serde(default)]
     pub shown_zone: Option<String>,
@@ -300,11 +315,21 @@ pub struct Progress {
 }
 
 /// Applies one event to progress. Returns true if anything visible changed.
+///
+/// A zone entry ticks only rows of the list of the zone the player came from (R-F1 of
+/// 2026-11-13): "Portal to town" in Freythorn's list waits for an entry into town from
+/// Freythorn, not from Ogham Village. Where the player came from is not known (the first
+/// entry seen, or an area without a checklist): any list, as before.
 pub fn apply(routes: &[Route], progress: &mut Progress, timestamp: &str, event: &LogEvent) -> bool {
     let mut changed = false;
-    if let LogEvent::ZoneEntered { area, .. } = event {
-        if progress.current_area.as_deref() != Some(area) {
+    let origin = match event {
+        LogEvent::ZoneEntered { .. } => progress.current_area.clone().filter(|area| routes.iter().any(|r| &r.zone.id == area)),
+        LogEvent::Dialogue { .. } => None,
+    };
+    if let LogEvent::ZoneEntered { area, level, .. } = event {
+        if progress.current_area.as_deref() != Some(area) || progress.area_level != Some(*level) {
             progress.current_area = Some(area.clone());
+            progress.area_level = Some(*level);
             changed = true;
         }
         if routes.iter().any(|r| &r.zone.id == area) && progress.shown_zone.as_deref() != Some(area) {
@@ -319,29 +344,63 @@ pub fn apply(routes: &[Route], progress: &mut Progress, timestamp: &str, event: 
         LogEvent::Dialogue { speaker, text } => Some((shown_text(speaker), shown_text(text))),
         LogEvent::ZoneEntered { .. } => None,
     };
-    for step in routes.iter().flat_map(|r| &r.steps) {
+    // One event ticks at most one row of a list (R-F4 of 2026-11-13): when several match,
+    // the last whose `after` holds. Skip the Trial's early waypoint grab, and the late entry
+    // ticks "Waypoint to the Trial" alone.
+    let mut ticks: BTreeMap<&str, (&Step, String, &str)> = BTreeMap::new();
+    for (route, step) in routes.iter().flat_map(|r| r.steps.iter().map(move |s| (r, s))) {
         let Some(trigger) = &step.trigger else { continue };
-        if progress.completed.contains_key(&step.id) || progress.dismissed.contains(&step.id) {
+        // A kill only "likely" is still open to its kill line.
+        if !unconfirmed(progress, &step.id) || progress.dismissed.contains(&step.id) {
             continue;
         }
-        let evidence = match (trigger, event) {
+        let (evidence, source) = match (trigger, event) {
             (Trigger::ZoneEntered { area, after }, LogEvent::ZoneEntered { area: got, level, .. })
                 if area == got && after.as_ref().is_none_or(|step| done_before.contains(step)) =>
             {
-                format!("Entered {got} (level {level})")
+                match &origin {
+                    Some(from) if *from == route.zone.id => (format!("Entered {got} (level {level})"), "log"),
+                    // A town's "Waypoint to X" says where to go next: X entered another way
+                    // (on foot through the Grelwood) does that. Other lists' rows say how to
+                    // leave their zone: from there only.
+                    Some(from) if is_town(&route.zone.id) => (format!("Entered {got} from {from}"), "log"),
+                    Some(_) => continue,
+                    // Where from is not known: any list, but only as inferred (`Route::shown`
+                    // does not take it for the player seen leaving).
+                    None => (format!("Entered {got} (level {level}); where from is not known"), "implied"),
+                }
             }
             (Trigger::NpcLine { area, lines, after }, LogEvent::Dialogue { speaker: who, text: said })
                 if progress.current_area.as_deref() == Some(area.as_str())
                     && after.as_ref().is_none_or(|step| done_before.contains(step))
                     && heard.as_ref().is_some_and(|(s, t)| lines.iter().any(|l| &l.speaker == s && &l.text == t)) =>
             {
-                format!("{who}: {said}")
+                (format!("{who}: {said}"), "log")
             }
             _ => continue,
         };
+        ticks.insert(route.zone.id.as_str(), (step, evidence, source));
+    }
+    // Coming into Z from X proves Z's way to X was taken (R-F6): a start in the middle of an
+    // act, or X reached another way (a waypoint from town). Z's open row into X, the last whose
+    // `after` holds, is taken as done.
+    if let (Some(from), LogEvent::ZoneEntered { area: got, .. }) = (&origin, event) {
+        if let Some(route) = routes.iter().find(|r| &r.zone.id == got) {
+            let back = route.steps.iter().rev().find(|step| {
+                matches!(&step.trigger, Some(Trigger::ZoneEntered { area, after }) if area == from
+                    && after.as_ref().is_none_or(|id| done_before.contains(id)))
+                    && !progress.completed.contains_key(&step.id)
+                    && !progress.dismissed.contains(&step.id)
+            });
+            if let Some(step) = back {
+                ticks.entry(route.zone.id.as_str()).or_insert((step, format!("Came back from {from}"), "implied"));
+            }
+        }
+    }
+    for (step, evidence, source) in ticks.into_values() {
         progress.completed.insert(
             step.id.clone(),
-            Completion { at: timestamp.to_string(), source: "log".into(), evidence },
+            Completion { at: timestamp.to_string(), source: source.into(), evidence },
         );
         changed = true;
     }
@@ -375,8 +434,13 @@ pub fn replay_unbound(inner: &mut Inner) -> bool {
 /// pick-up or a waypoint leaves no line (measured 2026-11-12: talks with Renly and Una
 /// in the Clearfell Encampment wrote nothing). The lists are in walking order, so when
 /// the log ticks a step, the steps before it in its list that the log cannot see are
-/// taken as done too (source "implied"). Not optional steps, not boss kills and not
-/// steps the compass leads to: those stay open until they are logged or ticked by hand.
+/// taken as done too (source "implied"): only what the later step proves, talks and the like.
+/// Not optional steps, boss kills, detours that return, steps no longer listed, and not what
+/// a player may skip and still need (R-F5 of 2026-11-13): steps the compass leads to ("Take
+/// the waypoint"), steps with a reward (the campsite stash, the small ritual) and zone
+/// entries (the log would have shown them: "Enter Freythorn" when the Farmlands came first).
+/// Those stay open until they are logged or ticked by hand; the panel keeps rows the app
+/// cannot tick (`tracked`) from holding the arrow.
 fn imply_earlier(routes: &[Route], progress: &mut Progress, timestamp: &str, done_before: &BTreeSet<String>) {
     for route in routes {
         let newly = |step: &Step| {
@@ -387,8 +451,12 @@ fn imply_earlier(routes: &[Route], progress: &mut Progress, timestamp: &str, don
         for step in &route.steps[..last] {
             let unseen = step.kind == "objective"
                 && !step.optional
+                && !step.returns
+                && listed(step, progress)
+                && !is_boss(step)
                 && step.navigation_target.is_none()
-                && !step.parts.iter().any(|p| p.style.as_deref() == Some("boss"));
+                && !step.parts.iter().any(|p| p.style.as_deref() == Some("reward"))
+                && !matches!(step.trigger, Some(Trigger::ZoneEntered { .. }));
             if !unseen || progress.completed.contains_key(&step.id) || progress.dismissed.contains(&step.id) {
                 continue;
             }
@@ -402,7 +470,7 @@ fn imply_earlier(routes: &[Route], progress: &mut Progress, timestamp: &str, don
 
 /// Ticks the steps a confirmed quest-tracker state proves done (`quest_screen`), and the
 /// unseen steps before them as the log does. True when a step was ticked. A step unticked
-/// by hand stays unticked.
+/// by hand stays unticked; a "likely" kill becomes proven ("screen"), a confirmed one stays.
 // The quest tracker is read on Windows only (`quest_screen.rs`).
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub fn apply_screen(routes: &[Route], progress: &mut Progress, quest: &str, orders: &BTreeSet<u32>, evidence: &str) -> bool {
@@ -410,7 +478,8 @@ pub fn apply_screen(routes: &[Route], progress: &mut Progress, quest: &str, orde
     let at = now_label();
     let mut ticked = false;
     for step in routes.iter().flat_map(|r| &r.steps) {
-        if progress.completed.contains_key(&step.id)
+        // A "probably done" kill is still open to proof (R-F7); a confirmed one stays.
+        if !unconfirmed(progress, &step.id)
             || progress.dismissed.contains(&step.id)
             || !step.screen.iter().any(|c| c.proves(quest, orders))
         {
@@ -428,13 +497,16 @@ pub fn apply_screen(routes: &[Route], progress: &mut Progress, quest: &str, orde
     ticked
 }
 
-/// Ticks or unticks a step by hand.
+/// Ticks or unticks a step by hand; a click on a "likely" kill confirms it (it stays done).
 pub fn toggle(routes: &[Route], progress: &mut Progress, id: &str) -> Result<(), String> {
     let step = routes.iter().flat_map(|r| &r.steps).find(|s| s.id == id).ok_or("Unknown step")?;
     if step.kind != "objective" {
         return Err("Only objectives can be ticked".into());
     }
-    if let Some(done) = progress.completed.remove(id) {
+    if progress.completed.get(id).is_some_and(|done| done.source == LIKELY) {
+        // A click on a "probably done" kill confirms it.
+        progress.completed.insert(id.to_string(), Completion { at: now_label(), source: "manual".into(), evidence: "Confirmed by hand".into() });
+    } else if let Some(done) = progress.completed.remove(id) {
         // Unticking what the app ticked tells it not to tick that step again. Taking
         // back one's own click does not: the step is simply open again.
         if done.source != "manual" {
@@ -468,7 +540,10 @@ pub struct StepView {
     target: Option<String>,
     /// "done", "open" (watched in the log) or "manual" (no log trigger known).
     state: String,
+    /// "log", "screen", "implied", "map", "manual", or "likely" (a boss quiet for 30 s).
     source: Option<String>,
+    /// The app can tick this row by itself on this platform (`tracked`).
+    tracked: bool,
     /// Which visit to the zone the step belongs to (see `Route::visits`).
     visit: usize,
 }
@@ -481,20 +556,60 @@ pub struct LogStatus {
     pub message: String,
 }
 
+/// Whether a step is listed at all: a step with `until` is not, once that step is done.
+pub fn listed(step: &Step, progress: &Progress) -> bool {
+    step.until.as_ref().is_none_or(|id| !progress.completed.contains_key(id))
+}
+
+/// Whether a zone is an act's town (`G1_town`…): the hub its list's waypoint rows leave from.
+fn is_town(zone: &str) -> bool {
+    zone.ends_with("_town")
+}
+
+/// Whether a step is a boss kill (it has a boss part).
+fn is_boss(step: &Step) -> bool {
+    step.parts.iter().any(|p| p.style.as_deref() == Some("boss"))
+}
+
+/// Whether the app can tick a step by itself on this platform: a log trigger, a boss kill
+/// (its fight starts when the boss speaks and ends with the kill line or as "likely" after
+/// `FIGHT_QUIET`; a boss that never speaks stays open), and on Windows a quest-tracker
+/// rule. Otherwise a click or an implied tick only.
+pub fn tracked(step: &Step) -> bool {
+    step.kind == "objective" && (step.trigger.is_some() || is_boss(step) || (crate::quest_screen::READS && !step.screen.is_empty()))
+}
+
+/// Whether a step's trigger is a zone entry into another area: it leaves the zone.
+fn leaves(step: &Step, zone: &str) -> bool {
+    matches!(&step.trigger, Some(Trigger::ZoneEntered { area, .. }) if area != zone)
+}
+
+/// The visit on show (`Route::shown`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Shown {
+    /// The visit whose steps are listed. One past the last visit when no planned visit is
+    /// due (a town trip the route does not plan): nothing is listed then.
+    pub visit: usize,
+    /// Open required steps of earlier visits the player left unfinished, listed with the
+    /// visit on show (rule 5 of `Route::shown`): Finn's charm when the town trip after
+    /// Freythorn was skipped, Crowbell when the Farmlands came before Freythorn.
+    pub carried: Vec<usize>,
+}
+
 impl Route {
     /// Each step's visit to the zone, from 0. A zone's list covers every time the route
-    /// passes through it (the town's: five times). A visit ends with the step that leaves
+    /// passes through it (the town's: six times). A visit ends with the step that leaves
     /// the zone (a zone-entry trigger for another area); the steps after it belong to the
     /// next time the player is there. An optional step that leaves (a side trip such as
-    /// the Mud Burrow) ends nothing: what follows it is still this visit.
+    /// the Mud Burrow) and a detour that returns (`returns`: a waypoint grab, the Cemetery's
+    /// Mausoleum and Tomb) end nothing: what follows is still this visit.
     pub fn visits(&self) -> Vec<usize> {
         let mut visit = 0;
         self.steps
             .iter()
             .map(|step| {
                 let this = visit;
-                let leaves = matches!(&step.trigger, Some(Trigger::ZoneEntered { area, .. }) if *area != self.zone.id);
-                if leaves && !step.optional {
+                if leaves(step, &self.zone.id) && !step.optional && !step.returns {
                     visit += 1;
                 }
                 this
@@ -502,25 +617,100 @@ impl Route {
             .collect()
     }
 
-    /// The visit under way: the first whose leaving step is not done (the last one when
-    /// all are, or when the list ends without a leaving step).
-    pub fn current_visit(&self, progress: &Progress) -> usize {
+    /// The visit on show, from what is done, never from the order it was done in (R1 of
+    /// 2026-11-13; `docs/architecture.md`, "Visits"):
+    /// 1. A visit is finished when its leaving step is done or no longer listed. The
+    ///    high-water mark is the visit after the last finished one: skipped detours and
+    ///    earlier open visits do not hold the list back.
+    /// 2. A later visit is due when the player has arrived for it: its leaving step's
+    ///    `after` is done (the town's visits wait for the zone the route comes from), or,
+    ///    with no `after`, it is the visit at the mark. The last due visit from the mark
+    ///    on is shown.
+    /// 3. Nothing due (a trip the route does not plan): the visit before the mark while it
+    ///    has open required steps (back in the Grelwood for Areagne), else nothing. When the
+    ///    player was not seen leaving that visit (its leaving step only inferred, R-F6), the
+    ///    visit at the mark: first seen in the Red Vale, back in the Grelwood, the seals.
+    /// 4. Every visit finished: the last one.
+    /// 5. The open required steps of an earlier visit the player never finished (its leaving
+    ///    step not done) come with the visit on show, its leaving step too unless that waits
+    ///    for something not yet done (`after`) (R-F2): the Farmlands entered before
+    ///    Freythorn, back in the Hunting Grounds Crowbell, the ritual and "Enter Freythorn"
+    ///    are still listed; Finn's charm comes with the town visit after Ogham Village.
+    pub fn shown(&self, progress: &Progress) -> Shown {
         let visits = self.visits();
         let last = visits.last().copied().unwrap_or(0);
-        (0..last)
-            .find(|&v| {
-                // A visit's leaving step is its last step.
-                let leaving = visits.iter().rposition(|&x| x == v).map(|i| &self.steps[i]);
-                leaving.is_some_and(|step| !progress.completed.contains_key(&step.id))
-            })
-            .unwrap_or(last)
+        let done = |i: usize| progress.completed.contains_key(&self.steps[i].id);
+        let is_leaving = |i: usize| leaves(&self.steps[i], &self.zone.id) && !self.steps[i].optional && !self.steps[i].returns;
+        // A visit's leaving step is its last step, when that step leaves.
+        let leaving = |v: usize| visits.iter().rposition(|&x| x == v).filter(|&i| is_leaving(i));
+        let finished = |v: usize| leaving(v).is_some_and(|i| done(i) || !listed(&self.steps[i], progress));
+        let mark = (0..=last).rev().find(|&v| finished(v)).map_or(0, |v| v + 1);
+        let waits = |i: usize| {
+            matches!(&self.steps[i].trigger, Some(Trigger::ZoneEntered { after: Some(id), .. }) if !progress.completed.contains_key(id))
+        };
+        let left_open = |i: usize| {
+            let step = &self.steps[i];
+            step.kind == "objective" && !step.optional && !done(i) && listed(step, progress) && !waits(i)
+        };
+        // Rule 5: the steps of unfinished visits before `upto` to list with the visit on show.
+        let carry = |upto: usize| -> Vec<usize> {
+            (0..self.steps.len()).filter(|&i| visits[i] < upto && !finished(visits[i]) && left_open(i)).collect()
+        };
+        if mark > last {
+            return Shown { visit: last, carried: carry(last) };
+        }
+        let after = |v: usize| match leaving(v).and_then(|i| self.steps[i].trigger.as_ref()) {
+            Some(Trigger::ZoneEntered { after, .. }) => after.clone(),
+            _ => None,
+        };
+        let due = |v: usize| match after(v) {
+            Some(id) => progress.completed.contains_key(&id),
+            None => v == mark,
+        };
+        let open = |i: usize| {
+            let step = &self.steps[i];
+            step.kind == "objective" && !done(i) && listed(step, progress) && !leaves(step, &self.zone.id)
+        };
+        if let Some(visit) = (mark..=last).rev().find(|&v| v == 0 || due(v)) {
+            return Shown { visit, carried: carry(visit) };
+        }
+        let back = mark - 1;
+        // The player was not seen leaving the visit before (its leaving step only inferred:
+        // a start in the middle of an act, or back from where it leads): the next visit.
+        let seen = leaving(back).and_then(|i| progress.completed.get(&self.steps[i].id)).is_none_or(|c| c.source != "implied");
+        if !seen {
+            return Shown { visit: mark, carried: carry(mark) };
+        }
+        let unfinished = (0..self.steps.len()).any(|i| visits[i] == back && open(i) && !self.steps[i].optional);
+        Shown { visit: if unfinished { back } else { last + 1 }, carried: carry(mark) }
+    }
+
+    /// The visit on show (`shown`), without the carried steps.
+    pub fn current_visit(&self, progress: &Progress) -> usize {
+        self.shown(progress).visit
+    }
+
+    /// The steps listed now, each with the visit the page files it under: every listed step
+    /// with its own visit, the carried ones with the visit on show.
+    pub fn listed_steps<'a>(&'a self, progress: &Progress) -> Vec<(&'a Step, usize)> {
+        let shown = self.shown(progress);
+        self.steps
+            .iter()
+            .zip(self.visits())
+            .enumerate()
+            .filter(|(_, (step, _))| listed(step, progress))
+            .map(|(i, (step, visit))| (step, if shown.carried.contains(&i) { shown.visit } else { visit }))
+            .collect()
     }
 }
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackerView {
+    /// The zone's level is the log's zone line's when known, else the route file's.
     zone: Option<Zone>,
+    /// The character's level, from its last level-up line; None until one was seen.
+    level: Option<u32>,
     current_area: Option<String>,
     in_zone: bool,
     character: Option<String>,
@@ -594,6 +784,9 @@ pub struct Fight {
     pub step: String,
     /// When the boss last spoke.
     pub last_line: std::time::Instant,
+    /// Other bosses of the zone heard before this one, each with its last line: their kills
+    /// are settled on their own timers (`Inner::settle_fight`). Cleared with the fight.
+    pub earlier: Vec<(String, std::time::Instant)>,
 }
 
 /// A boss silent for this long is taken to be dead or left behind. The Bloated Miller's
@@ -602,16 +795,69 @@ pub const FIGHT_QUIET: Duration = Duration::from_secs(30);
 
 /// The open kill step in `area` of the boss who is speaking. As in the layout recorder,
 /// the speaker must contain the checklist's boss name (at least four letters), so
-/// "Beira" matches "Beira of the Rotten Pack".
+/// "Beira" matches "Beira of the Rotten Pack". Where the kill row has a line trigger whose
+/// speakers carry the boss's name, only those speakers count (R-F3 of 2026-11-13): "Lachlann
+/// the Lost", the man at the gate, is not "Lachlann of Endless Lament", the boss. A trigger
+/// spoken by someone else (Mortimer for the Miller) leaves the name rule as it was.
 pub fn boss_step<'a>(routes: &'a [Route], progress: &Progress, area: &str, speaker: &str) -> Option<&'a Step> {
     let speaker = speaker.to_lowercase();
     routes.iter().filter(|r| r.zone.id == area).flat_map(|r| &r.steps).find(|step| {
-        !progress.completed.contains_key(&step.id)
-            && step.parts.iter().any(|p| {
-                let name = p.text.trim().to_lowercase();
-                p.style.as_deref() == Some("boss") && name.len() >= 4 && speaker.contains(&name)
-            })
+        let Some(name) = boss_name(step) else { return false };
+        let own = own_speakers(step);
+        unconfirmed(progress, &step.id)
+            && name.len() >= 4
+            && speaker.contains(&name)
+            && (own.is_empty() || own.contains(&speaker))
     })
+}
+
+/// A kill row's boss name, lower case.
+fn boss_name(step: &Step) -> Option<String> {
+    step.parts.iter().find(|p| p.style.as_deref() == Some("boss")).map(|p| p.text.trim().to_lowercase())
+}
+
+/// The speakers of a kill row's own line trigger that carry the boss's name, lower case:
+/// the boss's own forms. Empty when the row has no line trigger or others say it.
+fn own_speakers(step: &Step) -> Vec<String> {
+    match (&step.trigger, boss_name(step)) {
+        (Some(Trigger::NpcLine { lines, .. }), Some(name)) => {
+            lines.iter().map(|l| l.speaker.to_lowercase()).filter(|s| s.contains(&name)).collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// A kill step not yet known done: open, or only "likely" (a boss quiet for `FIGHT_QUIET`).
+fn unconfirmed(progress: &Progress, id: &str) -> bool {
+    progress.completed.get(id).is_none_or(|done| done.source == LIKELY)
+}
+
+/// The source of a kill taken as probably done: the boss was quiet for `FIGHT_QUIET`.
+pub const LIKELY: &str = "likely";
+
+/// A live line in the current zone: a boss of the zone whose kill is not confirmed speaks
+/// (or emerges): its fight starts, or resumes. A row ticked as "likely" opens again: the
+/// boss is not dead. True when a row opened again.
+pub fn hear_boss(routes: &[Route], progress: &mut Progress, fight: &mut Option<Fight>, speaker: &str, text: &str) -> bool {
+    let area = progress.current_area.clone().unwrap_or_default();
+    let Some(step) = boss_step(routes, progress, &area, speaker).or_else(|| boss_after_line(routes, progress, &area, text)) else {
+        return false;
+    };
+    // Another boss heard before keeps its own timer (R-F8): Areagne, then Gerung.
+    let mut earlier = Vec::new();
+    if let Some(current) = fight.take() {
+        earlier = current.earlier;
+        if current.step != step.id {
+            earlier.push((current.step, current.last_line));
+        }
+    }
+    earlier.retain(|(id, _)| *id != step.id);
+    *fight = Some(Fight { step: step.id.clone(), last_line: std::time::Instant::now(), earlier });
+    let reopened = progress.completed.get(&step.id).is_some_and(|done| done.source == LIKELY);
+    if reopened {
+        progress.completed.remove(&step.id);
+    }
+    reopened
 }
 
 /// The open kill step that follows the step this line triggers, in `area`, when the line
@@ -625,7 +871,9 @@ pub fn boss_after_line<'a>(routes: &'a [Route], progress: &Progress, area: &str,
         .iter()
         .filter(|step| step.kind == "objective")
         .find(|step| step.parts.iter().any(|p| p.style.as_deref() == Some("boss")))
-        .filter(|step| !progress.completed.contains_key(&step.id))
+        // A boss with lines of its own starts its fight by them only (R-F3): Lachlann's
+        // fight does not start at the Memorial Gate's line.
+        .filter(|step| unconfirmed(progress, &step.id) && own_speakers(step).is_empty())
 }
 
 /// The character a log line names: a level-up (`: <name> (<Class>) is now level <n>`) or a
@@ -634,18 +882,39 @@ pub fn boss_after_line<'a>(routes: &'a [Route], progress: &Progress, area: &str,
 /// their sender after `] ` with a channel mark (`#`, `@`, `$`, `%`, `&`), never `] : `.
 pub fn character_in_line(line: &str) -> Option<String> {
     let (_, message) = line.split_once("] : ")?;
-    let message = message.trim_end();
-    let name = match message.strip_suffix(" has been slain.") {
-        Some(name) => name,
-        None => {
-            let (name, rest) = message.split_once(" (")?;
-            let (_, level) = rest.split_once(") is now level ")?;
-            level.trim().parse::<u32>().ok()?;
-            name
-        }
+    let name = match message.trim_end().strip_suffix(" has been slain.") {
+        Some(name) => name.to_string(),
+        None => return level_up_in_line(line).map(|(name, _)| name),
     };
-    let valid = (2..=80).contains(&name.chars().count()) && name.chars().all(|c| c.is_alphanumeric() || c == '_');
-    valid.then(|| name.to_string())
+    valid_name(&name).then_some(name)
+}
+
+/// The character and its new level in a level-up line (`: <name> (<Class>) is now level <n>`).
+pub fn level_up_in_line(line: &str) -> Option<(String, u32)> {
+    let (_, message) = line.split_once("] : ")?;
+    let (name, rest) = message.trim_end().split_once(" (")?;
+    let (_, level) = rest.split_once(") is now level ")?;
+    let level = level.trim().parse::<u32>().ok().filter(|l| (1..=100).contains(l))?;
+    valid_name(name).then(|| (name.to_string(), level))
+}
+
+fn valid_name(name: &str) -> bool {
+    (2..=80).contains(&name.chars().count()) && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// A line that names the character (`character_in_line`) binds that character's profile;
+/// a level-up line also keeps the new level in it, so another character's level-up changes
+/// only its own. True when the profile or its level changed.
+pub fn note_character(inner: &mut Inner, line: &str) -> bool {
+    let Some(name) = character_in_line(line) else { return false };
+    let Inner { progress, characters, .. } = inner;
+    let mut changed = characters.bind_from_log(progress, &name);
+    let bound = characters.active.as_deref().is_some_and(|active| active.to_lowercase() == name.to_lowercase());
+    if let (true, Some((_, level))) = (bound, level_up_in_line(line)) {
+        changed |= progress.level != Some(level);
+        progress.level = Some(level);
+    }
+    changed
 }
 
 /// The log line of the player's death: `: <character> has been slain.`
@@ -659,24 +928,49 @@ const RECENT_LINES: usize = 30;
 impl Inner {
     /// Ends the fight when its step is ticked or the boss has been quiet too long. A boss
     /// quiet that long, with the player still alive in the zone (a death or a zone change
-    /// ends the fight first), is taken as killed: the log has no line for most kills, and
-    /// the owner wants a kill to close when it is done (2026-11-13). Ticked as implied, so
-    /// unticking it by hand keeps it open. True when a fight ended.
+    /// ends the fight first), is taken as probably killed: ticked as "likely" (owner,
+    /// decision 4 of 2026-11-13: the arrow moves on, a click confirms). The same boss
+    /// speaking again opens it again (`hear_boss`). Unticking it by hand keeps it open.
+    /// True when a fight ended.
     pub fn settle_fight(&mut self) -> bool {
-        let Some(fight) = self.fight.as_ref() else { return false };
-        let killed = self.progress.completed.contains_key(&fight.step);
-        let quiet = fight.last_line.elapsed() > FIGHT_QUIET;
-        if !killed && !quiet {
+        let Some(fight) = self.fight.take() else { return false };
+        // Bosses heard earlier in the fight, each on its own timer (R-F8 of 2026-11-13).
+        let mut earlier = Vec::new();
+        for (step, last_line) in fight.earlier {
+            if !unconfirmed(&self.progress, &step) {
+                continue;
+            }
+            if last_line.elapsed() > FIGHT_QUIET {
+                self.probably_done(&step);
+                continue;
+            }
+            earlier.push((step, last_line));
+        }
+        let killed = !unconfirmed(&self.progress, &fight.step);
+        if !killed && fight.last_line.elapsed() <= FIGHT_QUIET {
+            self.fight = Some(Fight { earlier, ..fight });
             return false;
         }
-        if !killed && !self.progress.dismissed.contains(&fight.step) {
+        if !killed {
+            self.probably_done(&fight.step);
+        }
+        // The kill came while another boss heard before is not yet quiet: its fight goes on.
+        if let Some(at) = (0..earlier.len()).max_by_key(|&i| earlier[i].1) {
+            let (step, last_line) = earlier.remove(at);
+            self.fight = Some(Fight { step, last_line, earlier });
+            return false;
+        }
+        true
+    }
+
+    /// A boss quiet for `FIGHT_QUIET`: its kill is ticked as "likely", unless unticked by hand.
+    fn probably_done(&mut self, step: &str) {
+        if !self.progress.dismissed.contains(step) {
             self.progress.completed.insert(
-                fight.step.clone(),
-                Completion { at: now_label(), source: "implied".into(), evidence: "The boss fell silent for 30 s: taken as killed".into() },
+                step.to_string(),
+                Completion { at: now_label(), source: LIKELY.into(), evidence: "The boss fell silent for 30 s: probably killed".into() },
             );
         }
-        self.fight = None;
-        true
     }
 
     /// Ticks the kill steps of the current zone's bosses the map shows dead
@@ -691,7 +985,7 @@ impl Inner {
                 continue;
             };
             if !dead.iter().any(|name| name == boss)
-                || progress.completed.contains_key(&step.id)
+                || !unconfirmed(progress, &step.id)
                 || progress.dismissed.contains(&step.id)
             {
                 continue;
@@ -730,11 +1024,11 @@ impl Inner {
             .filter_map(|s| s.navigation_target.as_ref())
             .map(|t| (t.area.clone(), t.label.clone())).collect();
         // Open steps with a target, in checklist order: what the compass may head for.
-        // Only steps of each zone's visit under way: what the list shows.
+        // Only the steps of each zone's visit on show: what the list shows.
         let targets = self.routes.iter()
             .flat_map(|r| {
                 let now = r.current_visit(&self.progress);
-                r.steps.iter().zip(r.visits()).filter(move |(_, visit)| *visit == now).map(|(step, _)| step)
+                r.listed_steps(&self.progress).into_iter().filter(move |(_, visit)| *visit == now).map(|(step, _)| step)
             })
             .filter(|s| !self.progress.completed.contains_key(&s.id))
             .filter(|s| !(self.skip_optional && s.optional))
@@ -777,7 +1071,8 @@ impl Inner {
 
     pub fn view(&self) -> TrackerView {
         let route = self.routes.iter().find(|r| self.in_zone && Some(r.zone.id.as_str()) == self.progress.current_area.as_deref());
-        let steps = route.into_iter().flat_map(|r| r.steps.iter().zip(r.visits()))
+        // Steps not listed at all (`listed`) are left out; carried ones come under the visit on show.
+        let steps = route.into_iter().flat_map(|r| r.listed_steps(&self.progress))
             .map(|(step, visit)| {
                 let done = self.progress.completed.get(&step.id);
                 let state = if step.kind != "objective" {
@@ -797,12 +1092,14 @@ impl Inner {
                     target: step.navigation_target.as_ref().map(|t| t.label.clone()),
                     state: state.into(),
                     source: done.map(|c| c.source.clone()),
+                    tracked: tracked(step),
                     visit,
                 }
             })
             .collect();
         TrackerView {
-            zone: route.map(|r| r.zone.clone()),
+            zone: route.map(|r| Zone { level: self.progress.area_level.unwrap_or(r.zone.level), ..r.zone.clone() }),
+            level: self.characters.active.as_ref().and(self.progress.level),
             current_area: self.in_zone.then(|| self.progress.current_area.clone()).flatten(),
             in_zone: self.in_zone,
             character: self.characters.active.clone(),
@@ -1074,6 +1371,8 @@ fn restore_live_context(app: &AppHandle, file: &mut File, pos: u64) -> std::io::
         // do not satisfy a later town-return trigger merely by restarting the app.
         if progress.current_area.as_deref() != Some(area.as_str()) {
             apply(routes, progress, "on start", event);
+        } else if let LogEvent::ZoneEntered { level, .. } = event {
+            progress.area_level = Some(*level);
         }
         if crate::RADAR {
             crate::minimap::set_label_candidates(exit_names(area));
@@ -1130,11 +1429,8 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
         if live && is_death(line) {
             inner.fight = None;
         }
-        // Who is playing, from the log (the main source on every platform).
-        if let Some(name) = character_in_line(line) {
-            let Inner { progress, characters, .. } = &mut *inner;
-            changed |= characters.bind_from_log(progress, &name);
-        }
+        // Who is playing, from the log (the main source on every platform), and its level.
+        changed |= note_character(&mut inner, line);
         if session_boundary(line) {
             crate::identity::trace("session-boundary",serde_json::json!({"epoch":inner.identity.epoch,"seq":inner.identity.seq,"pending":inner.identity.pending,"live":live}));
             inner.identity.invalidate();
@@ -1163,10 +1459,7 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
                     *in_zone = running && live;
                 }
                 LogEvent::Dialogue { speaker, text } if live && *in_zone => {
-                    let area = progress.current_area.as_deref().unwrap_or_default();
-                    if let Some(step) = boss_step(routes, progress, area, speaker).or_else(|| boss_after_line(routes, progress, area, text)) {
-                        *fight = Some(Fight { step: step.id.clone(), last_line: std::time::Instant::now() });
-                    }
+                    changed |= hear_boss(routes, progress, fight, speaker, text);
                 }
                 LogEvent::Dialogue { .. } => {}
             }
@@ -1200,8 +1493,15 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
         inner.sync_navigation(app);
         let _ = app.emit("tracker-state", inner.view());
     }
-    // After the checklist is up to date: a kill ticked in this batch ends the fight.
+    // After the checklist is up to date: a kill ticked in this batch ends the fight. A boss
+    // heard earlier and quiet since is ticked "likely" here: shown at once.
+    let before = inner.progress.completed.clone();
     inner.settle_fight();
+    if inner.progress.completed != before {
+        inner.sync_navigation(app);
+        inner.save();
+        let _ = app.emit("tracker-state", inner.view());
+    }
     let now = inner.fight.is_some();
     let in_zone = inner.in_zone;
     drop(inner);
@@ -1447,6 +1747,7 @@ mod tests {
         feed(
             &mut progress,
             &[
+                line("DEBUG", r#"Generating level 1 area "G1_1" with seed 1"#),
                 line("DEBUG", r#"Generating level 15 area "G1_town" with seed 1"#),
                 line("INFO", "Wounded Man: Reach... Clearfell... Find the Miller..."),
             ],
@@ -1493,10 +1794,53 @@ mod tests {
         feed(&mut progress, &[line("DEBUG", r#"Generating level 4 area "G1_4" with seed 7"#)]);
         assert_eq!(progress.shown_zone.as_deref(), Some("G1_4"));
         feed(&mut progress, &[line("DEBUG", r#"Generating level 5 area "G1_5" with seed 8"#)]);
-        // The waypoint detour and the final entry are the same zone line.
-        assert!(progress.completed.contains_key("grelwood-red-vale-wp"));
+        // One step waits for the Red Vale's zone line (the waypoint detour there is gone).
         assert!(progress.completed.contains_key("enter-red-vale"));
         assert!(!progress.completed.contains_key("runic-seals"));
+    }
+
+    /// The Act 1 fast route (2026-11-13, R2): every pickup the fastest guide takes (GTD-video,
+    /// GTD-build) is a route row, listed with "Optional content" off; what it skips is not a
+    /// required row; a reward shows only where it is the reason for the row.
+    #[test]
+    fn act_one_is_the_fast_route() {
+        let routes = load_routes();
+        let step = |id: &str| routes.iter().flat_map(|r| &r.steps).find(|s| s.id == id);
+        let text = |id: &str| step(id).unwrap().parts.iter().map(|p| p.text.as_str()).collect::<String>();
+        let reward = |id: &str| step(id).unwrap().parts.iter().find(|p| p.style.as_deref() == Some("reward")).map(|p| p.text.clone());
+        let pickups = [
+            ("abandoned-stash", "Skill Gem"), ("kill-areagne", "Support Gem"), ("kill-ervig", "Support Gem"),
+            ("ancient-ruins", "Ring"), ("haunted-treasure", "Support Gem"), ("kill-crowbell", "2 Skill Points"),
+            ("small-ritual", "Support Gem"), ("kill-king-in-the-mists", "+30 Spirit"), ("finn-charm", "Charm"),
+            ("crop-circle", "Skill Gem"), ("deliver-unas-lute", "2 Skill Points"), ("smithing-tools", "Salvage Bench"),
+            ("blacksmiths-chest", "Rune + Orb"), ("leitis-gem", "Skill Gem"), ("gallows-secret", "Support Gem"),
+            ("kill-candlemass", "+20 Max Life"),
+        ];
+        for (id, gives) in pickups {
+            let row = step(id).unwrap_or_else(|| panic!("{id}"));
+            assert!(!row.optional, "{id} is a route row");
+            assert_eq!(reward(id).as_deref(), Some(gives), "{id}");
+        }
+        // Skipped: the Mud Burrow, side content; gone: the ring's town trip and the talks.
+        for id in ["enter-mud-burrow", "kill-devourer", "kill-gerung", "talk-delwyn", "forgotten-riches", "renly-support-gem"] {
+            assert!(step(id).unwrap().optional, "{id} stays optional");
+        }
+        for id in [
+            "town-talk-finn", "town-una-cemetery", "town-hooded-one", "town-talk-all", "grelwood-red-vale-wp",
+            "hunting-grounds-town", "freythorn-wp", "farmlands-wp", "freythorn-to-farmlands", "ominous-altars",
+        ] {
+            assert!(step(id).is_none(), "{id} is dropped");
+        }
+        assert_eq!(text("kill-lachlann"), "Kill Lachlann, leave the ring");
+        // Bosses killed on the way carry no reward (decision 5).
+        for id in ["kill-beira", "kill-rust-king", "kill-lachlann", "kill-draven", "kill-asinia", "kill-executioner", "kill-geonor"] {
+            assert_eq!(reward(id), None, "{id}");
+        }
+        // Outside Act 1: the letter pays the points, and the heart for Aggorat is a route row.
+        assert_eq!(reward("deliver-lihl-lima-letter").as_deref(), Some("2 Skill Points"));
+        assert!(!step("deliver-lihl-lima-letter").unwrap().optional);
+        assert_eq!(reward("fallen-dekhara"), None);
+        assert!(!step("sacrificial-heart").unwrap().optional);
     }
 
     #[test]
@@ -1706,6 +2050,284 @@ mod tests {
         }
     }
 
+    /// The pairs of rows one log event cannot tell apart (the class check below). A zone entry
+    /// ticks only rows of the list of the zone the player left, and of one list only the last
+    /// row whose `after` holds (`apply`). So two zone entries into the same area clash when
+    /// their lists belong to the same zone (one list, or two lists of one zone) and the later
+    /// has no `after`, or the earlier's: it would always win and the earlier never tick (the
+    /// Grelwood's "Red Vale WP, return" on v0.1.118). A detour that returns is no exception
+    /// (R-F4 of 2026-11-13). Two NPC-line triggers of one list sharing a line, the same.
+    /// Read from the route files as written.
+    fn clashes(files: &[(String, serde_json::Value)]) -> Vec<String> {
+        use serde_json::Value;
+        let steps = |file: &Value| file["steps"].as_array().cloned().unwrap_or_default();
+        let lines = |step: &Value| -> BTreeSet<(String, String)> {
+            let trigger = &step["trigger"];
+            let mut set: BTreeSet<(String, String)> = trigger["lines"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|l| (shown_text(l["speaker"].as_str().unwrap()), shown_text(l["text"].as_str().unwrap())))
+                .collect();
+            if let (Some(speaker), Some(text)) = (trigger["speaker"].as_str(), trigger["text"].as_str()) {
+                set.insert((shown_text(speaker), shown_text(text)));
+            }
+            set
+        };
+        // Every step with a trigger, with its file and the zone whose list holds it, in order.
+        let all: Vec<(&str, &str, Value)> = files
+            .iter()
+            .flat_map(|(name, file)| {
+                let zone = file["zone"]["id"].as_str().unwrap();
+                steps(file).into_iter().map(move |s| (name.as_str(), zone, s))
+            })
+            .filter(|(_, _, s)| s["trigger"]["area"].is_string())
+            .collect();
+        let mut clashes = Vec::new();
+        for (i, (file, zone, earlier)) in all.iter().enumerate() {
+            let (kind, area) = (earlier["trigger"]["type"].as_str(), earlier["trigger"]["area"].as_str().unwrap());
+            for (other, other_zone, later) in &all[i + 1..] {
+                if other_zone != zone || later["trigger"]["type"].as_str() != kind || later["trigger"]["area"].as_str() != Some(area) {
+                    continue;
+                }
+                // One event ticks the last row whose `after` holds: the later needs an `after`
+                // of its own, or it always wins and the earlier never ticks.
+                let (first, second) = (earlier["trigger"]["after"].as_str(), later["trigger"]["after"].as_str());
+                let apart = second.is_some() && second != first;
+                let same_event = match kind {
+                    Some("zoneEntered") => !apart,
+                    Some("npcLine") => !apart && file == other && !lines(earlier).is_disjoint(&lines(later)),
+                    _ => false,
+                };
+                if same_event {
+                    clashes.push(format!("{file}/{other}: {} and {} ({area})", earlier["id"], later["id"]));
+                }
+            }
+        }
+        clashes
+    }
+
+    fn route_files() -> Vec<(String, serde_json::Value)> {
+        crate::bundle::ROUTES.iter().map(|(name, json)| (name.to_string(), serde_json::from_str(json).unwrap())).collect()
+    }
+
+    /// The class check of the levelling build (2026-11-13, R0): no log event may tick two
+    /// steps of one zone's list. On v0.1.118 the Grelwood's "Red Vale WP, return" and "Enter
+    /// The Red Vale" both ticked on the first Red Vale entry, so the visit between them could
+    /// never show (Areagne with it). Planted pairs show the check catches the kind.
+    #[test]
+    fn no_log_event_ticks_two_steps_of_one_list() {
+        let clashes_now = clashes(&route_files());
+        assert!(clashes_now.is_empty(), "one event ticks both:\n{}", clashes_now.join("\n"));
+        let file = |zone: &str, steps: &str| {
+            serde_json::from_str::<serde_json::Value>(&format!(r#"{{"zone":{{"id":"{zone}"}},"steps":[{steps}]}}"#)).unwrap()
+        };
+        let entry = |id: &str, area: &str, after: Option<&str>| {
+            let after = after.map_or(String::new(), |a| format!(r#","after":"{a}""#));
+            format!(r#"{{"id":"{id}","trigger":{{"type":"zoneEntered","area":"{area}"{after}}}}}"#)
+        };
+        // One list: the Grelwood's old pair.
+        let one = [("a".to_string(), file("A", &format!("{},{}", entry("wp", "B", None), entry("enter", "B", None))))];
+        assert_eq!(clashes(&one).len(), 1);
+        // The later waits for the earlier: fine.
+        let ordered = [("a".to_string(), file("A", &format!("{},{}", entry("wp", "B", None), entry("enter", "B", Some("wp")))))];
+        assert!(clashes(&ordered).is_empty());
+        // Two lists of one zone, each with an entry into B that one entry from A matches.
+        let two = [("a".to_string(), file("A", &entry("first", "B", None))), ("a2".to_string(), file("A", &entry("second", "B", None)))];
+        assert_eq!(clashes(&two), ["a/a2: \"first\" and \"second\" (B)"]);
+        // A detour that returns is no exception (R-F4): with no `after` the later always wins.
+        let detour = format!(r#"{{"id":"wp","returns":true,"trigger":{{"type":"zoneEntered","area":"B"}}}},{}"#, entry("enter", "B", None));
+        assert_eq!(clashes(&[("a".to_string(), file("A", &detour))]).len(), 1);
+        // Two lists of different zones: an entry from one zone ticks only its own list.
+        let apart = [("a".to_string(), file("A", &entry("from-a", "T", None))), ("c".to_string(), file("C", &entry("from-c", "T", None)))];
+        assert!(clashes(&apart).is_empty());
+    }
+
+    /// R-F2: the Farmlands entered before Freythorn: back in the Hunting Grounds, Crowbell, the
+    /// ritual and "Enter Freythorn" are still listed (nothing implies a zone entry).
+    #[test]
+    fn an_unfinished_visit_stays_listed_with_a_later_one() {
+        let mut inner = playing();
+        planned_up_to(&mut inner, "G1_11", 0);
+        shows(&mut inner, "G1_11", &HUNTING_FIRST, &HUNTING_FIRST_ALL);
+        play(&mut inner, &[enter("G1_13_1")]);
+        assert!(!inner.progress.completed.contains_key("hunting-grounds-to-freythorn"));
+        let mut back: Vec<&str> = HUNTING_FIRST.to_vec();
+        back.push("enter-ogham-farmlands");
+        shows(&mut inner, "G1_11", &back, &[]);
+        assert_eq!(inner.view().steps.iter().find(|s| s.id == "kill-crowbell").unwrap().state, "manual", "open");
+        // Then Freythorn and back: both visits finished, the last is listed.
+        play(&mut inner, &[enter("G1_12"), enter("G1_11")]);
+        assert_eq!(rows(&inner, false), ["enter-ogham-farmlands"]);
+    }
+
+    /// R-F2: the caravan's list out of order (Keth before the Mastodon Badlands): no required
+    /// row is lost; the visit for the Valley of the Titans lists the skipped one's rows too.
+    #[test]
+    fn the_caravan_out_of_order_loses_no_required_row() {
+        let mut inner = playing();
+        let caravan = inner.routes.iter().find(|r| r.zone.id == "G2_town").unwrap().clone();
+        for area in ["G2_1", "G2_town", "G2_3a", "G2_town", "G2_10_1", "G2_town", "G2_2", "G2_town", "G2_4_1", "G2_town"] {
+            play(&mut inner, &[enter(area)]);
+        }
+        assert_eq!(inner.progress.completed["travel-keth"].source, "log");
+        assert!(!inner.progress.completed.contains_key("travel-mastodon-badlands"));
+        let listed: BTreeSet<String> = rows(&inner, false).into_iter().collect();
+        let visits = caravan.visits();
+        let shown = inner.view().visit;
+        for (step, visit) in caravan.steps.iter().zip(visits) {
+            let required = step.kind == "objective" && !step.optional;
+            if required && visit < shown && !inner.progress.completed.contains_key(&step.id) {
+                assert!(listed.contains(&step.id), "{} (visit {visit}) lost; listed {listed:?}", step.id);
+            }
+        }
+        assert!(listed.contains("travel-mastodon-badlands") && listed.contains("travel-valley-titans"), "{listed:?}");
+    }
+
+    /// R-F6: a start in the middle of an act. First seen in the Red Vale (where from is not
+    /// known), then back in the Grelwood: the seals visit, not the first visit's rows. And
+    /// the Red Vale reached by waypoint from town, then the Grelwood on foot: coming in from
+    /// the Red Vale proves the Grelwood's way there was taken.
+    #[test]
+    fn coming_back_from_a_zone_proves_its_exit() {
+        let seals = ["runic-seals", "grelwood-una-seals", "grelwood-portal-town"];
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_5")]);
+        assert_eq!(inner.progress.completed["enter-red-vale"].source, "implied", "where from is not known");
+        shows(&mut inner, "G1_4", &seals, &[]);
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_town"), enter("G1_5")]);
+        assert!(!inner.progress.completed.contains_key("enter-red-vale"), "not from the Grelwood");
+        shows(&mut inner, "G1_4", &seals, &[]);
+        assert_eq!(inner.progress.completed["enter-red-vale"].evidence, "Came back from G1_5");
+        // Seen leaving for the Red Vale and walking back (Areagne skipped): the first visit.
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_2"), enter("G1_4"), enter("G1_5")]);
+        shows(&mut inner, "G1_4", &GRELWOOD_FIRST, &GRELWOOD_FIRST_ALL);
+    }
+
+    /// R-F3: Lachlann the Lost (the man at the gate) speaking starts no fight, so 30 quiet
+    /// seconds leave the kill open; Lachlann of Endless Lament (the boss) starts it.
+    #[test]
+    fn a_namesake_starts_no_fight() {
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_7")]);
+        let Inner { routes, progress, fight, .. } = &mut inner;
+        hear_boss(routes, progress, fight, "Lachlann the Lost", "At last! It's open! Praise the First Ones!");
+        assert!(fight.is_none());
+        assert!(!inner.settle_fight());
+        assert!(!inner.progress.completed.contains_key("kill-lachlann"));
+        let Inner { routes, progress, fight, .. } = &mut inner;
+        hear_boss(routes, progress, fight, "Lachlann of Endless Lament", "You will not have her!");
+        assert_eq!(fight.as_ref().unwrap().step, "kill-lachlann");
+        // A boss whose kill line someone else says (Mortimer) still starts by name.
+        assert_eq!(boss_step(&inner.routes, &inner.progress, "G1_1", "The Bloated Miller").map(|s| s.id.as_str()), Some("kill-bloated-miller"));
+        assert!(boss_step(&inner.routes, &inner.progress, "G1_1", "Mortimer").is_none());
+    }
+
+    /// R-F7: the quest tracker's proof turns a "probably done" kill into a proven one; a kill
+    /// confirmed by hand stays as it is.
+    #[test]
+    fn a_screen_proof_upgrades_a_likely_kill() {
+        let routes = load_routes();
+        let mut progress = Progress::default();
+        let likely = Completion { at: "now".into(), source: LIKELY.into(), evidence: "quiet".into() };
+        progress.completed.insert("kill-bloated-miller".into(), likely);
+        assert!(apply_screen(&routes, &mut progress, "TheMiller", &BTreeSet::from([3]), "tracker"));
+        assert_eq!(progress.completed["kill-bloated-miller"].source, "screen");
+        let mut progress = Progress::default();
+        done(&mut progress, "kill-bloated-miller");
+        apply_screen(&routes, &mut progress, "TheMiller", &BTreeSet::from([3]), "tracker");
+        assert_eq!(progress.completed["kill-bloated-miller"].source, "manual");
+    }
+
+    /// R-F8: two bosses of one zone speaking in turn (Areagne, then Gerung) keep their own
+    /// timers: neither's pending state is lost; quiet, both are probably done; the kill of one
+    /// leaves the other's fight going. A death or a zone change clears the fight, and these.
+    #[test]
+    fn two_bosses_keep_their_own_timers() {
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_4")]);
+        let hear = |inner: &mut Inner, speaker: &str| {
+            let Inner { routes, progress, fight, .. } = inner;
+            hear_boss(routes, progress, fight, speaker, "...");
+        };
+        let ago = |inner: &mut Inner, secs: u64| {
+            let fight = inner.fight.as_mut().unwrap();
+            let at = std::time::Instant::now() - Duration::from_secs(secs);
+            fight.last_line = at;
+            for (_, last) in &mut fight.earlier {
+                *last = at;
+            }
+        };
+        hear(&mut inner, "Areagne");
+        hear(&mut inner, "Gerung, the Brambleghast");
+        let fight = inner.fight.as_ref().unwrap();
+        assert_eq!((fight.step.as_str(), fight.earlier.len()), ("kill-gerung", 1));
+        hear(&mut inner, "Areagne");
+        let fight = inner.fight.as_ref().unwrap();
+        assert_eq!(fight.step, "kill-areagne");
+        assert_eq!(fight.earlier.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>(), ["kill-gerung"]);
+        ago(&mut inner, 5);
+        assert!(!inner.settle_fight());
+        ago(&mut inner, FIGHT_QUIET.as_secs() + 1);
+        assert!(inner.settle_fight());
+        for id in ["kill-areagne", "kill-gerung"] {
+            assert_eq!(inner.progress.completed[id].source, LIKELY, "{id}");
+        }
+        // Gerung's kill confirmed while Areagne spoke a moment ago: her fight goes on.
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_4")]);
+        hear(&mut inner, "Areagne");
+        hear(&mut inner, "Gerung, the Brambleghast");
+        toggle(&inner.routes.clone(), &mut inner.progress, "kill-gerung").unwrap();
+        assert!(!inner.settle_fight(), "not over");
+        assert_eq!(inner.fight.as_ref().unwrap().step, "kill-areagne");
+        assert!(!inner.progress.completed.contains_key("kill-areagne"));
+        // Leaving the zone or dying ends the fight (`process`): the earlier boss with it.
+        inner.fight = None;
+        assert!(!inner.settle_fight());
+        assert!(!inner.progress.completed.contains_key("kill-areagne"));
+    }
+
+    /// R-F4: one event ticks at most one row of a list, the last whose `after` holds. The
+    /// caravan's early Trial waypoint skipped, the Spires done: the late Trial entry ticks
+    /// "Waypoint to the Trial" and leaves the waypoint grab open.
+    #[test]
+    fn one_entry_ticks_one_row_of_a_list() {
+        let mut inner = playing();
+        play(&mut inner, &[enter("G2_9_1"), enter("G2_9_2"), enter("G2_town"), enter("G2_13")]);
+        assert_eq!(inner.progress.completed["enter-spires-of-deshar"].source, "log");
+        assert_eq!(inner.progress.completed["caravan-to-trial"].source, "log");
+        assert!(!inner.progress.completed.contains_key("travel-trial-waypoint"));
+        // The early entry, before the Spires, ticks the waypoint grab only.
+        let mut inner = playing();
+        play(&mut inner, &[enter("G2_town"), enter("G2_13")]);
+        assert!(inner.progress.completed.contains_key("travel-trial-waypoint"));
+        assert!(!inner.progress.completed.contains_key("caravan-to-trial"));
+    }
+
+    /// R-F1: Freythorn left on foot (no town trip), on through the Hunting Grounds, the
+    /// Farmlands and Ogham Village, then a portal to town: only the Village's portal row
+    /// ticks, Freythorn's rows stay as they were.
+    #[test]
+    fn a_zone_entry_ticks_only_the_list_of_the_zone_left() {
+        let mut inner = playing();
+        planned_up_to(&mut inner, "G1_12", 0);
+        play(&mut inner, &[enter("G1_12")]);
+        let freythorn = |inner: &Inner| {
+            ["ritual-altars", "kill-king-in-the-mists", "freythorn-portal-town"].map(|id| inner.progress.completed.contains_key(id))
+        };
+        let before = freythorn(&inner);
+        assert_eq!(before, [false, false, false]);
+        play(&mut inner, &[enter("G1_11"), enter("G1_13_1"), enter("G1_13_2"), enter("G1_town")]);
+        assert_eq!(inner.progress.completed["village-portal-town"].source, "log");
+        assert_eq!(freythorn(&inner), before, "Freythorn's rows as they were");
+        assert!(!inner.progress.completed.contains_key("town-to-hunting-grounds"));
+        // The town lists the visit the player came for, with Finn's charm carried.
+        assert_eq!(rows(&inner, false), ["finn-charm", "deliver-unas-lute", "leitis-gem", "town-to-ogham-village"]);
+    }
+
     #[test]
     fn exit_names_are_listed_once() {
         // The Cemetery has two exits each to the Mausoleum and the Tomb.
@@ -1770,8 +2392,8 @@ mod tests {
         assert_eq!(progress.completed["leave"].source, "log");
         assert_eq!(progress.completed["talk"].source, "implied");
         assert_eq!(progress.completed["talk"].evidence, "Before leave");
-        // Not a note, an optional step, a boss kill, a step the compass leads to,
-        // one unticked by hand, or a step after the logged one.
+        // Not a note, an optional step, a boss kill, a step the compass leads to, one
+        // unticked by hand, or a step after the logged one.
         for id in ["note", "side", "boss", "gate", "undone", "later"] {
             assert!(!progress.completed.contains_key(id), "{id}");
         }
@@ -1785,7 +2407,12 @@ mod tests {
         assert!(!progress.completed.contains_key("talk-renly"));
         enter_zone(&routes, &mut progress, "G1_2");
         assert_eq!(progress.completed["enter-clearfell"].source, "log");
-        assert_eq!(progress.completed["talk-renly"].source, "implied");
+        // Renly's talk gives a gem: leaving does not prove it (R-F5), it stays open.
+        assert!(!progress.completed.contains_key("talk-renly"));
+        // A talk with nothing to collect is implied: Una's in the Grelwood by the Red Vale.
+        enter_zone(&routes, &mut progress, "G1_4");
+        enter_zone(&routes, &mut progress, "G1_5");
+        assert_eq!(progress.completed["grelwood-talk-una"].source, "implied");
         // Later talks in the town's list stay open.
         assert!(!progress.completed.contains_key("renly-runed-spikes"));
         assert!(!progress.completed.contains_key("town-una-roots"));
@@ -1828,12 +2455,22 @@ mod tests {
         assert_eq!((visit_of("talk-renly"), visit_of("enter-clearfell")), (0, 0));
         assert_eq!((visit_of("renly-runed-spikes"), visit_of("town-to-grelwood")), (1, 1));
         assert_eq!(visit_of("town-una-roots"), 2);
-        assert_eq!(visit_of("enter-vastiri-outskirts"), 4);
+        assert_eq!((visit_of("finn-charm"), visit_of("town-to-hunting-grounds")), (3, 3));
+        assert_eq!((visit_of("deliver-unas-lute"), visit_of("leitis-gem"), visit_of("town-to-ogham-village")), (4, 4, 4));
+        assert_eq!(visit_of("enter-vastiri-outskirts"), 5);
         let mut progress = Progress::default();
         assert_eq!(town.current_visit(&progress), 0);
-        // The visit ends when its leaving step is done, whatever else is open.
+        // The visit ends when its leaving step is done, whatever else is open. The next is
+        // due only once the player comes from the Red Vale: until then the first visit while
+        // a row of it is open (Renly's gem), then nothing (one past the last visit).
         enter_zone(&routes, &mut progress, "G1_town");
         enter_zone(&routes, &mut progress, "G1_2");
+        assert_eq!(town.current_visit(&progress), 0);
+        toggle(&routes, &mut progress, "talk-renly").unwrap();
+        assert_eq!(town.current_visit(&progress), 6);
+        for area in ["G1_4", "G1_5", "G1_town"] {
+            enter_zone(&routes, &mut progress, area);
+        }
         assert_eq!(town.current_visit(&progress), 1);
         // A zone left once: one visit.
         let riverbank = routes.iter().find(|r| r.zone.id == "G1_1").unwrap();
@@ -1853,11 +2490,13 @@ mod tests {
         toggle(&routes, &mut progress, "enter-clearfell").unwrap();
         toggle(&routes, &mut progress, "enter-clearfell").unwrap();
         assert!(progress.dismissed.is_empty());
+        enter_zone(&routes, &mut progress, "G1_town");
         enter_zone(&routes, &mut progress, "G1_2");
         assert_eq!(progress.completed["enter-clearfell"].source, "log");
         // Unticking what the log ticked holds it back.
         toggle(&routes, &mut progress, "enter-clearfell").unwrap();
         assert!(progress.dismissed.contains("enter-clearfell"));
+        enter_zone(&routes, &mut progress, "G1_town");
         enter_zone(&routes, &mut progress, "G1_2");
         assert!(!progress.completed.contains_key("enter-clearfell"));
         // A click ticks it again and lifts the hold.
@@ -1906,7 +2545,7 @@ mod tests {
             in_zone: true,
             saved_at: Default::default(),
         };
-        let fight = |ago: Duration| Some(Fight { step: "kill-bloated-miller".into(), last_line: std::time::Instant::now() - ago });
+        let fight = |ago: Duration| Some(Fight { step: "kill-bloated-miller".into(), last_line: std::time::Instant::now() - ago, earlier: Vec::new() });
         assert!(!inner.settle_fight(), "no fight");
         inner.fight = fight(Duration::from_secs(5));
         assert!(!inner.settle_fight(), "the boss spoke five seconds ago");
@@ -1914,7 +2553,7 @@ mod tests {
         inner.fight = fight(FIGHT_QUIET + Duration::from_secs(1));
         assert!(inner.settle_fight(), "quiet for too long");
         assert!(inner.fight.is_none());
-        assert_eq!(inner.progress.completed["kill-bloated-miller"].source, "implied", "a quiet boss is taken as killed");
+        assert_eq!(inner.progress.completed["kill-bloated-miller"].source, LIKELY, "a quiet boss is probably killed");
         inner.progress.completed.remove("kill-bloated-miller");
         inner.fight = fight(Duration::from_secs(1));
         done(&mut inner.progress, "kill-bloated-miller");
@@ -2022,11 +2661,446 @@ mod tests {
         std::fs::remove_file(path).unwrap();
     }
 
+    // ---------- Replays of Act 1 (R1 of 2026-11-13: the visit follows the player) ----------
+
+    /// The tracker as the app has it while the player is in a zone, with a chosen character.
+    fn playing() -> Inner {
+        let mut inner = Inner {
+            routes: load_routes(), progress: Progress::default(), characters: Default::default(),
+            identity: Default::default(),
+            log: LogStatus { connected: true, path: None, message: String::new() },
+            save_path: None, skip_optional: false, recent: Default::default(), fight: None,
+            in_zone: true, saved_at: Default::default(),
+        };
+        inner.characters.select(&mut inner.progress, "Hero", false).unwrap();
+        inner
+    }
+
+    fn enter(area: &str) -> String {
+        line("DEBUG", &format!(r#"Generating level 5 area "{area}" with seed 1"#))
+    }
+
+    fn npc(speaker: &str, text: &str) -> String {
+        line("INFO", &format!("{speaker}: {text}"))
+    }
+
+    /// Log lines as `process` applies them.
+    fn play(inner: &mut Inner, lines: &[String]) {
+        for l in lines {
+            if let Some((ts, event)) = parse_line(l) {
+                apply(&inner.routes, &mut inner.progress, &ts, &event);
+            }
+        }
+    }
+
+    /// The rows the panel lists: the steps of the visit on show; optional ones only with
+    /// "Optional content" on.
+    fn rows(inner: &Inner, optional: bool) -> Vec<String> {
+        let view = inner.view();
+        view.steps.iter().filter(|s| s.visit == view.visit && (optional || !s.optional)).map(|s| s.id.clone()).collect()
+    }
+
+    /// Enters `area` and checks the rows listed with "Optional content" off and on.
+    fn shows(inner: &mut Inner, area: &str, off: &[&str], on: &[&str]) {
+        play(inner, &[enter(area)]);
+        assert_eq!(rows(inner, false), off, "{area}, optional content off");
+        assert_eq!(rows(inner, true), if on.is_empty() { off } else { on }, "{area}, optional content on");
+    }
+
+    /// A restart of the app: the progress file written and read back, the profile kept.
+    fn restart(inner: &Inner) -> Inner {
+        let mut characters = inner.characters.clone();
+        characters.remember(&inner.progress);
+        let saved = crate::characters::SavedProgress { progress: inner.progress.clone(), characters };
+        let saved = crate::characters::load(&serde_json::to_vec(&saved).unwrap()).unwrap();
+        let (mut progress, mut characters) = (saved.progress, saved.characters);
+        characters.clear_binding(&mut progress);
+        characters.keep_chosen(&mut progress);
+        let mut next = playing();
+        next.progress = progress;
+        next.characters = characters;
+        next
+    }
+
+    const CEMETERY: [&str; 7] =
+        ["talk-lachlann", "ancient-ruins", "enter-mausoleum", "enter-tomb", "memorial-gate", "kill-lachlann", "enter-hunting-grounds"];
+    const GRELWOOD_FIRST: [&str; 5] = ["grelwood-talk-una", "grelwood-waypoint", "kill-areagne", "grelwood-grim-tangle-wp", "enter-red-vale"];
+    const GRELWOOD_FIRST_ALL: [&str; 6] =
+        ["grelwood-talk-una", "grelwood-waypoint", "kill-areagne", "grelwood-grim-tangle-wp", "kill-gerung", "enter-red-vale"];
+    const HUNTING_FIRST: [&str; 4] = ["hunting-grounds-waypoint", "kill-crowbell", "small-ritual", "hunting-grounds-to-freythorn"];
+    const HUNTING_FIRST_ALL: [&str; 5] =
+        ["hunting-grounds-waypoint", "talk-delwyn", "kill-crowbell", "small-ritual", "hunting-grounds-to-freythorn"];
+
+    /// The zone entries of Act 1 in the planned order (contract 3).
+    const PLANNED: [&str; 27] = [
+        "G1_1", "G1_town", "G1_2", "G1_4", "G1_6", "G1_4", "G1_5", "G1_town", "G1_4", "G1_town", "G1_6", "G1_7", "G1_8",
+        "G1_7", "G1_9", "G1_7", "G1_11", "G1_12", "G1_town", "G1_11", "G1_13_1", "G1_13_2", "G1_town", "G1_13_2", "G1_14",
+        "G1_15", "G1_town",
+    ];
+
+    /// The planned entries before the first entry of `area` from `from` on.
+    fn planned_up_to(inner: &mut Inner, area: &str, from: usize) {
+        let stop = from + PLANNED[from..].iter().position(|a| *a == area).unwrap();
+        play(inner, &PLANNED[..stop].iter().map(|a| enter(a)).collect::<Vec<_>>());
+    }
+
+    /// The start of Act 1, as planned, up to the first Grelwood entry.
+    fn to_the_grelwood(inner: &mut Inner) {
+        shows(inner, "G1_1", &["talk-wounded-man", "kill-bloated-miller", "enter-clearfell-encampment"], &[]);
+        play(inner, &[npc("Wounded Man", "Reach... Clearfell... Find the Miller..."), npc("Mortimer", "Well done! Please come inside.")]);
+        shows(inner, "G1_town", &["talk-renly", "enter-clearfell"], &[]);
+        shows(inner, "G1_2", &["abandoned-stash", "kill-beira", "enter-grelwood"], &["abandoned-stash", "kill-beira", "enter-mud-burrow", "enter-grelwood"]);
+        shows(inner, "G1_4", &GRELWOOD_FIRST, &GRELWOOD_FIRST_ALL);
+    }
+
+    /// S1: Act 1 in the planned order (contract 3): each zone entry lists its visit's rows.
+    /// S3: the Grim Tangle's waypoint is grabbed before Areagne: she is still listed, open.
+    /// S5: the Grim Tangle's first entry lists the waypoint grab only, the later one Ervig.
+    #[test]
+    fn act_one_in_the_planned_order_lists_each_visit() {
+        let mut inner = playing();
+        to_the_grelwood(&mut inner);
+        shows(&mut inner, "G1_6", &["grim-tangle-waypoint"], &[]);
+        shows(&mut inner, "G1_4", &GRELWOOD_FIRST, &GRELWOOD_FIRST_ALL);
+        assert!(!inner.progress.completed.contains_key("kill-areagne"), "S3: Areagne is still to do");
+        assert!(inner.progress.completed.contains_key("grelwood-grim-tangle-wp"));
+        shows(&mut inner, "G1_5", &["obelisks-of-rust", "kill-rust-king", "red-vale-portal-town"], &[]);
+        play(&mut inner, &[npc("Ghostly Voice", "This is our land. We stand united!")]);
+        shows(&mut inner, "G1_town", &["renly-runed-spikes", "town-to-grelwood"], &["renly-support-gem", "renly-runed-spikes", "town-to-grelwood"]);
+        shows(&mut inner, "G1_4", &["runic-seals", "grelwood-una-seals", "grelwood-portal-town"], &[]);
+        shows(&mut inner, "G1_town", &["town-una-roots", "town-to-grim-tangle"], &[]);
+        shows(&mut inner, "G1_6", &["kill-ervig", "enter-cemetery"], &[]);
+        shows(&mut inner, "G1_7", &CEMETERY, &[]);
+        shows(&mut inner, "G1_8", &["kill-draven", "mausoleum-back"], &["kill-draven", "forgotten-riches", "mausoleum-back"]);
+        shows(&mut inner, "G1_7", &CEMETERY, &[]);
+        shows(&mut inner, "G1_9", &["haunted-treasure", "kill-asinia", "tomb-back"], &[]);
+        shows(&mut inner, "G1_7", &CEMETERY, &[]);
+        play(&mut inner, &[
+            npc("Lachlann the Lost", "At last! It's open! Praise the First Ones!"),
+            npc("Lachlann of Endless Lament", "Together... at last..."),
+        ]);
+        shows(&mut inner, "G1_11", &HUNTING_FIRST, &HUNTING_FIRST_ALL);
+        shows(&mut inner, "G1_12", &["ritual-altars", "kill-king-in-the-mists", "freythorn-portal-town"], &[]);
+        play(&mut inner, &[npc("The King in the Mists", "This is not the end...")]);
+        shows(&mut inner, "G1_town", &["finn-charm", "town-to-hunting-grounds"], &[]);
+        shows(&mut inner, "G1_11", &["enter-ogham-farmlands"], &[]);
+        shows(&mut inner, "G1_13_1", &["unas-lute", "crop-circle", "enter-ogham-village"], &[]);
+        shows(&mut inner, "G1_13_2", &["smithing-tools", "blacksmiths-chest", "kill-executioner", "lever-leitis", "village-portal-town"], &[]);
+        shows(&mut inner, "G1_town", &["deliver-unas-lute", "leitis-gem", "town-to-ogham-village"], &[]);
+        shows(&mut inner, "G1_13_2", &["enter-manor-ramparts"], &[]);
+        shows(&mut inner, "G1_14", &["gallows-secret", "enter-ogham-manor"], &[]);
+        shows(&mut inner, "G1_15", &["kill-candlemass", "kill-geonor", "manor-portal-town"], &[]);
+        play(&mut inner, &[npc("The Hooded One", "We must make haste. Let us return to Clearfell to make our preparations.")]);
+        shows(&mut inner, "G1_town", &["town-beasts-trail", "enter-vastiri-outskirts"], &[]);
+        play(&mut inner, &[enter("G2_1")]);
+        assert_eq!(inner.progress.completed["enter-vastiri-outskirts"].source, "log");
+        // Every leaving step of Act 1 was logged on the way.
+        for id in ["town-to-grelwood", "grelwood-portal-town", "town-to-grim-tangle", "grim-tangle-waypoint", "freythorn-portal-town",
+            "town-to-hunting-grounds", "village-portal-town", "town-to-ogham-village", "manor-portal-town"] {
+            assert_eq!(inner.progress.completed[id].source, "log", "{id}");
+        }
+    }
+
+    /// S2: the Red Vale before the Grim Tangle's waypoint. Back from the Red Vale the Grelwood
+    /// lists the seals; the waypoint grab is listed while the roots still block the way (until
+    /// the town trip after the seals), and a first entry after that trip is the real visit.
+    #[test]
+    fn the_red_vale_before_the_grim_tangle_waypoint() {
+        for grab_with_the_seals in [false, true] {
+            let mut inner = playing();
+            to_the_grelwood(&mut inner);
+            shows(&mut inner, "G1_5", &["obelisks-of-rust", "kill-rust-king", "red-vale-portal-town"], &[]);
+            shows(&mut inner, "G1_town", &["renly-runed-spikes", "town-to-grelwood"], &["renly-support-gem", "renly-runed-spikes", "town-to-grelwood"]);
+            shows(&mut inner, "G1_4", &["runic-seals", "grelwood-una-seals", "grelwood-portal-town"], &[]);
+            if grab_with_the_seals {
+                shows(&mut inner, "G1_6", &["grim-tangle-waypoint"], &[]);
+                assert!(!inner.progress.completed.contains_key("town-to-grim-tangle"), "a waypoint grab is not the town's step");
+                shows(&mut inner, "G1_4", &["runic-seals", "grelwood-una-seals", "grelwood-portal-town"], &[]);
+            }
+            shows(&mut inner, "G1_town", &["town-una-roots", "town-to-grim-tangle"], &[]);
+            if !grab_with_the_seals {
+                // No waypoint there yet: by the Grelwood, on foot (its visits are all done).
+                shows(&mut inner, "G1_4", &["runic-seals", "grelwood-una-seals", "grelwood-portal-town"], &[]);
+            }
+            shows(&mut inner, "G1_6", &["kill-ervig", "enter-cemetery"], &[]);
+            assert!(inner.view().steps.iter().all(|s| s.id != "grim-tangle-waypoint"), "not listed at all");
+            // Taken from town by waypoint, or on foot through the Grelwood.
+            let from = if grab_with_the_seals { "(level 5)" } else { "from G1_4" };
+            assert!(inner.progress.completed["town-to-grim-tangle"].evidence.contains(from));
+            assert!(!inner.progress.completed.contains_key("grim-tangle-waypoint") || grab_with_the_seals, "never implied");
+            shows(&mut inner, "G1_7", &CEMETERY, &[]);
+        }
+    }
+
+    /// S4: a town trip from Clearfell or the Grelwood before the Red Vale lists no rows of a
+    /// later town visit: the first visit while Renly's gem is still open (leaving the town
+    /// does not prove it, R-F5), then nothing (the route plans no visit then); the zones left
+    /// for it list their own visit again on return.
+    #[test]
+    fn an_early_town_trip_lists_nothing_stale() {
+        let mut inner = playing();
+        shows(&mut inner, "G1_town", &["talk-renly", "enter-clearfell"], &[]);
+        shows(&mut inner, "G1_2", &["abandoned-stash", "kill-beira", "enter-grelwood"], &["abandoned-stash", "kill-beira", "enter-mud-burrow", "enter-grelwood"]);
+        shows(&mut inner, "G1_town", &["talk-renly", "enter-clearfell"], &[]);
+        toggle(&inner.routes.clone(), &mut inner.progress, "talk-renly").unwrap();
+        assert_eq!(rows(&inner, false), Vec::<String>::new());
+        assert!(!inner.view().steps.is_empty(), "the zone's later visits are still sent (errands key on them)");
+        shows(&mut inner, "G1_2", &["abandoned-stash", "kill-beira", "enter-grelwood"], &["abandoned-stash", "kill-beira", "enter-mud-burrow", "enter-grelwood"]);
+        shows(&mut inner, "G1_4", &GRELWOOD_FIRST, &GRELWOOD_FIRST_ALL);
+        shows(&mut inner, "G1_town", &[], &[]);
+        shows(&mut inner, "G1_4", &GRELWOOD_FIRST, &GRELWOOD_FIRST_ALL);
+        assert!(!inner.progress.completed.contains_key("town-to-grelwood"));
+        shows(&mut inner, "G1_5", &["obelisks-of-rust", "kill-rust-king", "red-vale-portal-town"], &[]);
+        shows(&mut inner, "G1_town", &["renly-runed-spikes", "town-to-grelwood"], &["renly-support-gem", "renly-runed-spikes", "town-to-grelwood"]);
+    }
+
+    /// S6: the Mausoleum and the Tomb in either order: the Cemetery is one visit, the same rows
+    /// each time, and each side zone lists its own.
+    #[test]
+    fn the_mausoleum_and_the_tomb_in_either_order() {
+        for (first, second) in [("G1_9", "G1_8"), ("G1_8", "G1_9")] {
+            let mut inner = playing();
+            planned_up_to(&mut inner, "G1_7", 0);
+            shows(&mut inner, "G1_7", &CEMETERY, &[]);
+            for side in [first, second] {
+                if side == "G1_8" {
+                    shows(&mut inner, side, &["kill-draven", "mausoleum-back"], &["kill-draven", "forgotten-riches", "mausoleum-back"]);
+                } else {
+                    shows(&mut inner, side, &["haunted-treasure", "kill-asinia", "tomb-back"], &[]);
+                }
+                shows(&mut inner, "G1_7", &CEMETERY, &[]);
+                assert_eq!(inner.view().visit, 0);
+            }
+            assert!(!inner.progress.completed.contains_key("memorial-gate"));
+        }
+    }
+
+    /// S7: Lachlann's ring left on the ground: the Hunting Grounds list Crowbell, and a town
+    /// trip before Freythorn lists no town rows.
+    #[test]
+    fn the_ring_left_lists_no_town_trip() {
+        let mut inner = playing();
+        planned_up_to(&mut inner, "G1_8", 0);
+        play(&mut inner, &[enter("G1_8"), enter("G1_7"), enter("G1_9")]);
+        shows(&mut inner, "G1_7", &CEMETERY, &[]);
+        play(&mut inner, &[npc("Lachlann of Endless Lament", "Together... at last...")]);
+        shows(&mut inner, "G1_11", &HUNTING_FIRST, &HUNTING_FIRST_ALL);
+        shows(&mut inner, "G1_town", &[], &[]);
+        shows(&mut inner, "G1_11", &HUNTING_FIRST, &HUNTING_FIRST_ALL);
+        shows(&mut inner, "G1_12", &["ritual-altars", "kill-king-in-the-mists", "freythorn-portal-town"], &[]);
+    }
+
+    /// Skipped town trips: Freythorn left on foot, the town first reached from Ogham Village.
+    /// The town lists the visit the player came for (the lute, Leitis), with Finn's charm
+    /// from the skipped visit; its waypoint back to the Hunting Grounds is not carried.
+    #[test]
+    fn a_skipped_town_visit_carries_its_open_rows() {
+        let mut inner = playing();
+        planned_up_to(&mut inner, "G1_12", 0);
+        play(&mut inner, &[enter("G1_12")]);
+        shows(&mut inner, "G1_11", &["enter-ogham-farmlands"], &[]);
+        play(&mut inner, &[enter("G1_13_1"), enter("G1_13_2")]);
+        shows(&mut inner, "G1_town", &["finn-charm", "deliver-unas-lute", "leitis-gem", "town-to-ogham-village"], &[]);
+        assert_eq!(inner.view().visit, 4);
+        shows(&mut inner, "G1_13_2", &["enter-manor-ramparts"], &[]);
+        // Back in a zone whose visit is over, with a required row still open: Areagne.
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_4"), enter("G1_5")]);
+        shows(&mut inner, "G1_4", &GRELWOOD_FIRST, &GRELWOOD_FIRST_ALL);
+        for id in ["kill-areagne", "grelwood-waypoint"] {
+            toggle(&inner.routes.clone(), &mut inner.progress, id).unwrap();
+        }
+        assert_eq!(rows(&inner, false), Vec::<String>::new(), "nothing left to do there now");
+    }
+
+    /// S8: a restart mid-zone lists the same rows (the saved progress decides, not the order
+    /// the events were read in).
+    #[test]
+    fn a_restart_mid_zone_lists_the_same_rows() {
+        let mut inner = playing();
+        to_the_grelwood(&mut inner);
+        let mut states = Vec::new();
+        for area in ["G1_6", "G1_4", "G1_town", "G1_4", "G1_5", "G1_town", "G1_7", "G1_9", "G1_7", "G1_11"] {
+            play(&mut inner, &[enter(area)]);
+            let again = restart(&inner);
+            assert_eq!(again.progress.current_area.as_deref(), Some(area));
+            for optional in [false, true] {
+                assert_eq!(rows(&again, optional), rows(&inner, optional), "{area}");
+            }
+            assert_eq!(again.view().visit, inner.view().visit, "{area}");
+            states.push(rows(&inner, false));
+        }
+        assert!(states.contains(&vec!["talk-renly".to_string(), "enter-clearfell".to_string()]), "an early town trip is among them");
+    }
+
+    /// R3: the character's level from its level-up lines, kept in its own profile; the zone's
+    /// level from the zone line.
+    #[test]
+    fn the_level_comes_from_the_log_per_character() {
+        let at = |message: &str| format!("2026/11/13 17:20:01 1 2 [INFO Client 308] {message}");
+        assert_eq!(level_up_in_line(&at(": Hollow_Sue (Ranger) is now level 6")), Some(("Hollow_Sue".into(), 6)));
+        assert_eq!(level_up_in_line(&at(": Hollow_Sue has been slain.")), None);
+        assert_eq!(level_up_in_line(&at("#Hollow_Sue: (Ranger) is now level 6")), None, "chat");
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_4")]);
+        assert_eq!(inner.view().level, None, "no level-up seen yet");
+        assert!(note_character(&mut inner, &at(": Hollow_Sue (Ranger) is now level 6")));
+        assert_eq!(inner.characters.active.as_deref(), Some("Hollow_Sue"), "the log names who plays");
+        assert_eq!(inner.view().level, Some(6));
+        assert!(!note_character(&mut inner, &at(": Hollow_Sue has been slain.")), "a death says no level");
+        assert_eq!(inner.view().level, Some(6));
+        // It survives a restart.
+        let mut again = restart(&inner);
+        assert_eq!(again.characters.active.as_deref(), Some("Hollow_Sue"));
+        assert_eq!(again.view().level, Some(6));
+        // Another character's level-up is its own; the first keeps its level.
+        assert!(note_character(&mut again, &at(": Other_One (Witch) is now level 2")));
+        assert_eq!(again.view().level, Some(2));
+        assert!(note_character(&mut again, &at(": Hollow_Sue (Ranger) is now level 7")));
+        assert_eq!(again.view().level, Some(7));
+        assert_eq!(again.characters.profiles["Other_One"].level, Some(2));
+        // The zone's level: the log's zone line, else the route file's.
+        assert_eq!(again.view().zone.unwrap().level, 5, "the test's zone line says 5, the file 4");
+        play(&mut again, &[line("DEBUG", r#"Generating level 7 area "G1_4" with seed 9"#)]);
+        assert_eq!(again.view().zone.unwrap().level, 7);
+        again.progress.area_level = None;
+        assert_eq!(again.view().zone.unwrap().level, 4);
+    }
+
+    /// R4: which rows the app can tick by itself, and the waypoint row implied by a later entry.
+    #[test]
+    fn tracked_rows_and_the_implied_waypoint() {
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_town"), enter("G1_2"), enter("G1_4")]);
+        let view = inner.view();
+        let tracked = |id: &str| view.steps.iter().find(|s| s.id == id).unwrap().tracked;
+        assert!(tracked("enter-red-vale"), "a log trigger");
+        assert!(tracked("kill-areagne"), "a boss: her fight starts when she speaks");
+        assert!(!tracked("grelwood-waypoint"), "a hand row");
+        assert_eq!(tracked("grelwood-talk-una"), crate::quest_screen::READS, "a quest-tracker rule, read on Windows only");
+        play(&mut inner, &[enter("G1_6")]);
+        assert!(!inner.progress.completed.contains_key("kill-areagne"), "boss rows stay out");
+        // R-F5: the Grim Tangle entered without the Grelwood's waypoint: it stays open (the
+        // seals trip needs it).
+        assert!(!inner.progress.completed.contains_key("grelwood-waypoint"));
+    }
+
+    /// R-F5: implied ticks are what a later step proves. Pickups and rows the compass leads to
+    /// stay open when the player leaves without them: the campsite stash, the small ritual.
+    #[test]
+    fn skipped_pickups_stay_open() {
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_town"), enter("G1_2"), enter("G1_4")]);
+        assert!(!inner.progress.completed.contains_key("abandoned-stash"));
+        assert_eq!(inner.progress.completed["enter-grelwood"].source, "log");
+        let mut inner = playing();
+        planned_up_to(&mut inner, "G1_11", 0);
+        play(&mut inner, &[enter("G1_11"), enter("G1_12")]);
+        for id in ["hunting-grounds-waypoint", "small-ritual", "kill-crowbell"] {
+            assert!(!inner.progress.completed.contains_key(id), "{id}");
+        }
+        assert_eq!(inner.progress.completed["hunting-grounds-to-freythorn"].source, "log");
+    }
+
+    /// R5 (decision 4 of 2026-11-13): a boss quiet for 30 s is "likely" killed; it speaking
+    /// again reopens the row and the fight; a click confirms; a click on a confirmed row
+    /// reopens it.
+    #[test]
+    fn a_quiet_boss_is_probably_done() {
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_2")]);
+        let quiet = |inner: &mut Inner| {
+            inner.fight.as_mut().unwrap().last_line = std::time::Instant::now() - FIGHT_QUIET - Duration::from_secs(1);
+            assert!(inner.settle_fight());
+        };
+        let state = |inner: &Inner| {
+            let view = inner.view();
+            let row = view.steps.iter().find(|s| s.id == "kill-beira").unwrap().clone();
+            (row.state, row.source)
+        };
+        // 1. Quiet for 30 s: ticked, but only as likely.
+        let Inner { routes, progress, fight, .. } = &mut inner;
+        assert!(!hear_boss(routes, progress, fight, "Beira of the Rotten Pack", "Sleep in ice, wake in snow."));
+        assert_eq!(fight.as_ref().unwrap().step, "kill-beira");
+        quiet(&mut inner);
+        assert_eq!(state(&inner), ("done".into(), Some(LIKELY.into())));
+        assert!(inner.fight.is_none());
+        // 2. The same boss speaks again: the row opens, the fight resumes.
+        let Inner { routes, progress, fight, .. } = &mut inner;
+        assert!(hear_boss(routes, progress, fight, "Beira of the Rotten Pack", "Cold..."));
+        assert_eq!(fight.as_ref().unwrap().step, "kill-beira");
+        assert_eq!(state(&inner), ("manual".into(), None), "open (no kill line known for her)");
+        quiet(&mut inner);
+        // 3. A click confirms it: done, by hand.
+        toggle(&inner.routes.clone(), &mut inner.progress, "kill-beira").unwrap();
+        assert_eq!(state(&inner), ("done".into(), Some("manual".into())));
+        assert!(!inner.progress.dismissed.contains("kill-beira"));
+        let Inner { routes, progress, fight, .. } = &mut inner;
+        assert!(!hear_boss(routes, progress, fight, "Beira of the Rotten Pack", "Cold..."), "a confirmed kill stays");
+        assert!(fight.is_none());
+        // 4. A click on the confirmed row opens it again, as before.
+        toggle(&inner.routes.clone(), &mut inner.progress, "kill-beira").unwrap();
+        assert!(!inner.progress.completed.contains_key("kill-beira"));
+        assert!(inner.progress.dismissed.is_empty());
+        // A kill line that comes after the quiet tick makes it a logged kill.
+        let mut inner = playing();
+        play(&mut inner, &[enter("G1_7")]);
+        let Inner { routes, progress, fight, .. } = &mut inner;
+        hear_boss(routes, progress, fight, "Lachlann of Endless Lament", "You will not have her!");
+        quiet(&mut inner);
+        assert_eq!(inner.progress.completed["kill-lachlann"].source, LIKELY);
+        play(&mut inner, &[npc("Lachlann of Endless Lament", "Together... at last...")]);
+        assert_eq!(inner.progress.completed["kill-lachlann"].source, "log");
+    }
+
     #[test]
     fn the_players_death_line_is_told_from_chat() {
         assert!(is_death(&line("INFO", ": Somebody has been slain.")));
         assert!(!is_death(&line("INFO", "#Somebody: the boss has been slain.")));
         assert!(!is_death(&line("INFO", "Somebody: he has been slain.")));
         assert!(!is_death(&line("INFO", ": Somebody (Ranger) is now level 2")));
+    }
+
+    /// Writes what the panel is sent at each step of Act 1 in the planned order, one JSON
+    /// object per line (`{"name", "view"}`), to the file `BATONGA_VIEWS_OUT` names, for
+    /// rendering the panel in a browser from a real run (`previewTracker`, the browser
+    /// preview in `src/main.ts`). The character is one level under each zone, so the level
+    /// targets show where they bite. Run:
+    /// `BATONGA_VIEWS_OUT=<file> cargo test dump_act_one_views -- --ignored`.
+    #[test]
+    #[ignore = "writes a file for a render check: set BATONGA_VIEWS_OUT"]
+    fn dump_act_one_views() {
+        let Ok(out) = std::env::var("BATONGA_VIEWS_OUT") else { return };
+        let mut inner = playing();
+        let mut lines = Vec::new();
+        let mut dump = |inner: &Inner, name: String| {
+            lines.push(serde_json::json!({ "name": name, "view": inner.view() }).to_string());
+        };
+        // (zone to enter, lines spoken there afterwards)
+        let said: &[(&str, &[(&str, &str)])] = &[
+            ("G1_1", &[("Wounded Man", "Reach... Clearfell... Find the Miller..."), ("Mortimer", "Well done! Please come inside.")]),
+            ("G1_town", &[]), ("G1_2", &[]), ("G1_4", &[]), ("G1_6", &[]), ("G1_4", &[]),
+            ("G1_5", &[("Ghostly Voice", "This is our land. We stand united!")]),
+            ("G1_town", &[]), ("G1_4", &[]), ("G1_town", &[]), ("G1_6", &[]), ("G1_7", &[]), ("G1_8", &[]), ("G1_7", &[]),
+            ("G1_9", &[]),
+            ("G1_7", &[("Lachlann the Lost", "At last! It's open! Praise the First Ones!"), ("Lachlann of Endless Lament", "Together... at last...")]),
+            ("G1_11", &[]),
+            ("G1_12", &[("The King in the Mists", "This is not the end...")]),
+            ("G1_town", &[]), ("G1_11", &[]), ("G1_13_1", &[]), ("G1_13_2", &[]), ("G1_town", &[]), ("G1_13_2", &[]), ("G1_14", &[]),
+            ("G1_15", &[("The Hooded One", "We must make haste. Let us return to Clearfell to make our preparations.")]),
+            ("G1_town", &[]),
+        ];
+        for (n, (area, spoken)) in said.iter().enumerate() {
+            let zone = inner.routes.iter().find(|r| r.zone.id == *area).map_or(1, |r| r.zone.level);
+            let own = if *area == "G1_town" { inner.progress.level.unwrap_or(1) } else { zone.saturating_sub(1).max(1) };
+            note_character(&mut inner, &line("INFO", &format!(": Hero (Ranger) is now level {own}")));
+            play(&mut inner, &[line("DEBUG", &format!(r#"Generating level {zone} area "{area}" with seed 1"#))]);
+            dump(&inner, format!("{:02}-{area}", n + 1));
+            for (k, (speaker, text)) in spoken.iter().enumerate() {
+                play(&mut inner, &[npc(speaker, text)]);
+                dump(&inner, format!("{:02}-{area}-said{}", n + 1, k + 1));
+            }
+        }
+        std::fs::write(&out, lines.join("\n") + "\n").unwrap();
     }
 }

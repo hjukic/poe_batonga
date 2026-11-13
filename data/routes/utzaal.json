@@ -12,10 +12,9 @@
     {
       "id": "sacrificial-heart",
       "kind": "objective",
-      "optional": true,
       "parts": [{ "text": "Heart from Vaal Goliaths" }],
       "trigger": null,
-      "evidence": "For the Aggorat altar; it can also drop in Aggorat. No log line known. Tick by hand."
+      "evidence": "For the Aggorat altar (place-the-heart, 2 Skill Points): a route row, the altar's only source row. It can also drop in Aggorat. No log line known. Tick by hand."
     },
     {
       "id": "utzaal-side-doors",

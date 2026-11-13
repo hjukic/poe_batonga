@@ -22,9 +22,9 @@
       "id": "kill-rust-king",
       "kind": "objective",
       "screen": [{ "quest": "TreeOfSouls", "past": "Defeat the Rust King to obtain the final Rune of Power" }],
-      "parts": [{ "text": "Kill " }, { "text": "The Rust King", "style": "boss" }, { "text": "Skill Gem", "style": "reward" }],
+      "parts": [{ "text": "Kill " }, { "text": "The Rust King", "style": "boss" }],
       "trigger": null,
-      "evidence": "No kill line known. Tick by hand."
+      "evidence": "No kill line known; his fight starts at the third obelisk (obelisks-of-rust). His skill gem is not shown: the kill is on the way (decision 5, 2026-11-13)."
     },
     {
       "id": "red-vale-portal-town",

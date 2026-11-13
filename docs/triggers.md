@@ -23,9 +23,33 @@ below.
 
 The lists are in walking order. When the log ticks a step, the steps before it in the same list
 that the log cannot see are taken as done too (`"source": "implied"` in `progress.json`,
-`imply_earlier` in `tracker.rs`): "Talk to Renly" ticks when Clearfell is entered. Never implied:
-optional steps, boss kills, steps the compass leads to (they have a `navigationTarget`), and
-steps unticked by hand. Five return steps (`red-vale-portal-town`, `town-to-grelwood`,
+`imply_earlier` in `tracker.rs`): only what the later step proves, such as Una's talk in the
+Grelwood when the Red Vale is entered. Never implied: optional steps, boss kills, detours that
+return (`"returns": true`), steps no longer listed (`until`), steps unticked by hand, and what a
+player may skip and still need (2026-11-13, R-F5): steps the compass leads to ("Take the
+waypoint"), steps with a reward (Renly's gem, the campsite stash, the small ritual) and zone
+entries (the log would have shown them). Those stay open until logged or clicked; the panel
+keeps rows the app cannot tick (`tracked`) from holding the arrow.
+
+A boss fight starts when a boss of the zone speaks (a speaker carrying the row's boss name; where
+the kill row has a line trigger said by the boss, only those speakers: "Lachlann the Lost" at the
+gate starts no fight, "Lachlann of Endless Lament" does), or with the line the boss emerges on
+(the Rust King's). Two bosses of one zone heard in turn keep their own timers. A boss quiet for
+30 s is "probably done"
+(`"source": "likely"`, owner's decision of 2026-11-13): the row is ticked, a click confirms
+it ("manual"), the same boss speaking again opens it and the fight resumes, and its kill
+line, when it comes, makes it a logged kill.
+
+Each row the panel gets says whether the app can tick it by itself on this platform
+(`tracked`): a log trigger, a boss kill (its fight starts when the boss speaks) and, on
+Windows, a quest-tracker rule. Other rows tick by a click or by inference only.
+
+One log event ticks at most one row of a list: when several match, the last whose `after`
+holds (the caravan's late Trial entry ticks "Waypoint to the Trial", not the skipped early
+waypoint grab). So two zone entries into the same area in one list need an `after` on the
+later one, other than the earlier's, or the earlier would never tick
+(`no_log_event_ticks_two_steps_of_one_list`, which also covers two lists of one zone). How visits and `until` work:
+[architecture](architecture.md), "Visits". Five return steps (`red-vale-portal-town`, `town-to-grelwood`,
 `grelwood-portal-town`, `apex-portal-town`, `molten-portal-town`) had an `after` naming a step
 the log cannot tick; they now name the nearest earlier step it can.
 
@@ -45,7 +69,13 @@ Two kinds, read by `src-tauri/src/tracker.rs`:
 }
 ```
 
-- `zoneEntered`: the log's zone-generation line for `area`.
+- `zoneEntered`: the log's zone-generation line for `area`, entered from the zone whose list
+  holds the step (since 2026-11-13: "Portal to town" in Freythorn's list does not tick on a town
+  entry from Ogham Village). A town's "Waypoint to X" also ticks when X is entered another way
+  once its `after` is done (on foot through the Grelwood). Where the player came from is not
+  known (the first entry seen, or an area without a list): any list, as implied. Coming into a
+  zone from X takes its open row into X as done, implied ("Came back from X": a start in the
+  middle of an act, or X reached by waypoint).
 - `npcLine`: an NPC line, logged as `Speaker: text` in `[INFO Client N]` lines (chat starts
   with `#`, `@`, `$`, `%` or `&` and is ignored). It counts only while the player is in `area`,
   the step's own zone. `lines` lists every line that ticks the step (random and class variants,

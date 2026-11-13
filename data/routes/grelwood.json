@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "order": 50,
   "zone": { "id": "G1_4", "name": "The Grelwood", "level": 4 },
-  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas. Pickups and order from the fast route (GTD-video, Act 1), 2026-11-13",
   "steps": [
     {
       "id": "grelwood-talk-una",
@@ -21,20 +21,21 @@
       "evidence": "No log line known. Tick by hand."
     },
     {
+      "id": "kill-areagne",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_4", "label": "Areagne's hut", "tag": "witch_hut" },
+      "parts": [{ "text": "Kill " }, { "text": "Areagne", "style": "boss" }, { "text": " at the hut" }, { "text": "Support Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "A route row: her support gem is part of the fast route (GTD-video, GTD-build). No kill line known. Tick by hand. Target: the one 'witch_hut' node in all 12 layouts."
+    },
+    {
       "id": "grelwood-grim-tangle-wp",
       "kind": "objective",
+      "returns": true,
       "navigationTarget": { "area": "G1_4", "label": "The Grim Tangle", "exit": "G1_6" },
       "parts": [{ "text": "Grim Tangle WP, return" }],
       "trigger": { "type": "zoneEntered", "area": "G1_6" },
-      "evidence": "Zone-generation line for G1_6."
-    },
-    {
-      "id": "grelwood-red-vale-wp",
-      "kind": "objective",
-      "navigationTarget": { "area": "G1_4", "label": "The Red Vale", "exit": "G1_5" },
-      "parts": [{ "text": "Red Vale WP, return" }],
-      "trigger": { "type": "zoneEntered", "area": "G1_5" },
-      "evidence": "Zone-generation line for G1_5."
+      "evidence": "Zone-generation line for G1_6. A detour that returns: it ends no visit, so Areagne and the Red Vale stay listed whether it is done before or after them."
     },
     {
       "id": "kill-gerung",
@@ -46,21 +47,12 @@
       "evidence": "No kill line known. Tick by hand. Target: the one 'bossman' node (arena teleports) in all 12 layouts."
     },
     {
-      "id": "kill-areagne",
-      "kind": "objective",
-      "navigationTarget": { "area": "G1_4", "label": "Areagne's hut", "tag": "witch_hut" },
-      "optional": true,
-      "parts": [{ "text": "Kill " }, { "text": "Areagne", "style": "boss" }, { "text": " at the hut" }, { "text": "Support Gem", "style": "reward" }],
-      "trigger": null,
-      "evidence": "No kill line known. Tick by hand. Target: the one 'witch_hut' node in all 12 layouts."
-    },
-    {
       "id": "enter-red-vale",
       "kind": "objective",
       "navigationTarget": { "area": "G1_4", "label": "The Red Vale", "exit": "G1_5" },
       "parts": [{ "text": "Enter The Red Vale" }],
       "trigger": { "type": "zoneEntered", "area": "G1_5" },
-      "evidence": "Zone-generation line for G1_5. The waypoint detour above enters it first, so both tick then."
+      "evidence": "Zone-generation line for G1_5. It ends the first visit."
     },
     {
       "id": "runic-seals",

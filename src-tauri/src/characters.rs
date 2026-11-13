@@ -80,6 +80,7 @@ impl Characters {
         // Where the player was is the profile's too: a restart in a zone is no new visit.
         if let Some(kept) = kept.filter(|_| progress.current_area.is_none()) {
             progress.current_area = kept.current_area;
+            progress.area_level = kept.area_level;
             progress.shown_zone = kept.shown_zone;
             self.remember(progress);
         }
@@ -132,6 +133,7 @@ impl Characters {
         progress.log_path = old.log_path;
         progress.log_offset = old.log_offset;
         progress.current_area = old.current_area;
+        progress.area_level = old.area_level;
         progress.shown_zone = old.shown_zone;
     }
 
@@ -168,6 +170,7 @@ impl Characters {
             }
         }
         next.current_area = progress.current_area.clone();
+        next.area_level = progress.area_level;
         next.shown_zone = progress.shown_zone.clone();
         next.log_path = progress.log_path.clone();
         next.log_offset = progress.log_offset;

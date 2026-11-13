@@ -23,15 +23,31 @@ caret noise. One labelled new-character creation through first-zone entry now
 binds and persists the correct profile. Existing-character switching remains
 under live verification.
 
-## Now: zone tips (owner, 2026-11-13)
+## Now: ready for a fast league start (owner, 2026-11-13)
+
+Version 1.0 is out on 2026-12-11: that is the league start this app is for. A council reviewed
+v0.1.118 against the fastest players' guides ("so that i can levelup fast when playing") and
+found it not ready: [the review](docs/review-2026-11-13-levelling-council.md),
+[the benchmark](docs/levelling-benchmark.md). In order:
+
+1. Visits follow the player, whatever order they take.
+2. Act 1 follows the fast route: its pickups show by default, what it skips is gone.
+3. The character's level from the log, and level targets while under them.
+4. The bright arrow is always on what comes next; a quiet boss is "probably done".
+5. Town errands, boss lines and place tricks for Act 1; the schematic follows the step.
+6. **Guide text for Acts 2–4 waits for 1.0.** On release day: `npm run layouts:update`,
+   `icons:update`, `triggers:check`, then check the routes against the first 1.0 guides and
+   add the rows for Acts 5–6.
+
+## Zone tips (owner, 2026-11-13)
 
 "general guides/speedrun tips how to traverse the zones best and fastest ... gather few
 campaign guides/speedrun guides and similar layout tips and maybe create our own layout
 setups ... check the possible layouts from datamined zones ... for start focus on act 1".
 Act 1 done: a zone guide under the checklist (setting "Zone guide"): a Mobalytics-like
 schematic of the zone's usual shape from where you come in, the route, and short steps;
-community patterns checked against the layout graphs (`data/guides/act1.json`,
-`docs/act1-zone-tips.md`). Next: Acts 2-6.
+community patterns checked against the layout graphs (`data/guides/act1.json`, `act1-drawings.json`,
+`docs/act1-zone-tips.md`). Acts 2-6: after 1.0, see above.
 
 ## Parked: radar and layout recognition (owner, 2026-11-13)
 

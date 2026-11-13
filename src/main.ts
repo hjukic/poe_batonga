@@ -1,9 +1,12 @@
-import { guideFor, type ZoneGuide } from './zone-guides';
+import { guideFor, setPreviewGuide, type ZoneGuide } from './zone-guides';
+import { drawable, guideSvg } from './guide-svg';
+import { kindOf, shownHints, unmetLevelTarget, type Hint, type HintContext } from './hints';
+import { confirmedClick, twoStep } from './two-step';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import './style.css';
-import { panelMode } from './checklist';
+import { headerLevels, headingStep, litSteps, panelMode } from './checklist';
 import { recognizeScreen, learnKnownCharacters, matchKey, type OcrFrame, type KnownCharacter } from './character-screen.mjs';
 
 interface Status {
@@ -22,12 +25,19 @@ interface StepView {
   id: string; kind: string; parts: StepPart[]; optional: boolean;
   /** The compass target this step stands for, if any. */
   target: string | null;
-  state: 'done' | 'open' | 'manual' | 'note'; source: string | null;
+  state: 'done' | 'open' | 'manual' | 'note';
+  /** What ticked it: "log", "screen", "implied", "manual", or "likely" (a boss quiet for 30 s:
+   *  done but unconfirmed; a click confirms it). */
+  source: string | null;
+  /** false: the app cannot tick this row by itself here (a click or an implied tick only). */
+  tracked?: boolean;
   /** Which visit to the zone the step belongs to. */
   visit: number;
 }
 interface TrackerView {
   zone: { id: string; name: string; level: number } | null;
+  /** The character's level, from its last level-up line; null until one was seen. */
+  level?: number | null;
   currentArea: string | null;
   inZone: boolean;
   character: string | null;
@@ -95,9 +105,11 @@ const LOCKED = icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="
 const UNLOCKED = icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.75-1.4"/>');
 const GEAR = icon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>');
 const RESTART = icon('<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>');
-/** Step markers: an arrow in front of every open step, a tick when done. */
+/** Step markers: an arrow in front of an open step the app ticks by itself, a hollow ring in
+ *  front of one it cannot (a click ticks it), a tick when done. */
 const mark = (path: string) => `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="${path}"/></svg>`;
 const STEP_ARROW = mark('M1.5 6h8M6.2 2.6 9.6 6 6.2 9.4');
+const STEP_HOLLOW = mark('M9.4 6a3.4 3.4 0 1 1-6.8 0a3.4 3.4 0 1 1 6.8 0z');
 const STEP_DONE = mark('M2 6.5 4.8 9.2 10 3.2');
 const CLOSE = icon('<path d="M18 6 6 18M6 6l12 12"/>');
 
@@ -110,6 +122,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
   <section class="panel" aria-label="Campaign guide">
     <header id="drag">
       <span class="zone">${APP_NAME}</span>
+      <span class="levels" id="levels" hidden><span class="lv-area"></span><span class="lv-you"></span></span>
       <div class="header-actions">
         <button id="lock" class="icon" type="button"></button>
         <button id="restart" class="icon" type="button" title="Restart with the latest version" aria-label="Restart with the latest version">${RESTART}</button>
@@ -122,8 +135,8 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <p class="warning" id="start-error" role="alert" hidden></p>
     <div class="route" id="route"></div>
     <div class="zone-guide" id="zone-guide" hidden>
-      <div class="guide-drawing" id="guide-drawing"></div>
       <ul class="guide-general" id="guide-general"></ul>
+      <div class="guide-drawing" id="guide-drawing"></div>
     </div>
     <div class="layout-pick" id="layout-pick" hidden>
       <p class="layout-name" id="layout-name"></p>
@@ -202,11 +215,17 @@ const MAX_OPEN = 6;
  *  "quests completed" line unfolds its steps the same way, so a wrong tick can be undone. */
 let unfolded = false;
 let lastTracker: TrackerView | null = null;
+/** The rows listed now, in order (this visit's, after the optional filter): the bright arrow
+ *  is chosen among them. */
+let listedSteps: StepView[] = [];
 
 function stepRow(step: StepView) {
   const row = document.createElement(step.kind === 'objective' ? 'button' : 'div');
-  row.className = `step ${step.kind} ${step.state}${step.optional ? ' optional' : ''}`;
+  // "Probably done" (a boss quiet for 30 s): ticked, not struck out, until a click confirms it.
+  const likely = step.state === 'done' && step.source === 'likely';
+  row.className = `step ${step.kind} ${step.state}${likely ? ' likely' : ''}${step.optional ? ' optional' : ''}`;
   row.dataset.id = step.id;
+  if (step.tracked === false) row.dataset.tracked = 'false';
   if (step.target) row.dataset.target = step.target;
   if (row instanceof HTMLButtonElement) {
     row.type = 'button';
@@ -219,10 +238,10 @@ function stepRow(step: StepView) {
       });
     });
   }
-  // One row: marker, text (wraps under itself), reward or "optional" on the right.
+  // One row: marker, text (wraps under itself), reward and "optional" on the right.
   const marker = document.createElement('span');
   marker.className = 'mark';
-  if (step.kind === 'objective') marker.innerHTML = step.state === 'done' ? STEP_DONE : STEP_ARROW;
+  if (step.kind === 'objective') marker.innerHTML = step.state === 'done' ? STEP_DONE : step.tracked === false ? STEP_HOLLOW : STEP_ARROW;
   const text = document.createElement('span');
   text.className = 'text';
   const side = document.createElement('span');
@@ -233,18 +252,36 @@ function stepRow(step: StepView) {
     if (part.style) span.className = part.style;
     (part.style === 'reward' ? side : text).append(span);
   }
-  if (step.optional && !side.childElementCount) side.textContent = 'optional';
+  if (likely) {
+    side.replaceChildren(tag('done?', 'unsure'));
+  } else if (step.optional) {
+    // Optional rows say so, with their reward too (the reward is the reason for the row).
+    if (side.childElementCount) side.append(' · ');
+    side.append(tag('optional', 'opt'));
+  }
   row.append(marker, text);
   if (side.textContent) row.append(side);
-  // How to get there (the zone guide), under the row while it is open.
-  const hint = step.state !== 'done' ? guide?.hints[step.id] : undefined;
-  if (hint) {
-    const line = document.createElement('span');
-    line.className = 'hint';
-    line.textContent = hint.text;
-    row.append(line);
+  // The zone guide's lines for this row (the way, the boss, a level target, a tip), under it
+  // while it is open.
+  if (step.state !== 'done' && guide && hintContext) {
+    for (const hint of shownHints(guide.hints[step.id], hintContext)) row.append(hintLine(hint, 'span'));
   }
   return row;
+}
+
+function tag(text: string, className: string) {
+  const span = document.createElement('span');
+  span.className = className;
+  span.textContent = text;
+  return span;
+}
+
+/** One guide line, in its kind's look. */
+function hintLine(hint: Hint, tag: 'span' | 'li') {
+  const line = document.createElement(tag);
+  line.className = `hint kind-${kindOf(hint)}`;
+  line.textContent = hint.text;
+  return line;
 }
 
 /** A muted line that stands for folded steps; a click (unlocked) unfolds or folds the list. */
@@ -266,23 +303,47 @@ function summaryRow(text: string, done: boolean, onClick = () => { unfolded = !u
   return row;
 }
 
-/** The guide of the zone on show (`zone-guides.ts`): its schematic, a few lines for the
- *  whole zone, and the hints `stepRow` puts under the checklist rows. Null when switched off. */
+/** The guide of the zone on show (`zone-guides.ts`): the zone's own lines, its schematic, and
+ *  the lines `stepRow` puts under the checklist rows. Null when switched off. */
 let guide: ZoneGuide | null = null;
-let shownGuide: string | null = null;
+/** What the guide's conditions are evaluated against (hints.ts). */
+let hintContext: HintContext | null = null;
 function renderGuide(view: TrackerView) {
   const zone = view.inZone && zoneGuide.checked ? view.zone?.id ?? null : null;
   guide = guideFor(zone);
+  hintContext = { level: view.level ?? null, steps: view.steps };
   $('#zone-guide').hidden = !guide;
-  if (!guide || zone === shownGuide) return;
-  shownGuide = zone;
+  if (!guide) return;
+  // The zone's lines (in town: the errands) follow the level and the steps on every update.
+  $('#guide-general').replaceChildren(...shownHints(guide.general, hintContext).map((hint) => hintLine(hint, 'li')));
+}
+
+/** The markup the schematic was last drawn with: an unchanged drawing is not drawn again. */
+let drawnGuide = '';
+/**
+ * The schematic follows the rows: the places and ways of the rows to do now (`litSteps`) lit,
+ * the rest dimmed, places of rows not listed in the zone (optional content off) left out. None
+ * under a finished zone, or when nothing in it is lit (`drawable`).
+ */
+function renderDrawing(heading: string | null) {
+  const view = lastTracker;
+  const box = $('#guide-drawing');
+  const drawing = guide?.drawing ?? null;
+  if (!view || !drawing || panelMode(view, optionalContent.checked) === 'completed') {
+    box.hidden = true;
+    return;
+  }
+  const listed = new Set(view.steps.filter((step) => optionalContent.checked || !step.optional).map((step) => step.id));
+  const current = new Set(listedSteps.map((step) => step.id));
+  const lit = new Set(litSteps(listedSteps, heading));
+  const state = { shown: (id: string) => listed.has(id), current: (id: string) => current.has(id), lit: (id: string) => lit.has(id) };
+  box.hidden = !drawable(drawing, state);
   // Our own data (data/guides): no outside text reaches this markup.
-  $('#guide-drawing').innerHTML = guide.svg;
-  $('#guide-general').replaceChildren(...guide.general.map((hint) => {
-    const item = document.createElement('li');
-    item.textContent = hint.text;
-    return item;
-  }));
+  const markup = box.hidden ? '' : guideSvg(drawing, state);
+  if (markup !== drawnGuide) {
+    drawnGuide = markup;
+    box.innerHTML = markup;
+  }
 }
 
 function renderTracker(view: TrackerView) {
@@ -293,10 +354,6 @@ function renderTracker(view: TrackerView) {
   lastTracker = view;
   document.body.dataset.inZone = String(view.inZone);
   showMessage('#log-warning', view.log.connected ? null : view.log.message);
-  // A long name (a town's) takes the room of the level.
-  const zone = $('.zone');
-  zone.title = view.inZone && view.zone ? `${view.zone.name} · Lv ${view.zone.level}` : APP_NAME;
-  zone.textContent = view.inZone && view.zone ? (view.zone.name.length > 16 ? view.zone.name : zone.title) : APP_NAME;
   renderCharacter(view);
   renderGuide(view);
   const rows: HTMLElement[] = [];
@@ -304,11 +361,20 @@ function renderTracker(view: TrackerView) {
   // Speedrun (the default): optional steps are left out of the list.
   const wanted = optionalContent.checked ? view.steps : view.steps.filter((step) => !step.optional);
   const mode = panelMode(view, optionalContent.checked);
+  // Only this visit's steps (owner, 2026-11-13: the count of other visits' steps is noise).
+  const steps = wanted.filter((step) => step.visit === view.visit);
+  const target = mode === 'checklist' && guide && hintContext
+    ? unmetLevelTarget(steps.filter((step) => step.state !== 'done').map((step) => guide?.hints[step.id]), guide.general, hintContext)
+    : null;
+  renderHeader(view, target);
+  // A finished zone: its rows fold into one line, its guide goes.
+  if (mode === 'completed') $('#zone-guide').hidden = true;
   const message = (mode === 'choose-character' || mode === 'idle') ? (view.identityNote || null)
     : mode === 'unknown-zone' ? 'No campaign checklist for this area.' : null;
   if (mode === 'completed' && !unfolded) {
     rows.push(summaryRow(COMPLETED_MESSAGE, true, () => { unfolded = true; }));
   }
+  listedSteps = mode === 'checklist' || (mode === 'completed' && unfolded) ? steps : [];
   if (mode !== 'checklist' && !(mode === 'completed' && unfolded)) {
     if (message) {
       const line = document.createElement('p');
@@ -318,11 +384,10 @@ function renderTracker(view: TrackerView) {
       rows.push(line);
     }
     $('#route').replaceChildren(...rows);
+    markHeading();
     syncStepControls();
     return;
   }
-  // Only this visit's steps (owner, 2026-11-13: the count of other visits' steps is noise).
-  const steps = wanted.filter((step) => step.visit === view.visit);
   if (steps.length <= MAX_ROWS || unfolded) {
     rows.push(...steps.map(stepRow));
     if (unfolded) rows.push(summaryRow('Show less', false));
@@ -331,6 +396,9 @@ function renderTracker(view: TrackerView) {
     const objectives = steps.filter((step) => step.kind === 'objective');
     const open = objectives.filter((step) => step.state !== 'done');
     const shown = new Set(open.slice(0, MAX_OPEN));
+    // The row with the bright arrow is never folded away.
+    const heading = open.find((step) => step.id === headingStep(steps, guideTarget));
+    if (heading) shown.add(heading);
     const done = objectives.length - open.length;
     if (done) rows.push(summaryRow(`${done} done`, true));
     steps.forEach((step, index) => {
@@ -344,18 +412,51 @@ function renderTracker(view: TrackerView) {
   syncStepControls();
 }
 
+/**
+ * The header: the zone's name, its area level and the character's level ("area 4 · you 6"),
+ * named so neither is taken for the other. A long name gives way (ellipsis), the levels never.
+ * The character's level is amber only while a level target on show is not met.
+ */
+function renderHeader(view: TrackerView, target: number | null) {
+  const zone = $('.zone');
+  const inZone = view.inZone && view.zone !== null;
+  zone.textContent = inZone ? view.zone!.name : APP_NAME;
+  zone.title = inZone ? view.zone!.name : APP_NAME;
+  const levels = $('#levels');
+  levels.hidden = !inZone;
+  if (inZone) {
+    // A town (G1_town …) has no monsters: its level next to the character's reads as a gap.
+    const shown = headerLevels(view.zone!.level, view.level ?? null, target, view.zone!.id.endsWith('_town'));
+    const area = $('.lv-area');
+    area.textContent = shown.area ?? '';
+    area.hidden = shown.area === null;
+    levels.hidden = shown.area === null && shown.you === null;
+    const you = $('.lv-you');
+    you.textContent = shown.you ?? '';
+    you.hidden = shown.you === null;
+    you.classList.toggle('under', shown.under);
+  }
+  // Measured on one line: a name that does not fit wraps onto two.
+  zone.classList.remove('wrap');
+  zone.classList.toggle('wrap', zone.scrollWidth > zone.clientWidth);
+}
+
 /** Where the compass points, as a step's target label; null when it has no target. */
 let guideTarget: string | null = null;
 /**
- * The bright arrow marks the step to do now: the one the compass points to, else
- * the first open step that is not optional.
+ * The bright arrow marks the step to do now (`headingStep`): the first open required row the
+ * app ticks by itself, so a row only a click can tick does not hold it once done. Open rows
+ * the app cannot tick keep a hollow ring, unless the arrow falls back to one of them.
  */
 function markHeading() {
-  const open = Array.from(document.querySelectorAll<HTMLElement>('#route .step.objective:not(.done)'));
-  const heading = open.find((row) => guideTarget !== null && row.dataset.target === guideTarget)
-    ?? open.find((row) => !row.classList.contains('optional'))
-    ?? open[0];
-  for (const row of open) row.classList.toggle('heading', row === heading);
+  const heading = headingStep(listedSteps, guideTarget);
+  for (const row of Array.from(document.querySelectorAll<HTMLElement>('#route .step.objective'))) {
+    const isHeading = row.dataset.id === heading;
+    row.classList.toggle('heading', isHeading);
+    if (row.classList.contains('done')) continue;
+    row.querySelector('.mark')!.innerHTML = isHeading || row.dataset.tracked !== 'false' ? STEP_ARROW : STEP_HOLLOW;
+  }
+  renderDrawing(heading);
 }
 function setGuideTarget(target: string | null) {
   if (target === guideTarget) return;
@@ -534,6 +635,7 @@ function drawPreview(view: LayoutView | null, force = false) {
 function setSettingsOpen(open: boolean) {
   const wasOpen = !settings.hidden;
   settings.hidden = !open;
+  if (!open) resetConfirm.disarm();
   settingsToggle.setAttribute('aria-expanded', String(open));
   syncInput();
   if (open || !wasOpen) return;
@@ -758,9 +860,17 @@ restartButton.addEventListener('click', () => {
   void invoke('restart_latest').catch((error) => renderRestart('', String(error)));
 });
 $('#exit').addEventListener('click', () => { if (status?.interactive) void invoke('quit').catch(console.error); });
-$('#reset-progress').addEventListener('click', () => {
-  void invoke<TrackerView>('reset_progress').then(renderTracker).catch((error) => showMessage('#error', String(error)));
+// Reset progress wipes the character's run: the first click arms it, a deliberate second click
+// resets (a double click does not). It disarms after a few seconds or when the menu closes.
+const resetButton = $<HTMLButtonElement>('#reset-progress');
+const RESET_LABEL = resetButton.textContent ?? 'Reset progress';
+const resetConfirm = twoStep(4000, (armed) => {
+  resetButton.textContent = armed ? 'Click again to reset' : RESET_LABEL;
+  resetButton.classList.toggle('armed', armed);
 });
+resetButton.addEventListener('click', confirmedClick(resetConfirm, () => {
+  void invoke<TrackerView>('reset_progress').then(renderTracker).catch((error) => showMessage('#error', String(error)));
+}));
 
 const characterInput = $<HTMLInputElement>('#character-name');
 let shownCharacter: string | null = null;
@@ -799,30 +909,30 @@ $('#character-form').addEventListener('submit', (event) => {
   }).catch((error) => showMessage('#error', String(error)));
 });
 
-// Shown only in a plain browser (npm run dev without Tauri), where no log can be read.
+// Shown only in a plain browser (npm run dev without Tauri), where no log can be read: the
+// tracker's own view of the Grelwood's first visit in a replayed Act 1 run (dump_act_one_views).
 const browserPreview: TrackerView = {
-  zone: { id: 'G1_4', name: 'The Grelwood', level: 4 },
-  currentArea: 'G1_4',
+  zone: {"id": "G1_4", "level": 4, "name": "The Grelwood"},
+  level: 3,
+  currentArea: "G1_4",
   inZone: true,
-  character: 'Preview',
+  character: "Hero",
   recognizedCharacter: null,
-  characters: ['Preview'],
+  characters: ["Hero"],
   legacyAvailable: false,
-  identityNote: 'Tracking: Preview',
-  visit: 1,
-  log: { connected: true, path: null, message: '' },
+  identityNote: "",
+  visit: 0,
+  log: {"connected": true, "message": "", "path": null},
   steps: [
-    {"id": "grelwood-talk-una", "kind": "objective", "parts": [{"text": "Find and talk to "}, {"text": "Una", "style": "npc"}], "optional": false, "target": null, "state": "done", "source": "log", "visit": 0},
-    {"id": "grelwood-waypoint", "kind": "objective", "parts": [{"text": "Take the waypoint"}], "optional": false, "target": null, "state": "done", "source": "log", "visit": 0},
-    {"id": "grelwood-grim-tangle-wp", "kind": "objective", "parts": [{"text": "Grim Tangle WP, return"}], "optional": false, "target": "The Grim Tangle", "state": "done", "source": "log", "visit": 0},
-    {"id": "grelwood-red-vale-wp", "kind": "objective", "parts": [{"text": "Red Vale WP, return"}], "optional": false, "target": "The Red Vale", "state": "open", "source": null, "visit": 1},
-    {"id": "kill-gerung", "kind": "objective", "parts": [{"text": "Kill "}, {"text": "Gerung", "style": "boss"}, {"text": "Skill Gem", "style": "reward"}], "optional": true, "target": "Gerung", "state": "manual", "source": null, "visit": 2},
-    {"id": "kill-areagne", "kind": "objective", "parts": [{"text": "Kill "}, {"text": "Areagne", "style": "boss"}, {"text": " at the hut"}, {"text": "Support Gem", "style": "reward"}], "optional": true, "target": "Areagne's hut", "state": "manual", "source": null, "visit": 2},
-    {"id": "directions-grelwood", "kind": "note", "parts": [{"text": "Go upstream along the river to The Red Vale", "style": "direction"}], "optional": false, "target": null, "state": "note", "source": null, "visit": 2},
-    {"id": "enter-red-vale", "kind": "objective", "parts": [{"text": "Enter The Red Vale"}], "optional": false, "target": "The Red Vale", "state": "open", "source": null, "visit": 2},
-    {"id": "runic-seals", "kind": "objective", "parts": [{"text": "Activate 3 Runic Seals"}], "optional": false, "target": null, "state": "manual", "source": null, "visit": 3},
-    {"id": "grelwood-una-seals", "kind": "objective", "parts": [{"text": "Talk to "}, {"text": "Una", "style": "npc"}], "optional": false, "target": null, "state": "manual", "source": null, "visit": 3},
-    {"id": "grelwood-portal-town", "kind": "objective", "parts": [{"text": "Portal to town"}], "optional": false, "target": null, "state": "manual", "source": null, "visit": 3},
+    {"id": "grelwood-talk-una", "kind": "objective", "optional": false, "parts": [{"text": "Find and talk to "}, {"style": "npc", "text": "Una"}], "source": null, "state": "manual", "target": null, "tracked": false, "visit": 0},
+    {"id": "grelwood-waypoint", "kind": "objective", "optional": false, "parts": [{"text": "Take the waypoint"}], "source": null, "state": "manual", "target": "Waypoint", "tracked": false, "visit": 0},
+    {"id": "kill-areagne", "kind": "objective", "optional": false, "parts": [{"text": "Kill "}, {"style": "boss", "text": "Areagne"}, {"text": " at the hut"}, {"style": "reward", "text": "Support Gem"}], "source": null, "state": "manual", "target": "Areagne's hut", "tracked": true, "visit": 0},
+    {"id": "grelwood-grim-tangle-wp", "kind": "objective", "optional": false, "parts": [{"text": "Grim Tangle WP, return"}], "source": null, "state": "open", "target": "The Grim Tangle", "tracked": true, "visit": 0},
+    {"id": "kill-gerung", "kind": "objective", "optional": true, "parts": [{"text": "Kill "}, {"style": "boss", "text": "Gerung"}, {"style": "reward", "text": "Skill Gem"}], "source": null, "state": "manual", "target": "Gerung", "tracked": true, "visit": 0},
+    {"id": "enter-red-vale", "kind": "objective", "optional": false, "parts": [{"text": "Enter The Red Vale"}], "source": null, "state": "open", "target": "The Red Vale", "tracked": true, "visit": 0},
+    {"id": "runic-seals", "kind": "objective", "optional": false, "parts": [{"text": "Activate 3 Runic Seals"}], "source": null, "state": "manual", "target": null, "tracked": false, "visit": 1},
+    {"id": "grelwood-una-seals", "kind": "objective", "optional": false, "parts": [{"text": "Talk to "}, {"style": "npc", "text": "Una"}], "source": null, "state": "manual", "target": null, "tracked": false, "visit": 1},
+    {"id": "grelwood-portal-town", "kind": "objective", "optional": false, "parts": [{"text": "Portal to town"}], "source": null, "state": "open", "target": null, "tracked": true, "visit": 1},
   ],
 };
 
@@ -837,8 +947,18 @@ async function start() {
   if (!isTauri()) {
     render({ visible: true, interactive: true, toggleShortcut: 'Ctrl+Space', shortcutError: null, lastError: null, layerShell: false });
     renderTracker(browserPreview);
-    // A real layout of Clearfell (ClearFell_W_E_N), to see the drawing in a browser.
-    renderPicture(JSON.parse('{"known":true,"id":"ClearFell_W_E_N","share":0.93,"sure":true,"candidates":1,"paths":[[[-7481,-16101],[-81,-1090]],[[13466,-21338],[-81,-1090]],[[15710,-23582],[13466,-21338]],[[-14588,-17971],[-17581,-23956]],[[-6359,-32185],[-10848,-21712]],[[-3367,-26949],[-10848,-21712]],[[-14588,-33682],[-19825,-26200],[-17581,-23956]],[[-6359,-32185],[-1496,-34056]],[[-1496,-34056],[2992,-38544]],[[17337,-17597],[13466,-21338]],[[-6359,-32185],[-10100,-35926]],[[-5611,-38170],[-1496,-34056]],[[-10100,-35926],[-14588,-33682]],[[-20947,-21338],[-17581,-23956]],[[-10100,-35926],[-5611,-38170]],[[-10848,-21712],[-7481,-16101]],[[5611,-22460],[-81,-1090]],[[-6359,-32185],[-3367,-26949]],[[11222,-31063],[15710,-23582]],[[-10848,-21712],[-14588,-17971]],[[5611,-22460],[-7481,-16101]],[[2992,-38544],[11222,-31063]],[[11222,-31063],[-4489,-21338]]],"exits":[["Clearfell Encampment",[-81,-1090]],["The Grelwood",[-14588,-33682]],["Mud Burrow",[11222,-31063]]],"player":[-14588,-33682],"places":[["bridge",[-10848,-21712]],["bridge",[-6359,-32185]],["boss",[-17581,-23956]],["campsite",[-3367,-26949]]]}') as LayoutPicture);
+    // The radar is parked (as in the app). A script or a design check can show any state:
+    // `previewTracker(view)` with a TrackerView, `previewStatus(status)` for locked/unlocked.
+    document.body.dataset.radar = 'false';
+    // `previewGuide(zone, { hints, general })` lays sample guide lines over the zone's file.
+    Object.assign(window, {
+      previewTracker: renderTracker,
+      previewStatus: render,
+      previewGuide: (zone: string, sample: Parameters<typeof setPreviewGuide>[1]) => {
+        setPreviewGuide(zone, sample);
+        if (lastTracker) renderTracker(lastTracker);
+      },
+    });
     return;
   }
   // Each startup call on its own: one that fails is named in the panel, the others still

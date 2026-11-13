@@ -3,9 +3,9 @@
 The panel shows how to cross the zone you are in: under each open checklist row a short line
 on how to get there (in the direction colour), and under the list a schematic of the zone's
 usual shape drawn from where you come in (the triangle), with the route, places and clues,
-plus a line or two for the whole zone (`data/guides/act1.json`: `hints` by step id,
-`general`, `drawing`; drawn by `src/guide-svg.ts`, shown by `src/zone-guides.ts`; setting
-"Zone guide"). Hover a line for its sources. The schematics follow the Mobalytics layout
+plus a line or two for the whole zone (`data/guides/act1.json`: `hints` by step id and
+`general`; `data/guides/act1-drawings.json`: the schematics, drawn by `src/guide-svg.ts`; shown by `src/zone-guides.ts`; setting
+"Zone guide"). Each line's sources stay in the file (`src`), not in the panel. The schematics follow the Mobalytics layout
 guide's idea: one general pattern per zone, not one picture per layout; the game turns
 zones, the pattern stays. The Act 1 routes' own direction notes were folded into the hints
 (owner, 2026-11-13: "if i have those 1.2.3 comments why do i need the blue ones under kill
@@ -14,20 +14,65 @@ layout recognition were parked; Act 1 only for now.
 
 ## How hints are written (owner, 2026-11-13)
 
-For a league start, levelling fast: "very concise and straight to the point".
+For a league start, levelling fast: "very concise and straight to the point". A line is
+read in a second, mid-run: a few words, the one thing that matters.
 
 - One short line under the row it is about: under "Kill Beira" "Away from town, far
-  side.", under "Enter The Grelwood" "Far side, past the bridge."
-- No numbers in the panel (owner, 2026-11-13: "we do not need % on the text ... its a
-  noise"): how often a pattern holds is kept in the table below, not in the hint.
-- No rewards for what you do anyway ("Kill Beira", not "+10% cold res").
+  side.", under "Enter The Grelwood" "Far side, past the bridge." At most 46 characters: what fits on one line of the panel.
+- No percentages and no "N of M" counts (owner, 2026-11-13: "we do not need % on the
+  text ... its a noise"): how often a pattern holds is kept in the table below, not in
+  the hint. Digits only on level lines ("Level 7 first.") and town errands.
+- No rewards for what you do anyway ("Kill Beira", not "+10% cold res"). What a place
+  gives may be said where it is the point of the line (Areagne's cauldron, the Red Vale's
+  weapon racks).
 - Side content is an optional row of the checklist; its reason stays on the row (the
   reward on the right), the hint says only where it is.
+- No lists, no numbered tips, no tooltips on rows or hints.
+- Build-neutral: where to stand, what to dodge, what the place gives; no skill or gem
+  advice (the fastest guide plays a grenade Mercenary; its gem moves stay out).
+- Fewer, better lines: a boss gets a line only where one move saves a death; most get
+  none.
+
+`scripts/guides.test.mjs` checks the mechanical part of these rules, that every key and
+condition names a step of the zone's route file, the level targets, and the town errands.
+
+## Kinds and conditions
+
+A hint is `{text, src}` or a list of them under a step id; `general` lines are for the whole
+zone, and in town they are the errands. Optional fields:
+
+| Field | Meaning |
+|---|---|
+| `kind` | `way` (default: how to get there), `boss` (how to fight it; read before the fight, the panel hides during it), `level` (a level target; reads "Level N first."), `tip` (a time saver, what the place gives, a town errand) |
+| `below` | only while the character's level is under it (unknown level: shown); every level line has one |
+| `from` | only once the character's level is at least this (unknown level: hidden) |
+| `after` | only once that step of this zone is done |
+| `until` | only until that step of this zone is done |
+
+A level line comes first under its row. Town errands are pinned to a visit by the leaving
+steps (zone entries the log ticks), so a visit never shows more than two, at any level:
+
+| Visit (contract 3) | Errands | Gate |
+|---|---|---|
+| 1, first arrival | boots with movement speed; damage gloves | until the Grim Tangle waypoint |
+| 2, from the Red Vale | the same, and a better weapon if sold | after Clearfell, until the Grim Tangle waypoint |
+| 3, from the seals | the same two | as above |
+| 4, from Freythorn | "Level 10:" the next weapon base; greater flasks from Una if needed | shown under level 10 too (the line names the level), until the Hunting Grounds waypoint |
+| 5, from Ogham Village | a cold-resistance ring for Geonor | until the Ogham Village waypoint |
+| 6, after Geonor | none (grand flasks and the next boots come at 16, after Act 1's vendors) | |
+
+Level targets (gtd): 5 leaving the Grim Tangle, 7 before the Mausoleum (Draven), 8 before
+Freythorn, 13 before Ogham Manor, 14 before Geonor; 10 is the town's weapon base errand.
 
 ## Sources
 
 | Key | Source | Date / version |
 |---|---|---|
+| gtd | GuyThatDies, *I Spent One Month Making This Campaign Guide* (YouTube `UdIsZHbhXOY`): the fastest route, zone by zone; level targets, the Miller's corner, the Red Vale's weapon racks, the ring left, per-trip errands. Read through the council's benchmark summary. | 2026-04-23, 0.5 |
+| maxroll-ls | ZiggyD, *The Comprehensive League Start Leveling Guide* (Maxroll): gear and flask checkpoints by level (medium flasks from Areagne's cauldron, greater at 10 from Una, a cold-resistance ring for the Count). | 0.5.5, updated 2026-09-08 |
+| maxroll-secrets | ZiggyD, *Act 1 Campaign Secrets Guide* (Maxroll): where each secret is (sarcophagus, workshop chest, gallows, Candlemass's psalm, Forgotten Riches). | 0.3.0, updated 2025-08-27 |
+| domistae | Domistae `poe2-leveling`, `poe2_act1_guide.html` at `f682e2b`: the route files' source; its boss notes (Crowbell's slam, the King in the Mists' curses). | 0.5.5 |
+| poevault | poe-vault.com, *Act 1 Boss Guide*: each boss's attacks and phases (Asinia's bone cage, Geonor's frost sigils). | no date or version; read 2026-11-13 |
 | codex | Mobalytics, *Campaign Layout Guide: Act 1* (Lolcohol; Campaign Codex: Haddoq, Guitaraholic, CrimsonCasts, Angormus). Generalised patterns per zone with confidence levels; 30–40 instances per zone observed. | updated 2026-05-23; warns that 0.5 reworked some zones |
 | poe2way | poe2way.com act guide, Act 1: per-chapter cards; environmental clues tagged 0.5.0. | ~2026-05 |
 | maxroll | Maxroll, *Path of Exile 2 Campaign Guide*: zone order, waypoints, what is optional. | 2026-06-02 |
@@ -94,6 +139,17 @@ in v0.1.107. What the overlay showed went into them: the Brambleghast next to th
 exit, Una's lute in front of the Farmlands entrance, Lachlann's arena behind you as you come
 into the Cemetery.
 
+## Not confirmed for 0.5.5 (check in 1.0)
+
+- Boss lines from poevault (Asinia's bone cage, Geonor's frost sigils, the King in the Mists'
+  two curses): the page gives no version; the moves are old ones and may have changed.
+- Where-lines from maxroll-secrets (0.3.0): the workshop chest, the gallows by a checkpoint,
+  Candlemass's psalm, Forgotten Riches' pillar switch.
+- The Miller's far corner and the Red Vale's weapon racks: gtd (0.5), read only through the
+  benchmark's summary, not the video.
+- Left without a way line: the Grim Tangle waypoint grab, the Tomb's Haunted Treasure and the
+  Farmlands' crop circle (no source says where they are).
+
 ## Next
 
-- Acts 2–6 the same way.
+- Acts 2–6 the same way, after 1.0 (11 December).

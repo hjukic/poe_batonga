@@ -7,9 +7,9 @@
     {
       "id": "fallen-dekhara",
       "kind": "objective",
-      "parts": [{ "text": "Fallen Dekhara (tower)" }, { "text": "2 Skill Points", "style": "reward" }],
+      "parts": [{ "text": "Fallen Dekhara's letter (tower)" }],
       "trigger": null,
-      "evidence": "No log line known. Tick by hand."
+      "evidence": "Lailuma's body and the letter for Shambrin (FindTheSuicideNote). The 2 points come when the letter is returned (deliver-lihl-lima-letter). No log line known. Tick by hand."
     },
     {
       "id": "kill-vultures",

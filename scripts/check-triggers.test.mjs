@@ -178,7 +178,8 @@ test('every npcLine trigger in data/routes is bound to its zone, names its rows 
       }
     }
   }
-  assert.ok(count >= 22, `${count} npcLine triggers`);
+  // 21 since the fast route dropped the town talk after Lachlann's ring (2026-11-13).
+  assert.ok(count >= 21, `${count} npcLine triggers`);
 });
 
 test('the triggers match the game tables in TRIGGER_TABLES', { skip: !process.env.TRIGGER_TABLES && 'TRIGGER_TABLES not set' }, () => {

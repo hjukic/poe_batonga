@@ -1,0 +1,2190 @@
+{
+ "act": 1,
+ "about": "The schematic of each Act 1 zone: its usual shape drawn from where you come in (at the triangle), one way per place, the places and the clues. A mark, way or clue names the checklist rows it stands for (\"step\" or \"steps\": step ids of the zone's route file); the panel lights those of the rows to do now, dims the rest and leaves out places whose rows are not listed. \"arrow\": false is a stretch shared by several ways. Drawn by src/guide-svg.ts; the hints that go with it are in act1.json.",
+ "zones": {
+  "G1_1": {
+   "shape": [
+    [
+     [
+      50,
+      62
+     ],
+     [
+      43,
+      47
+     ],
+     [
+      57,
+      35
+     ],
+     [
+      45,
+      22
+     ],
+     [
+      52,
+      6
+     ]
+    ]
+   ],
+   "clues": [
+    {
+     "points": [
+      [
+       58,
+       62
+      ],
+      [
+       51,
+       47
+      ],
+      [
+       64,
+       35
+      ],
+      [
+       53,
+       22
+      ],
+      [
+       60,
+       8
+      ]
+     ],
+     "label": "river",
+     "at": [
+      70,
+      46
+     ],
+     "steps": [
+      "kill-bloated-miller",
+      "enter-clearfell-encampment"
+     ]
+    }
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       50,
+       57
+      ],
+      [
+       44,
+       47
+      ],
+      [
+       56,
+       35
+      ],
+      [
+       46,
+       23
+      ],
+      [
+       50,
+       17
+      ]
+     ],
+     "steps": [
+      "kill-bloated-miller",
+      "enter-clearfell-encampment"
+     ]
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      50,
+      60
+     ],
+     "kind": "in",
+     "label": "You start",
+     "below": true
+    },
+    {
+     "at": [
+      37,
+      38
+     ],
+     "kind": "reward",
+     "label": "Chest (gem)",
+     "anchor": "end"
+    },
+    {
+     "at": [
+      51,
+      14
+     ],
+     "kind": "boss",
+     "label": "Bloated Miller",
+     "anchor": "start",
+     "labelAt": [
+      54.5,
+      15.3
+     ],
+     "step": "kill-bloated-miller"
+    },
+    {
+     "at": [
+      52,
+      6
+     ],
+     "kind": "exit",
+     "label": "Encampment",
+     "anchor": "start",
+     "labelAt": [
+      55.5,
+      7.3
+     ],
+     "step": "enter-clearfell-encampment"
+    }
+   ]
+  },
+  "G1_2": {
+   "shape": [
+    [
+     [
+      50,
+      62
+     ],
+     [
+      50,
+      12
+     ]
+    ],
+    [
+     [
+      50,
+      46
+     ],
+     [
+      20,
+      42
+     ]
+    ],
+    [
+     [
+      50,
+      46
+     ],
+     [
+      80,
+      42
+     ]
+    ],
+    [
+     [
+      50,
+      24
+     ],
+     [
+      28,
+      14
+     ]
+    ],
+    [
+     [
+      50,
+      24
+     ],
+     [
+      74,
+      10
+     ]
+    ]
+   ],
+   "clues": [
+    {
+     "points": [
+      [
+       58,
+       22
+      ],
+      [
+       64,
+       15
+      ]
+     ],
+     "label": "bridge",
+     "at": [
+      67,
+      23
+     ],
+     "step": "enter-grelwood"
+    }
+   ],
+   "alt": [
+    {
+     "points": [
+      [
+       48,
+       46
+      ],
+      [
+       26,
+       42.5
+      ]
+     ],
+     "step": "enter-mud-burrow"
+    }
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       52,
+       46
+      ],
+      [
+       74,
+       42.5
+      ]
+     ],
+     "step": "abandoned-stash"
+    },
+    {
+     "points": [
+      [
+       50,
+       57
+      ],
+      [
+       50,
+       25
+      ],
+      [
+       33,
+       16
+      ]
+     ],
+     "step": "kill-beira"
+    },
+    {
+     "points": [
+      [
+       35,
+       18
+      ],
+      [
+       50,
+       26
+      ],
+      [
+       69,
+       13
+      ]
+     ],
+     "step": "enter-grelwood"
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      50,
+      60
+     ],
+     "kind": "in",
+     "label": "From town",
+     "below": true
+    },
+    {
+     "at": [
+      20,
+      42
+     ],
+     "kind": "wp",
+     "label": "WP + Mud Burrow",
+     "below": true,
+     "anchor": "start",
+     "step": "enter-mud-burrow"
+    },
+    {
+     "at": [
+      80,
+      42
+     ],
+     "kind": "reward",
+     "label": "Campsite",
+     "below": true,
+     "anchor": "end",
+     "step": "abandoned-stash"
+    },
+    {
+     "at": [
+      28,
+      14
+     ],
+     "kind": "boss",
+     "label": "Beira",
+     "anchor": "middle",
+     "step": "kill-beira"
+    },
+    {
+     "at": [
+      74,
+      10
+     ],
+     "kind": "exit",
+     "label": "The Grelwood",
+     "anchor": "middle",
+     "step": "enter-grelwood"
+    }
+   ]
+  },
+  "G1_3": {
+   "shape": [
+    [
+     [
+      50,
+      62
+     ],
+     [
+      28,
+      50
+     ],
+     [
+      68,
+      40
+     ],
+     [
+      32,
+      28
+     ],
+     [
+      62,
+      17
+     ],
+     [
+      50,
+      9
+     ]
+    ]
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       49,
+       57
+      ],
+      [
+       31,
+       50
+      ],
+      [
+       65,
+       40
+      ],
+      [
+       35,
+       28
+      ],
+      [
+       59,
+       18
+      ],
+      [
+       51,
+       12
+      ]
+     ],
+     "step": "kill-devourer"
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      50,
+      60
+     ],
+     "kind": "in",
+     "label": "From Clearfell",
+     "below": true
+    },
+    {
+     "at": [
+      50,
+      9
+     ],
+     "kind": "boss",
+     "label": "The Devourer",
+     "anchor": "start",
+     "step": "kill-devourer"
+    }
+   ]
+  },
+  "G1_4": {
+   "shape": [
+    [
+     [
+      50,
+      60
+     ],
+     [
+      18,
+      36
+     ],
+     [
+      50,
+      14
+     ],
+     [
+      82,
+      36
+     ],
+     [
+      50,
+      60
+     ]
+    ],
+    [
+     [
+      50,
+      14
+     ],
+     [
+      52,
+      6
+     ]
+    ]
+   ],
+   "clues": [
+    {
+     "points": [
+      [
+       62,
+       60
+      ],
+      [
+       74,
+       44
+      ],
+      [
+       64,
+       26
+      ],
+      [
+       55,
+       10
+      ]
+     ],
+     "label": "river",
+     "at": [
+      80,
+      52
+     ],
+     "step": "enter-red-vale"
+    },
+    {
+     "points": [
+      [
+       46,
+       52
+      ],
+      [
+       26,
+       40
+      ]
+     ],
+     "label": "glowing roots",
+     "at": [
+      20,
+      49
+     ],
+     "step": "grelwood-waypoint"
+    },
+    {
+     "points": [
+      [
+       54,
+       52
+      ],
+      [
+       76,
+       40
+      ]
+     ],
+     "label": "mushrooms",
+     "at": [
+      72,
+      54
+     ],
+     "step": "grelwood-grim-tangle-wp"
+    }
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       48,
+       56
+      ],
+      [
+       21,
+       37
+      ]
+     ],
+     "step": "grelwood-waypoint"
+    },
+    {
+     "points": [
+      [
+       50,
+       56
+      ],
+      [
+       50,
+       36
+      ]
+     ],
+     "step": "kill-areagne"
+    },
+    {
+     "points": [
+      [
+       52,
+       56
+      ],
+      [
+       79,
+       37
+      ]
+     ],
+     "step": "grelwood-grim-tangle-wp"
+    },
+    {
+     "points": [
+      [
+       51,
+       56
+      ],
+      [
+       60,
+       34
+      ],
+      [
+       53,
+       10
+      ]
+     ],
+     "step": "enter-red-vale"
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      50,
+      60
+     ],
+     "kind": "in",
+     "label": "From Clearfell",
+     "below": true,
+     "steps": [
+      "grelwood-talk-una",
+      "grelwood-waypoint",
+      "kill-areagne",
+      "grelwood-grim-tangle-wp",
+      "kill-gerung",
+      "enter-red-vale"
+     ]
+    },
+    {
+     "at": [
+      18,
+      36
+     ],
+     "kind": "wp",
+     "label": "Tree of Souls",
+     "anchor": "start",
+     "steps": [
+      "grelwood-waypoint",
+      "runic-seals",
+      "grelwood-una-seals"
+     ]
+    },
+    {
+     "at": [
+      82,
+      36
+     ],
+     "kind": "exit",
+     "label": "Grim Tangle",
+     "anchor": "end",
+     "step": "grelwood-grim-tangle-wp"
+    },
+    {
+     "at": [
+      50,
+      32
+     ],
+     "kind": "boss",
+     "label": "Areagne",
+     "step": "kill-areagne"
+    },
+    {
+     "at": [
+      40,
+      14
+     ],
+     "kind": "boss",
+     "label": "Brambleghast",
+     "anchor": "end"
+    },
+    {
+     "at": [
+      52,
+      6
+     ],
+     "kind": "exit",
+     "label": "The Red Vale",
+     "anchor": "start",
+     "labelAt": [
+      55.5,
+      7.3
+     ],
+     "step": "enter-red-vale"
+    }
+   ]
+  },
+  "G1_5": {
+   "shape": [
+    [
+     [
+      50,
+      60
+     ],
+     [
+      24,
+      50
+     ],
+     [
+      16,
+      30
+     ],
+     [
+      30,
+      12
+     ],
+     [
+      56,
+      8
+     ],
+     [
+      78,
+      18
+     ],
+     [
+      84,
+      40
+     ],
+     [
+      70,
+      56
+     ],
+     [
+      50,
+      60
+     ]
+    ]
+   ],
+   "clues": [
+    {
+     "points": [
+      [
+       36,
+       40
+      ],
+      [
+       50,
+       33
+      ],
+      [
+       64,
+       28
+      ]
+     ],
+     "label": "blood river",
+     "at": [
+      50,
+      43
+     ]
+    }
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       47,
+       58
+      ],
+      [
+       25,
+       48
+      ],
+      [
+       18,
+       30
+      ],
+      [
+       31,
+       14
+      ],
+      [
+       55,
+       10
+      ],
+      [
+       76,
+       19
+      ],
+      [
+       82,
+       36
+      ]
+     ],
+     "steps": [
+      "obelisks-of-rust",
+      "kill-rust-king"
+     ]
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      50,
+      60
+     ],
+     "kind": "in",
+     "label": "From the Grelwood",
+     "below": true
+    },
+    {
+     "at": [
+      17,
+      32
+     ],
+     "kind": "quest",
+     "label": "Obelisk",
+     "anchor": "start",
+     "step": "obelisks-of-rust"
+    },
+    {
+     "at": [
+      55,
+      9
+     ],
+     "kind": "quest",
+     "label": "Obelisk",
+     "anchor": "middle",
+     "step": "obelisks-of-rust"
+    },
+    {
+     "at": [
+      83,
+      39
+     ],
+     "kind": "boss",
+     "label": "Rust King",
+     "below": true,
+     "anchor": "end",
+     "step": "kill-rust-king"
+    }
+   ]
+  },
+  "G1_6": {
+   "shape": [
+    [
+     [
+      50,
+      62
+     ],
+     [
+      43,
+      46
+     ],
+     [
+      57,
+      32
+     ],
+     [
+      46,
+      18
+     ],
+     [
+      52,
+      6
+     ]
+    ],
+    [
+     [
+      51,
+      24
+     ],
+     [
+      76,
+      18
+     ]
+    ]
+   ],
+   "marks": [
+    {
+     "at": [
+      50,
+      60
+     ],
+     "kind": "in",
+     "label": "From the Grelwood",
+     "below": true,
+     "step": "grim-tangle-waypoint"
+    },
+    {
+     "at": [
+      41,
+      47
+     ],
+     "kind": "place",
+     "label": "Una",
+     "anchor": "end"
+    },
+    {
+     "at": [
+      76,
+      18
+     ],
+     "kind": "boss",
+     "label": "Ervig",
+     "below": true,
+     "anchor": "end",
+     "step": "kill-ervig"
+    },
+    {
+     "at": [
+      52,
+      6
+     ],
+     "kind": "exit",
+     "label": "Cemetery",
+     "anchor": "start",
+     "labelAt": [
+      55.5,
+      7.3
+     ],
+     "step": "enter-cemetery"
+    }
+   ]
+  },
+  "G1_7": {
+   "shape": [
+    [
+     [
+      14,
+      60
+     ],
+     [
+      14,
+      8
+     ],
+     [
+      86,
+      8
+     ],
+     [
+      86,
+      60
+     ],
+     [
+      14,
+      60
+     ]
+    ]
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       50,
+       55
+      ],
+      [
+       50,
+       36
+      ]
+     ],
+     "steps": [
+      "ancient-ruins",
+      "enter-mausoleum",
+      "enter-tomb"
+     ],
+     "arrow": false
+    },
+    {
+     "points": [
+      [
+       50,
+       36
+      ],
+      [
+       50,
+       15
+      ]
+     ],
+     "step": "ancient-ruins"
+    },
+    {
+     "points": [
+      [
+       49,
+       35
+      ],
+      [
+       20,
+       30
+      ]
+     ],
+     "steps": [
+      "enter-mausoleum",
+      "enter-tomb"
+     ]
+    },
+    {
+     "points": [
+      [
+       51,
+       35
+      ],
+      [
+       80,
+       30
+      ]
+     ],
+     "steps": [
+      "enter-mausoleum",
+      "enter-tomb"
+     ]
+    },
+    {
+     "points": [
+      [
+       47,
+       56
+      ],
+      [
+       33,
+       53
+      ]
+     ],
+     "steps": [
+      "talk-lachlann",
+      "memorial-gate",
+      "kill-lachlann",
+      "enter-hunting-grounds"
+     ]
+    },
+    {
+     "points": [
+      [
+       28,
+       54
+      ],
+      [
+       15,
+       60
+      ]
+     ],
+     "step": "enter-hunting-grounds"
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      50,
+      58
+     ],
+     "kind": "in",
+     "label": "From the Grim Tangle",
+     "anchor": "start"
+    },
+    {
+     "at": [
+      30,
+      52
+     ],
+     "kind": "boss",
+     "label": "Lachlann + gate",
+     "anchor": "end",
+     "steps": [
+      "talk-lachlann",
+      "memorial-gate",
+      "kill-lachlann"
+     ]
+    },
+    {
+     "at": [
+      16,
+      30
+     ],
+     "kind": "exit",
+     "label": "Mausoleum or Tomb",
+     "anchor": "start",
+     "labelAt": [
+      9.5,
+      36.9
+     ],
+     "steps": [
+      "enter-mausoleum",
+      "enter-tomb"
+     ]
+    },
+    {
+     "at": [
+      84,
+      30
+     ],
+     "kind": "exit",
+     "label": "Mausoleum or Tomb",
+     "anchor": "end",
+     "labelAt": [
+      90.5,
+      36.9
+     ],
+     "steps": [
+      "enter-mausoleum",
+      "enter-tomb"
+     ]
+    },
+    {
+     "at": [
+      50,
+      11
+     ],
+     "kind": "reward",
+     "label": "Ring",
+     "anchor": "start",
+     "step": "ancient-ruins"
+    },
+    {
+     "at": [
+      12,
+      61
+     ],
+     "kind": "exit",
+     "label": "Hunting Grounds",
+     "below": true,
+     "anchor": "start",
+     "step": "enter-hunting-grounds"
+    }
+   ]
+  },
+  "G1_8": {
+   "shape": [
+    [
+     [
+      18,
+      60
+     ],
+     [
+      18,
+      8
+     ],
+     [
+      82,
+      8
+     ],
+     [
+      82,
+      60
+     ],
+     [
+      18,
+      60
+     ]
+    ]
+   ],
+   "alt": [
+    {
+     "points": [
+      [
+       21,
+       51
+      ],
+      [
+       21,
+       15
+      ]
+     ],
+     "step": "kill-draven"
+    }
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       24,
+       53
+      ],
+      [
+       49,
+       35
+      ],
+      [
+       74,
+       15
+      ]
+     ],
+     "step": "kill-draven"
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      23,
+      56
+     ],
+     "kind": "in",
+     "label": "From the Cemetery",
+     "below": true,
+     "anchor": "start"
+    },
+    {
+     "at": [
+      50,
+      34
+     ],
+     "kind": "place",
+     "label": "Wheel tile",
+     "anchor": "start"
+    },
+    {
+     "at": [
+      77,
+      12
+     ],
+     "kind": "boss",
+     "label": "Draven",
+     "below": true,
+     "anchor": "end",
+     "step": "kill-draven"
+    },
+    {
+     "at": [
+      21,
+      11
+     ],
+     "kind": "maybe",
+     "label": "else here",
+     "below": true,
+     "anchor": "start",
+     "step": "kill-draven"
+    }
+   ]
+  },
+  "G1_9": {
+   "shape": [
+    [
+     [
+      20,
+      60
+     ],
+     [
+      20,
+      8
+     ],
+     [
+      80,
+      8
+     ],
+     [
+      80,
+      60
+     ],
+     [
+      20,
+      60
+     ]
+    ]
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       50,
+       56
+      ],
+      [
+       50,
+       37
+      ],
+      [
+       50,
+       15
+      ]
+     ],
+     "step": "kill-asinia"
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      50,
+      58
+     ],
+     "kind": "in",
+     "label": "From the Cemetery",
+     "anchor": "start"
+    },
+    {
+     "at": [
+      50,
+      34
+     ],
+     "kind": "place",
+     "label": "Centre",
+     "anchor": "start"
+    },
+    {
+     "at": [
+      50,
+      12
+     ],
+     "kind": "boss",
+     "label": "Asinia",
+     "anchor": "start",
+     "step": "kill-asinia"
+    }
+   ]
+  },
+  "G1_11": {
+   "shape": [
+    [
+     [
+      12,
+      60
+     ],
+     [
+      12,
+      8
+     ],
+     [
+      88,
+      8
+     ],
+     [
+      88,
+      60
+     ],
+     [
+      12,
+      60
+     ]
+    ]
+   ],
+   "clues": [
+    {
+     "points": [
+      [
+       40,
+       56
+      ],
+      [
+       20,
+       40
+      ],
+      [
+       18,
+       16
+      ]
+     ],
+     "label": "signposts",
+     "at": [
+      31,
+      33
+     ],
+     "step": "enter-ogham-farmlands"
+    },
+    {
+     "points": [
+      [
+       60,
+       56
+      ],
+      [
+       80,
+       50
+      ]
+     ],
+     "label": "bloody tracks",
+     "at": [
+      66,
+      61
+     ],
+     "step": "kill-crowbell"
+    },
+    {
+     "points": [
+      [
+       54,
+       30
+      ],
+      [
+       80,
+       14
+      ]
+     ],
+     "label": "locusts",
+     "at": [
+      73,
+      27
+     ],
+     "step": "hunting-grounds-to-freythorn"
+    }
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       53,
+       57
+      ],
+      [
+       81,
+       51
+      ]
+     ],
+     "step": "kill-crowbell"
+    },
+    {
+     "points": [
+      [
+       81,
+       47
+      ],
+      [
+       54,
+       34
+      ]
+     ],
+     "step": "small-ritual"
+    },
+    {
+     "points": [
+      [
+       53,
+       30
+      ],
+      [
+       81,
+       14
+      ]
+     ],
+     "step": "hunting-grounds-to-freythorn"
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      50,
+      59
+     ],
+     "kind": "in",
+     "label": "From the Cemetery",
+     "below": true,
+     "steps": [
+      "hunting-grounds-waypoint",
+      "talk-delwyn",
+      "kill-crowbell",
+      "small-ritual",
+      "hunting-grounds-to-freythorn"
+     ]
+    },
+    {
+     "at": [
+      16,
+      11
+     ],
+     "kind": "exit",
+     "label": "Ogham Farmlands",
+     "anchor": "start",
+     "labelAt": [
+      19.5,
+      12.3
+     ],
+     "step": "enter-ogham-farmlands"
+    },
+    {
+     "at": [
+      84,
+      11
+     ],
+     "kind": "exit",
+     "label": "Freythorn",
+     "anchor": "end",
+     "labelAt": [
+      80.5,
+      12.3
+     ],
+     "step": "hunting-grounds-to-freythorn"
+    },
+    {
+     "at": [
+      84,
+      49
+     ],
+     "kind": "boss",
+     "label": "Crowbell",
+     "anchor": "end",
+     "step": "kill-crowbell"
+    },
+    {
+     "at": [
+      50,
+      32
+     ],
+     "kind": "quest",
+     "label": "Ritual",
+     "anchor": "end",
+     "step": "small-ritual"
+    }
+   ]
+  },
+  "G1_12": {
+   "shape": [
+    [
+     [
+      50,
+      60
+     ],
+     [
+      22,
+      46
+     ],
+     [
+      18,
+      24
+     ],
+     [
+      40,
+      9
+     ],
+     [
+      66,
+      10
+     ],
+     [
+      84,
+      26
+     ],
+     [
+      78,
+      48
+     ],
+     [
+      50,
+      60
+     ]
+    ],
+    [
+     [
+      50,
+      60
+     ],
+     [
+      50,
+      32
+     ]
+    ]
+   ],
+   "clues": [
+    {
+     "points": [
+      [
+       24,
+       34
+      ],
+      [
+       40,
+       14
+      ]
+     ],
+     "label": "locusts",
+     "at": [
+      22,
+      21
+     ],
+     "step": "ritual-altars"
+    },
+    {
+     "points": [
+      [
+       44,
+       12
+      ],
+      [
+       76,
+       24
+      ]
+     ],
+     "label": "locusts",
+     "at": [
+      61,
+      24
+     ],
+     "step": "ritual-altars"
+    }
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       47,
+       57
+      ],
+      [
+       24,
+       44
+      ],
+      [
+       21,
+       37
+      ]
+     ],
+     "step": "ritual-altars"
+    },
+    {
+     "points": [
+      [
+       22,
+       32
+      ],
+      [
+       38,
+       13
+      ]
+     ],
+     "step": "ritual-altars"
+    },
+    {
+     "points": [
+      [
+       42,
+       11
+      ],
+      [
+       78,
+       24
+      ]
+     ],
+     "step": "ritual-altars"
+    },
+    {
+     "points": [
+      [
+       78,
+       22
+      ],
+      [
+       67,
+       11
+      ]
+     ],
+     "step": "kill-king-in-the-mists"
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      50,
+      60
+     ],
+     "kind": "in",
+     "label": "From Hunting Grounds",
+     "below": true
+    },
+    {
+     "at": [
+      50,
+      34
+     ],
+     "kind": "place",
+     "label": "Hub",
+     "anchor": "start"
+    },
+    {
+     "at": [
+      20,
+      36
+     ],
+     "kind": "quest",
+     "label": "Ritual",
+     "anchor": "start",
+     "step": "ritual-altars"
+    },
+    {
+     "at": [
+      40,
+      10
+     ],
+     "kind": "quest",
+     "label": "Ritual",
+     "anchor": "end",
+     "step": "ritual-altars"
+    },
+    {
+     "at": [
+      80,
+      26
+     ],
+     "kind": "quest",
+     "label": "Ritual",
+     "below": true,
+     "anchor": "end",
+     "step": "ritual-altars"
+    },
+    {
+     "at": [
+      64,
+      9
+     ],
+     "kind": "boss",
+     "label": "King",
+     "anchor": "start",
+     "step": "kill-king-in-the-mists"
+    }
+   ]
+  },
+  "G1_13_1": {
+   "shape": [
+    [
+     [
+      30,
+      62
+     ],
+     [
+      30,
+      6
+     ],
+     [
+      70,
+      6
+     ],
+     [
+      70,
+      62
+     ],
+     [
+      30,
+      62
+     ]
+    ]
+   ],
+   "alt": [
+    {
+     "points": [
+      [
+       48,
+       9
+      ],
+      [
+       34,
+       9
+      ]
+     ],
+     "step": "enter-ogham-village"
+    }
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       50,
+       57
+      ],
+      [
+       41,
+       45.5
+      ]
+     ],
+     "step": "unas-lute"
+    },
+    {
+     "points": [
+      [
+       51,
+       57
+      ],
+      [
+       51,
+       32
+      ],
+      [
+       50,
+       12
+      ]
+     ],
+     "step": "enter-ogham-village"
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      50,
+      60
+     ],
+     "kind": "in",
+     "label": "From Hunting Grounds",
+     "below": true
+    },
+    {
+     "at": [
+      38,
+      44
+     ],
+     "kind": "quest",
+     "label": "Una’s lute",
+     "anchor": "end",
+     "step": "unas-lute"
+    },
+    {
+     "at": [
+      56,
+      40
+     ],
+     "kind": "place",
+     "label": "long hut + carts",
+     "anchor": "start"
+    },
+    {
+     "at": [
+      56,
+      9
+     ],
+     "kind": "exit",
+     "label": "Ogham Village",
+     "below": true,
+     "anchor": "start",
+     "step": "enter-ogham-village"
+    }
+   ]
+  },
+  "G1_13_2": {
+   "shape": [
+    [
+     [
+      14,
+      60
+     ],
+     [
+      14,
+      8
+     ],
+     [
+      86,
+      8
+     ],
+     [
+      86,
+      60
+     ],
+     [
+      14,
+      60
+     ]
+    ]
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       68,
+       56
+      ],
+      [
+       32,
+       42
+      ]
+     ],
+     "steps": [
+      "smithing-tools",
+      "blacksmiths-chest"
+     ]
+    },
+    {
+     "points": [
+      [
+       72,
+       56
+      ],
+      [
+       83,
+       48
+      ],
+      [
+       83,
+       20
+      ],
+      [
+       57,
+       17
+      ]
+     ],
+     "steps": [
+      "kill-executioner",
+      "lever-leitis"
+     ]
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      72,
+      59
+     ],
+     "kind": "in",
+     "label": "From the Farmlands",
+     "below": true,
+     "anchor": "end",
+     "steps": [
+      "smithing-tools",
+      "blacksmiths-chest",
+      "kill-executioner",
+      "lever-leitis",
+      "village-portal-town"
+     ]
+    },
+    {
+     "at": [
+      28,
+      41
+     ],
+     "kind": "quest",
+     "label": "Smithing tools",
+     "anchor": "start",
+     "steps": [
+      "smithing-tools",
+      "blacksmiths-chest"
+     ]
+    },
+    {
+     "at": [
+      52,
+      17
+     ],
+     "kind": "boss",
+     "label": "Executioner",
+     "below": true,
+     "anchor": "end",
+     "steps": [
+      "kill-executioner",
+      "lever-leitis"
+     ]
+    },
+    {
+     "at": [
+      52,
+      10
+     ],
+     "kind": "exit",
+     "label": "Manor Ramparts",
+     "anchor": "end",
+     "step": "enter-manor-ramparts"
+    }
+   ]
+  },
+  "G1_14": {
+   "shape": [
+    [
+     [
+      24,
+      8
+     ],
+     [
+      24,
+      54
+     ],
+     [
+      76,
+      54
+     ],
+     [
+      76,
+      8
+     ]
+    ]
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       24,
+       13
+      ],
+      [
+       24,
+       29
+      ]
+     ],
+     "steps": [
+      "gallows-secret",
+      "enter-ogham-manor"
+     ]
+    },
+    {
+     "points": [
+      [
+       24,
+       33
+      ],
+      [
+       24,
+       52
+      ],
+      [
+       76,
+       52
+      ],
+      [
+       76,
+       14
+      ]
+     ],
+     "step": "enter-ogham-manor"
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      24,
+      9
+     ],
+     "kind": "in",
+     "label": "From the Village",
+     "anchor": "start"
+    },
+    {
+     "at": [
+      20,
+      32
+     ],
+     "kind": "reward",
+     "label": "Gallows",
+     "anchor": "end",
+     "step": "gallows-secret"
+    },
+    {
+     "at": [
+      76,
+      9
+     ],
+     "kind": "exit",
+     "label": "Ogham Manor",
+     "anchor": "end",
+     "step": "enter-ogham-manor"
+    }
+   ]
+  },
+  "G1_15": {
+   "shape": [
+    [
+     [
+      14,
+      56
+     ],
+     [
+      86,
+      56
+     ]
+    ],
+    [
+     [
+      14,
+      34
+     ],
+     [
+      86,
+      34
+     ]
+    ],
+    [
+     [
+      14,
+      12
+     ],
+     [
+      86,
+      12
+     ]
+    ],
+    [
+     [
+      86,
+      56
+     ],
+     [
+      86,
+      34
+     ]
+    ],
+    [
+     [
+      14,
+      34
+     ],
+     [
+      14,
+      12
+     ]
+    ]
+   ],
+   "clues": [
+    {
+     "points": [
+      [
+       46,
+       31
+      ],
+      [
+       56,
+       31
+      ]
+     ],
+     "label": "bridge",
+     "at": [
+      51,
+      28
+     ],
+     "step": "kill-geonor"
+    },
+    {
+     "points": [
+      [
+       50,
+       9
+      ],
+      [
+       60,
+       9
+      ]
+     ],
+     "label": "bridge",
+     "at": [
+      55,
+      6
+     ],
+     "step": "kill-geonor"
+    }
+   ],
+   "route": [
+    {
+     "points": [
+      [
+       18,
+       56
+      ],
+      [
+       83,
+       56
+      ],
+      [
+       86,
+       51
+      ],
+      [
+       86,
+       38
+      ]
+     ],
+     "steps": [
+      "kill-candlemass",
+      "kill-geonor"
+     ]
+    },
+    {
+     "points": [
+      [
+       82,
+       34
+      ],
+      [
+       17,
+       34
+      ],
+      [
+       14,
+       29
+      ],
+      [
+       14,
+       16
+      ]
+     ],
+     "step": "kill-geonor"
+    },
+    {
+     "points": [
+      [
+       18,
+       12
+      ],
+      [
+       80,
+       12
+      ]
+     ],
+     "step": "kill-geonor"
+    }
+   ],
+   "marks": [
+    {
+     "at": [
+      14,
+      56
+     ],
+     "kind": "in",
+     "label": "Floor 1",
+     "below": true,
+     "anchor": "start"
+    },
+    {
+     "at": [
+      56,
+      50
+     ],
+     "kind": "boss",
+     "label": "Candlemass",
+     "anchor": "middle",
+     "step": "kill-candlemass"
+    },
+    {
+     "at": [
+      86,
+      34
+     ],
+     "kind": "place",
+     "label": "Floor 2",
+     "below": true,
+     "anchor": "end"
+    },
+    {
+     "at": [
+      14,
+      12
+     ],
+     "kind": "place",
+     "label": "Floor 3",
+     "below": true,
+     "anchor": "start"
+    },
+    {
+     "at": [
+      84,
+      12
+     ],
+     "kind": "boss",
+     "label": "Count Geonor",
+     "anchor": "end",
+     "step": "kill-geonor"
+    }
+   ]
+  }
+ }
+}

@@ -53,53 +53,23 @@
       "kind": "objective",
       "navigationTarget": { "area": "G1_town", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint to Grim Tangle" }],
-      "trigger": { "type": "zoneEntered", "area": "G1_6", "after": "enter-red-vale" },
-      "evidence": "Zone-generation line for G1_6, counted only once enter-red-vale is done: the zone was entered before."
+      "trigger": { "type": "zoneEntered", "area": "G1_6", "after": "grelwood-portal-town" },
+      "evidence": "Zone-generation line for G1_6, counted only once grelwood-portal-town is done (the town was reached after the Runic Seals): the Grim Tangle's waypoint grab from the Grelwood comes earlier, also when the Red Vale was entered first."
     },
     {
-      "id": "town-talk-finn",
+      "id": "finn-charm",
       "kind": "objective",
-      "parts": [{ "text": "Talk to " }, { "text": "Finn", "style": "npc" }],
-      "trigger": null,
-      "evidence": "After the Cemetery. No log line known. Tick by hand."
-    },
-    {
-      "id": "town-una-cemetery",
-      "kind": "objective",
-      "screen": [{ "quest": "ReviveHoodedMentor", "past": "Bring Count Lachlann's Ring to Una" }],
-      "parts": [{ "text": "Talk to " }, { "text": "Una", "style": "npc" }],
-      "trigger": {
-        "type": "npcLine",
-        "area": "G1_town",
-        "lines": [
-          { "id": "UnaNewSignetRingResponse", "speaker": "Una", "text": "You found the ring! This will most certainly break the Count's binding. Give me a moment..." },
-          { "id": "UnaNewUsesRing", "speaker": "Una", "text": "It's working..." },
-          { "id": "UnaNewSeeSinWalking", "speaker": "Una", "text": "Look... he's stirring!" }
-        ]
-      },
-      "evidence": "Bark: UnaNewUsesRing, UnaNewSeeSinWalking. Panel: UnaNewSignetRingResponse. Una's 'Count Lachlann's Ring' hand-in (needs RingOfTheCountHeld) and the two lines of the ring scene that follows. From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log.",
-      "evidenceKind": "bark"
-    },
-    {
-      "id": "town-hooded-one",
-      "kind": "objective",
-      "screen": [{ "quest": "ReviveHoodedMentor", "past": "Witness the revival of the Hooded One" }],
-      "parts": [{ "text": "Talk to " }, { "text": "The Hooded One", "style": "npc" }]
+      "screen": [{ "quest": "TheOutcast", "past": "Talk to Finn for your reward" }],
+      "parts": [{ "text": "Talk to " }, { "text": "Finn", "style": "npc" }, { "text": "Charm", "style": "reward" }],
+      "evidence": "The reward of the Ominous Altars quest (TheOutcast: the ritual altars and the King in the Mists in Freythorn), claimed from Finn. A route row: the fast route goes to town after Freythorn for it (GTD-video). No log line known."
     },
     {
       "id": "town-to-hunting-grounds",
       "kind": "objective",
       "navigationTarget": { "area": "G1_town", "label": "Waypoint", "icon": "waypoint" },
       "parts": [{ "text": "Waypoint to Hunting Grounds" }],
-      "trigger": { "type": "zoneEntered", "area": "G1_11", "after": "enter-hunting-grounds" },
-      "evidence": "Zone-generation line for G1_11, counted only once enter-hunting-grounds is done: the zone was entered before."
-    },
-    {
-      "id": "finn-charm",
-      "kind": "objective",
-      "screen": [{ "quest": "TheOutcast", "past": "Talk to Finn for your reward" }],
-      "optional": true,
-      "parts": [{ "text": "After Ominous Altars: " }, { "text": "Finn", "style": "npc" }, { "text": "Charm", "style": "reward" }]
+      "trigger": { "type": "zoneEntered", "area": "G1_11", "after": "freythorn-portal-town" },
+      "evidence": "Zone-generation line for G1_11, counted only once freythorn-portal-town is done (the town was reached from Freythorn): a town trip from the Hunting Grounds before Freythorn does not end this visit."
     },
     {
       "id": "deliver-unas-lute",
@@ -108,11 +78,19 @@
       "parts": [{ "text": "Give the Lute to " }, { "text": "Una", "style": "npc" }, { "text": "2 Skill Points", "style": "reward" }]
     },
     {
-      "id": "town-talk-all",
+      "id": "leitis-gem",
       "kind": "objective",
-      "parts": [{ "text": "Talk to all NPCs" }],
-      "trigger": null,
-      "evidence": "After Count Geonor. No log line known. Tick by hand."
+      "screen": [{ "quest": "TheExecutioner", "past": "Talk to Leitis in Clearfell" }],
+      "parts": [{ "text": "Talk to " }, { "text": "Leitis", "style": "npc" }, { "text": "Skill Gem", "style": "reward" }],
+      "evidence": "The Trail of Corruption ends with 'Talk to Leitis in Clearfell' (data/quests/states.json, TheExecutioner); GTD-build lists a gem from Leitis. That the reward is a skill gem, claimed in town, is not confirmed in the game data. No log line known."
+    },
+    {
+      "id": "town-to-ogham-village",
+      "kind": "objective",
+      "navigationTarget": { "area": "G1_town", "label": "Waypoint", "icon": "waypoint" },
+      "parts": [{ "text": "Waypoint to Ogham Village" }],
+      "trigger": { "type": "zoneEntered", "area": "G1_13_2", "after": "village-portal-town" },
+      "evidence": "Zone-generation line for G1_13_2, counted only once village-portal-town is done (the town was reached from Ogham Village)."
     },
     {
       "id": "town-beasts-trail",
@@ -124,8 +102,8 @@
       "id": "enter-vastiri-outskirts",
       "kind": "objective",
       "parts": [{ "text": "Enter Vastiri Outskirts" }],
-      "trigger": { "type": "zoneEntered", "area": "G2_1" },
-      "evidence": "Zone-generation line for G2_1 (Act 2, in the town's Connections). No compass target: it would point at Act 2 on every earlier town visit."
+      "trigger": { "type": "zoneEntered", "area": "G2_1", "after": "manor-portal-town" },
+      "evidence": "Zone-generation line for G2_1 (Act 2, in the town's Connections), counted once manor-portal-town is done: the act's last town visit is due only after Count Geonor's Manor. No compass target: it would point at Act 2 on every earlier town visit."
     }
   ]
 }

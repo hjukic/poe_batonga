@@ -6,6 +6,9 @@
   --menu-line: rgb(255 255 255 / .08);
   --hover: rgb(255 255 255 / .08);
   --muted: #a8a2b6;
+  /* The text's dark halo: a tight outline first, so text holds over bright ground (Act 2 sand)
+     with the panel at 25%; then the soft shadow of the glass look. */
+  --halo: 0 0 1px #000, 0 0 2px #000d, 0 1px 3px #000, 0 1px 8px #0009;
 }
 * { box-sizing: border-box; }
 body { margin: 0; }
@@ -19,12 +22,21 @@ input { accent-color: var(--accent); }
 
 /* ---- Panel ---- */
 /* Fixed width: the panel never grows with its text; long steps wrap. */
-.panel { width: 320px; background: rgb(13 12 18 / var(--panel-opacity)); border: 1px solid rgb(239 235 255 / .05); border-radius: 14px; overflow: hidden; font-size: 14px; line-height: 20px; text-shadow: 0 1px 3px #000, 0 1px 8px #0009; }
+.panel { width: 320px; background: rgb(13 12 18 / var(--panel-opacity)); border: 1px solid rgb(239 235 255 / .05); border-radius: 14px; overflow: hidden; font-size: 14px; line-height: 20px; text-shadow: var(--halo); }
 .panel header { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; border-bottom: 1px solid rgb(239 235 255 / .05); font-weight: 500; }
 body[data-interactive="true"] .panel header { cursor: move; transition: background .15s; }
 /* Unlocked, the top bar is the drag handle: darken it on hover (not when over its buttons). */
 body[data-interactive="true"] .panel header:hover:not(:has(button:hover)) { background: rgb(0 0 0 / .35); }
 .zone { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A name too long for one line next to the levels takes two smaller ones, in the same height. */
+.zone.wrap { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; font-size: 12.5px; line-height: 14px; }
+/* "area 4 · you 6": the zone's level and the character's, after the name; they never shrink. */
+.levels { flex-shrink: 0; font-size: 12px; font-weight: 400; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.levels[hidden], .lv-area[hidden], .lv-you[hidden] { display: none; }
+.lv-you { color: #eeedf3; }
+.lv-area:not([hidden]) + .lv-you::before { content: " · "; color: var(--muted); }
+/* Under a level target on show: amber, as the level line and the bright arrow. */
+.lv-you.under { color: #ffd27a; }
 .header-actions { display: flex; gap: 2px; flex-shrink: 0; }
 button.icon { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; background: transparent; border: 0; border-radius: 8px; color: #e4dff0; opacity: .5; transition: opacity .15s, background .15s; }
 button.icon svg { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 2px #000); }
@@ -72,7 +84,8 @@ body[data-in-zone="false"] .layout-pick, body[data-in-zone="false"] .minimap { d
 .step.note .mark { height: 16px; }
 .step.note .text { grid-column: 2 / -1; }
 .direction { color: #8edce8; font-style: italic; }
-.boss { color: #ce7832; }
+/* One colour for bosses, in the rows and the schematic (guide-svg.ts BOSS_COLOR). */
+.boss { color: #f2777e; }
 .npc { color: #c9a7ff; }
 .reward { color: #8bd17c; }
 /* Finished steps stay in place, struck out and greyed, so the route keeps its shape. */
@@ -80,9 +93,16 @@ body[data-in-zone="false"] .layout-pick, body[data-in-zone="false"] .minimap { d
 button.step { width: 100%; padding: 0; border: 0; background: transparent; text-align: left; font: inherit; color: inherit; line-height: inherit; text-shadow: inherit; }
 button.step:disabled { cursor: default; }
 button.step:enabled:hover { background: rgb(239 235 255 / .06); }
-.step.done { color: #8d8899; opacity: .55; }
+.step.done { color: #9a95a6; opacity: .65; }
 .step.done .text { color: inherit; text-decoration: line-through; text-decoration-thickness: 1px; }
 .step.done .boss, .step.done .npc, .step.done .reward, .step.done .side { color: inherit; }
+/* "Probably done" (a boss quiet for 30 s): ticked but not struck out, "done?" on the right until
+   a click confirms it. */
+.step.done.likely { color: #b9b3c8; opacity: .85; }
+.step.done.likely .text { text-decoration: none; }
+.step.likely .unsure { color: var(--accent); }
+/* An optional row says so, after its reward. */
+.step .opt { color: var(--muted); }
 
 
 /* ---- The recognised layout, under the checklist ---- */
@@ -112,6 +132,8 @@ button.step:enabled:hover { background: rgb(239 235 255 / .06); }
 .dropdown hr { height: 1px; margin: 4px 2px; border: 0; background: var(--menu-line); }
 .item { display: block; width: 100%; padding: 9px 8px; text-align: left; background: transparent; border: 0; border-radius: 8px; transition: background .15s; }
 .item:hover { background: var(--hover); }
+/* Reset armed by a first click: the second one resets. */
+.item.armed { color: #ffb7a3; background: rgb(214 92 80 / .18); }
 .warning { margin: 2px 8px 6px; font-size: 11.5px; line-height: 1.4; color: #ffb7a3; overflow-wrap: anywhere; }
 .warning[hidden] { display: none; }
 
@@ -123,12 +145,21 @@ button.step:enabled:hover { background: rgb(239 235 255 / .06); }
 body[data-radar="false"] .radar-only { display: none; }
 /* How to cross the zone (zone-guides.ts): a schematic and short steps. */
 .zone-guide { padding: 0 14px 8px; }
-.zone-guide[hidden] { display: none; }
+.zone-guide[hidden], .guide-drawing[hidden] { display: none; }
 body[data-in-zone="false"] .zone-guide { display: none; }
 .guide-drawing svg { display: block; width: 292px; height: auto; }
-.guide-svg .g-label { font: 500 3.3px system-ui, sans-serif; letter-spacing: 0.02px; paint-order: stroke; stroke: rgb(13 12 18 / .85); stroke-width: 0.9px; stroke-linejoin: round; }
-.guide-svg .g-clue { font: italic 2.9px system-ui, sans-serif; paint-order: stroke; stroke: rgb(13 12 18 / .7); stroke-width: 0.7px; }
-.guide-general { margin: 2px 0 0; padding-left: 16px; font-size: 12px; line-height: 16px; color: #8edce8; font-style: italic; }
+/* Labels at least 11 px on screen: 3.8 of the drawing's 100 units across 292 px. */
+.guide-svg .g-label { font: 500 3.8px system-ui, sans-serif; letter-spacing: 0.02px; paint-order: stroke; stroke: rgb(13 12 18 / .9); stroke-width: 1.1px; stroke-linejoin: round; }
+.guide-svg .g-clue { font: italic 3.8px system-ui, sans-serif; paint-order: stroke; stroke: rgb(13 12 18 / .85); stroke-width: 1px; stroke-linejoin: round; }
+/* The zone's own lines (in town: the errands), above the schematic. */
+.guide-general { margin: 0 0 6px; padding-left: 16px; }
 .guide-general:empty { display: none; }
-/* How to get there, under a checklist row (the zone guide's hints). */
-.step .hint { grid-column: 2 / -1; font-size: 12px; line-height: 15px; color: #8edce8; font-style: italic; }
+.guide-general li + li { margin-top: 2px; }
+/* The guide's lines, under a checklist row or for the zone: one quiet look per kind (hints.ts).
+   The level line is the only warm one, as the bright arrow. */
+.step .hint { grid-column: 2 / -1; }
+.hint { font-size: 12px; line-height: 15px; font-style: italic; }
+.hint.kind-way { color: #8edce8; }
+.hint.kind-boss { color: #f0b4b8; }
+.hint.kind-tip { color: #cdc4f0; }
+.hint.kind-level { color: #ffd27a; }

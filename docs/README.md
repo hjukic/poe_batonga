@@ -10,6 +10,8 @@ For the latest checkpoint and the next live test, read [session handoff](SESSION
 - [Triggers](triggers.md): which checklist steps tick themselves from the log, and how.
 - [Log findings](log-findings.md): what the game's `Client.txt` records, and what not.
 - [Act 1 zone guides](act1-zone-tips.md): how to cross each zone (schematics and steps); sources and the layout counts behind them.
+- [Levelling benchmark](levelling-benchmark.md): what the fastest players' guides give a player, by kind of advice.
+- [Council review, 2026-11-13](review-2026-11-13-levelling-council.md): the overlay against that benchmark; findings and the owner's decisions.
 - [Data sources](data-sources.md): route, zone, layout-graph, icon, font and dialogue data,
   and how to refresh them after a patch.
 - [Overlay test](overlay-test.md): how to run the overlay and check it over the game.

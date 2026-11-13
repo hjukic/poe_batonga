@@ -2,14 +2,21 @@
   "formatVersion": 1,
   "order": 30,
   "zone": { "id": "G1_2", "name": "Clearfell", "level": 2 },
-  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); zone level from the live log",
+  "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); zone level from the live log. Pickups and order from the fast route (GTD-video, Act 1), 2026-11-13",
   "steps": [
+    {
+      "id": "abandoned-stash",
+      "kind": "objective",
+      "parts": [{ "text": "Abandoned Stash (campsite)" }, { "text": "Skill Gem", "style": "reward" }],
+      "trigger": null,
+      "evidence": "A route row: the campsite gem is part of the fast route (GTD-video). No log line known. Tick by hand."
+    },
     {
       "id": "kill-beira",
       "kind": "objective",
-      "parts": [{ "text": "Kill " }, { "text": "Beira", "style": "boss" }, { "text": "+10% Cold Res", "style": "reward" }],
+      "parts": [{ "text": "Kill " }, { "text": "Beira", "style": "boss" }],
       "trigger": null,
-      "evidence": "No kill line captured yet. Tick by hand."
+      "evidence": "No kill line captured yet. Tick by hand. Her +10% cold resistance is not shown: the kill is on the way (decision 5, 2026-11-13)."
     },
     {
       "id": "enter-mud-burrow",
@@ -19,14 +26,6 @@
       "parts": [{ "text": "Enter Mud Burrow" }],
       "trigger": { "type": "zoneEntered", "area": "G1_3" },
       "evidence": "Zone-generation line for G1_3 (data/observations/campaign-zones.json)."
-    },
-    {
-      "id": "abandoned-stash",
-      "kind": "objective",
-      "optional": true,
-      "parts": [{ "text": "Abandoned Stash (campsite)" }, { "text": "Skill Gem", "style": "reward" }],
-      "trigger": null,
-      "evidence": "No log line known. Tick by hand."
     },
     {
       "id": "enter-grelwood",
