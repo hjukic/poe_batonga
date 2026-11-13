@@ -198,7 +198,8 @@ function render(next: Status) {
 const MAX_ROWS = 9;
 /** Open steps shown while folded. */
 const MAX_OPEN = 6;
-/** Unfolded by a click on the summary line (to untick a hidden step). */
+/** Unfolded by a click on the summary line (to untick a hidden step). A completed zone's
+ *  "quests completed" line unfolds its steps the same way, so a wrong tick can be undone. */
 let unfolded = false;
 /** Steps of the zone's other visits are listed too (a click on their summary line). */
 let allVisits = false;
@@ -299,9 +300,11 @@ function renderTracker(view: TrackerView) {
   const wanted = optionalContent.checked ? view.steps : view.steps.filter((step) => !step.optional);
   const mode = panelMode(view, optionalContent.checked);
   const message = (mode === 'choose-character' || mode === 'idle') ? (view.identityNote || null)
-    : mode === 'unknown-zone' ? 'No campaign checklist for this area.'
-    : mode === 'completed' ? COMPLETED_MESSAGE : null;
-  if (mode !== 'checklist') {
+    : mode === 'unknown-zone' ? 'No campaign checklist for this area.' : null;
+  if (mode === 'completed' && !unfolded) {
+    rows.push(summaryRow(COMPLETED_MESSAGE, true, () => { unfolded = true; }));
+  }
+  if (mode !== 'checklist' && !(mode === 'completed' && unfolded)) {
     if (message) {
       const line = document.createElement('p');
       line.className = 'route-status';

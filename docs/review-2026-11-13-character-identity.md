@@ -17,7 +17,31 @@ before fixing. Line numbers are as of `f2224fc`.
   500 ms poll and every log batch; on Linux each call read every process's `cmdline`.
 - Please build on Windows once: the Windows cross-check cannot run on Linux (tauri-winres).
 
-## Open, for the owner of this code
+## Fixed on Windows (v0.1.108)
+
+Items 1–9 and the `save()` half of item 10 are fixed; each has a test. Built and tested on
+Windows. What changed, by item:
+
+1. `request()` stores `LAST_ACTIVATION`, so a quick Play after a selection keeps its
+   selection frame. The mouse hook takes a second click on the character list (system
+   double-click time and rectangle, `second_click`) as an activation.
+2. `glued` needs at least three tooltip glyphs after the known name; "ANNAB" is not "Anna".
+3. `game::running()` tells a gone process (false at once) from a running one whose
+   "Path of Exile 2" window is missing: still running for 15 s after the window was last seen.
+4. Live events read while unbound are kept with their area (`Characters::unbound`) and
+   judged again against the chosen profile (`tracker::replay_unbound`), after OCR binding
+   and manual selection. The start backlog is not kept: it may be another character's.
+5. `clear_binding` keeps `current_area`/`shown_zone` (they belong to the log, like its
+   path), so the start guard works on Windows too.
+6. `Recognition::observe`: an activation frame without a name keeps the read before it.
+7. "quests completed" is a summary line; a click lists the zone's steps to untick one.
+8. `Characters::select` falls back to `characters::match_key` (the JS `matchKey`) when no
+   profile has the same spelling up to case.
+9. The hooks use `InternalGetWindowText` (no `WM_GETTEXT`).
+10. `identity_observed` saves only when a name was learned, bound or the menu was reached
+    from a zone. Still open: two full-frame OCRs per creation keystroke when a caret is masked.
+
+## Open, as reviewed (line numbers as of `f2224fc`)
 
 1. **Double-click activation is never implemented** (`identity_windows.rs:27`).
    `LAST_ACTIVATION` is read in `superseding_input()` but never written; `LAST_CLICK_MS`

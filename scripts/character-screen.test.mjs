@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { classifyScreen, recognizeScreen, nameKey, learnKnownCharacters } from './read-character-screen.mjs';
+import { resolvePartialName } from '../src/character-screen.mjs';
 
 // Positions from the owner's screenshots; names below are synthetic.
 const line = (text, x, y) => ({ text, words: [{ text, x, y, width: 100, height: 20 }] });
@@ -227,6 +228,13 @@ test('Æ read for E in one frame still agrees, and the plain spelling is kept', 
   const full = standard('ODNESENNASINE');
   const crop = standard('ODNÆSENNASINE');
   assert.equal(recognizeScreen(full, crop).candidate?.name, 'ODNESENNASINE');
+});
+
+test('a clipped longer new name is not a known shorter name glued to the tooltip', () => {
+  const history = [{ name: 'Anna', league: 'Standard' }];
+  assert.equal(resolvePartialName(['ANNAB', 'ANNAB'], 'Standard', history), null, 'Annabel, clipped');
+  assert.equal(resolvePartialName(['ANNABE', 'ANNABE'], 'Standard', history), null);
+  assert.equal(resolvePartialName(['ANNASTANX', 'ANNASTAND'], 'Standard', history)?.name, 'Anna', 'really glued');
 });
 
 test('live v0.1.97: a glued "…NINC Standard League" read resolves from history', () => {

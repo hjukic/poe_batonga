@@ -755,6 +755,7 @@ fn select_character(app: AppHandle, name: String, import_legacy: bool) -> Result
     }
     let tracker::Inner { characters, progress, .. } = &mut *inner;
     characters.select(progress, &name, import_legacy)?;
+    tracker::replay_unbound(&mut inner);
     inner.identity.invalidate();
     inner.identity.note = format!("Tracking: {}", inner.characters.active.as_deref().unwrap_or(&name));
     identity::set_context(inner.in_zone, true);

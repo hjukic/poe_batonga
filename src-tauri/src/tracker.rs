@@ -329,6 +329,28 @@ pub fn apply(routes: &[Route], progress: &mut Progress, timestamp: &str, event: 
     changed
 }
 
+/// Judges the log events read while no character was bound against the progress of the one
+/// now bound, each in the area it happened in. Returns true if anything visible changed.
+pub fn replay_unbound(inner: &mut Inner) -> bool {
+    if inner.characters.active.is_none() {
+        return false;
+    }
+    let events = std::mem::take(&mut inner.characters.unbound);
+    let Inner { routes, progress, characters, .. } = inner;
+    let (area, shown) = (progress.current_area.clone(), progress.shown_zone.clone());
+    let mut changed = false;
+    for (timestamp, event, was_in) in &events {
+        progress.current_area = was_in.clone();
+        changed |= apply(routes, progress, timestamp, event);
+    }
+    if !events.is_empty() {
+        progress.current_area = area;
+        progress.shown_zone = shown;
+        characters.remember(progress);
+    }
+    changed
+}
+
 /// The log shows zone entries and a few spoken lines; a talk in a dialogue panel, a
 /// pick-up or a waypoint leaves no line (measured 2026-11-12: talks with Renly and Una
 /// in the Clearfell Encampment wrote nothing). The lists are in walking order, so when
@@ -1003,7 +1025,14 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
             inner.recent.clear();
         }
         if let Some((timestamp, event)) = parse_line(line) {
-            let Inner { routes, progress, recent, fight, in_zone, .. } = &mut *inner;
+            let Inner { routes, progress, recent, fight, in_zone, characters, .. } = &mut *inner;
+            // Not the backlog read on start: it may be another character's.
+            if live && characters.active.is_none() {
+                if characters.unbound.len() == crate::characters::UNBOUND_EVENTS {
+                    characters.unbound.remove(0);
+                }
+                characters.unbound.push((timestamp.clone(), event.clone(), progress.current_area.clone()));
+            }
             changed |= apply(routes, progress, &timestamp, &event);
             match &event {
                 // A new zone: whatever fight there was is behind the player.
@@ -1317,6 +1346,49 @@ mod tests {
         enter(&mut progress, "A");
         enter(&mut progress, "B");
         assert!(progress.completed.contains_key("move"));
+    }
+
+    #[test]
+    fn events_read_unbound_are_judged_again_against_the_chosen_profile() {
+        let route: Route = serde_json::from_str(
+            r#"{"zone":{"id":"A","name":"A","level":1},"steps":[
+                {"id":"detour","kind":"objective","parts":[],"trigger":{"type":"zoneEntered","area":"B"}},
+                {"id":"move","kind":"objective","parts":[],"trigger":{"type":"zoneEntered","area":"B","after":"detour"}},
+                {"id":"talk","kind":"objective","parts":[],"trigger":{"type":"npcLine","area":"B","after":"move","lines":[
+                    {"speaker":"Una","text":"Hello."}]}}
+            ]}"#,
+        )
+        .unwrap();
+        let mut inner = Inner {
+            routes: vec![route], progress: Progress::default(), characters: Default::default(),
+            identity: Default::default(),
+            log: LogStatus { connected: true, path: None, message: String::new() },
+            save_path: None, skip_optional: false, recent: Default::default(), fight: None,
+            in_zone: false, saved_at: Default::default(),
+        };
+        // The hero did the detour last login.
+        inner.characters.select(&mut inner.progress, "Hero", false).unwrap();
+        enter_zone(&inner.routes, &mut inner.progress, "B");
+        enter_zone(&inner.routes, &mut inner.progress, "A");
+        inner.characters.new_session(&mut inner.progress, Some("login-2".into()));
+        // A new login enters B and hears Una before the character is known (as `process` does).
+        let events = [
+            LogEvent::ZoneEntered { area: "B".into(), level: 1, seed: None },
+            LogEvent::Dialogue { speaker: "Una".into(), text: "Hello.".into() },
+        ];
+        for event in events {
+            let area = inner.progress.current_area.clone();
+            inner.characters.unbound.push(("t".into(), event.clone(), area));
+            apply(&inner.routes, &mut inner.progress, "t", &event);
+        }
+        assert!(!inner.progress.completed.contains_key("move"), "judged against no earlier ticks");
+        inner.characters.select(&mut inner.progress, "Hero", false).unwrap();
+        assert!(replay_unbound(&mut inner));
+        assert!(inner.progress.completed.contains_key("move"), "the hero's detour counts");
+        assert!(inner.progress.completed.contains_key("talk"));
+        assert_eq!(inner.progress.current_area.as_deref(), Some("B"));
+        assert!(inner.characters.unbound.is_empty());
+        assert!(inner.characters.profiles["Hero"].completed.contains_key("talk"), "saved in the profile");
     }
 
     fn one_route(steps: &str) -> [Route; 1] {

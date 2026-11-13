@@ -143,9 +143,14 @@ export function resolvePartialName(reads, league, knownCharacters) {
   const prefix = common.slice(0, -1).join('');
   // OCR may also glue the tooltip's own text ("<league> League") onto a title
   // that is still whole: accept that only when the rest is exactly the start
-  // of this row's tooltip text.
+  // of this row's tooltip text, at least three glyphs of it before the last
+  // (which may be misread). Less is a longer new name clipped by the tooltip
+  // ("ANNAB" is not the known "Anna" glued to anything).
   const tooltip = matchKey(`${league}League`.replace(/\s+/g, ''));
-  const glued = (read, key) => read.startsWith(key) && tooltip.startsWith(read.slice(key.length, -1) || '');
+  const glued = (read, key) => {
+    const rest = read.slice(key.length, -1);
+    return read.startsWith(key) && [...rest].length >= 3 && tooltip.startsWith(rest);
+  };
   const matches = new Map();
   for (const known of knownCharacters) {
     if (!known?.name || !known?.league || nameKey(known.league) !== nameKey(league)) continue;

@@ -1,11 +1,13 @@
 # Where we stopped — 2026-11-13
 
-> **Review, 2026-11-13 (from the Linux side):** read `docs/review-2026-11-13-character-identity.md`
-> first: 9 open findings on the identity code (double-click activation is never wired up,
-> a clipped new name can bind to a shorter known one, one missed game-window poll unbinds
-> the character, ...). v0.1.101 changed two things: Linux keeps its progress without
-> recognition (`Characters::keep_chosen`), and `game::running()` keeps its answer for 3 s.
-
+> **v0.1.108 (Windows, 2026-11-13):** the review's findings 1–9 are fixed
+> (`docs/review-2026-11-13-character-identity.md`, "Fixed on Windows"): a row double-click
+> really activates now, a briefly missing game window no longer unbinds, events before the
+> binding are judged against the chosen profile, a completed zone can be unfolded to untick.
+> The Windows build and all tests pass (204 Rust, 67 Node; two Node tests had Windows-only
+> path bugs). Since v0.1.99 the Linux side also parked the radar (v0.1.104) and added Act 1
+> zone guides (v0.1.105–107; `PLAN.md`, next: Acts 2–6). The live tests below still apply;
+> step 2's double-click only works from v0.1.108.
 
 Current version: **0.1.99**: character-selection recognition fixed for every
 list position, the slider and OCR misreads (details in
@@ -28,7 +30,7 @@ with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation
 - Tests: 37 recognizer/checklist tests, 7 identity tests; `tsc` and the
   Windows release build pass.
 
-## Next live test — do this first (v0.1.99)
+## Next live test — do this first (v0.1.108)
 
 1. Selection, quickly: `AAAABATONGA` (two reads used to disagree) and clicking
    a character while the league dropdown is open. Not yet seen live.

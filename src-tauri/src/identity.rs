@@ -92,6 +92,17 @@ impl Recognition {
         self.epoch
     }
 
+    /// Takes a menu frame's read as the name waiting for zone entry. The
+    /// activation's own frame may show a fading highlight or a hover tooltip:
+    /// without a name of its own it keeps the read of the input directly
+    /// before it (`begin` cleared anything older). False when it kept it.
+    pub fn observe(&mut self, read: Option<Candidate>, from_history: bool, preceding_frame: bool) -> bool {
+        if read.is_none() && !preceding_frame && self.submitted && self.pending.is_some() { return false; }
+        self.pending = read;
+        self.pending_from_history = from_history;
+        true
+    }
+
     /// A frame is current for the newest input, or for the selection click
     /// directly before a just-requested activation that has not begun yet.
     pub fn current(&self, epoch: u64, seq: u64) -> bool {
@@ -157,6 +168,7 @@ fn bind_at(inner: &mut crate::tracker::Inner, latest: u64) -> bool {
                     remember_complete(&mut inner.characters, known);
                 }
             }
+            crate::tracker::replay_unbound(inner);
             inner.identity.note = format!("Tracking: {}{}", inner.characters.active.as_deref().unwrap_or(&candidate.name),
                 if from_history { " (name completed from history)" } else { "" });
             set_context(true, true);
@@ -167,10 +179,11 @@ fn bind_at(inner: &mut crate::tracker::Inner, latest: u64) -> bool {
     }
 }
 
-fn remember_complete(characters: &mut crate::characters::Characters, known: KnownCharacter) {
-    if !characters.known.iter().any(|k| k.name.to_lowercase() == known.name.to_lowercase() && k.league.to_lowercase() == known.league.to_lowercase()) {
-        characters.known.push(known);
-    }
+/// False when it was known already.
+fn remember_complete(characters: &mut crate::characters::Characters, known: KnownCharacter) -> bool {
+    let new = !characters.known.iter().any(|k| k.name.to_lowercase() == known.name.to_lowercase() && k.league.to_lowercase() == known.league.to_lowercase());
+    if new { characters.known.push(known); }
+    new
 }
 
 #[tauri::command]
@@ -204,20 +217,24 @@ pub fn identity_observed(app: AppHandle, epoch: u64, seq: u64, result: ScreenRes
         // loading frame may still receive the immediately preceding name read.
         if !preceding_frame { inner.identity.activation_parent = None; }
         set_context(inner.in_zone, false);
+        // Saved only when something changed, not on every menu read (review item 10).
+        let mut changed = returned_to_menu;
         for known in learned.into_iter().filter(|k| valid_name(&k.name) && !k.league.trim().is_empty() && k.source == "complete-screen-read") {
-            remember_complete(&mut inner.characters, known);
+            changed |= remember_complete(&mut inner.characters, known);
         }
-        inner.identity.pending = if result.status == "candidate" {
+        let read = if result.status == "candidate" {
             result.candidate.filter(|c| valid_name(&c.name) && c.league.as_ref().is_some_and(|l| !l.trim().is_empty()))
         } else { None };
-        inner.identity.pending_from_history = result.resolution.as_deref() == Some("history-prefix");
+        if !inner.identity.observe(read, result.resolution.as_deref() == Some("history-prefix"), preceding_frame) {
+            trace("activation-kept-preceding", serde_json::json!({"seq":seq,"status":result.status,"reason":result.reason}));
+        }
         inner.identity.note = match &inner.identity.pending {
             Some(c) => format!("Recognized {}{}; waiting for zone entry", c.name,
-                if result.resolution.as_deref() == Some("history-prefix") { " (from history)" } else { "" }),
+                if inner.identity.pending_from_history { " (from history)" } else { "" }),
             None => "Character name is not clear yet; uncover it or choose a profile in settings".into(),
         };
-        bind_pending(&mut inner);
-        inner.save();
+        changed |= bind_pending(&mut inner);
+        if changed { inner.save(); }
         inner.sync_navigation(&app);
     } else {
         #[cfg(target_os = "windows")]
@@ -283,6 +300,25 @@ mod tests {
         state.begin(4, false, true); // An unprocessed edit happened at input 3.
         assert!(state.pending.is_none());
         assert!(!state.accepts(state.epoch, 1, 4));
+    }
+
+    #[test]
+    fn an_unreadable_activation_frame_keeps_the_selection_read_before_it() {
+        let hero = || Some(Candidate { name: "Hero".into(), league: Some("League".into()) });
+        let mut state = Recognition::default();
+        state.begin(1, false, false);
+        assert!(state.observe(hero(), true, false));
+        state.begin(2, false, true); // Play, or the row's second click
+        assert!(!state.observe(None, false, false), "ambiguous frame: no selected row");
+        assert_eq!(state.pending.as_ref().map(|c| c.name.as_str()), Some("Hero"));
+        assert!(state.pending_from_history);
+        let other = Candidate { name: "Other".into(), league: Some("League".into()) };
+        assert!(state.observe(Some(other), false, false), "a readable activation frame wins");
+        assert_eq!(state.pending.as_ref().map(|c| c.name.as_str()), Some("Other"));
+        state.begin(3, false, false);
+        state.pending = hero();
+        assert!(state.observe(None, false, false), "a selection click without a name clears it");
+        assert!(state.pending.is_none());
     }
 
     fn tracker() -> crate::tracker::Inner {

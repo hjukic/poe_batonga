@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { importArea, isCampaignArea, missingFiles, parseFileGroups, parseGraph, roomUnitSize } from './import-topologies.mjs';
 
-const DIR = new URL('../data/layouts/ggg/', import.meta.url).pathname;
+const DIR = fileURLToPath(new URL('../data/layouts/ggg/', import.meta.url));
 const names = readdirSync(DIR).filter((n) => n.endsWith('.json') && n !== 'index.json');
 const areas = new Map(names.map((n) => [n.replace(/\.json$/, ''), JSON.parse(readFileSync(join(DIR, n), 'utf8'))]));
 const index = JSON.parse(readFileSync(join(DIR, 'index.json'), 'utf8'));

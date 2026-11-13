@@ -8,9 +8,10 @@ use crate::minimap::Image;
 use windows::{core::HSTRING, Globalization::Language, Graphics::Imaging::{BitmapPixelFormat, SoftwareBitmap},
     Media::Ocr::OcrEngine, Storage::Streams::DataWriter, Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED}};
 use windows_sys::Win32::{Foundation::{GetLastError, HWND, LPARAM, LRESULT, WPARAM, RECT}, System::LibraryLoader::GetModuleHandleW,
-    Graphics::Gdi::ScreenToClient,
-    UI::WindowsAndMessaging::{CallNextHookEx, GetForegroundWindow, GetMessageW, GetWindowTextW, SetWindowsHookExW,
-        UnhookWindowsHookEx, KBDLLHOOKSTRUCT, MSLLHOOKSTRUCT, MSG, WH_KEYBOARD_LL, WH_MOUSE_LL,
+    Graphics::Gdi::ScreenToClient, UI::Input::KeyboardAndMouse::GetDoubleClickTime,
+    UI::WindowsAndMessaging::{CallNextHookEx, GetForegroundWindow, GetMessageW, GetSystemMetrics, InternalGetWindowText,
+        SetWindowsHookExW, UnhookWindowsHookEx, KBDLLHOOKSTRUCT, MSLLHOOKSTRUCT, MSG, WH_KEYBOARD_LL, WH_MOUSE_LL,
+        SM_CXDOUBLECLK, SM_CYDOUBLECLK,
         WM_KEYDOWN, WM_SYSKEYDOWN, WM_KEYUP, WM_SYSKEYUP, WM_LBUTTONDOWN, GetClientRect, WindowFromPoint, GetAncestor, GA_ROOT}};
 
 static SEQ: AtomicU64 = AtomicU64::new(0);
@@ -20,9 +21,12 @@ static ARMED: AtomicBool = AtomicBool::new(false);
 static RECOVERY_PROBE: AtomicBool = AtomicBool::new(true);
 static MODIFIERS: AtomicU64 = AtomicU64::new(0);
 static REQUESTS: OnceLock<SyncSender<Trigger>> = OnceLock::new();
-// Double-clicking a character row enters the game like Play does.
+// Double-clicking a character row enters the game like Play does. The last
+// row click (hook time in ms, and its screen point packed as two i32) is the
+// first half of a possible double-click; `NO_CLICK` means there is none.
+const NO_CLICK: u64 = u64::MAX;
 static LAST_CLICK_MS: AtomicU64 = AtomicU64::new(0);
-static LAST_CLICK_AT: AtomicU64 = AtomicU64::new(u64::MAX);
+static LAST_CLICK_AT: AtomicU64 = AtomicU64::new(NO_CLICK);
 /// Seq of the latest input that starts the game (Play/Continue, a row double-click).
 static LAST_ACTIVATION: AtomicU64 = AtomicU64::new(0);
 
@@ -61,14 +65,37 @@ fn game_title(window: HWND) -> bool {
     unsafe {
         if window.is_null() { return false; }
         let mut text = [0u16; 128];
-        let len = GetWindowTextW(window, text.as_mut_ptr(), text.len() as i32);
+        // Not GetWindowTextW: for the overlay's own windows that sends WM_GETTEXT
+        // to a busy UI thread from inside the low-level hook (global input lag,
+        // and past LowLevelHooksTimeout Windows silently removes the hook).
+        let len = InternalGetWindowText(window, text.as_mut_ptr(), text.len() as i32);
         len > 0 && String::from_utf16_lossy(&text[..len as usize]) == "Path of Exile 2"
     }
 }
 
 fn request(delay: u64, activation: bool, focus_click: bool) {
     let seq = SEQ.fetch_add(1, Ordering::SeqCst) + 1;
+    // Before the worker sees it: the selection frame just before an activation
+    // must not count as superseded (see `superseding_input`).
+    if activation { LAST_ACTIVATION.store(seq, Ordering::SeqCst); }
     if let Some(sender) = REQUESTS.get() { let _ = sender.try_send(Trigger { seq, delay, activation, focus_click }); }
+}
+
+fn pack_point(x: i32, y: i32) -> u64 { ((x as u32 as u64) << 32) | y as u32 as u64 }
+
+/// The second click of a double-click: soon enough after the previous row click
+/// and within the system's double-click rectangle around it.
+fn second_click(previous_ms: u64, previous_at: u64, now_ms: u64, x: i32, y: i32, max_ms: u64, slop: (i32, i32)) -> bool {
+    if previous_at == NO_CLICK { return false; }
+    let (px, py) = ((previous_at >> 32) as u32 as i32, previous_at as u32 as i32);
+    // Hook times are 32-bit tick counts that wrap after 49.7 days.
+    ((now_ms as u32).wrapping_sub(previous_ms as u32) as u64) <= max_ms &&
+        (x - px).abs() <= slop.0 / 2 && (y - py).abs() <= slop.1 / 2
+}
+
+/// A click in the character list on the selection screen (client fractions).
+fn in_character_list(fx: f64, fy: f64) -> bool {
+    (0.79..=0.99).contains(&fx) && (0.215..=0.73).contains(&fy)
 }
 
 unsafe extern "system" fn keyboard(code: i32, message: WPARAM, data: LPARAM) -> LRESULT {
@@ -120,10 +147,19 @@ unsafe extern "system" fn mouse(code: i32, message: WPARAM, data: LPARAM) -> LRE
             let mut point = event.pt;
             let mut rect = RECT::default();
             let focus_click = GetForegroundWindow() != window;
-            let activation = ScreenToClient(window, &mut point) != 0 &&
-                GetClientRect(window, &mut rect) != 0 && rect.right > 0 && rect.bottom > 0 &&
-                (0.28..=0.62).contains(&(point.x as f64 / rect.right as f64)) &&
-                (0.87..=0.95).contains(&(point.y as f64 / rect.bottom as f64));
+            let at = (ScreenToClient(window, &mut point) != 0 &&
+                GetClientRect(window, &mut rect) != 0 && rect.right > 0 && rect.bottom > 0)
+                .then(|| (point.x as f64 / rect.right as f64, point.y as f64 / rect.bottom as f64));
+            let play = at.is_some_and(|(fx, fy)| (0.28..=0.62).contains(&fx) && (0.87..=0.95).contains(&fy));
+            // A character row: its second click within the double-click time
+            // enters the game. A third click is a new first click.
+            let row = !in_zone && at.is_some_and(|(fx, fy)| in_character_list(fx, fy));
+            let double = row && second_click(LAST_CLICK_MS.load(Ordering::SeqCst), LAST_CLICK_AT.load(Ordering::SeqCst),
+                event.time as u64, event.pt.x, event.pt.y, GetDoubleClickTime() as u64,
+                (GetSystemMetrics(SM_CXDOUBLECLK), GetSystemMetrics(SM_CYDOUBLECLK)));
+            LAST_CLICK_MS.store(event.time as u64, Ordering::SeqCst);
+            LAST_CLICK_AT.store(if row && !double { pack_point(event.pt.x, event.pt.y) } else { NO_CLICK }, Ordering::SeqCst);
+            let activation = play || double;
             // Selection/edit clicks need a rendered frame; activation needs the
             // preceding field before the transition. OCR never blocks the hook.
             request(if activation { 0 } else if in_zone { 180 } else { 80 }, activation, focus_click);
@@ -468,6 +504,18 @@ mod tests {
         assert!(name_input_key(0x56,4)); // Ctrl+V edits the field
         assert!(name_input_key(0x0d,0)); // Enter activates
         assert!(name_input_key(0x49,0)); // A real I remains a letter
+    }
+    #[test]
+    fn a_second_row_click_soon_and_close_by_is_a_double_click() {
+        let slop = (4, 4);
+        let at = pack_point(-1700, 300); // a monitor left of the primary one
+        assert!(second_click(1000, at, 1400, -1699, 301, 500, slop));
+        assert!(!second_click(1000, at, 1600, -1699, 301, 500, slop), "too late");
+        assert!(!second_click(1000, at, 1400, -1690, 301, 500, slop), "another row or spot");
+        assert!(!second_click(1000, NO_CLICK, 1400, -1700, 300, 500, slop), "no first click");
+        assert!(second_click(u32::MAX as u64 - 100, at, 200, -1700, 300, 500, slop), "tick count wrapped");
+        assert!(in_character_list(0.85, 0.40));
+        assert!(!in_character_list(0.45, 0.90), "Play is its own activation");
     }
     #[test]
     fn caret_mask_preserves_real_letter_height_and_cleans_only_the_tall_bar() {

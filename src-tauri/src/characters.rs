@@ -15,7 +15,16 @@ pub struct Characters {
     pub known: Vec<crate::identity::KnownCharacter>,
     /// The character chosen last, by hand or kept (`keep_chosen`).
     pub last: Option<String>,
+    /// Log events read while no character was bound, each with the area the player was in,
+    /// for `tracker::replay_unbound` to judge against the profile then chosen. Before, they
+    /// were judged against an empty progress: an `after` step stayed open (review of
+    /// 2026-11-13, item 4). Not saved.
+    #[serde(skip)]
+    pub unbound: Vec<(String, crate::tracker::LogEvent, Option<String>)>,
 }
+
+/// Events kept while unbound; a login's own entry is the one that matters.
+pub const UNBOUND_EVENTS: usize = 64;
 
 /// Whether this build reads the character from the creation and selection screens (Windows
 /// OCR only).
@@ -79,13 +88,19 @@ impl Characters {
     }
 
     /// Stored progress survives a restart; a stored active name is not fresh identity.
+    /// Where the player was belongs to the log, like its path: kept, so that restoring an
+    /// already-read entry on start is not taken for another visit (review of 2026-11-13,
+    /// item 5). `select` carries it into the chosen profile.
     pub fn clear_binding(&mut self, progress: &mut Progress) {
         self.remember(progress);
         self.active = None;
         self.active_source = None;
+        self.unbound.clear();
         let old = std::mem::take(progress);
         progress.log_path = old.log_path;
         progress.log_offset = old.log_offset;
+        progress.current_area = old.current_area;
+        progress.shown_zone = old.shown_zone;
     }
 
     pub fn select(&mut self, progress: &mut Progress, name: &str, import_legacy: bool) -> Result<(), String> {
@@ -93,8 +108,13 @@ impl Characters {
         if name.is_empty() || name.chars().count() > 80 || name.chars().any(char::is_control) {
             return Err("Enter a character name (1–80 characters)".into());
         }
-        let matching: Vec<_> = self.profiles.keys().filter(|key| key.to_lowercase() == name.to_lowercase()).cloned().collect();
-        if matching.len() > 1 { return Err("Several saved profiles differ only by letter case; select a distinct profile name".into()); }
+        // The same spelling up to case first; else the same up to OCR misreads.
+        let same = |fold: fn(&str) -> String| -> Vec<String> {
+            self.profiles.keys().filter(|key| fold(key) == fold(name)).cloned().collect()
+        };
+        let mut matching = same(|s| s.to_lowercase());
+        if matching.is_empty() { matching = same(match_key); }
+        if matching.len() > 1 { return Err("Several saved profiles match this name (letter case or similar letters); select a distinct profile name".into()); }
         let name = matching.first().map(String::as_str).unwrap_or(name);
         if import_legacy && (self.legacy.is_none() || self.profiles.contains_key(name)) {
             return Err("Previous progress can only be assigned to a new character profile".into());
@@ -126,6 +146,34 @@ impl Characters {
         self.remember(progress);
         Ok(())
     }
+}
+
+/// `matchKey` of `src/character-screen.mjs`: matching only, never a display name. Windows
+/// OCR reads the game's small-caps title font inconsistently (I/l/1, O/0, É/Æ/E), so
+/// "BAT0NGA" must reach a hand-made "Batonga" (review of 2026-11-13, item 8). Accents are
+/// dropped from the letters Unicode decomposes into letter + mark; ø, ł, đ stay as in JS.
+pub fn match_key(name: &str) -> String {
+    name.trim().to_lowercase().chars().map(|c| match c {
+        'à'..='å' | 'ā' | 'ă' | 'ą' => 'a',
+        'ç' | 'ć' | 'ĉ' | 'ċ' | 'č' => 'c',
+        'ď' => 'd',
+        'è'..='ë' | 'ē' | 'ĕ' | 'ė' | 'ę' | 'ě' | 'æ' | 'œ' => 'e',
+        'ĝ' | 'ğ' | 'ġ' | 'ģ' => 'g',
+        'ĥ' => 'h',
+        'ì'..='ï' | 'ĩ' | 'ī' | 'ĭ' | 'į' | '1' | '|' | 'l' | 'ĺ' | 'ļ' | 'ľ' => 'i',
+        'ĵ' => 'j',
+        'ķ' => 'k',
+        'ñ' | 'ń' | 'ņ' | 'ň' => 'n',
+        'ò'..='ö' | 'ō' | 'ŏ' | 'ő' | '0' => 'o',
+        'ŕ' | 'ŗ' | 'ř' => 'r',
+        'ś' | 'ŝ' | 'ş' | 'š' => 's',
+        'ţ' | 'ť' => 't',
+        'ù'..='ü' | 'ũ' | 'ū' | 'ŭ' | 'ů' | 'ű' | 'ų' => 'u',
+        'ŵ' => 'w',
+        'ý' | 'ÿ' | 'ŷ' => 'y',
+        'ź' | 'ż' | 'ž' => 'z',
+        other => other,
+    }).collect()
 }
 
 pub fn load(bytes: &[u8]) -> Result<SavedProgress, serde_json::Error> {
@@ -189,6 +237,38 @@ mod tests {
         assert_eq!(chars.active.as_deref(), Some("Existing_Hero"));
         assert_eq!(chars.profiles.len(), 1);
         assert!(progress.completed.contains_key("boss"));
+    }
+
+    #[test]
+    fn ocr_misreads_reuse_the_profile_and_an_exact_spelling_wins() {
+        let mut chars = Characters::default();
+        let mut progress = Progress::default();
+        chars.select(&mut progress, "Batonga", false).unwrap();
+        tick(&mut progress, "boss");
+        chars.clear_binding(&mut progress);
+        chars.select(&mut progress, "BAT0NGA", false).unwrap();
+        assert_eq!(chars.active.as_deref(), Some("Batonga"));
+        assert!(progress.completed.contains_key("boss"));
+        assert_eq!(match_key("ÆLIÉN"), match_key("eii\u{e9}n"));
+        assert_eq!(match_key("Bjørn") == match_key("Bjorn"), false, "ø has no mark to drop, as in JS");
+        // Two profiles OCR cannot tell apart are fine while the read is one of them exactly.
+        chars.profiles.insert("Anna1".into(), Progress::default());
+        chars.profiles.insert("Annal".into(), Progress::default());
+        chars.select(&mut progress, "ANNAL", false).unwrap();
+        assert_eq!(chars.active.as_deref(), Some("Annal"));
+        assert!(chars.select(&mut progress, "AnnaI", false).is_err(), "not arbitrarily one of them");
+    }
+
+    #[test]
+    fn clearing_the_binding_keeps_where_the_player_is() {
+        let mut chars = Characters::default();
+        let mut progress = Progress { current_area: Some("G1_town".into()), shown_zone: Some("G1_town".into()), ..Default::default() };
+        chars.select(&mut progress, "Hero", false).unwrap();
+        tick(&mut progress, "boss");
+        chars.clear_binding(&mut progress); // as on every start
+        assert!(progress.completed.is_empty());
+        assert_eq!(progress.current_area.as_deref(), Some("G1_town"), "a restored entry is no new visit");
+        assert_eq!(progress.shown_zone.as_deref(), Some("G1_town"));
     }
 
     #[test]

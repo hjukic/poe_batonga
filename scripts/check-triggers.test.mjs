@@ -4,9 +4,10 @@
 // every trigger against those tables, as scripts/check-triggers.sh does.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { check, linesFromTables, loadLines, loadRoutes, shownText, triggerLines, variantStem } from './check-triggers.mjs';
 
-const ROUTES = new URL('../data/routes/', import.meta.url).pathname;
+const ROUTES = fileURLToPath(new URL('../data/routes/', import.meta.url));
 const routes = loadRoutes(ROUTES);
 
 test('shownText follows the tracker: markup out, whitespace collapsed', () => {

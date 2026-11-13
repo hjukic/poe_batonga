@@ -21,7 +21,7 @@
 // Exit code 1 when any line no longer matches; the report says what changed.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /** A line's text as the log shows it; the same rules as `shown_text` in src-tauri/src/tracker.rs:
  *  `<i>{word}` becomes `word`, other tags and every run of whitespace become one space. */
@@ -236,7 +236,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     return value;
   };
   const json = args.includes('--json');
-  const routesDir = option('--routes', new URL('../data/routes/', import.meta.url).pathname);
+  const routesDir = option('--routes', fileURLToPath(new URL('../data/routes/', import.meta.url)));
   const tables = args.filter((a) => a !== '--json')[0];
   if (!tables) {
     console.error('usage: node scripts/check-triggers.mjs <tables> [--routes <dir>] [--json]');
