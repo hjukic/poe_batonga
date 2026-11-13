@@ -505,7 +505,10 @@ fn read(memory: &mut Memory, region: &CaptureRegion, panel: &dyn Fn() -> Option<
         }
         scan
     };
-    choose(memory, || capture(region), region.minimap_marker, &region.plan, Some(&scan), big)
+    // Once the zone's layout is recognised the far exits' names are not needed: no more
+    // 4K screenshots of the whole window in this zone.
+    let scan: Option<&dyn Fn() -> Scan> = if layout_known() { None } else { Some(&scan) };
+    choose(memory, || capture(region), region.minimap_marker, &region.plan, scan, big)
 }
 
 /// The corner's capture read as the minimap, when it shows its player cross.
@@ -604,6 +607,19 @@ pub fn init() -> Minimap {
     Minimap {
         last: Arc::new(std::sync::Mutex::new(MinimapView::status(true, "Starting"))),
     }
+}
+
+/// The current zone's layout is recognised from named exits (`layout::layout_done`): the
+/// whole-window scans, which read far exits' names to recognise it, stop until the next
+/// zone. Each is a 4K screenshot, which the compositor copies off the GPU.
+static LAYOUT_KNOWN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_layout_known(known: bool) {
+    LAYOUT_KNOWN.store(known, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn layout_known() -> bool {
+    LAYOUT_KNOWN.load(std::sync::atomic::Ordering::SeqCst)
 }
 
 /// The page's "Compass (parked)" setting, off until the page says otherwise: the views

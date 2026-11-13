@@ -1092,6 +1092,8 @@ impl Recorder {
         let mut state = crate::relock(&self.0);
         match event {
             LogEvent::ZoneEntered { area, level, seed } => {
+                // A new zone: its layout is to be recognised (whole-window scans again).
+                crate::minimap::set_layout_known(false);
                 let left = state.session.as_ref().map(|s| s.recording.area.clone());
                 let respawn = live && left.as_deref() == Some(area.as_str());
                 if let Some(session) = state.session.as_mut() {
@@ -1711,9 +1713,19 @@ impl State {
                 .collect(),
             guide: self.guide(session),
             light: false,
-            layout: session.navigator.as_ref().and_then(|n| n.picture()),
+            layout: {
+                let picture = session.navigator.as_ref().and_then(|n| n.picture());
+                crate::minimap::set_layout_known(layout_done(picture.as_ref()));
+                picture
+            },
         })
     }
+}
+
+/// The zone's layout is recognised for good: sure, from exits read by name (not from the
+/// path alone, which named exits may still correct).
+fn layout_done(picture: Option<&nav::Picture>) -> bool {
+    picture.is_some_and(|p| p.known && p.sure && !p.from_path)
 }
 
 #[cfg(test)]
@@ -1951,6 +1963,16 @@ mod tests {
         assert_eq!(start.scale, 1.17);
         drop(state);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn whole_window_scans_stop_only_once_a_layout_is_sure_from_named_exits() {
+        let picture = |known, sure, from_path| nav::Picture { known, sure, from_path, ..Default::default() };
+        assert!(!layout_done(None));
+        assert!(!layout_done(Some(&picture(false, false, false))));
+        assert!(!layout_done(Some(&picture(true, false, false))), "likely, not sure");
+        assert!(!layout_done(Some(&picture(true, true, true))), "from the path alone");
+        assert!(layout_done(Some(&picture(true, true, false))));
     }
 
     #[test]
