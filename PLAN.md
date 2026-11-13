@@ -28,10 +28,10 @@ under live verification.
 "general guides/speedrun tips how to traverse the zones best and fastest ... gather few
 campaign guides/speedrun guides and similar layout tips and maybe create our own layout
 setups ... check the possible layouts from datamined zones ... for start focus on act 1".
-Act 1 done as a first version: `data/tips/act1.json` (community tips checked against the
-layout graphs), shown under the checklist (setting "Zone tips"); evidence and sources in
-`docs/act1-zone-tips.md`. Our own layout setups: every layout of the zone over each other
-from the entrance, drawn under the tips (setting "Zone layouts"). Next: Acts 2-6.
+Act 1 done: a zone guide under the checklist (setting "Zone guide"): a Mobalytics-like
+schematic of the zone's usual shape from where you come in, the route, and short steps;
+community patterns checked against the layout graphs (`data/guides/act1.json`,
+`docs/act1-zone-tips.md`). Next: Acts 2-6.
 
 ## Parked: radar and layout recognition (owner, 2026-11-13)
 

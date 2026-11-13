@@ -1,8 +1,12 @@
-# Act 1 zone tips: sources and evidence
+# Act 1 zone guides: sources and evidence
 
-The panel shows, under the checklist, how to cross the zone you are in fast
-(`data/tips/act1.json`, `src/zone-tips.ts`; setting "Zone tips"). Each tip names its
-sources (hover it). This file keeps what they rest on. Started 2026-11-13, after the radar
+The panel shows, under the checklist, how to cross the zone you are in: a schematic of the
+zone's usual shape drawn from where you come in (the triangle), the route to follow, the
+places and clues on it, and two to four numbered steps (`data/guides/act1.json`, drawn by
+`src/guide-svg.ts`, shown by `src/zone-guides.ts`; setting "Zone guide"). Each step names its
+sources (hover it). The schematics follow the Mobalytics layout guide's idea: one general
+pattern per zone, not one picture per layout; the game turns zones, the pattern stays. This
+file keeps what they rest on. Started 2026-11-13, after the radar
 and layout recognition were parked; Act 1 only for now.
 
 ## Sources
@@ -66,23 +70,14 @@ directions (north, east) are not used for dungeon zones: their layouts may lie t
   graphs tag the wheel tile (`mausoleum_centre`, always within the nearer two thirds) but not
   Draven's arena; kept as the codex says it.
 
-## Our own layout setups
+## Tried and dropped: every layout over each other
 
-Under the tips the panel draws every layout of the zone over each other (setting "Zone
-layouts"; `src/zone-setups.ts`). `node scripts/build-zone-setups.mjs` builds
-`data/tips/act1-setups.json` from the layout graphs: each layout is moved so the entrance
-(campaign order) is at the bottom, turned so the way into the zone (entrance to the middle of
-the layout) points up, and scaled to its farthest node. Corridors are faint, so the ones many
-layouts share stand out; exits, bosses and places are soft spots, bright where many layouts
-put them, each named once where most of them are. What it shows that the tips use:
-
-- The Grelwood: the Brambleghast next to the Red Vale exit (the codex's "same quadrant").
-- Ogham Farmlands: Una's lute just in front of you, Ogham Village and the boss at the far end.
-- Cemetery of the Eternals: Lachlann's arena behind you as you come in, the tombs around the
-  middle.
-- The Grim Tangle: the Cemetery at the far end, the Rotten Druid off to one side.
-
-Rebuild after the layout graphs change (`scripts/update-layouts.sh`).
+v0.1.106 drew every layout of the zone laid over each other from the entrance. The owner:
+"that drawing does not help, i was thinking something like those mobalytics, where i get an
+idea of the layout and know what to follow or do in each zone". Replaced by the schematics
+in v0.1.107. What the overlay showed went into them: the Brambleghast next to the Red Vale
+exit, Una's lute in front of the Farmlands entrance, Lachlann's arena behind you as you come
+into the Cemetery.
 
 ## Next
 

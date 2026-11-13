@@ -9,7 +9,7 @@ For the latest checkpoint and the next live test, read [session handoff](SESSION
   was measured.
 - [Triggers](triggers.md): which checklist steps tick themselves from the log, and how.
 - [Log findings](log-findings.md): what the game's `Client.txt` records, and what not.
-- [Act 1 zone tips](act1-zone-tips.md): how to cross each zone fast; sources and the layout counts behind each tip.
+- [Act 1 zone guides](act1-zone-tips.md): how to cross each zone (schematics and steps); sources and the layout counts behind them.
 - [Data sources](data-sources.md): route, zone, layout-graph, icon, font and dialogue data,
   and how to refresh them after a patch.
 - [Overlay test](overlay-test.md): how to run the overlay and check it over the game.

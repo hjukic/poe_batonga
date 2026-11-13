@@ -1,0 +1,2331 @@
+{
+ "act": 1,
+ "about": "How to cross each Act 1 zone: a schematic of its usual shape drawn from where you come in (at the triangle), the route to follow, and short steps. Community patterns, checked against the game's layout graphs; evidence in docs/act1-zone-tips.md. Drawings: src/guide-svg.ts.",
+ "sources": {
+  "data": "The game's layout graphs: every possible layout of the zone, counted (scripts/zone-layout-stats.mjs).",
+  "codex": "Mobalytics, Campaign Layout Guide: Act 1 (Lolcohol, Campaign Codex), updated 2026-05-23.",
+  "poe2way": "poe2way.com act guide, Act 1 (layout tips tagged 0.5.0).",
+  "maxroll": "Maxroll, Path of Exile 2 Campaign Guide, updated 2026-06-02.",
+  "aoeah": "AOEAH, PoE 2 0.5 Campaign Speedrun & Fast Leveling Route Guide, 2026-05-22."
+ },
+ "zones": {
+  "G1_1": {
+   "steps": [
+    {
+     "text": "Follow the river straight on: no waypoint here.",
+     "src": [
+      "maxroll"
+     ]
+    },
+    {
+     "text": "Large chest midway: your first skill gem.",
+     "src": [
+      "maxroll"
+     ]
+    },
+    {
+     "text": "The Bloated Miller guards the way to the encampment.",
+     "src": [
+      "maxroll",
+      "data"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       50,
+       62
+      ],
+      [
+       43,
+       47
+      ],
+      [
+       57,
+       35
+      ],
+      [
+       45,
+       22
+      ],
+      [
+       52,
+       6
+      ]
+     ]
+    ],
+    "clues": [
+     {
+      "points": [
+       [
+        58,
+        62
+       ],
+       [
+        51,
+        47
+       ],
+       [
+        64,
+        35
+       ],
+       [
+        53,
+        22
+       ],
+       [
+        60,
+        8
+       ]
+      ],
+      "label": "river",
+      "at": [
+       70,
+       46
+      ]
+     }
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        50,
+        57
+       ],
+       [
+        44,
+        47
+       ],
+       [
+        56,
+        35
+       ],
+       [
+        46,
+        23
+       ],
+       [
+        50,
+        17
+       ]
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       50,
+       60
+      ],
+      "kind": "in",
+      "label": "You start",
+      "below": true
+     },
+     {
+      "at": [
+       37,
+       38
+      ],
+      "kind": "reward",
+      "label": "Chest: skill gem",
+      "anchor": "end"
+     },
+     {
+      "at": [
+       51,
+       14
+      ],
+      "kind": "boss",
+      "label": "Bloated Miller",
+      "anchor": "start"
+     },
+     {
+      "at": [
+       52,
+       6
+      ],
+      "kind": "exit",
+      "label": "Clearfell Encampment",
+      "anchor": "end"
+     }
+    ]
+   }
+  },
+  "G1_2": {
+   "steps": [
+    {
+     "text": "Head straight away from town: Beira (+10% cold res) and the Grelwood are on the far side (the Grelwood in 29 of 33 layouts).",
+     "src": [
+      "data",
+      "codex"
+     ]
+    },
+    {
+     "text": "Waypoint and Mud Burrow on one side of the start, the Mysterious Campsite (skill gem) on the other; the sides swap.",
+     "src": [
+      "codex"
+     ]
+    },
+    {
+     "text": "The Grelwood is past the bridge. The Mud Burrow is rarely worth it.",
+     "src": [
+      "codex",
+      "maxroll"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       50,
+       62
+      ],
+      [
+       50,
+       12
+      ]
+     ],
+     [
+      [
+       50,
+       46
+      ],
+      [
+       20,
+       42
+      ]
+     ],
+     [
+      [
+       50,
+       46
+      ],
+      [
+       80,
+       42
+      ]
+     ],
+     [
+      [
+       50,
+       24
+      ],
+      [
+       28,
+       14
+      ]
+     ],
+     [
+      [
+       50,
+       24
+      ],
+      [
+       74,
+       10
+      ]
+     ]
+    ],
+    "alt": [
+     {
+      "points": [
+       [
+        48,
+        46
+       ],
+       [
+        26,
+        42.5
+       ]
+      ]
+     },
+     {
+      "points": [
+       [
+        52,
+        46
+       ],
+       [
+        74,
+        42.5
+       ]
+      ]
+     }
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        50,
+        57
+       ],
+       [
+        50,
+        25
+       ],
+       [
+        33,
+        16
+       ]
+      ]
+     },
+     {
+      "points": [
+       [
+        35,
+        18
+       ],
+       [
+        50,
+        26
+       ],
+       [
+        69,
+        13
+       ]
+      ]
+     }
+    ],
+    "clues": [
+     {
+      "points": [
+       [
+        58,
+        22
+       ],
+       [
+        64,
+        15
+       ]
+      ],
+      "label": "bridge",
+      "at": [
+       66,
+       22
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       50,
+       60
+      ],
+      "kind": "in",
+      "label": "From town",
+      "below": true
+     },
+     {
+      "at": [
+       20,
+       42
+      ],
+      "kind": "wp",
+      "label": "WP + Mud Burrow",
+      "below": true,
+      "anchor": "start"
+     },
+     {
+      "at": [
+       80,
+       42
+      ],
+      "kind": "reward",
+      "label": "Campsite: gem",
+      "below": true,
+      "anchor": "end"
+     },
+     {
+      "at": [
+       28,
+       14
+      ],
+      "kind": "boss",
+      "label": "Beira",
+      "anchor": "middle"
+     },
+     {
+      "at": [
+       74,
+       10
+      ],
+      "kind": "exit",
+      "label": "The Grelwood",
+      "anchor": "middle"
+     }
+    ]
+   }
+  },
+  "G1_3": {
+   "steps": [
+    {
+     "text": "One winding tunnel: keep going, the Devourer is always at the far end (4 of 4).",
+     "src": [
+      "data",
+      "maxroll"
+     ]
+    },
+    {
+     "text": "Optional (Lv 2 uncut gem); dodge-roll through his projectile barrage.",
+     "src": [
+      "codex",
+      "maxroll"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       50,
+       62
+      ],
+      [
+       28,
+       50
+      ],
+      [
+       68,
+       40
+      ],
+      [
+       32,
+       28
+      ],
+      [
+       62,
+       17
+      ],
+      [
+       50,
+       9
+      ]
+     ]
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        49,
+        57
+       ],
+       [
+        31,
+        50
+       ],
+       [
+        65,
+        40
+       ],
+       [
+        35,
+        28
+       ],
+       [
+        59,
+        18
+       ],
+       [
+        51,
+        12
+       ]
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       50,
+       60
+      ],
+      "kind": "in",
+      "label": "From Clearfell",
+      "below": true
+     },
+     {
+      "at": [
+       50,
+       9
+      ],
+      "kind": "boss",
+      "label": "The Devourer",
+      "anchor": "start"
+     }
+    ]
+   }
+  },
+  "G1_4": {
+   "steps": [
+    {
+     "text": "Follow the river upstream: the Red Vale is always at the far end (12 of 12), the Brambleghast next to it.",
+     "src": [
+      "poe2way",
+      "codex",
+      "data"
+     ]
+    },
+    {
+     "text": "Glowing roots lead to the Tree of Souls (waypoint); orange mushrooms to the Grim Tangle, about halfway in (11 of 12).",
+     "src": [
+      "poe2way",
+      "codex",
+      "data"
+     ]
+    },
+    {
+     "text": "The Tree, the Grim Tangle and Areagne's hut sit round a diamond and swap; the Lost Catacombs are by the entrance.",
+     "src": [
+      "codex",
+      "data"
+     ]
+    },
+    {
+     "text": "Found the Grim Tangle or the Red Vale first? Take its waypoint and come back.",
+     "src": [
+      "poe2way",
+      "maxroll"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       50,
+       60
+      ],
+      [
+       18,
+       36
+      ],
+      [
+       50,
+       14
+      ],
+      [
+       82,
+       36
+      ],
+      [
+       50,
+       60
+      ]
+     ],
+     [
+      [
+       50,
+       14
+      ],
+      [
+       52,
+       6
+      ]
+     ]
+    ],
+    "clues": [
+     {
+      "points": [
+       [
+        62,
+        60
+       ],
+       [
+        74,
+        44
+       ],
+       [
+        64,
+        26
+       ],
+       [
+        55,
+        10
+       ]
+      ],
+      "label": "river",
+      "at": [
+       80,
+       52
+      ]
+     },
+     {
+      "points": [
+       [
+        46,
+        52
+       ],
+       [
+        26,
+        40
+       ]
+      ],
+      "label": "glowing roots",
+      "at": [
+       28,
+       50
+      ]
+     },
+     {
+      "points": [
+       [
+        54,
+        52
+       ],
+       [
+        76,
+        40
+       ]
+      ],
+      "label": "mushrooms",
+      "at": [
+       70,
+       54
+      ]
+     }
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        50,
+        56
+       ],
+       [
+        60,
+        34
+       ],
+       [
+        53,
+        10
+       ]
+      ]
+     }
+    ],
+    "alt": [
+     {
+      "points": [
+       [
+        48,
+        56
+       ],
+       [
+        21,
+        37
+       ]
+      ]
+     },
+     {
+      "points": [
+       [
+        52,
+        56
+       ],
+       [
+        79,
+        37
+       ]
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       50,
+       60
+      ],
+      "kind": "in",
+      "label": "From Clearfell",
+      "below": true
+     },
+     {
+      "at": [
+       41,
+       52
+      ],
+      "kind": "maybe",
+      "label": "Lost Catacombs",
+      "anchor": "end",
+      "below": true
+     },
+     {
+      "at": [
+       18,
+       36
+      ],
+      "kind": "wp",
+      "label": "Tree of Souls",
+      "anchor": "start"
+     },
+     {
+      "at": [
+       82,
+       36
+      ],
+      "kind": "exit",
+      "label": "Grim Tangle",
+      "anchor": "end"
+     },
+     {
+      "at": [
+       50,
+       32
+      ],
+      "kind": "place",
+      "label": "Areagne's hut",
+      "below": true
+     },
+     {
+      "at": [
+       40,
+       14
+      ],
+      "kind": "boss",
+      "label": "Brambleghast",
+      "anchor": "end"
+     },
+     {
+      "at": [
+       52,
+       6
+      ],
+      "kind": "exit",
+      "label": "The Red Vale",
+      "anchor": "start"
+     }
+    ]
+   }
+  },
+  "G1_5": {
+   "steps": [
+    {
+     "text": "Make a loop: three Rust obelisks spread round the zone, one sometimes by the blood river in the middle.",
+     "src": [
+      "codex",
+      "maxroll"
+     ]
+    },
+    {
+     "text": "Each spawns a wave; the third summons the Rust King. Good experience.",
+     "src": [
+      "maxroll",
+      "poe2way"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       50,
+       60
+      ],
+      [
+       24,
+       50
+      ],
+      [
+       16,
+       30
+      ],
+      [
+       30,
+       12
+      ],
+      [
+       56,
+       8
+      ],
+      [
+       78,
+       18
+      ],
+      [
+       84,
+       40
+      ],
+      [
+       70,
+       56
+      ],
+      [
+       50,
+       60
+      ]
+     ]
+    ],
+    "clues": [
+     {
+      "points": [
+       [
+        36,
+        40
+       ],
+       [
+        50,
+        33
+       ],
+       [
+        64,
+        28
+       ]
+      ],
+      "label": "blood river",
+      "at": [
+       50,
+       42
+      ]
+     }
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        47,
+        58
+       ],
+       [
+        25,
+        48
+       ],
+       [
+        18,
+        30
+       ],
+       [
+        31,
+        14
+       ],
+       [
+        55,
+        10
+       ],
+       [
+        76,
+        19
+       ],
+       [
+        82,
+        36
+       ]
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       50,
+       60
+      ],
+      "kind": "in",
+      "label": "From the Grelwood",
+      "below": true
+     },
+     {
+      "at": [
+       17,
+       32
+      ],
+      "kind": "quest",
+      "label": "Obelisk",
+      "anchor": "start"
+     },
+     {
+      "at": [
+       55,
+       9
+      ],
+      "kind": "quest",
+      "label": "Obelisk",
+      "anchor": "middle"
+     },
+     {
+      "at": [
+       83,
+       39
+      ],
+      "kind": "boss",
+      "label": "3rd: Rust King",
+      "anchor": "end",
+      "below": true
+     }
+    ]
+   }
+  },
+  "G1_6": {
+   "steps": [
+    {
+     "text": "Head away from the entrance, the way the zone opens up: the Cemetery is always at the far end (8 of 8).",
+     "src": [
+      "data",
+      "codex"
+     ]
+    },
+    {
+     "text": "When Una starts singing, respawn at the checkpoint to skip it.",
+     "src": [
+      "codex",
+      "poe2way"
+     ]
+    },
+    {
+     "text": "The Rotten Druid (support gem) is off to one side near the end.",
+     "src": [
+      "data",
+      "codex"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       50,
+       62
+      ],
+      [
+       43,
+       46
+      ],
+      [
+       57,
+       32
+      ],
+      [
+       46,
+       18
+      ],
+      [
+       52,
+       6
+      ]
+     ],
+     [
+      [
+       51,
+       24
+      ],
+      [
+       76,
+       18
+      ]
+     ]
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        50,
+        57
+       ],
+       [
+        44,
+        46
+       ],
+       [
+        55,
+        32
+       ],
+       [
+        47,
+        19
+       ],
+       [
+        51,
+        10
+       ]
+      ]
+     }
+    ],
+    "alt": [
+     {
+      "points": [
+       [
+        53,
+        23
+       ],
+       [
+        72,
+        18.5
+       ]
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       50,
+       60
+      ],
+      "kind": "in",
+      "label": "From the Grelwood",
+      "below": true
+     },
+     {
+      "at": [
+       41,
+       47
+      ],
+      "kind": "place",
+      "label": "Una: respawn to skip",
+      "anchor": "end"
+     },
+     {
+      "at": [
+       76,
+       18
+      ],
+      "kind": "boss",
+      "label": "Rotten Druid",
+      "anchor": "end",
+      "below": true
+     },
+     {
+      "at": [
+       52,
+       6
+      ],
+      "kind": "exit",
+      "label": "Cemetery of the Eternals",
+      "anchor": "start"
+     }
+    ]
+   }
+  },
+  "G1_7": {
+   "steps": [
+    {
+     "text": "Lachlann's arena and the Memorial Gate are close to where you come in (10 of 12).",
+     "src": [
+      "data"
+     ]
+    },
+    {
+     "text": "The two tombs lie halfway in, along the side walls: hug one wall, then the other; take a tomb's waypoint when you find it.",
+     "src": [
+      "data",
+      "codex",
+      "poe2way"
+     ]
+    },
+    {
+     "text": "Sarcophagus with a guaranteed ring on the far wall.",
+     "src": [
+      "codex",
+      "maxroll"
+     ]
+    },
+    {
+     "text": "After opening the gate, respawn at the checkpoint to skip the talk.",
+     "src": [
+      "poe2way",
+      "codex"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       14,
+       60
+      ],
+      [
+       14,
+       8
+      ],
+      [
+       86,
+       8
+      ],
+      [
+       86,
+       60
+      ],
+      [
+       14,
+       60
+      ]
+     ]
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        50,
+        56
+       ],
+       [
+        50,
+        38
+       ],
+       [
+        19,
+        30
+       ]
+      ]
+     },
+     {
+      "points": [
+       [
+        21,
+        27
+       ],
+       [
+        50,
+        26
+       ],
+       [
+        80,
+        30
+       ]
+      ]
+     }
+    ],
+    "alt": [
+     {
+      "points": [
+       [
+        50,
+        12
+       ],
+       [
+        50,
+        18
+       ]
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       50,
+       58
+      ],
+      "kind": "in",
+      "label": "From the Grim Tangle",
+      "anchor": "start"
+     },
+     {
+      "at": [
+       30,
+       52
+      ],
+      "kind": "boss",
+      "label": "Lachlann · gate",
+      "anchor": "end"
+     },
+     {
+      "at": [
+       16,
+       30
+      ],
+      "kind": "exit",
+      "label": "Tomb / Mausoleum",
+      "anchor": "start",
+      "below": true
+     },
+     {
+      "at": [
+       84,
+       30
+      ],
+      "kind": "exit",
+      "label": "Mausoleum / Tomb",
+      "anchor": "end",
+      "below": true
+     },
+     {
+      "at": [
+       50,
+       11
+      ],
+      "kind": "reward",
+      "label": "Sarcophagus: ring",
+      "below": true
+     }
+    ]
+   }
+  },
+  "G1_8": {
+   "steps": [
+    {
+     "text": "A grid of rooms; you come in near a corner.",
+     "src": [
+      "codex"
+     ]
+    },
+    {
+     "text": "Draw a line from the entrance through the wheel tile in the middle: Draven is at the far end 3 times in 4.",
+     "src": [
+      "codex"
+     ]
+    },
+    {
+     "text": "Not there? He is along the long wall in line with the entrance. His arena has a ribbed edge.",
+     "src": [
+      "codex"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       18,
+       60
+      ],
+      [
+       18,
+       8
+      ],
+      [
+       82,
+       8
+      ],
+      [
+       82,
+       60
+      ],
+      [
+       18,
+       60
+      ]
+     ]
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        24,
+        53
+       ],
+       [
+        49,
+        35
+       ],
+       [
+        74,
+        15
+       ]
+      ]
+     }
+    ],
+    "alt": [
+     {
+      "points": [
+       [
+        21,
+        51
+       ],
+       [
+        21,
+        15
+       ]
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       23,
+       56
+      ],
+      "kind": "in",
+      "label": "From the Cemetery",
+      "anchor": "start",
+      "below": true
+     },
+     {
+      "at": [
+       50,
+       34
+      ],
+      "kind": "place",
+      "label": "Wheel tile",
+      "anchor": "start"
+     },
+     {
+      "at": [
+       77,
+       12
+      ],
+      "kind": "boss",
+      "label": "Draven (3 in 4)",
+      "anchor": "end",
+      "below": true
+     },
+     {
+      "at": [
+       21,
+       11
+      ],
+      "kind": "maybe",
+      "label": "else here",
+      "anchor": "start",
+      "below": true
+     }
+    ]
+   }
+  },
+  "G1_9": {
+   "steps": [
+    {
+     "text": "Go through the middle: Asinia's arena is usually along the far side (not sure yet).",
+     "src": [
+      "codex"
+     ]
+    },
+    {
+     "text": "Haunted Treasure (optional): a rare knight with a support gem.",
+     "src": [
+      "codex"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       20,
+       60
+      ],
+      [
+       20,
+       8
+      ],
+      [
+       80,
+       8
+      ],
+      [
+       80,
+       60
+      ],
+      [
+       20,
+       60
+      ]
+     ]
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        50,
+        56
+       ],
+       [
+        50,
+        37
+       ],
+       [
+        50,
+        15
+       ]
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       50,
+       58
+      ],
+      "kind": "in",
+      "label": "From the Cemetery",
+      "anchor": "start"
+     },
+     {
+      "at": [
+       50,
+       34
+      ],
+      "kind": "place",
+      "label": "Centre",
+      "anchor": "start"
+     },
+     {
+      "at": [
+       50,
+       12
+      ],
+      "kind": "boss",
+      "label": "Asinia (usually)",
+      "anchor": "start"
+     }
+    ]
+   }
+  },
+  "G1_11": {
+   "steps": [
+    {
+     "text": "Places sit in the corners: follow the edges, skip the middle. Both exits are usually on the far side.",
+     "src": [
+      "codex",
+      "data"
+     ]
+    },
+    {
+     "text": "Signposts lead to Ogham Farmlands; bloody tracks to the Crowbell (+2 passive points).",
+     "src": [
+      "codex",
+      "poe2way"
+     ]
+    },
+    {
+     "text": "Finish the ritual in the middle and its locusts fly to Freythorn. Found the Farmlands first? Take its waypoint and come back.",
+     "src": [
+      "codex",
+      "poe2way"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       12,
+       60
+      ],
+      [
+       12,
+       8
+      ],
+      [
+       88,
+       8
+      ],
+      [
+       88,
+       60
+      ],
+      [
+       12,
+       60
+      ]
+     ]
+    ],
+    "clues": [
+     {
+      "points": [
+       [
+        40,
+        56
+       ],
+       [
+        20,
+        40
+       ],
+       [
+        18,
+        16
+       ]
+      ],
+      "label": "signposts",
+      "at": [
+       31,
+       33
+      ]
+     },
+     {
+      "points": [
+       [
+        60,
+        56
+       ],
+       [
+        80,
+        50
+       ]
+      ],
+      "label": "bloody tracks",
+      "at": [
+       70,
+       60
+      ]
+     },
+     {
+      "points": [
+       [
+        54,
+        30
+       ],
+       [
+        80,
+        14
+       ]
+      ],
+      "label": "locusts",
+      "at": [
+       72,
+       26
+      ]
+     }
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        47,
+        57
+       ],
+       [
+        15,
+        54
+       ],
+       [
+        15,
+        15
+       ]
+      ]
+     }
+    ],
+    "alt": [
+     {
+      "points": [
+       [
+        53,
+        57
+       ],
+       [
+        85,
+        54
+       ],
+       [
+        85,
+        15
+       ]
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       50,
+       59
+      ],
+      "kind": "in",
+      "label": "From the Cemetery",
+      "below": true
+     },
+     {
+      "at": [
+       16,
+       11
+      ],
+      "kind": "exit",
+      "label": "Ogham Farmlands",
+      "anchor": "start",
+      "below": true
+     },
+     {
+      "at": [
+       84,
+       11
+      ],
+      "kind": "exit",
+      "label": "Freythorn",
+      "anchor": "end",
+      "below": true
+     },
+     {
+      "at": [
+       84,
+       49
+      ],
+      "kind": "boss",
+      "label": "Crowbell",
+      "anchor": "end"
+     },
+     {
+      "at": [
+       50,
+       32
+      ],
+      "kind": "quest",
+      "label": "Ritual",
+      "anchor": "middle"
+     }
+    ]
+   }
+  },
+  "G1_12": {
+   "steps": [
+    {
+     "text": "Three rituals, then the King in the Mists (+30 spirit).",
+     "src": [
+      "maxroll",
+      "poe2way"
+     ]
+    },
+    {
+     "text": "After each ritual the locusts fly to the nearest one left.",
+     "src": [
+      "codex",
+      "poe2way"
+     ]
+    },
+    {
+     "text": "The arena is often opposite the entrance; its black swirls point to rituals still undone.",
+     "src": [
+      "codex",
+      "data"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       50,
+       60
+      ],
+      [
+       22,
+       46
+      ],
+      [
+       18,
+       24
+      ],
+      [
+       40,
+       9
+      ],
+      [
+       66,
+       10
+      ],
+      [
+       84,
+       26
+      ],
+      [
+       78,
+       48
+      ],
+      [
+       50,
+       60
+      ]
+     ],
+     [
+      [
+       50,
+       60
+      ],
+      [
+       50,
+       32
+      ]
+     ]
+    ],
+    "clues": [
+     {
+      "points": [
+       [
+        24,
+        34
+       ],
+       [
+        40,
+        14
+       ]
+      ],
+      "label": "locusts",
+      "at": [
+       22,
+       20
+      ]
+     },
+     {
+      "points": [
+       [
+        44,
+        12
+       ],
+       [
+        76,
+        24
+       ]
+      ],
+      "label": "locusts",
+      "at": [
+       62,
+       23
+      ]
+     }
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        47,
+        57
+       ],
+       [
+        24,
+        44
+       ],
+       [
+        21,
+        37
+       ]
+      ]
+     },
+     {
+      "points": [
+       [
+        22,
+        32
+       ],
+       [
+        38,
+        13
+       ]
+      ]
+     },
+     {
+      "points": [
+       [
+        42,
+        11
+       ],
+       [
+        78,
+        24
+       ]
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       50,
+       60
+      ],
+      "kind": "in",
+      "label": "From the Hunting Grounds",
+      "below": true
+     },
+     {
+      "at": [
+       50,
+       34
+      ],
+      "kind": "place",
+      "label": "Hub",
+      "anchor": "start"
+     },
+     {
+      "at": [
+       20,
+       36
+      ],
+      "kind": "quest",
+      "label": "Ritual",
+      "anchor": "start"
+     },
+     {
+      "at": [
+       40,
+       10
+      ],
+      "kind": "quest",
+      "label": "Ritual",
+      "anchor": "end"
+     },
+     {
+      "at": [
+       80,
+       26
+      ],
+      "kind": "quest",
+      "label": "Ritual",
+      "anchor": "end",
+      "below": true
+     },
+     {
+      "at": [
+       64,
+       9
+      ],
+      "kind": "boss",
+      "label": "Arena",
+      "anchor": "start"
+     }
+    ]
+   }
+  },
+  "G1_13_1": {
+   "steps": [
+    {
+     "text": "Head straight away from the entrance.",
+     "src": [
+      "codex",
+      "data"
+     ]
+    },
+    {
+     "text": "Una's lute is close, on the way: her hut is behind a long hut with carts; go round.",
+     "src": [
+      "codex",
+      "data"
+     ]
+    },
+    {
+     "text": "Ogham Village is on the far wall (28 of 32): not there? Follow that wall.",
+     "src": [
+      "codex",
+      "data"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       30,
+       62
+      ],
+      [
+       30,
+       6
+      ],
+      [
+       70,
+       6
+      ],
+      [
+       70,
+       62
+      ],
+      [
+       30,
+       62
+      ]
+     ]
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        50,
+        57
+       ],
+       [
+        44,
+        46
+       ],
+       [
+        50,
+        32
+       ],
+       [
+        50,
+        12
+       ]
+      ]
+     }
+    ],
+    "alt": [
+     {
+      "points": [
+       [
+        48,
+        9
+       ],
+       [
+        34,
+        9
+       ]
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       50,
+       60
+      ],
+      "kind": "in",
+      "label": "From the Hunting Grounds",
+      "below": true
+     },
+     {
+      "at": [
+       38,
+       44
+      ],
+      "kind": "quest",
+      "label": "Una's lute",
+      "anchor": "end"
+     },
+     {
+      "at": [
+       56,
+       40
+      ],
+      "kind": "place",
+      "label": "long hut + carts",
+      "anchor": "start"
+     },
+     {
+      "at": [
+       56,
+       9
+      ],
+      "kind": "exit",
+      "label": "Ogham Village",
+      "anchor": "start",
+      "below": true
+     }
+    ]
+   }
+  },
+  "G1_13_2": {
+   "steps": [
+    {
+     "text": "Hug the right-hand wall up to the Executioner's arena.",
+     "src": [
+      "codex"
+     ]
+    },
+    {
+     "text": "The Manor Ramparts open behind his arena, usually on the far side.",
+     "src": [
+      "data"
+     ]
+    },
+    {
+     "text": "Renly's tools: a room with a checkpoint along the wall; missed it? From the waypoint follow the left wall.",
+     "src": [
+      "codex"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       14,
+       60
+      ],
+      [
+       14,
+       8
+      ],
+      [
+       86,
+       8
+      ],
+      [
+       86,
+       60
+      ],
+      [
+       14,
+       60
+      ]
+     ]
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        72,
+        56
+       ],
+       [
+        83,
+        48
+       ],
+       [
+        83,
+        20
+       ],
+       [
+        57,
+        17
+       ]
+      ]
+     }
+    ],
+    "alt": [
+     {
+      "points": [
+       [
+        68,
+        56
+       ],
+       [
+        32,
+        42
+       ]
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       72,
+       59
+      ],
+      "kind": "in",
+      "label": "From the Farmlands",
+      "anchor": "end",
+      "below": true
+     },
+     {
+      "at": [
+       28,
+       41
+      ],
+      "kind": "quest",
+      "label": "Renly's tools",
+      "anchor": "start"
+     },
+     {
+      "at": [
+       52,
+       17
+      ],
+      "kind": "boss",
+      "label": "Executioner (exit behind)",
+      "anchor": "end",
+      "below": true
+     },
+     {
+      "at": [
+       52,
+       10
+      ],
+      "kind": "exit",
+      "label": "Manor Ramparts",
+      "anchor": "end",
+      "below": false
+     }
+    ]
+   }
+  },
+  "G1_14": {
+   "steps": [
+    {
+     "text": "U-shaped: follow it round; the manor is up the other side (usually the far side).",
+     "src": [
+      "codex",
+      "data"
+     ]
+    },
+    {
+     "text": "If it opens down-left the manor is up-right, and the other way round.",
+     "src": [
+      "codex"
+     ]
+    },
+    {
+     "text": "Gallows rope on a wall: a support gem.",
+     "src": [
+      "codex",
+      "poe2way"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       24,
+       8
+      ],
+      [
+       24,
+       54
+      ],
+      [
+       76,
+       54
+      ],
+      [
+       76,
+       8
+      ]
+     ]
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        24,
+        13
+       ],
+       [
+        24,
+        52
+       ],
+       [
+        76,
+        52
+       ],
+       [
+        76,
+        14
+       ]
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       24,
+       9
+      ],
+      "kind": "in",
+      "label": "From the Village",
+      "anchor": "start"
+     },
+     {
+      "at": [
+       20,
+       32
+      ],
+      "kind": "reward",
+      "label": "Gallows",
+      "anchor": "end"
+     },
+     {
+      "at": [
+       76,
+       9
+      ],
+      "kind": "exit",
+      "label": "Ogham Manor",
+      "anchor": "end"
+     }
+    ]
+   }
+  },
+  "G1_15": {
+   "steps": [
+    {
+     "text": "Each floor: go the opposite way from where you came in; Count Geonor is always at the far end (16 of 16).",
+     "src": [
+      "codex",
+      "poe2way",
+      "data"
+     ]
+    },
+    {
+     "text": "Candlemass (+20 life) is on the first floor, on a far wall: found the stairs first? Take the checkpoint, go back for him.",
+     "src": [
+      "codex",
+      "poe2way"
+     ]
+    },
+    {
+     "text": "Floors 2 and 3: cross the bridge; on 3 the Count shouts, take the lift down to him.",
+     "src": [
+      "codex"
+     ]
+    }
+   ],
+   "drawing": {
+    "shape": [
+     [
+      [
+       14,
+       56
+      ],
+      [
+       86,
+       56
+      ]
+     ],
+     [
+      [
+       14,
+       34
+      ],
+      [
+       86,
+       34
+      ]
+     ],
+     [
+      [
+       14,
+       12
+      ],
+      [
+       86,
+       12
+      ]
+     ],
+     [
+      [
+       86,
+       56
+      ],
+      [
+       86,
+       34
+      ]
+     ],
+     [
+      [
+       14,
+       34
+      ],
+      [
+       14,
+       12
+      ]
+     ]
+    ],
+    "route": [
+     {
+      "points": [
+       [
+        18,
+        56
+       ],
+       [
+        83,
+        56
+       ],
+       [
+        86,
+        51
+       ],
+       [
+        86,
+        38
+       ]
+      ]
+     },
+     {
+      "points": [
+       [
+        82,
+        34
+       ],
+       [
+        17,
+        34
+       ],
+       [
+        14,
+        29
+       ],
+       [
+        14,
+        16
+       ]
+      ]
+     },
+     {
+      "points": [
+       [
+        18,
+        12
+       ],
+       [
+        80,
+        12
+       ]
+      ]
+     }
+    ],
+    "clues": [
+     {
+      "points": [
+       [
+        46,
+        31
+       ],
+       [
+        56,
+        31
+       ]
+      ],
+      "label": "bridge",
+      "at": [
+       51,
+       28
+      ]
+     },
+     {
+      "points": [
+       [
+        50,
+        9
+       ],
+       [
+        60,
+        9
+       ]
+      ],
+      "label": "bridge",
+      "at": [
+       55,
+       6
+      ]
+     }
+    ],
+    "marks": [
+     {
+      "at": [
+       14,
+       56
+      ],
+      "kind": "in",
+      "label": "Floor 1",
+      "anchor": "start",
+      "below": true
+     },
+     {
+      "at": [
+       56,
+       50
+      ],
+      "kind": "boss",
+      "label": "Candlemass",
+      "anchor": "middle"
+     },
+     {
+      "at": [
+       86,
+       34
+      ],
+      "kind": "place",
+      "label": "Floor 2",
+      "anchor": "end",
+      "below": true
+     },
+     {
+      "at": [
+       14,
+       12
+      ],
+      "kind": "place",
+      "label": "Floor 3",
+      "anchor": "start",
+      "below": true
+     },
+     {
+      "at": [
+       84,
+       12
+      ],
+      "kind": "boss",
+      "label": "Count Geonor",
+      "anchor": "end"
+     }
+    ]
+   }
+  }
+ }
+}

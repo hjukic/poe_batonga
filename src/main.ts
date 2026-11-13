@@ -1,5 +1,4 @@
-import { sourcesOf, tipsFor } from './zone-tips';
-import { drawSetup, hasSetup } from './zone-setups';
+import { guideFor, sourcesOf } from './zone-guides';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -122,10 +121,9 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <p class="restart-status" id="restart-status" role="status" hidden></p>
     <p class="warning" id="start-error" role="alert" hidden></p>
     <div class="route" id="route"></div>
-    <ul class="zone-tips" id="zone-tips" hidden></ul>
-    <div class="zone-setup" id="zone-setup" hidden>
-      <canvas id="setup-canvas" width="584" height="440"></canvas>
-      <p class="setup-note" id="setup-note"></p>
+    <div class="zone-guide" id="zone-guide" hidden>
+      <div class="guide-drawing" id="guide-drawing"></div>
+      <ol class="guide-steps" id="guide-steps"></ol>
     </div>
     <div class="layout-pick" id="layout-pick" hidden>
       <p class="layout-name" id="layout-name"></p>
@@ -153,8 +151,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <label class="row radar-only" title="Parked until the layout is recognised reliably (roadmap phase 3). On: the experimental arrow around the character."><span>Compass (parked)</span><input id="compass-enabled" type="checkbox" /></label>
     <label class="row" title="The overlay hides while the game is closed or on a workspace that is not shown"><span>Hide when game is off screen</span><input id="auto-hide" type="checkbox" checked /></label>
     <label class="row" title="The overlay hides when a zone boss starts talking and comes back when the kill is logged, you die or leave, or the boss has been quiet for 30 seconds"><span>Hide during boss fights</span><input id="fight-hide" type="checkbox" checked /></label>
-    <label class="row" title="How to cross the zone fast: community tips checked against the game's own layouts"><span>Zone tips</span><input id="zone-tips-enabled" type="checkbox" /></label>
-    <label class="row" title="Every layout of the zone over each other, from where you come in: where exits and bosses usually are"><span>Zone layouts</span><input id="zone-setups-enabled" type="checkbox" /></label>
+    <label class="row" title="How to cross the zone: a schematic of its usual shape from where you come in, and short steps (community guides checked against the game's own layouts)"><span>Zone guide</span><input id="zone-guide-enabled" type="checkbox" /></label>
     <label class="row radar-only" title="The map recorded so far, for checking the tracking"><span>Map preview</span><input id="map-preview" type="checkbox" /></label>
     <p id="shortcut-error" class="warning" hidden></p>
     <hr />
@@ -262,27 +259,21 @@ function summaryRow(text: string, done: boolean, onClick = () => { unfolded = !u
   return row;
 }
 
-/** The zone's layouts laid over each other (`zone-setups.ts`), drawn again only for a new zone. */
-let drawnSetup: string | null = null;
-function renderSetup(view: TrackerView) {
-  const zone = view.inZone && zoneSetups.checked && hasSetup(view.zone?.id) ? view.zone?.id ?? null : null;
-  $('#zone-setup').hidden = !zone;
-  if (!zone || zone === drawnSetup) return;
-  drawnSetup = zone;
-  const layouts = drawSetup($<HTMLCanvasElement>('#setup-canvas'), zone);
-  $('#setup-note').textContent = `All ${layouts} layouts of this zone over each other · you come in at ▲ · bright: where most of them put it`;
-}
-
-/** How to cross the zone on show fast (`zone-tips.ts`), while in it and switched on. */
-function renderTips(view: TrackerView) {
-  renderSetup(view);
-  const list = $('#zone-tips');
-  const tips = view.inZone && zoneTips.checked ? tipsFor(view.zone?.id) : [];
-  list.hidden = tips.length === 0;
-  list.replaceChildren(...tips.map((tip) => {
+/** How to cross the zone on show (`zone-guides.ts`): its schematic and steps, while in it and
+ *  switched on. Drawn again only for another zone. */
+let shownGuide: string | null = null;
+function renderGuide(view: TrackerView) {
+  const zone = view.inZone && zoneGuide.checked ? view.zone?.id ?? null : null;
+  const guide = guideFor(zone);
+  $('#zone-guide').hidden = !guide;
+  if (!guide || zone === shownGuide) return;
+  shownGuide = zone;
+  // Our own data (data/guides): no outside text reaches this markup.
+  $('#guide-drawing').innerHTML = guide.svg;
+  $('#guide-steps').replaceChildren(...guide.steps.map((step) => {
     const item = document.createElement('li');
-    item.textContent = tip.text;
-    item.title = `From: ${sourcesOf(tip)}`;
+    item.textContent = step.text;
+    item.title = `From: ${sourcesOf(step)}`;
     return item;
   }));
 }
@@ -301,7 +292,7 @@ function renderTracker(view: TrackerView) {
   zone.title = view.inZone && view.zone ? `${view.zone.name} · Lv ${view.zone.level}` : APP_NAME;
   zone.textContent = view.inZone && view.zone ? (view.zone.name.length > 16 ? view.zone.name : zone.title) : APP_NAME;
   renderCharacter(view);
-  renderTips(view);
+  renderGuide(view);
   const rows: HTMLElement[] = [];
   // A zone's list covers every visit of the route; only this visit's steps are shown.
   // Speedrun (the default): optional steps are left out of the list.
@@ -609,17 +600,11 @@ const sendFightHide = () => isTauri() && void invoke('set_fight_hide', { enabled
 fightHide.addEventListener('change', () => { keep('fight-hide', fightHide.checked); sendFightHide(); });
 const mapPreview = $<HTMLInputElement>('#map-preview');
 mapPreview.checked = stored('map-preview', false);
-const zoneTips = $<HTMLInputElement>('#zone-tips-enabled');
-zoneTips.checked = stored('zone-tips', true);
-const zoneSetups = $<HTMLInputElement>('#zone-setups-enabled');
-zoneSetups.checked = stored('zone-setups', true);
-zoneSetups.addEventListener('change', () => {
-  keep('zone-setups', zoneSetups.checked);
-  if (lastTracker) renderTips(lastTracker);
-});
-zoneTips.addEventListener('change', () => {
-  keep('zone-tips', zoneTips.checked);
-  if (lastTracker) renderTips(lastTracker);
+const zoneGuide = $<HTMLInputElement>('#zone-guide-enabled');
+zoneGuide.checked = stored('zone-guide', true);
+zoneGuide.addEventListener('change', () => {
+  keep('zone-guide', zoneGuide.checked);
+  if (lastTracker) renderGuide(lastTracker);
 });
 const showMapPreview = () => { document.body.dataset.mapPreview = String(mapPreview.checked); };
 showMapPreview();

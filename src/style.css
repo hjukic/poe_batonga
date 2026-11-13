@@ -121,14 +121,12 @@ button.step:enabled:hover { background: rgb(239 235 255 / .06); }
 .version { padding: 0 12px 6px; text-align: right; font-size: 10.5px; line-height: 1; color: var(--muted); opacity: .7; }
 /* The radar and layout recognition are parked (the app's RADAR switch): their settings are hidden. */
 body[data-radar="false"] .radar-only { display: none; }
-/* How to cross the zone fast (zone-tips.ts). */
-.zone-tips { margin: 2px 0 8px; padding: 0 14px 0 30px; font-size: 12px; line-height: 16px; color: #8edce8; }
-.zone-tips[hidden] { display: none; }
-.zone-tips li { margin: 3px 0; }
-body[data-in-zone="false"] .zone-tips { display: none; }
-/* Every layout of the zone over each other (zone-setups.ts). */
-.zone-setup { padding: 0 14px 6px; }
-.zone-setup[hidden] { display: none; }
-.zone-setup canvas { display: block; width: 292px; height: 220px; }
-.setup-note { margin: 2px 0 0; font-size: 11px; line-height: 14px; color: #9a94ad; }
-body[data-in-zone="false"] .zone-setup { display: none; }
+/* How to cross the zone (zone-guides.ts): a schematic and short steps. */
+.zone-guide { padding: 0 14px 8px; }
+.zone-guide[hidden] { display: none; }
+body[data-in-zone="false"] .zone-guide { display: none; }
+.guide-drawing svg { display: block; width: 292px; height: auto; }
+.guide-svg .g-label { font: 600 3.4px system-ui, sans-serif; paint-order: stroke; stroke: #15131c; stroke-width: 0.8px; }
+.guide-svg .g-clue { font: italic 3px system-ui, sans-serif; }
+.guide-steps { margin: 4px 0 0; padding-left: 18px; font-size: 12px; line-height: 16px; color: #d9d3ea; }
+.guide-steps li { margin: 3px 0; }
