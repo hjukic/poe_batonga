@@ -16,9 +16,10 @@ layout recognition were parked; Act 1 only for now.
 
 For a league start, levelling fast: "very concise and straight to the point".
 
-- One short line under the row it is about: under "Kill Beira" "Away from town, far side
-  (67%).", under "Enter The Grelwood" "Far side, past the bridge (88%)."
-- How often a pattern holds as a percentage of the zone's layouts (88%), not "29 of 33".
+- One short line under the row it is about: under "Kill Beira" "Away from town, far
+  side.", under "Enter The Grelwood" "Far side, past the bridge."
+- No numbers in the panel (owner, 2026-11-13: "we do not need % on the text ... its a
+  noise"): how often a pattern holds is kept in the table below, not in the hint.
 - No rewards for what you do anyway ("Kill Beira", not "+10% cold res").
 - Side content is an optional row of the checklist; its reason stays on the row (the
   reward on the right), the hint says only where it is.

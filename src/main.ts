@@ -200,8 +200,6 @@ const MAX_ROWS = 9;
 const MAX_OPEN = 6;
 /** Unfolded by a click on the summary line (to untick a hidden step). */
 let unfolded = false;
-/** Steps of the zone's other visits are listed too (a click on their summary line). */
-let allVisits = false;
 let lastTracker: TrackerView | null = null;
 
 function stepRow(step: StepView) {
@@ -291,7 +289,6 @@ function renderGuide(view: TrackerView) {
 function renderTracker(view: TrackerView) {
   if (lastTracker && (lastTracker.currentArea !== view.currentArea || lastTracker.character !== view.character || lastTracker.inZone !== view.inZone)) {
     unfolded = false;
-    allVisits = false;
     renderLayout(null);
   }
   lastTracker = view;
@@ -323,8 +320,8 @@ function renderTracker(view: TrackerView) {
     syncStepControls();
     return;
   }
-  const steps = allVisits ? wanted : wanted.filter((step) => step.visit === view.visit);
-  const otherVisits = wanted.filter((step) => step.visit !== view.visit && step.kind === 'objective').length;
+  // Only this visit's steps (owner, 2026-11-13: the count of other visits' steps is noise).
+  const steps = wanted.filter((step) => step.visit === view.visit);
   if (steps.length <= MAX_ROWS || unfolded) {
     rows.push(...steps.map(stepRow));
     if (unfolded) rows.push(summaryRow('Show less', false));
@@ -340,9 +337,6 @@ function renderTracker(view: TrackerView) {
       if (next && shown.has(next)) rows.push(stepRow(step));
     });
     if (open.length > shown.size) rows.push(summaryRow(`+${open.length - shown.size} more`, false));
-  }
-  if (otherVisits) {
-    rows.push(summaryRow(allVisits ? 'This visit only' : `${otherVisits} on other visits`, false, () => { allVisits = !allVisits; }));
   }
   $('#route').replaceChildren(...rows);
   markHeading();

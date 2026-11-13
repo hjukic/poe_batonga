@@ -326,7 +326,7 @@
    },
    "hints": {
     "kill-beira": {
-     "text": "Away from town, far side (67%).",
+     "text": "Away from town, far side.",
      "src": [
       "data",
       "codex"
@@ -345,7 +345,7 @@
      ]
     },
     "enter-grelwood": {
-     "text": "Far side, past the bridge (88%).",
+     "text": "Far side, past the bridge.",
      "src": [
       "data",
       "codex"
@@ -436,7 +436,7 @@
    },
    "hints": {
     "kill-devourer": {
-     "text": "At the far end (100%).",
+     "text": "At the far end.",
      "src": [
       "data"
      ]
@@ -660,7 +660,7 @@
      ]
     },
     "grelwood-grim-tangle-wp": {
-     "text": "Follow the mushrooms, halfway in (92%).",
+     "text": "Follow the mushrooms, halfway in.",
      "src": [
       "poe2way",
       "codex",
@@ -668,7 +668,7 @@
      ]
     },
     "grelwood-red-vale-wp": {
-     "text": "Follow the river upstream, far end (100%).",
+     "text": "Follow the river upstream, far end.",
      "src": [
       "poe2way",
       "codex",
@@ -682,7 +682,7 @@
      ]
     },
     "enter-red-vale": {
-     "text": "River upstream, far end (100%).",
+     "text": "River upstream, far end.",
      "src": [
       "poe2way",
       "codex",
@@ -979,7 +979,7 @@
    },
    "hints": {
     "enter-cemetery": {
-     "text": "Follow the caskets, far end (100%).",
+     "text": "Follow the caskets, far end.",
      "src": [
       "data",
       "codex"
@@ -1128,7 +1128,7 @@
    },
    "hints": {
     "talk-lachlann": {
-     "text": "Near the entrance (83%).",
+     "text": "Near the entrance.",
      "src": [
       "data"
      ]
@@ -1247,7 +1247,7 @@
        12
       ],
       "kind": "boss",
-      "label": "Draven 75%",
+      "label": "Draven",
       "anchor": "end",
       "below": true
      },
@@ -1265,7 +1265,7 @@
    },
    "hints": {
     "kill-draven": {
-     "text": "Entrance → wheel tile → far end (75%); else the long wall.",
+     "text": "Entrance → wheel tile → far end; else the long wall.",
      "src": [
       "codex"
      ]
@@ -1874,7 +1874,7 @@
      ]
     },
     "enter-ogham-village": {
-     "text": "Straight on, far wall (88%).",
+     "text": "Straight on, far wall.",
      "src": [
       "codex",
       "data"
@@ -2301,7 +2301,7 @@
      ]
     },
     "kill-geonor": {
-     "text": "Each floor: go the opposite way; far end (100%).",
+     "text": "Each floor: go the opposite way; far end.",
      "src": [
       "codex",
       "poe2way",
