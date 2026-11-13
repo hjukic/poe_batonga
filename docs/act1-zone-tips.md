@@ -66,8 +66,24 @@ directions (north, east) are not used for dungeon zones: their layouts may lie t
   graphs tag the wheel tile (`mausoleum_centre`, always within the nearer two thirds) but not
   Draven's arena; kept as the codex says it.
 
+## Our own layout setups
+
+Under the tips the panel draws every layout of the zone over each other (setting "Zone
+layouts"; `src/zone-setups.ts`). `node scripts/build-zone-setups.mjs` builds
+`data/tips/act1-setups.json` from the layout graphs: each layout is moved so the entrance
+(campaign order) is at the bottom, turned so the way into the zone (entrance to the middle of
+the layout) points up, and scaled to its farthest node. Corridors are faint, so the ones many
+layouts share stand out; exits, bosses and places are soft spots, bright where many layouts
+put them, each named once where most of them are. What it shows that the tips use:
+
+- The Grelwood: the Brambleghast next to the Red Vale exit (the codex's "same quadrant").
+- Ogham Farmlands: Una's lute just in front of you, Ogham Village and the boss at the far end.
+- Cemetery of the Eternals: Lachlann's arena behind you as you come in, the tombs around the
+  middle.
+- The Grim Tangle: the Cemetery at the far end, the Rotten Druid off to one side.
+
+Rebuild after the layout graphs change (`scripts/update-layouts.sh`).
+
 ## Next
 
 - Acts 2–6 the same way.
-- Drawings: each zone's layouts laid over each other from the entrance, so the panel can show
-  where exits and bosses tend to be ("our own layout setups").

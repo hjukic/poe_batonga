@@ -30,8 +30,8 @@ campaign guides/speedrun guides and similar layout tips and maybe create our own
 setups ... check the possible layouts from datamined zones ... for start focus on act 1".
 Act 1 done as a first version: `data/tips/act1.json` (community tips checked against the
 layout graphs), shown under the checklist (setting "Zone tips"); evidence and sources in
-`docs/act1-zone-tips.md`. Next: drawings of where exits and bosses tend to be, from every
-layout of a zone laid over each other at the entrance; then Acts 2-6.
+`docs/act1-zone-tips.md`. Our own layout setups: every layout of the zone over each other
+from the entrance, drawn under the tips (setting "Zone layouts"). Next: Acts 2-6.
 
 ## Parked: radar and layout recognition (owner, 2026-11-13)
 

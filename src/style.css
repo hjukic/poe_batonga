@@ -126,3 +126,9 @@ body[data-radar="false"] .radar-only { display: none; }
 .zone-tips[hidden] { display: none; }
 .zone-tips li { margin: 3px 0; }
 body[data-in-zone="false"] .zone-tips { display: none; }
+/* Every layout of the zone over each other (zone-setups.ts). */
+.zone-setup { padding: 0 14px 6px; }
+.zone-setup[hidden] { display: none; }
+.zone-setup canvas { display: block; width: 292px; height: 220px; }
+.setup-note { margin: 2px 0 0; font-size: 11px; line-height: 14px; color: #9a94ad; }
+body[data-in-zone="false"] .zone-setup { display: none; }

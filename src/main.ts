@@ -1,4 +1,5 @@
 import { sourcesOf, tipsFor } from './zone-tips';
+import { drawSetup, hasSetup } from './zone-setups';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -122,6 +123,10 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <p class="warning" id="start-error" role="alert" hidden></p>
     <div class="route" id="route"></div>
     <ul class="zone-tips" id="zone-tips" hidden></ul>
+    <div class="zone-setup" id="zone-setup" hidden>
+      <canvas id="setup-canvas" width="584" height="440"></canvas>
+      <p class="setup-note" id="setup-note"></p>
+    </div>
     <div class="layout-pick" id="layout-pick" hidden>
       <p class="layout-name" id="layout-name"></p>
       <canvas id="layout-canvas" width="584" height="400"></canvas>
@@ -149,6 +154,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <label class="row" title="The overlay hides while the game is closed or on a workspace that is not shown"><span>Hide when game is off screen</span><input id="auto-hide" type="checkbox" checked /></label>
     <label class="row" title="The overlay hides when a zone boss starts talking and comes back when the kill is logged, you die or leave, or the boss has been quiet for 30 seconds"><span>Hide during boss fights</span><input id="fight-hide" type="checkbox" checked /></label>
     <label class="row" title="How to cross the zone fast: community tips checked against the game's own layouts"><span>Zone tips</span><input id="zone-tips-enabled" type="checkbox" /></label>
+    <label class="row" title="Every layout of the zone over each other, from where you come in: where exits and bosses usually are"><span>Zone layouts</span><input id="zone-setups-enabled" type="checkbox" /></label>
     <label class="row radar-only" title="The map recorded so far, for checking the tracking"><span>Map preview</span><input id="map-preview" type="checkbox" /></label>
     <p id="shortcut-error" class="warning" hidden></p>
     <hr />
@@ -256,8 +262,20 @@ function summaryRow(text: string, done: boolean, onClick = () => { unfolded = !u
   return row;
 }
 
+/** The zone's layouts laid over each other (`zone-setups.ts`), drawn again only for a new zone. */
+let drawnSetup: string | null = null;
+function renderSetup(view: TrackerView) {
+  const zone = view.inZone && zoneSetups.checked && hasSetup(view.zone?.id) ? view.zone?.id ?? null : null;
+  $('#zone-setup').hidden = !zone;
+  if (!zone || zone === drawnSetup) return;
+  drawnSetup = zone;
+  const layouts = drawSetup($<HTMLCanvasElement>('#setup-canvas'), zone);
+  $('#setup-note').textContent = `All ${layouts} layouts of this zone over each other · you come in at ▲ · bright: where most of them put it`;
+}
+
 /** How to cross the zone on show fast (`zone-tips.ts`), while in it and switched on. */
 function renderTips(view: TrackerView) {
+  renderSetup(view);
   const list = $('#zone-tips');
   const tips = view.inZone && zoneTips.checked ? tipsFor(view.zone?.id) : [];
   list.hidden = tips.length === 0;
@@ -593,6 +611,12 @@ const mapPreview = $<HTMLInputElement>('#map-preview');
 mapPreview.checked = stored('map-preview', false);
 const zoneTips = $<HTMLInputElement>('#zone-tips-enabled');
 zoneTips.checked = stored('zone-tips', true);
+const zoneSetups = $<HTMLInputElement>('#zone-setups-enabled');
+zoneSetups.checked = stored('zone-setups', true);
+zoneSetups.addEventListener('change', () => {
+  keep('zone-setups', zoneSetups.checked);
+  if (lastTracker) renderTips(lastTracker);
+});
 zoneTips.addEventListener('change', () => {
   keep('zone-tips', zoneTips.checked);
   if (lastTracker) renderTips(lastTracker);
