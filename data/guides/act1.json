@@ -1,6 +1,6 @@
 {
  "act": 1,
- "about": "How to cross each Act 1 zone: a schematic of its usual shape drawn from where you come in (at the triangle), the route to follow, and short steps. Community patterns, checked against the game's layout graphs; evidence in docs/act1-zone-tips.md. Drawings: src/guide-svg.ts.",
+ "about": "How to cross each Act 1 zone: a schematic of its usual shape drawn from where you come in (at the triangle), and a short hint under each checklist row (by step id). Community patterns, checked against the game's layout graphs; evidence in docs/act1-zone-tips.md. Drawings: src/guide-svg.ts.",
  "sources": {
   "data": "The game's layout graphs: every possible layout of the zone, counted (scripts/zone-layout-stats.mjs).",
   "codex": "Mobalytics, Campaign Layout Guide: Act 1 (Lolcohol, Campaign Codex), updated 2026-05-23.",
@@ -10,21 +10,6 @@
  },
  "zones": {
   "G1_1": {
-   "steps": [
-    {
-     "text": "Follow the river to the Miller.",
-     "src": [
-      "maxroll",
-      "data"
-     ]
-    },
-    {
-     "text": "Chest midway: first skill gem.",
-     "src": [
-      "maxroll"
-     ]
-    }
-   ],
    "drawing": {
     "shape": [
      [
@@ -145,30 +130,18 @@
       "anchor": "end"
      }
     ]
+   },
+   "hints": {
+    "kill-bloated-miller": {
+     "text": "Follow the river upstream.",
+     "src": [
+      "maxroll",
+      "data"
+     ]
+    }
    }
   },
   "G1_2": {
-   "steps": [
-    {
-     "text": "Away from town: Beira, then the Grelwood (88%).",
-     "src": [
-      "data",
-      "codex"
-     ]
-    },
-    {
-     "text": "Grelwood is past the bridge.",
-     "src": [
-      "codex"
-     ]
-    },
-    {
-     "text": "Optional: Mud Burrow (Lv 2 gem), campsite (gem).",
-     "src": [
-      "codex"
-     ]
-    }
-   ],
    "drawing": {
     "shape": [
      [
@@ -350,23 +323,37 @@
       "anchor": "middle"
      }
     ]
-   }
-  },
-  "G1_3": {
-   "steps": [
-    {
-     "text": "Optional zone (Lv 2 gem).",
+   },
+   "hints": {
+    "kill-beira": {
+     "text": "Away from town, far side (67%).",
+     "src": [
+      "data",
+      "codex"
+     ]
+    },
+    "enter-mud-burrow": {
+     "text": "By the waypoint, to one side of the start.",
      "src": [
       "codex"
      ]
     },
-    {
-     "text": "Boss at the far end (100%).",
+    "abandoned-stash": {
+     "text": "Campsite, the other side of the start.",
      "src": [
-      "data"
+      "codex"
+     ]
+    },
+    "enter-grelwood": {
+     "text": "Far side, past the bridge (88%).",
+     "src": [
+      "data",
+      "codex"
      ]
     }
-   ],
+   }
+  },
+  "G1_3": {
    "drawing": {
     "shape": [
      [
@@ -446,41 +433,17 @@
       "anchor": "start"
      }
     ]
+   },
+   "hints": {
+    "kill-devourer": {
+     "text": "At the far end (100%).",
+     "src": [
+      "data"
+     ]
+    }
    }
   },
   "G1_4": {
-   "steps": [
-    {
-     "text": "River → Red Vale, far end (100%).",
-     "src": [
-      "poe2way",
-      "codex",
-      "data"
-     ]
-    },
-    {
-     "text": "Roots → Tree of Souls (WP).",
-     "src": [
-      "poe2way",
-      "codex"
-     ]
-    },
-    {
-     "text": "Mushrooms → Grim Tangle, halfway (92%).",
-     "src": [
-      "poe2way",
-      "codex",
-      "data"
-     ]
-    },
-    {
-     "text": "Exit found first? Take its WP, come back.",
-     "src": [
-      "poe2way",
-      "maxroll"
-     ]
-    }
-   ],
    "drawing": {
     "shape": [
      [
@@ -687,24 +650,63 @@
       "anchor": "start"
      }
     ]
-   }
-  },
-  "G1_5": {
-   "steps": [
-    {
-     "text": "Loop round: 3 obelisks.",
+   },
+   "hints": {
+    "grelwood-waypoint": {
+     "text": "Follow the glowing roots to the Tree of Souls.",
      "src": [
-      "codex",
-      "maxroll"
+      "poe2way",
+      "codex"
      ]
     },
-    {
-     "text": "3rd spawns the Rust King.",
+    "grelwood-grim-tangle-wp": {
+     "text": "Follow the mushrooms, halfway in (92%).",
+     "src": [
+      "poe2way",
+      "codex",
+      "data"
+     ]
+    },
+    "grelwood-red-vale-wp": {
+     "text": "Follow the river upstream, far end (100%).",
+     "src": [
+      "poe2way",
+      "codex",
+      "data"
+     ]
+    },
+    "kill-areagne": {
+     "text": "Her hut, halfway in.",
+     "src": [
+      "data"
+     ]
+    },
+    "enter-red-vale": {
+     "text": "River upstream, far end (100%).",
+     "src": [
+      "poe2way",
+      "codex",
+      "data"
+     ]
+    },
+    "runic-seals": {
+     "text": "At the Tree of Souls.",
      "src": [
       "maxroll"
      ]
     }
-   ],
+   },
+   "general": [
+    {
+     "text": "Found an exit first? Take its WP, come back.",
+     "src": [
+      "poe2way",
+      "maxroll"
+     ]
+    }
+   ]
+  },
+  "G1_5": {
    "drawing": {
     "shape": [
      [
@@ -842,25 +844,24 @@
       "below": true
      }
     ]
+   },
+   "hints": {
+    "obelisks-of-rust": {
+     "text": "Loop round the zone.",
+     "src": [
+      "codex",
+      "maxroll"
+     ]
+    },
+    "kill-rust-king": {
+     "text": "Spawns at the 3rd obelisk.",
+     "src": [
+      "maxroll"
+     ]
+    }
    }
   },
   "G1_6": {
-   "steps": [
-    {
-     "text": "Away from the entrance: Cemetery at the far end (100%).",
-     "src": [
-      "data",
-      "codex"
-     ]
-    },
-    {
-     "text": "Una sings: respawn at checkpoint to skip.",
-     "src": [
-      "codex",
-      "poe2way"
-     ]
-    }
-   ],
    "drawing": {
     "shape": [
      [
@@ -975,38 +976,33 @@
       "anchor": "start"
      }
     ]
-   }
-  },
-  "G1_7": {
-   "steps": [
-    {
-     "text": "Lachlann + gate: near the entrance (83%).",
-     "src": [
-      "data"
-     ]
-    },
-    {
-     "text": "Tombs halfway, on the side walls: hug one, then the other.",
+   },
+   "hints": {
+    "enter-cemetery": {
+     "text": "Follow the caskets, far end (100%).",
      "src": [
       "data",
       "codex"
      ]
     },
-    {
-     "text": "Gate open: respawn at checkpoint to skip the talk.",
+    "kill-ervig": {
+     "text": "Off to one side near the end.",
      "src": [
-      "poe2way",
-      "codex"
-     ]
-    },
-    {
-     "text": "Optional: ring chest, far wall.",
-     "src": [
-      "codex",
-      "maxroll"
+      "data"
      ]
     }
-   ],
+   },
+   "general": [
+    {
+     "text": "Una sings: respawn at checkpoint to skip.",
+     "src": [
+      "codex",
+      "poe2way"
+     ]
+    }
+   ]
+  },
+  "G1_7": {
    "drawing": {
     "shape": [
      [
@@ -1129,23 +1125,45 @@
       "below": true
      }
     ]
-   }
-  },
-  "G1_8": {
-   "steps": [
-    {
-     "text": "Line from entrance through the wheel tile: Draven at the far end (75%).",
+   },
+   "hints": {
+    "talk-lachlann": {
+     "text": "Near the entrance (83%).",
      "src": [
+      "data"
+     ]
+    },
+    "ancient-ruins": {
+     "text": "Far wall.",
+     "src": [
+      "codex",
+      "maxroll"
+     ]
+    },
+    "enter-mausoleum": {
+     "text": "Halfway in, on a side wall.",
+     "src": [
+      "data",
       "codex"
      ]
     },
-    {
-     "text": "Not there: long wall in line with the entrance.",
+    "enter-tomb": {
+     "text": "Halfway in, on the other side wall.",
      "src": [
+      "data",
+      "codex"
+     ]
+    },
+    "memorial-gate": {
+     "text": "Then respawn at checkpoint to skip the talk.",
+     "src": [
+      "poe2way",
       "codex"
      ]
     }
-   ],
+   }
+  },
+  "G1_8": {
    "drawing": {
     "shape": [
      [
@@ -1244,17 +1262,17 @@
       "below": true
      }
     ]
-   }
-  },
-  "G1_9": {
-   "steps": [
-    {
-     "text": "Through the middle: Asinia usually at the far side.",
+   },
+   "hints": {
+    "kill-draven": {
+     "text": "Entrance → wheel tile → far end (75%); else the long wall.",
      "src": [
       "codex"
      ]
     }
-   ],
+   }
+  },
+  "G1_9": {
    "drawing": {
     "shape": [
      [
@@ -1327,38 +1345,17 @@
       "anchor": "start"
      }
     ]
-   }
-  },
-  "G1_11": {
-   "steps": [
-    {
-     "text": "Follow the edges, skip the middle.",
+   },
+   "hints": {
+    "kill-asinia": {
+     "text": "Through the middle, far side.",
      "src": [
       "codex"
      ]
-    },
-    {
-     "text": "Signposts → Farmlands.",
-     "src": [
-      "codex",
-      "poe2way"
-     ]
-    },
-    {
-     "text": "Ritual locusts → Freythorn.",
-     "src": [
-      "codex",
-      "poe2way"
-     ]
-    },
-    {
-     "text": "Optional: Crowbell (+2 passives), follow bloody tracks.",
-     "src": [
-      "codex",
-      "poe2way"
-     ]
     }
-   ],
+   }
+  },
+  "G1_11": {
    "drawing": {
     "shape": [
      [
@@ -1526,25 +1523,46 @@
       "anchor": "middle"
      }
     ]
-   }
-  },
-  "G1_12": {
-   "steps": [
-    {
-     "text": "3 rituals, then the King.",
-     "src": [
-      "maxroll",
-      "poe2way"
-     ]
-    },
-    {
-     "text": "Locusts point to the next ritual.",
+   },
+   "hints": {
+    "kill-crowbell": {
+     "text": "Follow the blood trails.",
      "src": [
       "codex",
       "poe2way"
      ]
+    },
+    "freythorn-wp": {
+     "text": "After the ritual, follow the locusts.",
+     "src": [
+      "codex",
+      "poe2way"
+     ]
+    },
+    "farmlands-wp": {
+     "text": "Follow the signposts.",
+     "src": [
+      "codex",
+      "poe2way"
+     ]
+    },
+    "small-ritual": {
+     "text": "In the middle.",
+     "src": [
+      "codex"
+     ]
     }
-   ],
+   },
+   "general": [
+    {
+     "text": "Places sit in the corners: follow the edges.",
+     "src": [
+      "codex"
+     ]
+    }
+   ]
+  },
+  "G1_12": {
    "drawing": {
     "shape": [
      [
@@ -1727,32 +1745,25 @@
       "anchor": "start"
      }
     ]
-   }
-  },
-  "G1_13_1": {
-   "steps": [
-    {
-     "text": "Straight away from the entrance.",
+   },
+   "hints": {
+    "ritual-altars": {
+     "text": "Follow the altar smoke; locusts point to the next.",
      "src": [
       "codex",
-      "data"
+      "poe2way"
      ]
     },
-    {
-     "text": "Village on the far wall (88%); else follow that wall.",
-     "src": [
-      "codex",
-      "data"
-     ]
-    },
-    {
-     "text": "Optional: Una's lute (+2 passives), on the way.",
+    "kill-king-in-the-mists": {
+     "text": "Arena often opposite the entrance.",
      "src": [
       "codex",
       "data"
      ]
     }
-   ],
+   }
+  },
+  "G1_13_1": {
    "drawing": {
     "shape": [
      [
@@ -1853,29 +1864,25 @@
       "below": true
      }
     ]
-   }
-  },
-  "G1_13_2": {
-   "steps": [
-    {
-     "text": "Hug the right wall to the Executioner.",
+   },
+   "hints": {
+    "unas-lute": {
+     "text": "Close, behind a long hut with carts.",
      "src": [
-      "codex"
-     ]
-    },
-    {
-     "text": "Exit is behind his arena.",
-     "src": [
+      "codex",
       "data"
      ]
     },
-    {
-     "text": "Optional: Renly's tools (salvage bench), room with checkpoint.",
+    "enter-ogham-village": {
+     "text": "Straight on, far wall (88%).",
      "src": [
-      "codex"
+      "codex",
+      "data"
      ]
     }
-   ],
+   }
+  },
+  "G1_13_2": {
    "drawing": {
     "shape": [
      [
@@ -1978,18 +1985,29 @@
       "below": false
      }
     ]
-   }
-  },
-  "G1_14": {
-   "steps": [
-    {
-     "text": "U-shape: follow it round to the manor.",
+   },
+   "hints": {
+    "smithing-tools": {
+     "text": "Follow the cobble road; room with a checkpoint.",
      "src": [
-      "codex",
+      "codex"
+     ]
+    },
+    "kill-executioner": {
+     "text": "Hug the right wall.",
+     "src": [
+      "codex"
+     ]
+    },
+    "enter-manor-ramparts": {
+     "text": "Behind his arena.",
+     "src": [
       "data"
      ]
     }
-   ],
+   }
+  },
+  "G1_14": {
    "drawing": {
     "shape": [
      [
@@ -2062,31 +2080,25 @@
       "anchor": "end"
      }
     ]
-   }
-  },
-  "G1_15": {
-   "steps": [
-    {
-     "text": "Each floor: go opposite to where you came in.",
+   },
+   "hints": {
+    "enter-ogham-manor": {
+     "text": "Follow the U round to the far side.",
      "src": [
       "codex",
-      "poe2way"
-     ]
-    },
-    {
-     "text": "The Count is at the far end (100%).",
-     "src": [
       "data"
      ]
     },
-    {
-     "text": "Optional: Candlemass, floor 1 (+20 life).",
+    "gallows-secret": {
+     "text": "On a wall along the way.",
      "src": [
       "codex",
       "poe2way"
      ]
     }
-   ],
+   }
+  },
+  "G1_15": {
    "drawing": {
     "shape": [
      [
@@ -2280,6 +2292,22 @@
       "anchor": "end"
      }
     ]
+   },
+   "hints": {
+    "kill-candlemass": {
+     "text": "Floor 1, a far wall.",
+     "src": [
+      "codex"
+     ]
+    },
+    "kill-geonor": {
+     "text": "Each floor: go the opposite way; far end (100%).",
+     "src": [
+      "codex",
+      "poe2way",
+      "data"
+     ]
+    }
    }
   }
  }

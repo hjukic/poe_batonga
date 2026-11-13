@@ -1481,7 +1481,7 @@ mod tests {
         assert!(!progress.completed.contains_key("enter-clearfell-encampment"));
         toggle(&routes, &mut progress, "enter-clearfell-encampment").unwrap();
         assert_eq!(progress.completed["enter-clearfell-encampment"].source, "manual");
-        assert!(toggle(&routes, &mut progress, "directions-river").is_err());
+        assert!(toggle(&routes, &mut progress, "directions-aggorat").is_err(), "a note is no step to tick");
     }
 
     #[test]

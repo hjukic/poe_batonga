@@ -27,11 +27,6 @@
       "parts": [{ "text": "Talk to " }, { "text": "Delwyn", "style": "npc" }]
     },
     {
-      "id": "directions-hunting-grounds",
-      "kind": "note",
-      "parts": [{ "text": "Blood trails lead to The Crowbell", "style": "direction" }]
-    },
-    {
       "id": "kill-crowbell",
       "kind": "objective",
       "parts": [{ "text": "Kill " }, { "text": "The Crowbell", "style": "boss" }, { "text": "2 Skill Points", "style": "reward" }],

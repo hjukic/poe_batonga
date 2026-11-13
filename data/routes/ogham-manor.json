@@ -12,11 +12,6 @@
       "evidence": "No kill line known. Tick by hand."
     },
     {
-      "id": "directions-ogham-manor",
-      "kind": "note",
-      "parts": [{ "text": "Each floor down: go the opposite way", "style": "direction" }]
-    },
-    {
       "id": "kill-geonor",
       "kind": "objective",
       "parts": [{ "text": "Kill " }, { "text": "Count Geonor", "style": "boss" }],

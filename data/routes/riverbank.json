@@ -15,11 +15,6 @@
       "evidence": "Last line of his dialogue (SamuelWildFindMiller); seen in a live log on 2026-11-11."
     },
     {
-      "id": "directions-river",
-      "kind": "note",
-      "parts": [{ "text": "Follow the river upstream", "style": "direction" }]
-    },
-    {
       "id": "kill-bloated-miller",
       "navigationTarget": { "area": "G1_1", "label": "The Bloated Miller", "exit": "G1_town" },
       "kind": "objective",

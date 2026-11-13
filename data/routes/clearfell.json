@@ -12,11 +12,6 @@
       "evidence": "No kill line captured yet. Tick by hand."
     },
     {
-      "id": "directions-mud-burrow",
-      "kind": "note",
-      "parts": [{ "text": "Burrow by waypoint, Grelwood past the bridge", "style": "direction" }]
-    },
-    {
       "id": "enter-mud-burrow",
       "kind": "objective",
       "navigationTarget": { "area": "G1_2", "label": "Mud Burrow", "exit": "G1_3" },

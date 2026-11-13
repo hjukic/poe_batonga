@@ -1,4 +1,4 @@
-import { guideFor, sourcesOf } from './zone-guides';
+import { guideFor, sourcesOf, type ZoneGuide } from './zone-guides';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -123,7 +123,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <div class="route" id="route"></div>
     <div class="zone-guide" id="zone-guide" hidden>
       <div class="guide-drawing" id="guide-drawing"></div>
-      <ol class="guide-steps" id="guide-steps"></ol>
+      <ul class="guide-general" id="guide-general"></ul>
     </div>
     <div class="layout-pick" id="layout-pick" hidden>
       <p class="layout-name" id="layout-name"></p>
@@ -151,7 +151,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <label class="row radar-only" title="Parked until the layout is recognised reliably (roadmap phase 3). On: the experimental arrow around the character."><span>Compass (parked)</span><input id="compass-enabled" type="checkbox" /></label>
     <label class="row" title="The overlay hides while the game is closed or on a workspace that is not shown"><span>Hide when game is off screen</span><input id="auto-hide" type="checkbox" checked /></label>
     <label class="row" title="The overlay hides when a zone boss starts talking and comes back when the kill is logged, you die or leave, or the boss has been quiet for 30 seconds"><span>Hide during boss fights</span><input id="fight-hide" type="checkbox" checked /></label>
-    <label class="row" title="How to cross the zone: a schematic of its usual shape from where you come in, and short steps (community guides checked against the game's own layouts)"><span>Zone guide</span><input id="zone-guide-enabled" type="checkbox" /></label>
+    <label class="row" title="How to cross the zone: a schematic of its usual shape from where you come in, and a short hint under each step (community guides checked against the game's own layouts)"><span>Zone guide</span><input id="zone-guide-enabled" type="checkbox" /></label>
     <label class="row radar-only" title="The map recorded so far, for checking the tracking"><span>Map preview</span><input id="map-preview" type="checkbox" /></label>
     <p id="shortcut-error" class="warning" hidden></p>
     <hr />
@@ -237,6 +237,15 @@ function stepRow(step: StepView) {
   if (step.optional && !side.childElementCount) side.textContent = 'optional';
   row.append(marker, text);
   if (side.textContent) row.append(side);
+  // How to get there (the zone guide), under the row while it is open.
+  const hint = step.state !== 'done' ? guide?.hints[step.id] : undefined;
+  if (hint) {
+    const line = document.createElement('span');
+    line.className = 'hint';
+    line.textContent = hint.text;
+    line.title = `From: ${sourcesOf(hint)}`;
+    row.append(line);
+  }
   return row;
 }
 
@@ -259,21 +268,22 @@ function summaryRow(text: string, done: boolean, onClick = () => { unfolded = !u
   return row;
 }
 
-/** How to cross the zone on show (`zone-guides.ts`): its schematic and steps, while in it and
- *  switched on. Drawn again only for another zone. */
+/** The guide of the zone on show (`zone-guides.ts`): its schematic, a few lines for the
+ *  whole zone, and the hints `stepRow` puts under the checklist rows. Null when switched off. */
+let guide: ZoneGuide | null = null;
 let shownGuide: string | null = null;
 function renderGuide(view: TrackerView) {
   const zone = view.inZone && zoneGuide.checked ? view.zone?.id ?? null : null;
-  const guide = guideFor(zone);
+  guide = guideFor(zone);
   $('#zone-guide').hidden = !guide;
   if (!guide || zone === shownGuide) return;
   shownGuide = zone;
   // Our own data (data/guides): no outside text reaches this markup.
   $('#guide-drawing').innerHTML = guide.svg;
-  $('#guide-steps').replaceChildren(...guide.steps.map((step) => {
+  $('#guide-general').replaceChildren(...guide.general.map((hint) => {
     const item = document.createElement('li');
-    item.textContent = step.text;
-    item.title = `From: ${sourcesOf(step)}`;
+    item.textContent = hint.text;
+    item.title = `From: ${sourcesOf(hint)}`;
     return item;
   }));
 }
@@ -604,7 +614,7 @@ const zoneGuide = $<HTMLInputElement>('#zone-guide-enabled');
 zoneGuide.checked = stored('zone-guide', true);
 zoneGuide.addEventListener('change', () => {
   keep('zone-guide', zoneGuide.checked);
-  if (lastTracker) renderGuide(lastTracker);
+  if (lastTracker) renderTracker(lastTracker);
 });
 const showMapPreview = () => { document.body.dataset.mapPreview = String(mapPreview.checked); };
 showMapPreview();

@@ -128,5 +128,7 @@ body[data-in-zone="false"] .zone-guide { display: none; }
 .guide-drawing svg { display: block; width: 292px; height: auto; }
 .guide-svg .g-label { font: 600 3.4px system-ui, sans-serif; paint-order: stroke; stroke: #15131c; stroke-width: 0.8px; }
 .guide-svg .g-clue { font: italic 3px system-ui, sans-serif; }
-.guide-steps { margin: 4px 0 0; padding-left: 18px; font-size: 12px; line-height: 16px; color: #d9d3ea; }
-.guide-steps li { margin: 3px 0; }
+.guide-general { margin: 2px 0 0; padding-left: 16px; font-size: 12px; line-height: 16px; color: #8edce8; font-style: italic; }
+.guide-general:empty { display: none; }
+/* How to get there, under a checklist row (the zone guide's hints). */
+.step .hint { grid-column: 2 / -1; font-size: 12px; line-height: 15px; color: #8edce8; font-style: italic; }

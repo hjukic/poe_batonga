@@ -5,11 +5,6 @@
   "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
   "steps": [
     {
-      "id": "directions-freythorn",
-      "kind": "note",
-      "parts": [{ "text": "Altar smoke leads to the small altars", "style": "direction" }]
-    },
-    {
       "id": "ritual-altars",
       "kind": "objective",
       "parts": [{ "text": "Activate 3 Ritual Altars" }],

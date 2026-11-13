@@ -1,23 +1,27 @@
 # Act 1 zone guides: sources and evidence
 
-The panel shows, under the checklist, how to cross the zone you are in: a schematic of the
-zone's usual shape drawn from where you come in (the triangle), the route to follow, the
-places and clues on it, and two to four numbered steps (`data/guides/act1.json`, drawn by
-`src/guide-svg.ts`, shown by `src/zone-guides.ts`; setting "Zone guide"). Each step names its
-sources (hover it). The schematics follow the Mobalytics layout guide's idea: one general
-pattern per zone, not one picture per layout; the game turns zones, the pattern stays. This
-file keeps what they rest on. Started 2026-11-13, after the radar
-and layout recognition were parked; Act 1 only for now.
+The panel shows how to cross the zone you are in: under each open checklist row a short line
+on how to get there (in the direction colour), and under the list a schematic of the zone's
+usual shape drawn from where you come in (the triangle), with the route, places and clues,
+plus a line or two for the whole zone (`data/guides/act1.json`: `hints` by step id,
+`general`, `drawing`; drawn by `src/guide-svg.ts`, shown by `src/zone-guides.ts`; setting
+"Zone guide"). Hover a line for its sources. The schematics follow the Mobalytics layout
+guide's idea: one general pattern per zone, not one picture per layout; the game turns
+zones, the pattern stays. The Act 1 routes' own direction notes were folded into the hints
+(owner, 2026-11-13: "if i have those 1.2.3 comments why do i need the blue ones under kill
+beira"). This file keeps what it all rests on. Started 2026-11-13, after the radar and
+layout recognition were parked; Act 1 only for now.
 
-## How steps are written (owner, 2026-11-13)
+## How hints are written (owner, 2026-11-13)
 
 For a league start, levelling fast: "very concise and straight to the point".
 
-- One short line each, what to do: "Away from town: Beira, then the Grelwood (88%)."
+- One short line under the row it is about: under "Kill Beira" "Away from town, far side
+  (67%).", under "Enter The Grelwood" "Far side, past the bridge (88%)."
 - How often a pattern holds as a percentage of the zone's layouts (88%), not "29 of 33".
 - No rewards for what you do anyway ("Kill Beira", not "+10% cold res").
-- Side content starts with "Optional:" and says in brackets why you might do it:
-  "Optional: Mud Burrow (Lv 2 gem)."
+- Side content is an optional row of the checklist; its reason stays on the row (the
+  reward on the right), the hint says only where it is.
 
 ## Sources
 
