@@ -1,4 +1,4 @@
-import { guideFor, sourcesOf, type ZoneGuide } from './zone-guides';
+import { guideFor, type ZoneGuide } from './zone-guides';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -241,7 +241,6 @@ function stepRow(step: StepView) {
     const line = document.createElement('span');
     line.className = 'hint';
     line.textContent = hint.text;
-    line.title = `From: ${sourcesOf(hint)}`;
     row.append(line);
   }
   return row;
@@ -281,7 +280,6 @@ function renderGuide(view: TrackerView) {
   $('#guide-general').replaceChildren(...guide.general.map((hint) => {
     const item = document.createElement('li');
     item.textContent = hint.text;
-    item.title = `From: ${sourcesOf(hint)}`;
     return item;
   }));
 }
@@ -367,7 +365,6 @@ function setGuideTarget(target: string | null) {
 function syncStepControls() {
   document.querySelectorAll<HTMLButtonElement>('#route button.step').forEach((row) => {
     row.disabled = !lastTracker?.inZone || !lastTracker.character;
-    if (!row.classList.contains('summary')) row.title = 'Click: done / not done';
   });
   syncInput();
 }

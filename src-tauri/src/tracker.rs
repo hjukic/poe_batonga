@@ -543,6 +543,20 @@ pub fn boss_step<'a>(routes: &'a [Route], progress: &Progress, area: &str, speak
     })
 }
 
+/// The open kill step that follows the step this line triggers, in `area`: the line a boss
+/// emerges on starts his fight though he does not say it (the Rust King rises at the third
+/// obelisk with a "Ghostly Voice" line, then may say nothing: the owner's fight of 2026-11-13).
+pub fn boss_after_line<'a>(routes: &'a [Route], progress: &Progress, area: &str, text: &str) -> Option<&'a Step> {
+    let route = routes.iter().find(|r| r.zone.id == area)?;
+    let said = |step: &Step| matches!(&step.trigger, Some(Trigger::NpcLine { lines, .. }) if lines.iter().any(|l| l.text == text));
+    let at = route.steps.iter().position(said)?;
+    route.steps[at + 1..]
+        .iter()
+        .filter(|step| step.kind == "objective")
+        .find(|step| step.parts.iter().any(|p| p.style.as_deref() == Some("boss")))
+        .filter(|step| !progress.completed.contains_key(&step.id))
+}
+
 /// The log line of the player's death: `: <character> has been slain.`
 fn is_death(line: &str) -> bool {
     line.trim_end().ends_with(" has been slain.") && line.contains("] : ")
@@ -552,16 +566,26 @@ fn is_death(line: &str) -> bool {
 const RECENT_LINES: usize = 30;
 
 impl Inner {
-    /// Ends the fight when its step is ticked or the boss has been quiet too long.
-    /// True when a fight ended.
+    /// Ends the fight when its step is ticked or the boss has been quiet too long. A boss
+    /// quiet that long, with the player still alive in the zone (a death or a zone change
+    /// ends the fight first), is taken as killed: the log has no line for most kills, and
+    /// the owner wants a kill to close when it is done (2026-11-13). Ticked as implied, so
+    /// unticking it by hand keeps it open. True when a fight ended.
     pub fn settle_fight(&mut self) -> bool {
-        let over = self.fight.as_ref().is_some_and(|fight| {
-            self.progress.completed.contains_key(&fight.step) || fight.last_line.elapsed() > FIGHT_QUIET
-        });
-        if over {
-            self.fight = None;
+        let Some(fight) = self.fight.as_ref() else { return false };
+        let killed = self.progress.completed.contains_key(&fight.step);
+        let quiet = fight.last_line.elapsed() > FIGHT_QUIET;
+        if !killed && !quiet {
+            return false;
         }
-        over
+        if !killed && !self.progress.dismissed.contains(&fight.step) {
+            self.progress.completed.insert(
+                fight.step.clone(),
+                Completion { at: now_label(), source: "implied".into(), evidence: "The boss fell silent for 30 s: taken as killed".into() },
+            );
+        }
+        self.fight = None;
+        true
     }
 
     /// Ticks the kill steps of the current zone's bosses the map shows dead
@@ -1011,9 +1035,9 @@ fn process(app: &AppHandle, path: &str, bytes: &[u8], read_through: u64, live: b
                     *fight = None;
                     *in_zone = running && live;
                 }
-                LogEvent::Dialogue { speaker, .. } if live && *in_zone => {
+                LogEvent::Dialogue { speaker, text } if live && *in_zone => {
                     let area = progress.current_area.as_deref().unwrap_or_default();
-                    if let Some(step) = boss_step(routes, progress, area, speaker) {
+                    if let Some(step) = boss_step(routes, progress, area, speaker).or_else(|| boss_after_line(routes, progress, area, text)) {
                         *fight = Some(Fight { step: step.id.clone(), last_line: std::time::Instant::now() });
                     }
                 }
@@ -1115,7 +1139,15 @@ fn tick_map_kills(app: &AppHandle) {
 /// Between log lines: ends a fight whose boss has gone quiet.
 fn settle_quiet_fight(app: &AppHandle) {
     let tracker = app.state::<Tracker>();
-    let ended = crate::relock(&tracker.0).settle_fight();
+    let mut inner = crate::relock(&tracker.0);
+    let before = inner.progress.completed.len();
+    let ended = inner.settle_fight();
+    if inner.progress.completed.len() != before {
+        inner.sync_navigation(app);
+        inner.save();
+        let _ = app.emit("tracker-state", inner.view());
+    }
+    drop(inner);
     if ended {
         crate::set_fight(app, false);
     }
@@ -1667,9 +1699,25 @@ mod tests {
         inner.fight = fight(FIGHT_QUIET + Duration::from_secs(1));
         assert!(inner.settle_fight(), "quiet for too long");
         assert!(inner.fight.is_none());
+        assert_eq!(inner.progress.completed["kill-bloated-miller"].source, "implied", "a quiet boss is taken as killed");
+        inner.progress.completed.remove("kill-bloated-miller");
         inner.fight = fight(Duration::from_secs(1));
         done(&mut inner.progress, "kill-bloated-miller");
         assert!(inner.settle_fight(), "the kill is ticked");
+    }
+
+    #[test]
+    fn the_rust_kings_emerge_line_ticks_the_obelisks_and_starts_his_fight() {
+        let routes = load_routes();
+        let mut progress = Progress::default();
+        feed(&mut progress, &[line("DEBUG", r#"Generating level 5 area "G1_5" with seed 2001406961"#)]);
+        // As the owner's log has it (2026-11-13): spoken by "Ghostly Voice".
+        let emerge = line("INFO", "Ghostly Voice: This is our land. We stand united!");
+        feed(&mut progress, &[emerge]);
+        assert!(progress.completed.contains_key("obelisks-of-rust"), "by its text, whoever the log names");
+        let kill = boss_after_line(&routes, &progress, "G1_5", "This is our land. We stand united!").map(|s| s.id.as_str());
+        assert_eq!(kill, Some("kill-rust-king"));
+        assert!(boss_after_line(&routes, &progress, "G1_5", "Something else").is_none());
     }
 
     #[test]
