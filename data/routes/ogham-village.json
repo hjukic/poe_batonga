@@ -5,11 +5,6 @@
   "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
   "steps": [
     {
-      "id": "directions-ogham-village",
-      "kind": "note",
-      "parts": [{ "text": "Cobble road leads to the smithing house", "style": "direction" }]
-    },
-    {
       "id": "smithing-tools",
       "kind": "objective",
       "navigationTarget": { "area": "G1_13_2", "label": "Smithing house", "tag": "blacksmith" },

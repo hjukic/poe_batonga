@@ -12,10 +12,10 @@
         "type": "npcLine",
         "area": "G1_5",
         "lines": [
-          { "id": "RustKingEmerge", "speaker": "The Rust King", "text": "This is our land. We stand united!" }
+          { "id": "RustKingEmerge", "speaker": "Ghostly Voice", "text": "This is our land. We stand united!" }
         ]
       },
-      "evidence": "Bark: RustKingEmerge. The Rust King's emerge line; he rises at the third obelisk (guide: 'spawns on last obelisk'). From the game's dialogue tables (2026-11-12). World speech, of the kind the log shows; not yet seen in the log.",
+      "evidence": "Bark: RustKingEmerge. He rises at the third obelisk with this line, which the log records from \"Ghostly Voice\" (the owner's Red Vale, 2026-11-12 and 2026-11-13). It also starts his fight: the kill closes once he has been quiet for 30 s.",
       "evidenceKind": "bark"
     },
     {

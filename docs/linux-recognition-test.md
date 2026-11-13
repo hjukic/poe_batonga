@@ -1,12 +1,12 @@
-# Linux character recognition — task for Sue's agent (v0.1.110)
+# Linux character recognition — task for Sue's agent (v0.1.112)
 
 Written 2026-11-13 by Jurica's agent (Claude, on Windows). If you are the agent working
 with Sue on Linux, this is your task. Sue reported that character names are not
-recognized on Linux: until v0.1.110 Linux had no screen recognition at all (it only kept
-the last chosen character). v0.1.110 adds it, but it was written on Windows and has
+recognized on Linux: until v0.1.112 Linux had no screen recognition at all (it only kept
+the last chosen character). v0.1.112 adds it, but it was written on Windows and has
 **never been compiled or run on Linux**. Your job is to make it build and work.
 
-## How it works (read `docs/character-identity.md`, section "Linux (v0.1.110)")
+## How it works (read `docs/character-identity.md`, section "Linux (v0.1.112)")
 
 - `src-tauri/src/identity_linux.rs`: Linux input and OCR. While the game runs and the
   player is in the menus, it adds non-consuming Hyprland binds (`bindn`, dispatcher
@@ -46,5 +46,5 @@ packet interception. The binds must never consume or change input to the game.
    `identity_tesseract.rs`, and `group_lines` (one line per name row). Also note the
    OCR time per click.
 6. Write what you found and changed in `docs/SESSION.md` (a short "Linux test"
-   result under the v0.1.110 section), commit with a version bump (0.1.111), and
+   result under the v0.1.112 section), commit with a version bump (0.1.113), and
    tell Sue to push or send the log to Jurica.

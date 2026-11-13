@@ -13,11 +13,14 @@
 > Since v0.1.99 the Linux side also parked the radar (v0.1.104) and added Act 1 zone
 > guides (v0.1.105–107; `PLAN.md`, next: Acts 2–6).
 
-> **v0.1.110 (2026-11-13):** character recognition on Linux/Hyprland (written on
+> **v0.1.112 (2026-11-13):** character recognition on Linux/Hyprland (written on
 > Windows, untested on Linux; see "Linux test" below). The capture and frame queue
 > moved to the shared `identity_native.rs`; Windows behaves as in v0.1.109.
+> The history has two lines numbered v0.1.108–0.1.111: zone guide changes
+> (pushed from the other machine) and Windows character recognition (local), merged
+> as v0.1.112.
 
-Current version: **0.1.110**. Rebuild before testing:
+Current version: **0.1.112**. Rebuild before testing:
 `npm run desktop:build`, then run `src-tauri/target/release/poe-batonga.exe`
 with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation.log`.
 
@@ -46,9 +49,9 @@ with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation
 5. **Progress isolation**: tick a checkbox on A, return to the menu, enter with
    B, then A again. A's ticks must come back, B's stay separate.
 
-## Linux test — Sue (v0.1.110, not yet compiled or run on Linux)
+## Linux test — Sue (v0.1.112, not yet compiled or run on Linux)
 
-v0.1.110 adds character recognition on Linux (Hyprland only): non-consuming
+v0.1.112 adds character recognition on Linux (Hyprland only): non-consuming
 `bindn` binds while in the menus, `grim` capture, `tesseract` OCR. Needs
 `tesseract` with English data (`docs/overlay-test.md`, Run). First run:
 

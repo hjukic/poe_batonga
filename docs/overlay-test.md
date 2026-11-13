@@ -246,7 +246,7 @@ or a trail that wanders while standing still: a cold or icy zone, a dungeon with
 blue-grey stone floors, ground lit by water or frost, a fight with frost or lightning
 effects, and a town.
 
-## Character recognition on Linux (v0.1.110)
+## Character recognition on Linux (v0.1.112)
 
 Hyprland only, like the map reading. Needs `grim` and `tesseract` with English data
 (see Run). While the game runs and the player is in the menus, the app adds Hyprland

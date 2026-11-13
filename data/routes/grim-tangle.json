@@ -5,11 +5,6 @@
   "source": "Domistae poe2-leveling f682e2b, poe2_act1_guide.html (patch 0.5.5); ids and levels from WorldAreas",
   "steps": [
     {
-      "id": "directions-grim-tangle",
-      "kind": "note",
-      "parts": [{ "text": "Caskets lead to the Cemetery", "style": "direction" }]
-    },
-    {
       "id": "kill-ervig",
       "kind": "objective",
       "navigationTarget": { "area": "G1_6", "label": "Ervig", "tag": "boss" },

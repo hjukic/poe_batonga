@@ -468,7 +468,7 @@ Limits: the buttons must read `PLAY`/`CREATE`/`DELETE` (English client, en-US
 OCR) on a 16:9 layout; the creation screen still needs one of the twelve class
 names; a covered title on a turning screen resolves only from history.
 
-## Linux (v0.1.110)
+## Linux (v0.1.112)
 
 Linux reads the character as Windows does; the code that captures, queues and hands
 frames to the recognizer is now shared (`identity_native.rs`), and each platform

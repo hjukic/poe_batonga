@@ -52,11 +52,6 @@
       "evidence": "No kill line known. Tick by hand. Target: the one 'witch_hut' node in all 12 layouts."
     },
     {
-      "id": "directions-grelwood",
-      "kind": "note",
-      "parts": [{ "text": "Go upstream along the river to The Red Vale", "style": "direction" }]
-    },
-    {
       "id": "enter-red-vale",
       "kind": "objective",
       "navigationTarget": { "area": "G1_4", "label": "The Red Vale", "exit": "G1_5" },
