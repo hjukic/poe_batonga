@@ -34,11 +34,17 @@ const FORMAT_VERSION: u32 = 2;
 const MIN_FRAME_WALLS: usize = 30;
 /// Share of a frame's wall cells that must land on known walls to accept a match.
 const MIN_MATCH: f64 = 0.55;
-/// Search radius in cells around the predicted move, then a wider retry.
-const NEAR: i32 = 12;
-const WIDE: i32 = 32;
-/// Consecutive unmatched frames before a new part is started (about three seconds).
-const LOST_LIMIT: u32 = 25;
+/// Search radius in cells around the predicted move, then a wider retry. At four frames a
+/// second the move changes by up to 20 cells between frames in 95 of 100 frames, 38 in 99
+/// (the owner's Cemetery and Grelwood, 2026-11-13; at eight a second 11 and 22, with 12 and 32).
+const NEAR: i32 = 20;
+const WIDE: i32 = 40;
+/// Frames in `seconds` at the reader's rate (`minimap::FRAME_INTERVAL`).
+const fn frames(seconds: u128) -> u32 {
+    (seconds * 1000 / crate::minimap::FRAME_INTERVAL.as_millis()) as u32
+}
+/// Consecutive unmatched frames before a new part is started (three seconds).
+const LOST_LIMIT: u32 = frames(3);
 const SAVE_EVERY: Duration = Duration::from_secs(15);
 /// Far icons from a whole-screen scan stand in for this many frames after it
 /// (the scan comes every `minimap::SCAN_EVERY`-th big-map frame).
@@ -162,7 +168,7 @@ const HELD_DROP: (u32, f64) = (16, 0.25);
 const NEIGHBOURS: [(i32, i32); 8] = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)];
 /// Frames to find the player on a known map before starting a new part (about 8 s): nothing
 /// of the visit is fed to the navigator while it is looked for, so looking longer costs nothing.
-const FIND_FRAMES: u32 = 64;
+const FIND_FRAMES: u32 = frames(8);
 /// Times a wall cell counts as seen at most: more sightings add nothing.
 const SEEN_MOST: u32 = 50;
 
@@ -396,7 +402,7 @@ struct NamedSeen {
 
 /// The same named icon in two frames: this close (cells), within this many frames.
 const SAME_ICON: f32 = 4.0;
-const NAMED_FRAMES: u32 = 33;
+const NAMED_FRAMES: u32 = frames(4);
 /// A grey twin this close (cells) to where this part saw the pair alive is that boss, dead.
 const SAME_PLACE: f32 = 12.0;
 

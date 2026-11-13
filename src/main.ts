@@ -401,16 +401,27 @@ function renderPicture(picture: LayoutPicture | undefined) {
 
 /** The last full layout view, for drawing the map preview when it is switched on. */
 let lastFullView: LayoutView | null = null;
+/** What the panel last drew: a view that changes nothing is not drawn again (each redraw
+ *  makes the compositor draw the overlay over the game anew). */
+let drawnPicture = '';
+let drawnPreview = '';
 function renderLayout(view: LayoutView | null) {
   // With the compass parked the bright arrow marks the first open step, not its target.
   setGuideTarget(compassEnabled.checked ? view?.guide?.target || null : null);
   if (view?.light) return;
-  renderPicture(view?.layout);
+  const picture = JSON.stringify(view?.layout ?? null);
+  if (picture !== drawnPicture) {
+    drawnPicture = picture;
+    renderPicture(view?.layout);
+  }
   lastFullView = view;
   // The preview (up to 300x260 cells) is drawn only while it is shown.
   if (mapPreview.checked) drawPreview(view);
 }
-function drawPreview(view: LayoutView | null) {
+function drawPreview(view: LayoutView | null, force = false) {
+  const drawn = view ? `${view.part}:${view.walls.length}:${view.trail.length}:${view.pois.length}:${view.player}` : '';
+  if (drawn === drawnPreview && !force) return;
+  drawnPreview = drawn;
   const context = minimapCanvas.getContext('2d');
   if (!context) return;
   context.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
@@ -517,7 +528,7 @@ showMapPreview();
 mapPreview.addEventListener('change', () => {
   keep('map-preview', mapPreview.checked);
   showMapPreview();
-  if (mapPreview.checked) drawPreview(lastFullView);
+  if (mapPreview.checked) drawPreview(lastFullView, true);
 });
 
 // ---- Show / hide shortcut ----

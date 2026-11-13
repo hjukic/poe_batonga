@@ -620,7 +620,7 @@ impl Inner {
         recorder.set_targets(targets);
         recorder.set_log_completed(by_log);
         if let Some(view) = recorder.set_completed(completed) {
-            let _ = app.emit("layout-state", view);
+            crate::minimap::send_layout(app, view);
         }
     }
 

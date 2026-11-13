@@ -22,9 +22,17 @@ mod windows_capture;
 #[cfg(target_os = "windows")]
 use windows_capture::{capture, capture_bigmap, capture_window, locate_minimap, Region as CaptureRegion};
 
-/// About eight frames a second: the needle follows the player closely. A capture of
-/// the map's area takes about 30 ms, of the whole window 50-60 ms (grim, 3840x2160).
-const FRAME_INTERVAL: Duration = Duration::from_millis(120);
+/// Four frames a second. Each frame is a screenshot, and a screenshot makes the compositor
+/// copy the screen's pixels back from the GPU: at eight a second (for the compass's
+/// needle, now parked) the owner saw the game stutter (2026-11-13). Before the compass
+/// needed them the reader ran at three. A capture of the map's area takes about 30 ms,
+/// of the whole window 50-60 ms (grim, 3840x2160).
+pub(crate) const FRAME_INTERVAL: Duration = Duration::from_millis(250);
+/// While the map shows nothing new (the player stands: a talk, the inventory, a menu),
+/// a frame every half second; the first change goes back to `FRAME_INTERVAL`.
+const IDLE_INTERVAL: Duration = Duration::from_millis(500);
+/// Frames with the same walls before the reader slows down (two seconds).
+const IDLE_AFTER: u32 = 8;
 /// Where the game is checked again (window moved, workspace switched).
 const LOCATE_INTERVAL: Duration = Duration::from_secs(2);
 
@@ -89,8 +97,10 @@ impl MinimapView {
     }
 
     /// What the pages get is the same (`walls` is not sent): no news for them.
+    /// The pages use whether a map with the player was read and the message, not where the
+    /// player is: sent on every move, the event went to both pages eight times a second.
     fn same_for_pages(&self, other: &MinimapView) -> bool {
-        let shown = |v: &MinimapView| (v.enabled, v.visible, v.message.clone(), v.cols, v.rows, v.player);
+        let shown = |v: &MinimapView| (v.enabled, v.visible, v.message.clone(), v.player.is_some());
         shown(self) == shown(other)
     }
 }
@@ -614,6 +624,16 @@ fn worth_sending(view: &crate::layout::LayoutView, compass: bool) -> Option<serd
     (!light || compass).then_some(value)
 }
 
+/// Sends a layout view to the panel, and to the compass while it is on: the compass page
+/// uses the needle only, and a full view (up to 300x260 map cells) went to it every
+/// second while it was parked.
+pub fn send_layout<S: serde::Serialize + Clone>(app: &AppHandle, view: S) {
+    if compass_on() {
+        let _ = app.emit_to("compass", "layout-state", view.clone());
+    }
+    let _ = app.emit_to("overlay", "layout-state", view);
+}
+
 /// Set when something worth a picture happened (a boss spoke); the reader takes it.
 static SAMPLE_WANTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -754,6 +774,8 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
     std::thread::spawn(move || {
         let mut region: Option<(Result<CaptureRegion, String>, Instant)> = None;
         let mut memory = Memory::default();
+        // Frames in a row whose walls were the last frame's (see `IDLE_AFTER`).
+        let mut still: u32 = 0;
         let mut samples = Samples::new(app.path().app_data_dir().ok().map(|dir| dir.join("samples")));
         loop {
             let started = Instant::now();
@@ -771,7 +793,7 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
                             let recorder = app.state::<crate::layout::Recorder>();
                             recorder.on_icons(&icons, whole);
                             if let Some(layout) = recorder.on_frame(&view, capture_px).and_then(|v| worth_sending(&v, compass_on())) {
-                                let _ = app.emit("layout-state", layout);
+                                send_layout(&app, layout);
                             }
                             samples.maybe(&view, &icons, area);
                             view
@@ -791,13 +813,20 @@ pub fn spawn(app: AppHandle, minimap: &Minimap) {
                 let mut l = crate::relock(&last);
                 // The walls change every frame but are not sent.
                 let changed = !l.same_for_pages(&view);
+                still = if view.visible && l.walls == view.walls { still + 1 } else { 0 };
                 *l = view.clone();
                 changed
             };
             if changed {
                 let _ = app.emit("minimap-state", view.clone());
             }
-            let wait = if view.visible { FRAME_INTERVAL } else { FRAME_INTERVAL * 2 };
+            let wait = if !view.visible {
+                FRAME_INTERVAL * 2
+            } else if still >= IDLE_AFTER {
+                IDLE_INTERVAL
+            } else {
+                FRAME_INTERVAL
+            };
             std::thread::sleep(wait.saturating_sub(started.elapsed()));
         }
     });
@@ -811,7 +840,8 @@ mod tests {
     fn a_frame_with_only_new_walls_is_no_news_for_the_pages() {
         let view = MinimapView { walls: vec![[1, 2]], player: Some([3.0, 4.0]), ..MinimapView::status(true, "Reading big map") };
         assert!(view.same_for_pages(&MinimapView { walls: vec![[5, 6], [7, 8]], ..view.clone() }));
-        assert!(!view.same_for_pages(&MinimapView { player: Some([3.5, 4.0]), ..view.clone() }));
+        assert!(view.same_for_pages(&MinimapView { player: Some([3.5, 4.0]), ..view.clone() }), "a move is no news");
+        assert!(!view.same_for_pages(&MinimapView { player: None, ..view.clone() }));
         assert!(!view.same_for_pages(&MinimapView { message: "Reading minimap".into(), ..view.clone() }));
     }
 
