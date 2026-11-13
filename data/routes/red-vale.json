@@ -12,7 +12,7 @@
         "type": "npcLine",
         "area": "G1_5",
         "lines": [
-          { "id": "RustKingEmerge", "speaker": "Ghostly Voice", "text": "This is our land. We stand united!" }
+          { "id": "RustKingEmerge", "speaker": "Ghostly Voice", "text": "This is our land. We stand united!", "emerges": true }
         ]
       },
       "evidence": "Bark: RustKingEmerge. He rises at the third obelisk with this line, which the log records from \"Ghostly Voice\" (the owner's Red Vale, 2026-11-12 and 2026-11-13). It also starts his fight: the kill closes once he has been quiet for 30 s.",

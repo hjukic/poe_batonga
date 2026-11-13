@@ -50,6 +50,11 @@ pub struct NpcLine {
     /// for scripts/check-triggers.mjs. Not used to match.
     #[serde(default)]
     pub id: Option<String>,
+    /// The boss of the next kill step rises on this line, though he may not speak: the
+    /// line starts his fight (`boss_after_line`). Only lines marked so; any other line
+    /// before a boss (the Wounded Man's "Find the Miller...", live v0.1.115) does not.
+    #[serde(default)]
+    pub emerges: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -95,13 +100,13 @@ impl TryFrom<RawTrigger> for Trigger {
             RawTrigger::ZoneEntered { area, after } => Ok(Trigger::ZoneEntered { area, after }),
             RawTrigger::NpcLine { area, speaker, text, lines, after } => {
                 let lines = match (speaker, text, lines.is_empty()) {
-                    (Some(speaker), Some(text), true) => vec![NpcLine { speaker, text, id: None }],
+                    (Some(speaker), Some(text), true) => vec![NpcLine { speaker, text, id: None, emerges: false }],
                     (None, None, false) => lines,
                     _ => return Err("npcLine needs either speaker and text, or lines".into()),
                 };
                 let lines: Vec<NpcLine> = lines
                     .into_iter()
-                    .map(|l| NpcLine { speaker: shown_text(&l.speaker), text: shown_text(&l.text), id: l.id })
+                    .map(|l| NpcLine { speaker: shown_text(&l.speaker), text: shown_text(&l.text), id: l.id, emerges: l.emerges })
                     .collect();
                 // An empty speaker or text would match nothing real, or an empty log line.
                 if lines.iter().any(|l| l.speaker.is_empty() || l.text.is_empty()) {
@@ -607,12 +612,12 @@ pub fn boss_step<'a>(routes: &'a [Route], progress: &Progress, area: &str, speak
     })
 }
 
-/// The open kill step that follows the step this line triggers, in `area`: the line a boss
-/// emerges on starts his fight though he does not say it (the Rust King rises at the third
+/// The open kill step that follows the step this line triggers, in `area`, when the line
+/// is marked `emerges`: the line a boss emerges on starts his fight though he does not say it (the Rust King rises at the third
 /// obelisk with a "Ghostly Voice" line, then may say nothing: the owner's fight of 2026-11-13).
 pub fn boss_after_line<'a>(routes: &'a [Route], progress: &Progress, area: &str, text: &str) -> Option<&'a Step> {
     let route = routes.iter().find(|r| r.zone.id == area)?;
-    let said = |step: &Step| matches!(&step.trigger, Some(Trigger::NpcLine { lines, .. }) if lines.iter().any(|l| l.text == text));
+    let said = |step: &Step| matches!(&step.trigger, Some(Trigger::NpcLine { lines, .. }) if lines.iter().any(|l| l.emerges && l.text == text));
     let at = route.steps.iter().position(said)?;
     route.steps[at + 1..]
         .iter()
@@ -1894,6 +1899,20 @@ mod tests {
         let kill = boss_after_line(&routes, &progress, "G1_5", "This is our land. We stand united!").map(|s| s.id.as_str());
         assert_eq!(kill, Some("kill-rust-king"));
         assert!(boss_after_line(&routes, &progress, "G1_5", "Something else").is_none());
+    }
+
+    #[test]
+    fn a_line_before_a_boss_starts_no_fight_unless_he_emerges_on_it() {
+        // Live v0.1.115: the Wounded Man's last line ticks his talk, the step before the
+        // Miller; taken as the Miller's emerge line it hid the overlay and, 30 s later,
+        // ticked the kill while the player stood by the Wounded Man.
+        let routes = load_routes();
+        let mut progress = Progress::default();
+        feed(&mut progress, &[line("DEBUG", r#"Generating level 1 area "G1_1" with seed 1"#)]);
+        feed(&mut progress, &[line("INFO", "Wounded Man: Reach... Clearfell... Find the Miller...")]);
+        assert!(progress.completed.contains_key("talk-wounded-man"));
+        assert!(boss_after_line(&routes, &progress, "G1_1", "Reach... Clearfell... Find the Miller...").is_none());
+        assert!(boss_step(&routes, &progress, "G1_1", "Wounded Man").is_none());
     }
 
     #[test]

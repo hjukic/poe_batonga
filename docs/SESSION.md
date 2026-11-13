@@ -61,7 +61,15 @@
 > shape) is unchanged. **Test:** unlock, go straight to Settings, open the menu, click
 > inside it, lock again; the lock button and checklist rows while locked.
 
-Current version: **0.1.116**. Rebuild before testing:
+> **v0.1.117 (2026-11-13):** from the owner's live v0.1.115 run (RRANGERDANGERJHGH):
+> the Wounded Man's "Find the Miller..." was taken as the Miller's emerge line (v0.1.111
+> `boss_after_line` took any line ticking the step before a boss), so the overlay hid as
+> in a fight and, 30 s later, ticked the Miller as killed. Now only trigger lines marked
+> `"emerges": true` start a fight that way (only the Rust King's "Ghostly Voice" line).
+> The false tick was removed from the owner's progress (backup
+> `progress.json.bak-before-0.1.116`).
+
+Current version: **0.1.117**. Rebuild before testing:
 `npm run desktop:build`, then run `src-tauri/target/release/poe-batonga.exe`
 with `BATONGA_IDENTITY_DIAGNOSTICS=artifacts/character-identity/runtime-creation.log`
 and `BATONGA_QUEST_DIAGNOSTICS=artifacts/quest-tracker.jsonl`.
