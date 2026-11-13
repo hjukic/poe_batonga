@@ -91,11 +91,41 @@ fn binds(add: bool) -> String {
     format!("[[BATCH]]{}", keywords.join(";"))
 }
 
+/// Hyprland configured in Lua (0.55 on) refuses `keyword` ("keyword can't work with
+/// non-legacy parsers. Use eval."; the owner's Hyprland 0.56.2, 2026-11-13): there the binds
+/// go through `eval`. Each bind's handle is kept in a Lua global, so removing them takes
+/// exactly these binds and none of the user's own on the same keys.
+static LUA: AtomicBool = AtomicBool::new(false);
+
+/// The binds as one Lua `eval`: added (any left from a run that did not end cleanly removed
+/// first) or removed.
+fn lua_binds(add: bool) -> String {
+    let clear = "for _, b in ipairs(_G.batonga_binds or {}) do b:remove() end";
+    if !add {
+        return format!("eval {clear}; _G.batonga_binds = nil");
+    }
+    let mut keys: Vec<(String, &str)> = vec![("mouse:272".into(), CLICK), ("Return".into(), ENTER), ("KP_Enter".into(), ENTER)];
+    for key in EDIT_KEYS {
+        keys.push((key.to_string(), EDIT));
+        keys.push((format!("SHIFT + {key}"), EDIT));
+    }
+    let calls: Vec<String> = keys
+        .iter()
+        .map(|(key, event)| format!("hl.bind(\"{key}\", hl.dsp.event(\"{event}\"), {{ non_consuming = true }})"))
+        .collect();
+    format!("eval {clear}; _G.batonga_binds = {{ {} }}", calls.join(", "))
+}
+
 /// Adds or removes the binds (once per change).
 fn set_binds(on: bool) {
     if BOUND_KEYS.swap(on, Ordering::SeqCst) == on { return; }
-    let reply = crate::layer_shell::hyprland_request(&binds(on));
-    super::trace("hyprland-binds", serde_json::json!({"on":on,"reply":reply.map(|r| r.chars().take(200).collect::<String>())}));
+    let lua = LUA.load(Ordering::SeqCst);
+    let mut reply = crate::layer_shell::hyprland_request(&if lua { lua_binds(on) } else { binds(on) });
+    if !lua && reply.as_deref().is_some_and(|r| r.contains("non-legacy")) {
+        LUA.store(true, Ordering::SeqCst);
+        reply = crate::layer_shell::hyprland_request(&lua_binds(on));
+    }
+    super::trace("hyprland-binds", serde_json::json!({"on":on,"lua":LUA.load(Ordering::SeqCst),"reply":reply.map(|r| r.chars().take(200).collect::<String>())}));
 }
 
 /// Keeps the binds while they are wanted: the game runs and the player is not in a zone
@@ -270,5 +300,15 @@ mod tests {
         assert!(add.contains("keyword bindn SHIFT,a,event,batonga-edit"));
         assert!(binds(false).contains("keyword unbind ,Return"));
         assert_eq!(add.matches(';').count() + 1, 3 + EDIT_KEYS.len() * 2);
+    }
+
+    #[test]
+    fn lua_binds_keep_their_handles_and_remove_only_those() {
+        let add = lua_binds(true);
+        assert!(add.starts_with("eval for _, b in ipairs(_G.batonga_binds or {}) do b:remove() end; _G.batonga_binds = { "));
+        assert!(add.contains(r#"hl.bind("mouse:272", hl.dsp.event("batonga-click"), { non_consuming = true })"#));
+        assert!(add.contains(r#"hl.bind("SHIFT + a", hl.dsp.event("batonga-edit"), { non_consuming = true })"#));
+        assert_eq!(add.matches("hl.bind(").count(), 3 + EDIT_KEYS.len() * 2);
+        assert_eq!(lua_binds(false), "eval for _, b in ipairs(_G.batonga_binds or {}) do b:remove() end; _G.batonga_binds = nil");
     }
 }
