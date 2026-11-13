@@ -23,6 +23,16 @@ caret noise. One labelled new-character creation through first-zone entry now
 binds and persists the correct profile. Existing-character switching remains
 under live verification.
 
+## Now: zone tips (owner, 2026-11-13)
+
+"general guides/speedrun tips how to traverse the zones best and fastest ... gather few
+campaign guides/speedrun guides and similar layout tips and maybe create our own layout
+setups ... check the possible layouts from datamined zones ... for start focus on act 1".
+Act 1 done as a first version: `data/tips/act1.json` (community tips checked against the
+layout graphs), shown under the checklist (setting "Zone tips"); evidence and sources in
+`docs/act1-zone-tips.md`. Next: drawings of where exits and bosses tend to be, from every
+layout of a zone laid over each other at the entrance; then Acts 2-6.
+
 ## Parked: radar and layout recognition (owner, 2026-11-13)
 
 "pls park those radar and layout recognition feature, turn them off in the app and codebase..

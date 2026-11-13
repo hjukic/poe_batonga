@@ -121,3 +121,8 @@ button.step:enabled:hover { background: rgb(239 235 255 / .06); }
 .version { padding: 0 12px 6px; text-align: right; font-size: 10.5px; line-height: 1; color: var(--muted); opacity: .7; }
 /* The radar and layout recognition are parked (the app's RADAR switch): their settings are hidden. */
 body[data-radar="false"] .radar-only { display: none; }
+/* How to cross the zone fast (zone-tips.ts). */
+.zone-tips { margin: 2px 0 8px; padding: 0 14px 0 30px; font-size: 12px; line-height: 16px; color: #8edce8; }
+.zone-tips[hidden] { display: none; }
+.zone-tips li { margin: 3px 0; }
+body[data-in-zone="false"] .zone-tips { display: none; }

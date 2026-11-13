@@ -1,0 +1,80 @@
+{
+  "act": 1,
+  "about": "How to cross each Act 1 zone fast. Community tips (sources below), checked against the game's own layout graphs (data/layouts/ggg, the owner's install, counted 2026-11-13). Directions from the data are relative to where you come in: they hold however the zone is turned. Evidence: docs/act1-zone-tips.md.",
+  "sources": {
+    "data": "The game's layout graphs: every possible layout of the zone, counted.",
+    "codex": "Mobalytics, Campaign Layout Guide: Act 1 (Lolcohol, Campaign Codex), updated 2026-05-23.",
+    "poe2way": "poe2way.com act guide, Act 1 (layout tips tagged 0.5.0).",
+    "maxroll": "Maxroll, Path of Exile 2 Campaign Guide, updated 2026-06-02.",
+    "aoeah": "AOEAH, PoE 2 0.5 Campaign Speedrun & Fast Leveling Route Guide, 2026-05-22."
+  },
+  "general": [
+    { "text": "Lost? Hug a wall: it leads to exits and boss arenas most of the time.", "src": ["aoeah"] },
+    { "text": "The way on is almost always on the far side from where you came in.", "src": ["data"] }
+  ],
+  "zones": {
+    "G1_1": [
+      { "text": "Straight on: the Bloated Miller guards the way to the encampment.", "src": ["maxroll", "data"] },
+      { "text": "The large chest midway holds your first skill gem.", "src": ["maxroll"] }
+    ],
+    "G1_2": [
+      { "text": "The Grelwood is on the far side from town (29 of 33 layouts).", "src": ["data"] },
+      { "text": "Beira (+10% cold res) is usually on the far side too.", "src": ["data", "codex"] },
+      { "text": "Mud Burrow and waypoint on one side of the start, the Mysterious Campsite (skill gem) on the other.", "src": ["codex"] },
+      { "text": "Mud Burrow is rarely worth it (Lv 2 uncut gem).", "src": ["codex"] }
+    ],
+    "G1_3": [
+      { "text": "Narrow and winding: the Devourer is always at the far end (4 of 4).", "src": ["data"] }
+    ],
+    "G1_4": [
+      { "text": "Follow the river: the Red Vale is always on the far side (12 of 12).", "src": ["poe2way", "codex", "data"] },
+      { "text": "Orange mushrooms lead to the Grim Tangle, about halfway in (11 of 12).", "src": ["poe2way", "codex", "data"] },
+      { "text": "Glowing roots lead to the Tree of Souls and the waypoint.", "src": ["poe2way", "codex"] },
+      { "text": "Found the Grim Tangle or the Red Vale first? Take its waypoint and come back.", "src": ["poe2way", "maxroll"] }
+    ],
+    "G1_5": [
+      { "text": "Loop round for the three Rust obelisks; the third summons the Rust King.", "src": ["codex", "maxroll"] }
+    ],
+    "G1_6": [
+      { "text": "Head away from the entrance: the Cemetery is always on the far side (8 of 8).", "src": ["data", "codex"] },
+      { "text": "Once Una starts singing, respawn at the checkpoint to skip it.", "src": ["codex", "poe2way"] }
+    ],
+    "G1_7": [
+      { "text": "Lachlann's arena is on your half of the zone (10 of 12); the tombs lie halfway, along the side walls.", "src": ["data", "codex"] },
+      { "text": "Found a tomb first? Take its waypoint and come back.", "src": ["poe2way"] },
+      { "text": "Ancient Ruins sarcophagus (guaranteed ring) along the far wall.", "src": ["codex", "maxroll"] },
+      { "text": "After opening the Memorial Gate, respawn at the checkpoint to skip the talk.", "src": ["poe2way", "codex"] }
+    ],
+    "G1_8": [
+      { "text": "Line from where you came in through the wheel tile in the middle: Draven is at the far end (3 of 4).", "src": ["codex"] },
+      { "text": "Not there? He is on the long wall in line with the entrance. His arena has a ribbed edge.", "src": ["codex"] }
+    ],
+    "G1_9": [
+      { "text": "Go through the middle: Asinia's arena is usually along the top.", "src": ["codex"] }
+    ],
+    "G1_11": [
+      { "text": "Points of interest sit in the corners: follow the edges, skip the middle.", "src": ["codex"] },
+      { "text": "Signposts lead to Ogham Farmlands, bloody tracks to the Crowbell (+2 passives).", "src": ["codex", "poe2way"] },
+      { "text": "Both exits are usually on the far side (Freythorn 5 of 6, Farmlands 2 of 3).", "src": ["data"] }
+    ],
+    "G1_12": [
+      { "text": "After each ritual the locusts fly to the nearest one left.", "src": ["codex", "poe2way"] },
+      { "text": "The boss arena's black swirls point to rituals still undone.", "src": ["codex"] }
+    ],
+    "G1_13_1": [
+      { "text": "Head straight away from the entrance: Ogham Village is on the far wall (28 of 32).", "src": ["codex", "data"] },
+      { "text": "Una's lute is close, on the way: behind a long hut with carts.", "src": ["codex", "data"] }
+    ],
+    "G1_13_2": [
+      { "text": "Hug the right-hand wall up to the Executioner; the Ramparts open behind his arena.", "src": ["codex", "data"] },
+      { "text": "Renly's tools: a room with a checkpoint along the wall.", "src": ["codex"] }
+    ],
+    "G1_14": [
+      { "text": "U-shaped: if it opens down-left, the manor is up-right; usually on the far side.", "src": ["codex", "data"] }
+    ],
+    "G1_15": [
+      { "text": "Each floor: go the opposite way from where you came in; Count Geonor is always at the far end (16 of 16).", "src": ["codex", "poe2way", "data"] },
+      { "text": "Stairs before Candlemass (+20 life)? Take the checkpoint and go back for him.", "src": ["poe2way"] }
+    ]
+  }
+}

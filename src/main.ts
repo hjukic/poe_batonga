@@ -1,3 +1,4 @@
+import { sourcesOf, tipsFor } from './zone-tips';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -120,6 +121,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <p class="restart-status" id="restart-status" role="status" hidden></p>
     <p class="warning" id="start-error" role="alert" hidden></p>
     <div class="route" id="route"></div>
+    <ul class="zone-tips" id="zone-tips" hidden></ul>
     <div class="layout-pick" id="layout-pick" hidden>
       <p class="layout-name" id="layout-name"></p>
       <canvas id="layout-canvas" width="584" height="400"></canvas>
@@ -146,6 +148,7 @@ document.querySelector<HTMLElement>('#app')!.innerHTML = `
     <label class="row radar-only" title="Parked until the layout is recognised reliably (roadmap phase 3). On: the experimental arrow around the character."><span>Compass (parked)</span><input id="compass-enabled" type="checkbox" /></label>
     <label class="row" title="The overlay hides while the game is closed or on a workspace that is not shown"><span>Hide when game is off screen</span><input id="auto-hide" type="checkbox" checked /></label>
     <label class="row" title="The overlay hides when a zone boss starts talking and comes back when the kill is logged, you die or leave, or the boss has been quiet for 30 seconds"><span>Hide during boss fights</span><input id="fight-hide" type="checkbox" checked /></label>
+    <label class="row" title="How to cross the zone fast: community tips checked against the game's own layouts"><span>Zone tips</span><input id="zone-tips-enabled" type="checkbox" /></label>
     <label class="row radar-only" title="The map recorded so far, for checking the tracking"><span>Map preview</span><input id="map-preview" type="checkbox" /></label>
     <p id="shortcut-error" class="warning" hidden></p>
     <hr />
@@ -253,6 +256,19 @@ function summaryRow(text: string, done: boolean, onClick = () => { unfolded = !u
   return row;
 }
 
+/** How to cross the zone on show fast (`zone-tips.ts`), while in it and switched on. */
+function renderTips(view: TrackerView) {
+  const list = $('#zone-tips');
+  const tips = view.inZone && zoneTips.checked ? tipsFor(view.zone?.id) : [];
+  list.hidden = tips.length === 0;
+  list.replaceChildren(...tips.map((tip) => {
+    const item = document.createElement('li');
+    item.textContent = tip.text;
+    item.title = `From: ${sourcesOf(tip)}`;
+    return item;
+  }));
+}
+
 function renderTracker(view: TrackerView) {
   if (lastTracker && (lastTracker.currentArea !== view.currentArea || lastTracker.character !== view.character || lastTracker.inZone !== view.inZone)) {
     unfolded = false;
@@ -267,6 +283,7 @@ function renderTracker(view: TrackerView) {
   zone.title = view.inZone && view.zone ? `${view.zone.name} · Lv ${view.zone.level}` : APP_NAME;
   zone.textContent = view.inZone && view.zone ? (view.zone.name.length > 16 ? view.zone.name : zone.title) : APP_NAME;
   renderCharacter(view);
+  renderTips(view);
   const rows: HTMLElement[] = [];
   // A zone's list covers every visit of the route; only this visit's steps are shown.
   // Speedrun (the default): optional steps are left out of the list.
@@ -574,6 +591,12 @@ const sendFightHide = () => isTauri() && void invoke('set_fight_hide', { enabled
 fightHide.addEventListener('change', () => { keep('fight-hide', fightHide.checked); sendFightHide(); });
 const mapPreview = $<HTMLInputElement>('#map-preview');
 mapPreview.checked = stored('map-preview', false);
+const zoneTips = $<HTMLInputElement>('#zone-tips-enabled');
+zoneTips.checked = stored('zone-tips', true);
+zoneTips.addEventListener('change', () => {
+  keep('zone-tips', zoneTips.checked);
+  if (lastTracker) renderTips(lastTracker);
+});
 const showMapPreview = () => { document.body.dataset.mapPreview = String(mapPreview.checked); };
 showMapPreview();
 mapPreview.addEventListener('change', () => {
